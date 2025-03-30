@@ -31,6 +31,7 @@ public class HandlerFactory {
     private final Set<LoreHandler> registeredListeners = new HashSet<>();
     // Track initialization state
     private boolean initialized = false;
+    private boolean initializing = false; // Add flag to prevent recursion
     
     public HandlerFactory(RVNKLore plugin) {
         this.plugin = plugin;
@@ -42,18 +43,34 @@ public class HandlerFactory {
      * This method is idempotent - safe to call multiple times
      */
     public void initialize() {
+        // Both flags prevent reentry 
         if (initialized) {
             debug.debug("HandlerFactory already initialized, skipping");
             return;
         }
         
+        if (initializing) {
+            debug.debug("HandlerFactory initialization already in progress, skipping recursive call");
+            return;
+        }
+        
         try {
+            initializing = true;
             debug.debug("Initializing HandlerFactory");
+            
+            // First register handler classes - this doesn't create instances yet
             registerDefaultHandlers();
-            initializeDefaultHandlers();
+            
+            // Then pre-create the core handler instances without involving LoreManager
+            preCreateCoreHandlers();
+            
+            // Mark as initialized BEFORE we leave the method to prevent reentry
             initialized = true;
+            debug.debug("HandlerFactory initialization complete");
         } catch (Exception e) {
             debug.error("Error initializing HandlerFactory", e);
+        } finally {
+            initializing = false;
         }
     }
     
@@ -84,6 +101,9 @@ public class HandlerFactory {
             handlerClasses.put("PLAYER_DEATH", PlayerDeathLoreHandler.class);
             handlerClasses.put("ENCHANTED_ITEM", EnchantedItemLoreHandler.class);
             
+            // Sign handlers
+            handlerClasses.put("SIGN_LANDMARK", org.fourz.RVNKLore.handler.sign.HandlerSignLandmark.class);
+            
             // Check for missing handlers but don't log warnings yet - will use default
             for (LoreType type : LoreType.values()) {
                 if (!handlerClasses.containsKey(type.name())) {
@@ -98,18 +118,38 @@ public class HandlerFactory {
     }
     
     /**
-     * Initialize only the most commonly used handlers to avoid excessive initialization
+     * Pre-create essential handlers without triggering initialization chains
      */
-    private void initializeDefaultHandlers() {
-        debug.debug("Pre-initializing core handlers");
-        // Only initialize the most commonly used handler types to reduce startup overhead
+    private void preCreateCoreHandlers() {
+        debug.debug("Pre-creating core handlers");
         LoreType[] coreTypes = {
             LoreType.GENERIC, LoreType.PLAYER, LoreType.CITY, 
             LoreType.LANDMARK, LoreType.FACTION
         };
         
         for (LoreType type : coreTypes) {
-            getHandler(type);
+            if (!handlerCache.containsKey(type)) {
+                try {
+                    Class<? extends LoreHandler> handlerClass = handlerClasses.get(type.name());
+                    if (handlerClass == null) {
+                        debug.debug("No handler class for " + type + ", using default");
+                        handlerClass = DefaultLoreHandler.class;
+                    }
+                    
+                    // Direct instantiation without initialization to avoid circular dependencies
+                    LoreHandler handler = handlerClass.getConstructor(RVNKLore.class).newInstance(plugin);
+                    handlerCache.put(type, handler);
+                    
+                    // Register as listener but don't initialize yet
+                    if (!registeredListeners.contains(handler)) {
+                        PluginManager pm = plugin.getServer().getPluginManager();
+                        pm.registerEvents(handler, plugin);
+                        registeredListeners.add(handler);
+                    }
+                } catch (Exception e) {
+                    debug.error("Failed to pre-create handler for " + type, e);
+                }
+            }
         }
     }
     
@@ -120,25 +160,31 @@ public class HandlerFactory {
      * @return The appropriate handler for the type
      */
     public LoreHandler getHandler(LoreType type) {
-        if (!initialized) {
+        // Protection against recursion
+        if (!initialized && !initializing) {
+            // Only log this once
+            debug.debug("Initializing HandlerFactory on demand");
             initialize();
         }
         
+        // Fast path if already cached
+        if (handlerCache.containsKey(type)) {
+            return handlerCache.get(type);
+        }
+        
+        // Create and cache the handler if not found
         try {
-            return handlerCache.computeIfAbsent(type, t -> {
-                try {
-                    debug.debug("Creating handler for type: " + t);
-                    LoreHandler handler = createHandler(t);
-                    registerEventListener(handler);
-                    return handler;
-                } catch (Exception e) {
-                    debug.error("Error creating handler for " + t, e);
-                    return new DefaultLoreHandler(plugin);
-                }
-            });
+            debug.debug("Creating handler for type: " + type);
+            LoreHandler handler = createHandler(type);
+            handlerCache.put(type, handler);
+            registerEventListener(handler);
+            return handler;
         } catch (Exception e) {
-            debug.error("Error getting handler for " + type, e);
-            return new DefaultLoreHandler(plugin);
+            debug.error("Error creating handler for " + type, e);
+            // Always return something usable
+            DefaultLoreHandler defaultHandler = new DefaultLoreHandler(plugin);
+            handlerCache.put(type, defaultHandler);
+            return defaultHandler;
         }
     }
     

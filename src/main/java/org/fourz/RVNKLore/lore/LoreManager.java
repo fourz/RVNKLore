@@ -4,7 +4,6 @@ import org.bukkit.Location;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.handler.LoreHandler;
 import org.fourz.RVNKLore.util.Debug;
-import org.fourz.RVNKLore.handler.HandlerFactory;
 
 import java.util.*;
 import java.util.logging.Level;
@@ -16,11 +15,11 @@ import java.util.stream.Collectors;
 public class LoreManager {
     private final RVNKLore plugin;
     private final Debug debug;
-    private final Map<LoreType, LoreHandler> handlers = new HashMap<>();
     private final Set<LoreEntry> cachedEntries = new HashSet<>();
     private final Map<LoreType, List<LoreEntry>> loreByType = new HashMap<>();
     private static LoreManager instance;
     private LoreFinder loreFinder;
+    private boolean initializing = false;
 
     public LoreManager(RVNKLore plugin) {
         this.plugin = plugin;
@@ -45,29 +44,27 @@ public class LoreManager {
      * Initialize the lore system and load handlers
      */
     public void initializeLore() {
-        debug.debug("Initializing lore system...");
-        registerLoreHandlers();
-        loadLoreEntries();
-        this.loreFinder = new LoreFinder(plugin, this);
-        debug.debug("Lore system initialized successfully");
-    }
-
-    /**
-     * Register all lore type handlers
-     */
-    private void registerLoreHandlers() {
-        debug.debug("Retrieving lore handlers...");
-        
-        // Get handlers from the HandlerFactory instead of creating new ones
-        HandlerFactory factory = plugin.getHandlerFactory();
-        
-        // Initialize handlers for each type we expect to use
-        for (LoreType type : LoreType.values()) {
-            LoreHandler handler = factory.getHandler(type);
-            handlers.put(type, handler);
+        if (initializing) {
+            debug.debug("Lore system initialization already in progress, skipping recursive call");
+            return;
         }
         
-        debug.debug("Lore handlers retrieved successfully");
+        try {
+            initializing = true;
+            debug.debug("Initializing lore system...");
+            
+            // First load entries from database (doesn't require handlers)
+            loadLoreEntries();
+            
+            // Then create the LoreFinder (should be after entries are loaded)
+            this.loreFinder = new LoreFinder(plugin, this);
+            
+            debug.debug("Lore system initialized successfully");
+        } catch (Exception e) {
+            debug.error("Error initializing lore system", e);
+        } finally {
+            initializing = false;
+        }
     }
 
     /**
@@ -106,8 +103,8 @@ public class LoreManager {
         
         debug.debug("Adding lore entry: " + entry.getName() + " of type " + entry.getType());
         
-        // Validate the entry using the appropriate handler
-        LoreHandler handler = handlers.get(entry.getType());
+        // Validate the entry using the appropriate handler from HandlerFactory
+        LoreHandler handler = plugin.getHandlerFactory().getHandler(entry.getType());
         if (handler == null) {
             debug.warning("No handler found for lore type: " + entry.getType());
             return false;
@@ -243,7 +240,6 @@ public class LoreManager {
         debug.debug("Cleaning up lore manager...");
         cachedEntries.clear();
         loreByType.clear();
-        handlers.clear();
         instance = null;
     }
 
@@ -254,7 +250,10 @@ public class LoreManager {
      * @return The handler, or null if not found
      */
     public LoreHandler getHandler(LoreType type) {
-        return handlers.get(type);
+        if (initializing) {
+            debug.warning("Handler requested during LoreManager initialization - potential circular dependency");
+        }
+        return plugin.getHandlerFactory().getHandler(type);
     }
 
     /**

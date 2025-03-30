@@ -37,47 +37,27 @@ public class RVNKLore extends JavaPlugin {
                 throw new Exception("Database connection failed. Plugin cannot function without storage.");
             }
             
-            // Initialize handler factory first to prevent duplicate initializations
+            // Create handler factory but don't initialize it yet
             handlerFactory = new HandlerFactory(this);
-            handlerFactory.initialize();
             
             // Initialize utility manager for diagnostics
             utilityManager = UtilityManager.getInstance(this);
             
-            // Continue with other managers
-            loreManager = new LoreManager(this);
+            // First initialize the handler factory completely before LoreManager needs it
+            debugger.info("Initializing core systems...");
+            handlerFactory.initialize();
+            
+            // Now initialize LoreManager after HandlerFactory is fully initialized
+            loreManager = LoreManager.getInstance(this);
             loreManager.initializeLore();
+            
+            // Finally initialize command system
             commandManager = new CommandManager(this);
             
             debugger.info("RVNKLore has been enabled!");
         } catch (Exception e) {
             debugger.error("Failed to initialize plugin", e);
             getServer().getPluginManager().disablePlugin(this);
-        }
-    }
-
-    private void initializeManagers() {
-        try {
-            if (databaseManager == null) {
-                databaseManager = new DatabaseManager(this);
-            }
-            
-            if (handlerFactory == null) {
-                handlerFactory = new HandlerFactory(this);
-                handlerFactory.initialize();
-            }
-            
-            if (loreManager == null) {
-                loreManager = new LoreManager(this);
-                loreManager.initializeLore();
-            }
-            
-            if (commandManager == null) {
-                commandManager = new CommandManager(this);
-            }
-        } catch (Exception e) {
-            debugger.error("Failed to initialize managers", e);
-            throw new RuntimeException("Manager initialization failed", e);
         }
     }
 
@@ -165,6 +145,7 @@ public class RVNKLore extends JavaPlugin {
         if (handlerFactory == null) {
             debugger.warning("Handler factory requested but was null. Creating new instance.");
             handlerFactory = new HandlerFactory(this);
+            // Only initialize if it's actually null - avoids repeated initialization
             handlerFactory.initialize();
         }
         return handlerFactory;

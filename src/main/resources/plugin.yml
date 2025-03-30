@@ -40,3 +40,9 @@ permissions:
   rvnklore.register.city:
     description: Allows registering new cities
     default: true
+  rvnklore.sign.landmark:
+    description: Allows players to create landmark signs
+    default: op
+  rvnklore.approve.own:
+    description: Allows players to auto-approve their own submissions
+    default: op
