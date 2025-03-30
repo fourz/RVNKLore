@@ -25,7 +25,9 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
 
     public LoreCommand(RVNKLore plugin) {
         this.plugin = plugin;
-        this.debug = Debug.createDebugger(plugin, "LoreCommand", Level.FINE);
+        // Get log level from config instead of hardcoding Level.FINE
+        Level logLevel = plugin.getConfigManager().getLogLevel();
+        this.debug = Debug.createDebugger(plugin, "LoreCommand", logLevel);
         registerSubCommands();
     }
 

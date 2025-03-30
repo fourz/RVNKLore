@@ -24,6 +24,7 @@ lore:
     HAT: DEFAULT  
 
 storage:
+  test-mode: no # yes = wipe schema on start, no = keep tables on start
   type: sqlite
   mysql:
     host: localhost
