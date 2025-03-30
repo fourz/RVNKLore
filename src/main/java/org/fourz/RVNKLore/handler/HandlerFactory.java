@@ -18,6 +18,7 @@ import java.util.HashSet;
 
 /**
  * Factory for creating and managing lore handlers
+ * Combines functionality from LoreHandlerManager to prevent duplicate initialization
  */
 public class HandlerFactory {
     private final RVNKLore plugin;
@@ -28,17 +29,43 @@ public class HandlerFactory {
     private final Map<String, Class<? extends LoreHandler>> handlerClasses = new HashMap<>();
     // Track registered event listeners
     private final Set<LoreHandler> registeredListeners = new HashSet<>();
+    // Track initialization state
+    private boolean initialized = false;
     
     public HandlerFactory(RVNKLore plugin) {
         this.plugin = plugin;
         this.debug = Debug.createDebugger(plugin, "HandlerFactory", Level.FINE);
-        registerDefaultHandlers();
+    }
+    
+    /**
+     * Initialize the factory and register default handlers
+     * This method is idempotent - safe to call multiple times
+     */
+    public void initialize() {
+        if (initialized) {
+            debug.debug("HandlerFactory already initialized, skipping");
+            return;
+        }
+        
+        try {
+            debug.debug("Initializing HandlerFactory");
+            registerDefaultHandlers();
+            initializeDefaultHandlers();
+            initialized = true;
+        } catch (Exception e) {
+            debug.error("Error initializing HandlerFactory", e);
+        }
     }
     
     /**
      * Register the default handler implementations
      */
     private void registerDefaultHandlers() {
+        if (!handlerClasses.isEmpty()) {
+            debug.debug("Handler classes already registered, skipping registration");
+            return;
+        }
+        
         try {
             // Core handlers - only register the ones we have actual implementations for
             handlerClasses.put("GENERIC", DefaultLoreHandler.class);
@@ -71,15 +98,36 @@ public class HandlerFactory {
     }
     
     /**
+     * Initialize only the most commonly used handlers to avoid excessive initialization
+     */
+    private void initializeDefaultHandlers() {
+        debug.debug("Pre-initializing core handlers");
+        // Only initialize the most commonly used handler types to reduce startup overhead
+        LoreType[] coreTypes = {
+            LoreType.GENERIC, LoreType.PLAYER, LoreType.CITY, 
+            LoreType.LANDMARK, LoreType.FACTION
+        };
+        
+        for (LoreType type : coreTypes) {
+            getHandler(type);
+        }
+    }
+    
+    /**
      * Get a handler for the specified lore type
      * 
      * @param type The lore type
      * @return The appropriate handler for the type
      */
     public LoreHandler getHandler(LoreType type) {
+        if (!initialized) {
+            initialize();
+        }
+        
         try {
             return handlerCache.computeIfAbsent(type, t -> {
                 try {
+                    debug.debug("Creating handler for type: " + t);
                     LoreHandler handler = createHandler(t);
                     registerEventListener(handler);
                     return handler;
@@ -138,21 +186,25 @@ public class HandlerFactory {
         }
         registeredListeners.clear();
         handlerCache.clear();
+        initialized = false;
         debug.debug("Unregistered all handler event listeners");
     }
     
     /**
-     * Initialize all handlers for all lore types
+     * Get all registered handlers
+     * 
+     * @return Map of lore types to their handlers
      */
-    public void initializeAllHandlers() {
-        // Only initialize handlers for types we expect to use
-        for (LoreType type : LoreType.values()) {
-            try {
-                getHandler(type);
-            } catch (Exception e) {
-                debug.error("Failed to initialize handler for type: " + type, e);
-            }
-        }
-        debug.debug("Initialized all handlers");
+    public Map<LoreType, LoreHandler> getAllHandlers() {
+        return new EnumMap<>(handlerCache);
+    }
+    
+    /**
+     * Reload all handlers
+     */
+    public void reloadHandlers() {
+        debug.debug("Reloading lore handlers");
+        unregisterAllHandlers();
+        initialize();
     }
 }

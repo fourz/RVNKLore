@@ -4,6 +4,7 @@ import org.bukkit.Location;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.handler.LoreHandler;
 import org.fourz.RVNKLore.util.Debug;
+import org.fourz.RVNKLore.handler.HandlerFactory;
 
 import java.util.*;
 import java.util.logging.Level;
@@ -55,12 +56,18 @@ public class LoreManager {
      * Register all lore type handlers
      */
     private void registerLoreHandlers() {
-        debug.debug("Registering lore handlers...");
+        debug.debug("Retrieving lore handlers...");
         
-        // Load handlers from config
-        handlers.putAll(plugin.getConfigManager().loadLoreHandlers());
+        // Get handlers from the HandlerFactory instead of creating new ones
+        HandlerFactory factory = plugin.getHandlerFactory();
         
-        debug.debug("Lore handlers registered successfully");
+        // Initialize handlers for each type we expect to use
+        for (LoreType type : LoreType.values()) {
+            LoreHandler handler = factory.getHandler(type);
+            handlers.put(type, handler);
+        }
+        
+        debug.debug("Lore handlers retrieved successfully");
     }
 
     /**

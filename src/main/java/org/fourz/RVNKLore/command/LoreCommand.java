@@ -34,13 +34,20 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
      */
     private void registerSubCommands() {
         debug.debug("Registering subcommands...");
-        registerSubCommand("add", new LoreAddSubCommand(plugin));
-        registerSubCommand("get", new LoreGetSubCommand(plugin));
-        registerSubCommand("list", new LoreListSubCommand(plugin));
-        registerSubCommand("approve", new LoreApproveSubCommand(plugin));
-        registerSubCommand("reload", new LoreReloadSubCommand(plugin));
-        registerSubCommand("export", new LoreExportSubCommand(plugin));
-        debug.debug("Subcommands registered successfully");
+        
+        // Register all subcommands at once to reduce debug log spam
+        Map<String, SubCommand> commands = new HashMap<>();
+        commands.put("add", new LoreAddSubCommand(plugin));
+        commands.put("get", new LoreGetSubCommand(plugin));
+        commands.put("list", new LoreListSubCommand(plugin));
+        commands.put("approve", new LoreApproveSubCommand(plugin));
+        commands.put("reload", new LoreReloadSubCommand(plugin));
+        commands.put("export", new LoreExportSubCommand(plugin));
+        
+        // Add all commands to the subCommands map
+        commands.forEach(this::registerSubCommand);
+        
+        debug.debug("Registered " + commands.size() + " subcommands successfully");
     }
 
     /**
@@ -50,7 +57,6 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
      * @param subCommand The subcommand implementation
      */
     private void registerSubCommand(String name, SubCommand subCommand) {
-        debug.debug("Registering subcommand: " + name);
         subCommands.put(name.toLowerCase(), subCommand);
     }
 

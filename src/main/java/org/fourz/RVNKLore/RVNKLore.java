@@ -1,7 +1,6 @@
 package org.fourz.RVNKLore;
 
 import org.bukkit.plugin.java.JavaPlugin;
-import org.fourz.RVNKLore.handler.LoreHandlerManager;
 import org.fourz.RVNKLore.handler.HandlerFactory;
 import org.fourz.RVNKLore.lore.LoreManager;
 import org.fourz.RVNKLore.util.Debug;
@@ -16,7 +15,6 @@ public class RVNKLore extends JavaPlugin {
     private ConfigManager configManager;
     private CommandManager commandManager;
     private DatabaseManager databaseManager;
-    private LoreHandlerManager handlerManager;
     private HandlerFactory handlerFactory;
     
     @Override
@@ -36,9 +34,9 @@ public class RVNKLore extends JavaPlugin {
                 throw new Exception("Database connection failed. Plugin cannot function without storage.");
             }
             
-            // Initialize handler factory and manager
+            // Initialize handler factory first to prevent duplicate initializations
             handlerFactory = new HandlerFactory(this);
-            handlerManager = new LoreHandlerManager(this);
+            handlerFactory.initialize();
             
             // Continue with other managers
             loreManager = new LoreManager(this);
@@ -60,6 +58,7 @@ public class RVNKLore extends JavaPlugin {
             
             if (handlerFactory == null) {
                 handlerFactory = new HandlerFactory(this);
+                handlerFactory.initialize();
             }
             
             if (loreManager == null) {
@@ -96,11 +95,6 @@ public class RVNKLore extends JavaPlugin {
     }
 
     private void cleanupManagers() {
-        if (handlerManager != null) {
-            handlerManager.unregisterAllHandlers();
-            handlerManager = null;
-        }
-        
         if (handlerFactory != null) {
             handlerFactory.unregisterAllHandlers();
             handlerFactory = null;
@@ -145,10 +139,6 @@ public class RVNKLore extends JavaPlugin {
         return databaseManager;
     }
     
-    public LoreHandlerManager getHandlerManager() {
-        return handlerManager;
-    }
-    
     /**
      * Get the handler factory for this plugin
      * 
@@ -158,6 +148,7 @@ public class RVNKLore extends JavaPlugin {
         if (handlerFactory == null) {
             debugger.warning("Handler factory requested but was null. Creating new instance.");
             handlerFactory = new HandlerFactory(this);
+            handlerFactory.initialize();
         }
         return handlerFactory;
     }
