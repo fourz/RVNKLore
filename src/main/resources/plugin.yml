@@ -1,12 +1,42 @@
 name: RVNKLore
 api: "1.17"
 version: 1.0.0
-description: A quest system for Minecraft
-authors: [YourName]
+description: A lore data system for Minecraft
+authors: [Derek, Fourz] 
 main: org.fourz.RVNKLore.RVNKLore
 api-version: 1.17
 
 commands:
-
+  lore:
+    description: Main command for RVNKLore plugin
+    usage: /lore <subcommand> [args...]
 
 permissions:
+  rvnklore.*:
+    description: Gives access to all RVNKLore commands
+    default: true
+  rvnklore.admin:
+    description: Gives access to administrative commands
+    default: op
+    children: {}
+  rvnklore.command.*:
+    description: Gives access to all basic lore commands
+    default: true
+  rvnklore.register.*:
+    description: Gives access to all registration commands
+    default: true
+  rvnklore.command.add:
+    description: Allows adding new lore entries
+    default: true
+  rvnklore.command.get:
+    description: Allows viewing lore entries
+    default: true
+  rvnklore.command.list:
+    description: Allows listing lore entries
+    default: true
+  rvnklore.command.getitem:
+    description: Allows getting lore items
+    default: op
+  rvnklore.register.city:
+    description: Allows registering new cities
+    default: true
