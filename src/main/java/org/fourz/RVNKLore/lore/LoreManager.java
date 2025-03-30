@@ -2,6 +2,7 @@ package org.fourz.RVNKLore.lore;
 
 import org.bukkit.Location;
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.handler.LoreHandler;
 import org.fourz.RVNKLore.util.Debug;
 
 import java.util.*;
@@ -18,6 +19,7 @@ public class LoreManager {
     private final Set<LoreEntry> cachedEntries = new HashSet<>();
     private final Map<LoreType, List<LoreEntry>> loreByType = new HashMap<>();
     private static LoreManager instance;
+    private LoreFinder loreFinder;
 
     public LoreManager(RVNKLore plugin) {
         this.plugin = plugin;
@@ -45,6 +47,7 @@ public class LoreManager {
         debug.debug("Initializing lore system...");
         registerLoreHandlers();
         loadLoreEntries();
+        this.loreFinder = new LoreFinder(plugin, this);
         debug.debug("Lore system initialized successfully");
     }
 
@@ -53,20 +56,9 @@ public class LoreManager {
      */
     private void registerLoreHandlers() {
         debug.debug("Registering lore handlers...");
-        handlers.put(LoreType.PLAYER_HEAD, new HeadLoreHandler(plugin));
-        handlers.put(LoreType.MOB_HEAD, new HeadLoreHandler(plugin));
-        handlers.put(LoreType.HEAD, new HeadLoreHandler(plugin));
-        handlers.put(LoreType.HAT, new HeadLoreHandler(plugin));
-        handlers.put(LoreType.LANDMARK, new LandmarkLoreHandler(plugin));
-        handlers.put(LoreType.CITY, new LandmarkLoreHandler(plugin)); // Temporarily using LandmarkHandler
-        handlers.put(LoreType.PATH, new LandmarkLoreHandler(plugin)); // Temporarily using LandmarkHandler
         
-        // Add handlers for remaining types with a default handler if needed
-        for (LoreType type : LoreType.values()) {
-            if (!handlers.containsKey(type)) {
-                handlers.put(type, new DefaultLoreHandler(plugin));
-            }
-        }
+        // Load handlers from config
+        handlers.putAll(plugin.getConfigManager().loadLoreHandlers());
         
         debug.debug("Lore handlers registered successfully");
     }
@@ -158,7 +150,7 @@ public class LoreManager {
      * @return True if successful, false otherwise
      */
     public boolean approveLoreEntry(UUID id) {
-        LoreEntry entry = getLoreEntry(id);
+        LoreEntry entry = loreFinder.getLoreEntry(id);
         if (entry == null) {
             return false;
         }
@@ -315,5 +307,19 @@ public class LoreManager {
         for (List<LoreEntry> entries : loreByType.values()) {
             entries.clear();
         }
+    }
+    
+    /**
+     * Get the lore finder instance
+     */
+    public LoreFinder getLoreFinder() {
+        return loreFinder;
+    }
+    
+    /**
+     * Package-private method to get cached entries for the LoreFinder
+     */
+    Set<LoreEntry> getCachedEntries() {
+        return cachedEntries;
     }
 }

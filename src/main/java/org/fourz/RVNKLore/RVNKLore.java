@@ -20,10 +20,23 @@ public class RVNKLore extends JavaPlugin {
         // Initialize ConfigManager first
         configManager = new ConfigManager(this);
         debugger = new Debug(this, "RVNKLore", configManager.getLogLevel()) {};
+        configManager.initDebugLogging(); // Initialize debug in the config manager
         debugger.info("Initializing RVNKLore...");
         
         try {
-            initializeManagers();
+            // First try to initialize the database
+            databaseManager = new DatabaseManager(this);
+            
+            // Check database connection
+            if (!databaseManager.isConnected()) {
+                throw new Exception("Database connection failed. Plugin cannot function without storage.");
+            }
+            
+            // Continue with other managers
+            loreManager = new LoreManager(this);
+            loreManager.initializeLore();
+            commandManager = new CommandManager(this);
+            
             debugger.info("RVNKLore has been enabled!");
         } catch (Exception e) {
             debugger.error("Failed to initialize plugin", e);
@@ -32,10 +45,23 @@ public class RVNKLore extends JavaPlugin {
     }
 
     private void initializeManagers() {
-        databaseManager = new DatabaseManager(this);
-        loreManager = new LoreManager(this);
-        loreManager.initializeLore();
-        commandManager = new CommandManager(this);
+        try {
+            if (databaseManager == null) {
+                databaseManager = new DatabaseManager(this);
+            }
+            
+            if (loreManager == null) {
+                loreManager = new LoreManager(this);
+                loreManager.initializeLore();
+            }
+            
+            if (commandManager == null) {
+                commandManager = new CommandManager(this);
+            }
+        } catch (Exception e) {
+            debugger.error("Failed to initialize managers", e);
+            throw new RuntimeException("Manager initialization failed", e);
+        }
     }
 
     @Override

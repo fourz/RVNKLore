@@ -1,4 +1,4 @@
-package org.fourz.RVNKLore.lore;
+package org.fourz.RVNKLore.handler;
 
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
@@ -6,6 +6,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.util.Debug;
 
 import java.util.ArrayList;
@@ -13,26 +14,31 @@ import java.util.List;
 import java.util.logging.Level;
 
 /**
- * Default handler for lore entries without a specific handler
+ * Handler for city lore entries
  */
-public class DefaultLoreHandler implements LoreHandler {
+public class CityLoreHandler implements LoreHandler {
     private final RVNKLore plugin;
     private final Debug debug;
     
-    public DefaultLoreHandler(RVNKLore plugin) {
+    public CityLoreHandler(RVNKLore plugin) {
         this.plugin = plugin;
-        this.debug = Debug.createDebugger(plugin, "DefaultLoreHandler", Level.FINE);
+        this.debug = Debug.createDebugger(plugin, "CityLoreHandler", Level.FINE);
     }
 
     @Override
     public boolean validateEntry(LoreEntry entry) {
         if (entry.getName() == null || entry.getName().isEmpty()) {
-            debug.debug("Lore validation failed: Name is required");
+            debug.debug("City lore validation failed: Name is required");
             return false;
         }
         
         if (entry.getDescription() == null || entry.getDescription().isEmpty()) {
-            debug.debug("Lore validation failed: Description is required");
+            debug.debug("City lore validation failed: Description is required");
+            return false;
+        }
+        
+        if (entry.getLocation() == null) {
+            debug.debug("City lore validation failed: Location is required for cities");
             return false;
         }
         
@@ -41,14 +47,23 @@ public class DefaultLoreHandler implements LoreHandler {
 
     @Override
     public ItemStack createLoreItem(LoreEntry entry) {
-        ItemStack item = new ItemStack(Material.BOOK);
+        ItemStack item = new ItemStack(Material.CRAFTING_TABLE);
         ItemMeta meta = item.getItemMeta();
         
         if (meta != null) {
             meta.setDisplayName(ChatColor.GOLD + entry.getName());
             
             List<String> lore = new ArrayList<>();
-            lore.add(ChatColor.GRAY + "Type: " + ChatColor.YELLOW + entry.getType().getDescription());
+            lore.add(ChatColor.GRAY + "Type: " + ChatColor.YELLOW + "City");
+            
+            // Location info
+            if (entry.getLocation() != null) {
+                lore.add(ChatColor.GRAY + "Location: " + 
+                        ChatColor.YELLOW + entry.getLocation().getWorld().getName() + " at " + 
+                        (int)entry.getLocation().getX() + ", " + 
+                        (int)entry.getLocation().getY() + ", " + 
+                        (int)entry.getLocation().getZ());
+            }
             
             // Split description into lines for better readability
             String[] descLines = entry.getDescription().split("\\n");
@@ -56,10 +71,8 @@ public class DefaultLoreHandler implements LoreHandler {
                 lore.add(ChatColor.WHITE + line);
             }
             
-            if (entry.getSubmittedBy() != null) {
-                lore.add("");
-                lore.add(ChatColor.GRAY + "Documented by: " + ChatColor.YELLOW + entry.getSubmittedBy());
-            }
+            lore.add("");
+            lore.add(ChatColor.GRAY + "Established by: " + ChatColor.YELLOW + entry.getSubmittedBy());
             
             meta.setLore(lore);
             item.setItemMeta(meta);
@@ -71,16 +84,9 @@ public class DefaultLoreHandler implements LoreHandler {
     @Override
     public void displayLore(LoreEntry entry, Player player) {
         player.sendMessage(ChatColor.GOLD + "=== " + entry.getName() + " ===");
-        player.sendMessage(ChatColor.GRAY + "Type: " + ChatColor.YELLOW + entry.getType().getDescription());
-        
-        player.sendMessage("");
-        String[] descLines = entry.getDescription().split("\\n");
-        for (String line : descLines) {
-            player.sendMessage(ChatColor.WHITE + line);
-        }
+        player.sendMessage(ChatColor.GRAY + "Type: " + ChatColor.YELLOW + "City");
         
         if (entry.getLocation() != null) {
-            player.sendMessage("");
             player.sendMessage(ChatColor.GRAY + "Location: " + 
                     ChatColor.YELLOW + entry.getLocation().getWorld().getName() + " at " + 
                     (int)entry.getLocation().getX() + ", " + 
@@ -88,9 +94,13 @@ public class DefaultLoreHandler implements LoreHandler {
                     (int)entry.getLocation().getZ());
         }
         
-        if (entry.getSubmittedBy() != null) {
-            player.sendMessage("");
-            player.sendMessage(ChatColor.GRAY + "Documented by: " + ChatColor.YELLOW + entry.getSubmittedBy());
+        player.sendMessage("");
+        String[] descLines = entry.getDescription().split("\\n");
+        for (String line : descLines) {
+            player.sendMessage(ChatColor.WHITE + line);
         }
+        
+        player.sendMessage("");
+        player.sendMessage(ChatColor.GRAY + "Established by: " + ChatColor.YELLOW + entry.getSubmittedBy());
     }
 }

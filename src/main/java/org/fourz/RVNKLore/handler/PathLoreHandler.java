@@ -1,12 +1,12 @@
-package org.fourz.RVNKLore.lore;
+package org.fourz.RVNKLore.handler;
 
 import org.bukkit.ChatColor;
-import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.util.Debug;
 
 import java.util.ArrayList;
@@ -14,31 +14,31 @@ import java.util.List;
 import java.util.logging.Level;
 
 /**
- * Handler for landmark lore entries
+ * Handler for path and route lore entries
  */
-public class LandmarkLoreHandler implements LoreHandler {
+public class PathLoreHandler implements LoreHandler {
     private final RVNKLore plugin;
     private final Debug debug;
     
-    public LandmarkLoreHandler(RVNKLore plugin) {
+    public PathLoreHandler(RVNKLore plugin) {
         this.plugin = plugin;
-        this.debug = Debug.createDebugger(plugin, "LandmarkLoreHandler", Level.FINE);
+        this.debug = Debug.createDebugger(plugin, "PathLoreHandler", Level.FINE);
     }
 
     @Override
     public boolean validateEntry(LoreEntry entry) {
         if (entry.getName() == null || entry.getName().isEmpty()) {
-            debug.debug("Landmark lore validation failed: Name is required");
+            debug.debug("Path lore validation failed: Name is required");
             return false;
         }
         
         if (entry.getDescription() == null || entry.getDescription().isEmpty()) {
-            debug.debug("Landmark lore validation failed: Description is required");
+            debug.debug("Path lore validation failed: Description is required");
             return false;
         }
         
         if (entry.getLocation() == null) {
-            debug.debug("Landmark lore validation failed: Location is required for landmarks");
+            debug.debug("Path lore validation failed: Starting location is required for paths");
             return false;
         }
         
@@ -47,18 +47,18 @@ public class LandmarkLoreHandler implements LoreHandler {
 
     @Override
     public ItemStack createLoreItem(LoreEntry entry) {
-        ItemStack item = new ItemStack(Material.MAP);
+        ItemStack item = new ItemStack(Material.COMPASS);
         ItemMeta meta = item.getItemMeta();
         
         if (meta != null) {
             meta.setDisplayName(ChatColor.GOLD + entry.getName());
             
             List<String> lore = new ArrayList<>();
-            lore.add(ChatColor.GRAY + "Type: " + ChatColor.YELLOW + "Landmark");
+            lore.add(ChatColor.GRAY + "Type: " + ChatColor.GREEN + "Path/Route");
             
             // Location info
             if (entry.getLocation() != null) {
-                lore.add(ChatColor.GRAY + "Location: " + 
+                lore.add(ChatColor.GRAY + "Starting Point: " + 
                         ChatColor.YELLOW + entry.getLocation().getWorld().getName() + " at " + 
                         (int)entry.getLocation().getX() + ", " + 
                         (int)entry.getLocation().getY() + ", " + 
@@ -84,10 +84,10 @@ public class LandmarkLoreHandler implements LoreHandler {
     @Override
     public void displayLore(LoreEntry entry, Player player) {
         player.sendMessage(ChatColor.GOLD + "=== " + entry.getName() + " ===");
-        player.sendMessage(ChatColor.GRAY + "Type: " + ChatColor.YELLOW + "Landmark");
+        player.sendMessage(ChatColor.GRAY + "Type: " + ChatColor.GREEN + "Path/Route");
         
         if (entry.getLocation() != null) {
-            player.sendMessage(ChatColor.GRAY + "Location: " + 
+            player.sendMessage(ChatColor.GRAY + "Starting Point: " + 
                     ChatColor.YELLOW + entry.getLocation().getWorld().getName() + " at " + 
                     (int)entry.getLocation().getX() + ", " + 
                     (int)entry.getLocation().getY() + ", " + 

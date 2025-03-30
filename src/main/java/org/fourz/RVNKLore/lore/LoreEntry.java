@@ -208,4 +208,86 @@ public class LoreEntry {
                 ", type=" + type +
                 '}';
     }
+    
+    /**
+     * Creates a location-based lore entry (LANDMARK, CITY, PATH)
+     * 
+     * @param name The name of the lore entry
+     * @param description The description of the lore entry
+     * @param type The type of lore (should be LANDMARK, CITY, or PATH)
+     * @param location The location associated with this lore
+     * @param player The player who submitted this lore
+     * @return A new LoreEntry with location data
+     */
+    public static LoreEntry createLocationLore(String name, String description, LoreType type, Location location, Player player) {
+        LoreEntry entry = new LoreEntry(name, description, type, player);
+        entry.setLocation(location);
+        return entry;
+    }
+    
+    /**
+     * Creates a head/hat based lore entry (PLAYER_HEAD, MOB_HEAD, HEAD, HAT)
+     * 
+     * @param name The name of the lore entry
+     * @param description The description of the lore entry
+     * @param type The type of lore (should be a head/hat type)
+     * @param nbtData The NBT data for the head item
+     * @param player The player who submitted this lore
+     * @return A new LoreEntry with NBT data
+     */
+    public static LoreEntry createHeadLore(String name, String description, LoreType type, String nbtData, Player player) {
+        LoreEntry entry = new LoreEntry(name, description, type, player);
+        entry.setNbtData(nbtData);
+        return entry;
+    }
+    
+    /**
+     * Creates a character-related lore entry (PLAYER, FACTION)
+     * 
+     * @param name The name of the lore entry
+     * @param description The description of the lore entry
+     * @param type The type of lore (should be PLAYER or FACTION)
+     * @param player The player who submitted this lore
+     * @return A new LoreEntry for character lore
+     */
+    public static LoreEntry createCharacterLore(String name, String description, LoreType type, Player player) {
+        return new LoreEntry(name, description, type, player);
+    }
+    
+    /**
+     * Creates a gameplay-related lore entry (ENCHANTMENT, ITEM, QUEST)
+     * 
+     * @param name The name of the lore entry
+     * @param description The description of the lore entry
+     * @param type The type of lore (should be ENCHANTMENT, ITEM, or QUEST)
+     * @param player The player who submitted this lore
+     * @return A new LoreEntry for gameplay lore
+     */
+    public static LoreEntry createGameplayLore(String name, String description, LoreType type, Player player) {
+        return new LoreEntry(name, description, type, player);
+    }
+    
+    /**
+     * Validates if this lore entry has all required fields based on its type
+     * 
+     * @return true if the entry is valid, false otherwise
+     */
+    public boolean isValid() {
+        if (name == null || description == null || type == null) {
+            return false;
+        }
+        
+        // Location-based lore requires a location
+        if ((type == LoreType.LANDMARK || type == LoreType.CITY || type == LoreType.PATH) && location == null) {
+            return false;
+        }
+        
+        // Head/hat lore typically requires NBT data
+        if ((type == LoreType.PLAYER_HEAD || type == LoreType.MOB_HEAD || 
+             type == LoreType.HEAD || type == LoreType.HAT) && (nbtData == null || nbtData.isEmpty())) {
+            return false;
+        }
+        
+        return true;
+    }
 }

@@ -14,6 +14,7 @@ import org.json.simple.parser.JSONParser;
 
 import java.sql.*;
 import java.util.*;
+import java.util.Date;
 import java.util.logging.Level;
 
 /**
@@ -263,5 +264,212 @@ public class DatabaseManager {
                 debug.error("Failed to close database connection", e);
             }
         }
+    }
+
+    public boolean exportLoreEntriesToFile(List<LoreEntry> entries, String filePath) throws Exception {
+        debug.debug("Exporting " + entries.size() + " lore entries to file: " + filePath);
+        
+        try {
+            java.io.File file = new java.io.File(filePath);
+            // Ensure directory exists
+            file.getParentFile().mkdirs();
+            
+            List<JSONObject> jsonEntries = new ArrayList<>();
+            for (LoreEntry entry : entries) {
+                jsonEntries.add(entry.toJson());
+            }
+            
+            JSONObject result = new JSONObject();
+            result.put("lore_entries", jsonEntries);
+            result.put("exported_at", new Date().toString());
+            result.put("entry_count", entries.size());
+            
+            Gson gson = new GsonBuilder().setPrettyPrinting().create();
+            String jsonContent = gson.toJson(result);
+            
+            try (java.io.FileWriter writer = new java.io.FileWriter(file)) {
+                writer.write(jsonContent);
+            }
+            
+            debug.info("Exported " + entries.size() + " lore entries to " + filePath);
+            return true;
+        } catch (Exception e) {
+            debug.error("Failed to export lore entries to file", e);
+            throw e;
+        }
+    }
+    
+    /**
+     * Check if the database connection is active and valid
+     * 
+     * @return True if connected, false otherwise
+     */
+    public boolean isConnected() {
+        try {
+            if (connection != null && !connection.isClosed()) {
+                // Test the connection with a simple query
+                try (Statement stmt = connection.createStatement()) {
+                    stmt.execute("SELECT 1");
+                    return true;
+                }
+            }
+            return false;
+        } catch (SQLException e) {
+            debug.error("Database connection check failed", e);
+            return false;
+        }
+    }
+
+    /**
+     * Get lore entries by type
+     * 
+     * @param type The type of lore entries to retrieve
+     * @return A list of matching lore entries
+     */
+    public List<LoreEntry> getLoreEntriesByType(LoreType type) {
+        List<LoreEntry> entries = new ArrayList<>();
+        String sql = "SELECT * FROM lore_entries WHERE type = ?";
+        
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setString(1, type.name());
+            
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    entries.add(resultSetToLoreEntry(rs));
+                }
+            }
+        } catch (SQLException e) {
+            debug.error("Failed to get lore entries by type: " + type, e);
+        }
+        
+        return entries;
+    }
+
+    /**
+     * Delete a lore entry by ID
+     * 
+     * @param id The UUID of the entry to delete
+     * @return true if successful, false otherwise
+     */
+    public boolean deleteLoreEntry(UUID id) {
+        String sql = "DELETE FROM lore_entries WHERE id = ?";
+        
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setString(1, id.toString());
+            int rowsAffected = stmt.executeUpdate();
+            return rowsAffected > 0;
+        } catch (SQLException e) {
+            debug.error("Failed to delete lore entry: " + id, e);
+            return false;
+        }
+    }
+
+    /**
+     * Execute database backup
+     * 
+     * @param backupPath the path where to store the backup
+     * @return true if successful, false otherwise
+     */
+    public boolean backupDatabase(String backupPath) {
+        debug.debug("Backing up database to: " + backupPath);
+        
+        if (storageType.equalsIgnoreCase("sqlite")) {
+            try {
+                String dbPath = plugin.getDataFolder().getAbsolutePath() + "/lore.db";
+                java.io.File sourceFile = new java.io.File(dbPath);
+                java.io.File destFile = new java.io.File(backupPath);
+                
+                // Ensure parent directory exists
+                destFile.getParentFile().mkdirs();
+                
+                // Copy the file
+                java.nio.file.Files.copy(
+                    sourceFile.toPath(), 
+                    destFile.toPath(), 
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING
+                );
+                
+                debug.info("SQLite database backup created at: " + backupPath);
+                return true;
+            } catch (Exception e) {
+                debug.error("Failed to backup SQLite database", e);
+                return false;
+            }
+        } else {
+            // For MySQL, we export to a SQL dump file
+            try {
+                // Export all data to JSON as a simple backup
+                List<LoreEntry> allEntries = getAllLoreEntries();
+                return exportLoreEntriesToFile(allEntries, backupPath);
+            } catch (Exception e) {
+                debug.error("Failed to backup MySQL database", e);
+                return false;
+            }
+        }
+    }
+
+    /**
+     * Search lore entries by keyword in name or description
+     * 
+     * @param keyword The keyword to search for
+     * @return A list of matching lore entries
+     */
+    public List<LoreEntry> searchLoreEntries(String keyword) {
+        List<LoreEntry> entries = new ArrayList<>();
+        String sql = "SELECT * FROM lore_entries WHERE name LIKE ? OR description LIKE ?";
+        String searchTerm = "%" + keyword + "%";
+        
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setString(1, searchTerm);
+            stmt.setString(2, searchTerm);
+            
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    entries.add(resultSetToLoreEntry(rs));
+                }
+            }
+        } catch (SQLException e) {
+            debug.error("Failed to search lore entries for: " + keyword, e);
+        }
+        
+        return entries;
+    }
+
+    /**
+     * Reconnect to the database if the connection is lost
+     * 
+     * @return true if the connection was reestablished, false otherwise
+     */
+    public boolean reconnect() {
+        debug.warning("Attempting to reconnect to database...");
+        
+        try {
+            if (connection != null && !connection.isClosed()) {
+                connection.close();
+            }
+            
+            initializeDatabase();
+            
+            boolean connected = isConnected();
+            if (connected) {
+                debug.info("Successfully reconnected to database");
+            } else {
+                debug.warning("Failed to reconnect to database");
+            }
+            
+            return connected;
+        } catch (SQLException e) {
+            debug.error("Failed to reconnect to database", e);
+            return false;
+        }
+    }
+
+    /**
+     * Get the active database connection
+     * 
+     * @return The database connection
+     */
+    public Connection getConnection() {
+        return connection;
     }
 }

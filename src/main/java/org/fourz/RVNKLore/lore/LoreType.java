@@ -1,7 +1,5 @@
 package org.fourz.RVNKLore.lore;
 
-import net.minecraft.world.entity.animal.axolotl.PlayDead;
-
 /**
  * Enum representing different types of lore entries
  */
