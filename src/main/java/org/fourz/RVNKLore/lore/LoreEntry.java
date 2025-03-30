@@ -41,8 +41,8 @@ public class LoreEntry {
         this.id = UUID.randomUUID().toString();
         this.name = name;
         this.description = description;
-        this.nbtData = nbtData;
-        //this.submittedBy = contributor.getName();
+        this.nbtData = ""; // Initialize with empty string instead of using undefined variable
+        this.submittedBy = contributor.getName(); // Uncomment this line to set the submitter's name
         this.type = type;
         this.approved = false;
         this.createdAt = new Timestamp(System.currentTimeMillis());

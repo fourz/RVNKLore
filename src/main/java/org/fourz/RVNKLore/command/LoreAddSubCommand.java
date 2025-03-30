@@ -63,7 +63,6 @@ public class LoreAddSubCommand implements SubCommand {
         }
 
         // Create lore entry
-        
         LoreEntry entry = new LoreEntry(name, description.toString(), type, player);
         
         // For location-based lore types, add player's current location
@@ -71,8 +70,10 @@ public class LoreAddSubCommand implements SubCommand {
             entry.setLocation(player.getLocation());
         }
         
-        // If player has item in hand and type is HEAD or HAT, get NBT data
-        if ((type == LoreType.HEAD || type == LoreType.HAT) && player.getInventory().getItemInMainHand() != null) {
+        // If player has item in hand and type is a head/hat type, get NBT data
+        if ((type == LoreType.HEAD || type == LoreType.HAT || 
+             type == LoreType.PLAYER_HEAD || type == LoreType.MOB_HEAD) && 
+            player.getInventory().getItemInMainHand() != null) {
             // In a real implementation, you would use an NBT API to extract NBT data
             // For this example, we'll use a placeholder
             entry.setNbtData("{}");
