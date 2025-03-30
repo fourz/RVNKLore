@@ -7,9 +7,12 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.lore.LoreEntry;
+import org.fourz.RVNKLore.lore.LoreType;
 import org.fourz.RVNKLore.util.Debug;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.logging.Level;
 
@@ -26,14 +29,33 @@ public class FactionLoreHandler implements LoreHandler {
     }
 
     @Override
+    public void initialize() {
+        debug.debug("Initializing faction lore handler");
+    }
+
+    @Override
     public boolean validateEntry(LoreEntry entry) {
+        List<String> validationErrors = new ArrayList<>();
+        
         if (entry.getName() == null || entry.getName().isEmpty()) {
-            debug.debug("Faction lore validation failed: Name is required");
-            return false;
+            validationErrors.add("Name is required");
+        } else if (entry.getName().length() < 3 || entry.getName().length() > 32) {
+            validationErrors.add("Faction name must be between 3-32 characters");
         }
         
         if (entry.getDescription() == null || entry.getDescription().isEmpty()) {
-            debug.debug("Faction lore validation failed: Description is required");
+            validationErrors.add("Description is required");
+        } else if (entry.getDescription().length() < 20) {
+            validationErrors.add("Description too short (min 20 characters)");
+        }
+        
+        // Factions should list at least one member
+        if (entry.getMetadata("members") == null || entry.getMetadata("members").isEmpty()) {
+            validationErrors.add("At least one member must be specified");
+        }
+        
+        if (!validationErrors.isEmpty()) {
+            debug.debug("Faction validation failed: " + String.join(", ", validationErrors));
             return false;
         }
         
@@ -46,28 +68,50 @@ public class FactionLoreHandler implements LoreHandler {
         ItemMeta meta = item.getItemMeta();
         
         if (meta != null) {
-            meta.setDisplayName(ChatColor.GOLD + entry.getName());
+            meta.setDisplayName(ChatColor.RED + entry.getName());
             
             List<String> lore = new ArrayList<>();
             lore.add(ChatColor.GRAY + "Type: " + ChatColor.RED + "Faction");
             
-            // Split description into lines for better readability
+            // Format founding date if available
+            if (entry.getMetadata("founding_date") != null) {
+                try {
+                    long foundingTimestamp = Long.parseLong(entry.getMetadata("founding_date"));
+                    Date foundingDate = new Date(foundingTimestamp);
+                    SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+                    lore.add(ChatColor.GRAY + "Founded: " + ChatColor.WHITE + sdf.format(foundingDate));
+                } catch (NumberFormatException e) {
+                    debug.debug("Could not parse founding date for faction: " + entry.getName());
+                }
+            }
+            
+            // Add founder if available
+            if (entry.getSubmittedBy() != null) {
+                lore.add(ChatColor.GRAY + "Leader: " + ChatColor.YELLOW + entry.getSubmittedBy());
+            }
+            
+            // Add members if available
+            if (entry.getMetadata("members") != null) {
+                lore.add(ChatColor.GRAY + "Members: " + ChatColor.WHITE + entry.getMetadata("members"));
+            }
+            
+            lore.add("");
+            
+            // Split description into lines
             String[] descLines = entry.getDescription().split("\\n");
             for (String line : descLines) {
                 lore.add(ChatColor.WHITE + line);
             }
             
+            // Add headquarters location if available
             if (entry.getLocation() != null) {
                 lore.add("");
                 lore.add(ChatColor.GRAY + "Headquarters: " + 
-                        ChatColor.YELLOW + entry.getLocation().getWorld().getName() + " at " + 
+                        ChatColor.WHITE + entry.getLocation().getWorld().getName() + " at " + 
                         (int)entry.getLocation().getX() + ", " + 
                         (int)entry.getLocation().getY() + ", " + 
                         (int)entry.getLocation().getZ());
             }
-            
-            lore.add("");
-            lore.add(ChatColor.GRAY + "Chronicled by: " + ChatColor.YELLOW + entry.getSubmittedBy());
             
             meta.setLore(lore);
             item.setItemMeta(meta);
@@ -78,25 +122,52 @@ public class FactionLoreHandler implements LoreHandler {
 
     @Override
     public void displayLore(LoreEntry entry, Player player) {
-        player.sendMessage(ChatColor.GOLD + "=== " + entry.getName() + " ===");
+        player.sendMessage(ChatColor.RED + "==== " + entry.getName() + " ====");
         player.sendMessage(ChatColor.GRAY + "Type: " + ChatColor.RED + "Faction");
         
+        // Format founding date if available
+        if (entry.getMetadata("founding_date") != null) {
+            try {
+                long foundingTimestamp = Long.parseLong(entry.getMetadata("founding_date"));
+                Date foundingDate = new Date(foundingTimestamp);
+                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+                player.sendMessage(ChatColor.GRAY + "Founded: " + ChatColor.WHITE + sdf.format(foundingDate));
+            } catch (NumberFormatException e) {
+                debug.debug("Could not parse founding date");
+            }
+        }
+        
+        // Add founder if available
+        if (entry.getSubmittedBy() != null) {
+            player.sendMessage(ChatColor.GRAY + "Leader: " + ChatColor.YELLOW + entry.getSubmittedBy());
+        }
+        
+        // Add members if available
+        if (entry.getMetadata("members") != null) {
+            player.sendMessage(ChatColor.GRAY + "Members: " + ChatColor.WHITE + entry.getMetadata("members"));
+        }
+        
         player.sendMessage("");
+        
+        // Display description
         String[] descLines = entry.getDescription().split("\\n");
         for (String line : descLines) {
             player.sendMessage(ChatColor.WHITE + line);
         }
         
+        // Add headquarters location if available
         if (entry.getLocation() != null) {
             player.sendMessage("");
             player.sendMessage(ChatColor.GRAY + "Headquarters: " + 
-                    ChatColor.YELLOW + entry.getLocation().getWorld().getName() + " at " + 
+                    ChatColor.WHITE + entry.getLocation().getWorld().getName() + " at " + 
                     (int)entry.getLocation().getX() + ", " + 
                     (int)entry.getLocation().getY() + ", " + 
                     (int)entry.getLocation().getZ());
         }
-        
-        player.sendMessage("");
-        player.sendMessage(ChatColor.GRAY + "Chronicled by: " + ChatColor.YELLOW + entry.getSubmittedBy());
+    }
+
+    @Override
+    public LoreType getHandlerType() {
+        return LoreType.FACTION;
     }
 }

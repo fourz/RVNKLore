@@ -91,89 +91,158 @@ public class DatabaseManager {
                 "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
                 ")";
         
+        String createMetadataTable = "CREATE TABLE IF NOT EXISTS lore_metadata (" +
+                "lore_id VARCHAR(36) NOT NULL, " +
+                "meta_key VARCHAR(64) NOT NULL, " +
+                "meta_value TEXT, " +
+                "PRIMARY KEY (lore_id, meta_key), " +
+                "FOREIGN KEY (lore_id) REFERENCES lore_entries(id) ON DELETE CASCADE" +
+                ")";
+        
         try (Statement stmt = connection.createStatement()) {
             stmt.execute(createLoreTable);
+            stmt.execute(createMetadataTable);
             debug.debug("Database tables created/verified");
         }
     }
     
     /**
-     * Add a new lore entry to the database
-     * 
-     * @param entry The lore entry to add
-     * @return True if successful, false otherwise
+     * Add a new lore entry to the database with metadata
      */
     public boolean addLoreEntry(LoreEntry entry) {
+        // First add the main entry
         String sql = "INSERT INTO lore_entries (id, type, name, description, nbt_data, world, x, y, z, submitted_by, approved) " +
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         
-        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-            stmt.setString(1, entry.getId().toString());
-            stmt.setString(2, entry.getType().name());
-            stmt.setString(3, entry.getName());
-            stmt.setString(4, entry.getDescription());
-            stmt.setString(5, entry.getNbtData());
+        try {
+            // Enable transaction
+            connection.setAutoCommit(false);
             
-            Location loc = entry.getLocation();
-            if (loc != null) {
-                stmt.setString(6, loc.getWorld().getName());
-                stmt.setDouble(7, loc.getX());
-                stmt.setDouble(8, loc.getY());
-                stmt.setDouble(9, loc.getZ());
-            } else {
-                stmt.setNull(6, Types.VARCHAR);
-                stmt.setNull(7, Types.DOUBLE);
-                stmt.setNull(8, Types.DOUBLE);
-                stmt.setNull(9, Types.DOUBLE);
+            try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+                stmt.setString(1, entry.getId().toString());
+                stmt.setString(2, entry.getType().name());
+                stmt.setString(3, entry.getName());
+                stmt.setString(4, entry.getDescription());
+                stmt.setString(5, entry.getNbtData());
+                
+                Location loc = entry.getLocation();
+                if (loc != null) {
+                    stmt.setString(6, loc.getWorld().getName());
+                    stmt.setDouble(7, loc.getX());
+                    stmt.setDouble(8, loc.getY());
+                    stmt.setDouble(9, loc.getZ());
+                } else {
+                    stmt.setNull(6, Types.VARCHAR);
+                    stmt.setNull(7, Types.DOUBLE);
+                    stmt.setNull(8, Types.DOUBLE);
+                    stmt.setNull(9, Types.DOUBLE);
+                }
+                
+                stmt.setString(10, entry.getSubmittedBy());
+                stmt.setBoolean(11, entry.isApproved());
+                
+                stmt.executeUpdate();
+                
+                // Now add any metadata
+                addMetadataForEntry(entry);
+                
+                // Commit the transaction
+                connection.commit();
+                return true;
+            } catch (SQLException e) {
+                connection.rollback();
+                debug.error("Failed to add lore entry to database", e);
+                return false;
+            } finally {
+                connection.setAutoCommit(true);
             }
-            
-            stmt.setString(10, entry.getSubmittedBy());
-            stmt.setBoolean(11, entry.isApproved());
-            
-            stmt.executeUpdate();
-            return true;
         } catch (SQLException e) {
-            debug.error("Failed to add lore entry to database", e);
+            debug.error("Transaction error when adding lore entry", e);
             return false;
         }
     }
     
     /**
-     * Update an existing lore entry in the database
-     * 
-     * @param entry The lore entry to update
-     * @return True if successful, false otherwise
+     * Helper method to add metadata for an entry
+     */
+    private void addMetadataForEntry(LoreEntry entry) throws SQLException {
+        Map<String, String> metadata = entry.getAllMetadata();
+        if (metadata.isEmpty()) {
+            return;
+        }
+        
+        String sql = "INSERT INTO lore_metadata (lore_id, meta_key, meta_value) VALUES (?, ?, ?)";
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            for (Map.Entry<String, String> meta : metadata.entrySet()) {
+                stmt.setString(1, entry.getId().toString());
+                stmt.setString(2, meta.getKey());
+                stmt.setString(3, meta.getValue());
+                stmt.addBatch();
+            }
+            stmt.executeBatch();
+        }
+    }
+    
+    /**
+     * Update an entry and its metadata
      */
     public boolean updateLoreEntry(LoreEntry entry) {
         String sql = "UPDATE lore_entries SET name = ?, description = ?, nbt_data = ?, " +
                 "world = ?, x = ?, y = ?, z = ?, approved = ? WHERE id = ?";
         
-        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-            stmt.setString(1, entry.getName());
-            stmt.setString(2, entry.getDescription());
-            stmt.setString(3, entry.getNbtData());
+        try {
+            connection.setAutoCommit(false);
             
-            Location loc = entry.getLocation();
-            if (loc != null) {
-                stmt.setString(4, loc.getWorld().getName());
-                stmt.setDouble(5, loc.getX());
-                stmt.setDouble(6, loc.getY());
-                stmt.setDouble(7, loc.getZ());
-            } else {
-                stmt.setNull(4, Types.VARCHAR);
-                stmt.setNull(5, Types.DOUBLE);
-                stmt.setNull(6, Types.DOUBLE);
-                stmt.setNull(7, Types.DOUBLE);
+            try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+                stmt.setString(1, entry.getName());
+                stmt.setString(2, entry.getDescription());
+                stmt.setString(3, entry.getNbtData());
+                
+                Location loc = entry.getLocation();
+                if (loc != null) {
+                    stmt.setString(4, loc.getWorld().getName());
+                    stmt.setDouble(5, loc.getX());
+                    stmt.setDouble(6, loc.getY());
+                    stmt.setDouble(7, loc.getZ());
+                } else {
+                    stmt.setNull(4, Types.VARCHAR);
+                    stmt.setNull(5, Types.DOUBLE);
+                    stmt.setNull(6, Types.DOUBLE);
+                    stmt.setNull(7, Types.DOUBLE);
+                }
+                
+                stmt.setBoolean(8, entry.isApproved());
+                stmt.setString(9, entry.getId().toString());
+                
+                stmt.executeUpdate();
+                
+                // Update metadata: first delete existing, then add new
+                deleteMetadataForEntry(entry.getId().toString());
+                addMetadataForEntry(entry);
+                
+                connection.commit();
+                return true;
+            } catch (SQLException e) {
+                connection.rollback();
+                debug.error("Failed to update lore entry in database", e);
+                return false;
+            } finally {
+                connection.setAutoCommit(true);
             }
-            
-            stmt.setBoolean(8, entry.isApproved());
-            stmt.setString(9, entry.getId().toString());
-            
-            stmt.executeUpdate();
-            return true;
         } catch (SQLException e) {
-            debug.error("Failed to update lore entry in database", e);
+            debug.error("Transaction error when updating lore entry", e);
             return false;
+        }
+    }
+    
+    /**
+     * Delete metadata for an entry
+     */
+    private void deleteMetadataForEntry(String id) throws SQLException {
+        String sql = "DELETE FROM lore_metadata WHERE lore_id = ?";
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setString(1, id);
+            stmt.executeUpdate();
         }
     }
     
@@ -200,14 +269,14 @@ public class DatabaseManager {
     }
     
     /**
-     * Convert a database result set to a LoreEntry object
+     * Convert a database result set to a LoreEntry object with metadata
      * 
      * @param rs The result set to convert
      * @return The created LoreEntry
      */
     private LoreEntry resultSetToLoreEntry(ResultSet rs) throws SQLException {
         UUID id = UUID.fromString(rs.getString("id"));
-        LoreType type = LoreType.fromString(rs.getString("type"));
+        LoreType type = LoreType.valueOf(rs.getString("type"));
         String name = rs.getString("name");
         String description = rs.getString("description");
         String nbtData = rs.getString("nbt_data");
@@ -229,7 +298,29 @@ public class DatabaseManager {
         boolean approved = rs.getBoolean("approved");
         Timestamp createdAt = rs.getTimestamp("created_at");
         
-        return new LoreEntry(id, type, name, description, nbtData, location, submittedBy, approved, createdAt);
+        LoreEntry entry = new LoreEntry(id, type, name, description, nbtData, location, submittedBy, approved, createdAt);
+        
+        // Load metadata
+        loadMetadataForEntry(entry);
+        
+        return entry;
+    }
+    
+    /**
+     * Load metadata for a lore entry
+     */
+    private void loadMetadataForEntry(LoreEntry entry) throws SQLException {
+        String sql = "SELECT meta_key, meta_value FROM lore_metadata WHERE lore_id = ?";
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setString(1, entry.getId().toString());
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    String key = rs.getString("meta_key");
+                    String value = rs.getString("meta_value");
+                    entry.addMetadata(key, value);
+                }
+            }
+        }
     }
     
     /**

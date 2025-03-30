@@ -322,4 +322,28 @@ public class LoreManager {
     Set<LoreEntry> getCachedEntries() {
         return cachedEntries;
     }
+
+    /**
+     * Get a lore entry by its name
+     * 
+     * @param name The name of the lore entry
+     * @return The lore entry, or null if not found
+     */
+    public LoreEntry getLoreEntryByName(String name) {
+        debug.debug("Looking up lore entry by name: " + name);
+        
+        return cachedEntries.stream()
+            .filter(entry -> entry.getName().equalsIgnoreCase(name))
+            .findFirst()
+            .orElse(null);
+    }
+
+    /**
+     * Get all lore entries
+     * 
+     * @return A list of all lore entries
+     */
+    public List<LoreEntry> getAllLoreEntries() {
+        return new ArrayList<>(cachedEntries);
+    }
 }

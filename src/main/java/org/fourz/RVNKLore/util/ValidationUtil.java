@@ -76,7 +76,7 @@ public class ValidationUtil {
         if (isLocationType(type)) {
             Location location = entry.getLocation();
             if (location == null) {
-                throw new LoreException("Location is required for " + type.getDescription() + " lore", 
+                throw new LoreException("Location is required for " + type.name() + " lore", 
                         LoreExceptionType.VALIDATION_ERROR);
             }
             

@@ -5,6 +5,8 @@ import org.json.simple.JSONObject;
 
 import org.bukkit.entity.Player;
 import java.sql.Timestamp;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -20,6 +22,17 @@ public class LoreEntry {
     private String submittedBy;
     private boolean approved;
     private Timestamp createdAt;
+    // Missing metadata field
+    private Map<String, String> metadata;
+    
+    /**
+     * Default constructor for new entries
+     */
+    public LoreEntry() {
+        this.id = UUID.randomUUID().toString();
+        this.metadata = new HashMap<>();
+        this.createdAt = new Timestamp(System.currentTimeMillis());
+    }
     
     /**
      * Constructor for creating a new lore entry
@@ -171,6 +184,51 @@ public class LoreEntry {
     }
     
     /**
+     * Add metadata to this lore entry
+     * 
+     * @param key The metadata key
+     * @param value The metadata value
+     */
+    public void addMetadata(String key, String value) {
+        if (metadata == null) {
+            metadata = new HashMap<>();
+        }
+        metadata.put(key, value);
+    }
+    
+    /**
+     * Get metadata from this lore entry
+     * 
+     * @param key The metadata key
+     * @return The metadata value, or null if not found
+     */
+    public String getMetadata(String key) {
+        if (metadata == null) {
+            return null;
+        }
+        return metadata.get(key);
+    }
+    
+    /**
+     * Check if this entry has metadata with the given key
+     * 
+     * @param key The metadata key
+     * @return True if metadata exists, false otherwise
+     */
+    public boolean hasMetadata(String key) {
+        return metadata != null && metadata.containsKey(key);
+    }
+    
+    /**
+     * Get all metadata for this entry
+     * 
+     * @return A map of all metadata
+     */
+    public Map<String, String> getAllMetadata() {
+        return metadata != null ? new HashMap<>(metadata) : new HashMap<>();
+    }
+    
+    /**
      * Convert the lore entry to a JSON object
      */
     public JSONObject toJson() {
@@ -196,6 +254,13 @@ public class LoreEntry {
         json.put("submittedBy", submittedBy);
         json.put("approved", approved);
         json.put("createdAt", createdAt.toString());
+        
+        // Add metadata to JSON
+        if (metadata != null && !metadata.isEmpty()) {
+            JSONObject metadataJson = new JSONObject();
+            metadataJson.putAll(metadata);
+            json.put("metadata", metadataJson);
+        }
         
         return json;
     }

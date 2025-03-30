@@ -98,4 +98,9 @@ public class QuestLoreHandler extends DefaultLoreHandler implements LoreHandler 
             player.sendMessage(ChatColor.YELLOW + "Added by: " + ChatColor.WHITE + entry.getSubmittedBy());
         }
     }
+
+    @Override
+    public LoreType getHandlerType() {
+        return LoreType.QUEST;
+    }
 }

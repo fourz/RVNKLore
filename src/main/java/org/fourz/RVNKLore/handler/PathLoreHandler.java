@@ -7,6 +7,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.lore.LoreEntry;
+import org.fourz.RVNKLore.lore.LoreType;
 import org.fourz.RVNKLore.util.Debug;
 
 import java.util.ArrayList;
@@ -14,7 +15,7 @@ import java.util.List;
 import java.util.logging.Level;
 
 /**
- * Handler for path and route lore entries
+ * Handler for path/road lore entries
  */
 public class PathLoreHandler implements LoreHandler {
     private final RVNKLore plugin;
@@ -23,6 +24,11 @@ public class PathLoreHandler implements LoreHandler {
     public PathLoreHandler(RVNKLore plugin) {
         this.plugin = plugin;
         this.debug = Debug.createDebugger(plugin, "PathLoreHandler", Level.FINE);
+    }
+
+    @Override
+    public void initialize() {
+        debug.debug("Initializing path lore handler");
     }
 
     @Override
@@ -38,7 +44,7 @@ public class PathLoreHandler implements LoreHandler {
         }
         
         if (entry.getLocation() == null) {
-            debug.debug("Path lore validation failed: Starting location is required for paths");
+            debug.debug("Path lore validation failed: Starting location is required");
             return false;
         }
         
@@ -47,23 +53,26 @@ public class PathLoreHandler implements LoreHandler {
 
     @Override
     public ItemStack createLoreItem(LoreEntry entry) {
-        ItemStack item = new ItemStack(Material.COMPASS);
+        ItemStack item = new ItemStack(Material.MAP);
         ItemMeta meta = item.getItemMeta();
         
         if (meta != null) {
             meta.setDisplayName(ChatColor.GOLD + entry.getName());
             
             List<String> lore = new ArrayList<>();
-            lore.add(ChatColor.GRAY + "Type: " + ChatColor.GREEN + "Path/Route");
+            lore.add(ChatColor.GRAY + "Type: " + ChatColor.GOLD + "Path/Road");
             
-            // Location info
-            if (entry.getLocation() != null) {
-                lore.add(ChatColor.GRAY + "Starting Point: " + 
-                        ChatColor.YELLOW + entry.getLocation().getWorld().getName() + " at " + 
-                        (int)entry.getLocation().getX() + ", " + 
-                        (int)entry.getLocation().getY() + ", " + 
-                        (int)entry.getLocation().getZ());
+            // Add creator if available
+            if (entry.getSubmittedBy() != null) {
+                lore.add(ChatColor.GRAY + "Paved by: " + ChatColor.YELLOW + entry.getSubmittedBy());
             }
+            
+            // Get destination from metadata if available
+            if (entry.getMetadata("destination") != null) {
+                lore.add(ChatColor.GRAY + "Destination: " + ChatColor.WHITE + entry.getMetadata("destination"));
+            }
+            
+            lore.add("");
             
             // Split description into lines for better readability
             String[] descLines = entry.getDescription().split("\\n");
@@ -71,8 +80,15 @@ public class PathLoreHandler implements LoreHandler {
                 lore.add(ChatColor.WHITE + line);
             }
             
-            lore.add("");
-            lore.add(ChatColor.GRAY + "Documented by: " + ChatColor.YELLOW + entry.getSubmittedBy());
+            // Add starting location
+            if (entry.getLocation() != null) {
+                lore.add("");
+                lore.add(ChatColor.GRAY + "Starting Point: " + 
+                        ChatColor.WHITE + entry.getLocation().getWorld().getName() + " at " + 
+                        (int)entry.getLocation().getX() + ", " + 
+                        (int)entry.getLocation().getY() + ", " + 
+                        (int)entry.getLocation().getZ());
+            }
             
             meta.setLore(lore);
             item.setItemMeta(meta);
@@ -83,24 +99,40 @@ public class PathLoreHandler implements LoreHandler {
 
     @Override
     public void displayLore(LoreEntry entry, Player player) {
-        player.sendMessage(ChatColor.GOLD + "=== " + entry.getName() + " ===");
-        player.sendMessage(ChatColor.GRAY + "Type: " + ChatColor.GREEN + "Path/Route");
+        player.sendMessage(ChatColor.GOLD + "==== " + entry.getName() + " ====");
+        player.sendMessage(ChatColor.GRAY + "Type: " + ChatColor.GOLD + "Path/Road");
         
-        if (entry.getLocation() != null) {
-            player.sendMessage(ChatColor.GRAY + "Starting Point: " + 
-                    ChatColor.YELLOW + entry.getLocation().getWorld().getName() + " at " + 
-                    (int)entry.getLocation().getX() + ", " + 
-                    (int)entry.getLocation().getY() + ", " + 
-                    (int)entry.getLocation().getZ());
+        // Add creator if available
+        if (entry.getSubmittedBy() != null) {
+            player.sendMessage(ChatColor.GRAY + "Paved by: " + ChatColor.YELLOW + entry.getSubmittedBy());
+        }
+        
+        // Get destination from metadata if available
+        if (entry.getMetadata("destination") != null) {
+            player.sendMessage(ChatColor.GRAY + "Destination: " + ChatColor.WHITE + entry.getMetadata("destination"));
         }
         
         player.sendMessage("");
+        
+        // Display description
         String[] descLines = entry.getDescription().split("\\n");
         for (String line : descLines) {
             player.sendMessage(ChatColor.WHITE + line);
         }
         
-        player.sendMessage("");
-        player.sendMessage(ChatColor.GRAY + "Documented by: " + ChatColor.YELLOW + entry.getSubmittedBy());
+        // Add starting location
+        if (entry.getLocation() != null) {
+            player.sendMessage("");
+            player.sendMessage(ChatColor.GRAY + "Starting Point: " + 
+                    ChatColor.WHITE + entry.getLocation().getWorld().getName() + " at " + 
+                    (int)entry.getLocation().getX() + ", " + 
+                    (int)entry.getLocation().getY() + ", " + 
+                    (int)entry.getLocation().getZ());
+        }
+    }
+
+    @Override
+    public LoreType getHandlerType() {
+        return LoreType.PATH;
     }
 }

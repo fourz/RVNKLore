@@ -1,6 +1,8 @@
 package org.fourz.RVNKLore;
 
 import org.bukkit.plugin.java.JavaPlugin;
+import org.fourz.RVNKLore.handler.LoreHandlerManager;
+import org.fourz.RVNKLore.handler.HandlerFactory;
 import org.fourz.RVNKLore.lore.LoreManager;
 import org.fourz.RVNKLore.util.Debug;
 import org.fourz.RVNKLore.config.ConfigManager;
@@ -14,6 +16,8 @@ public class RVNKLore extends JavaPlugin {
     private ConfigManager configManager;
     private CommandManager commandManager;
     private DatabaseManager databaseManager;
+    private LoreHandlerManager handlerManager;
+    private HandlerFactory handlerFactory;
     
     @Override
     public void onEnable() {
@@ -32,6 +36,10 @@ public class RVNKLore extends JavaPlugin {
                 throw new Exception("Database connection failed. Plugin cannot function without storage.");
             }
             
+            // Initialize handler factory and manager
+            handlerFactory = new HandlerFactory(this);
+            handlerManager = new LoreHandlerManager(this);
+            
             // Continue with other managers
             loreManager = new LoreManager(this);
             loreManager.initializeLore();
@@ -48,6 +56,10 @@ public class RVNKLore extends JavaPlugin {
         try {
             if (databaseManager == null) {
                 databaseManager = new DatabaseManager(this);
+            }
+            
+            if (handlerFactory == null) {
+                handlerFactory = new HandlerFactory(this);
             }
             
             if (loreManager == null) {
@@ -84,6 +96,16 @@ public class RVNKLore extends JavaPlugin {
     }
 
     private void cleanupManagers() {
+        if (handlerManager != null) {
+            handlerManager.unregisterAllHandlers();
+            handlerManager = null;
+        }
+        
+        if (handlerFactory != null) {
+            handlerFactory.unregisterAllHandlers();
+            handlerFactory = null;
+        }
+        
         if (loreManager != null) {
             loreManager.cleanup();
             loreManager = null;
@@ -121,5 +143,22 @@ public class RVNKLore extends JavaPlugin {
     
     public DatabaseManager getDatabaseManager() {
         return databaseManager;
+    }
+    
+    public LoreHandlerManager getHandlerManager() {
+        return handlerManager;
+    }
+    
+    /**
+     * Get the handler factory for this plugin
+     * 
+     * @return The handler factory
+     */
+    public HandlerFactory getHandlerFactory() {
+        if (handlerFactory == null) {
+            debugger.warning("Handler factory requested but was null. Creating new instance.");
+            handlerFactory = new HandlerFactory(this);
+        }
+        return handlerFactory;
     }
 }

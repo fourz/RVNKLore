@@ -1,37 +1,86 @@
 package org.fourz.RVNKLore.lore;
 
 /**
- * Enum representing different types of lore entries
+ * Enum of all supported lore entry types
  */
 public enum LoreType {
-    PLAYER_HEAD("Player head"),
-    MOB_HEAD("Mob head"),
-    HEAD("Custom player with custom texture"),    
-    HAT("Wearable head item with custom model"),
-    LANDMARK("Notable location or structure"),
-    CITY("Player-built settlement or city"),
-    PATH("Road, trail, or navigation path"),
-    ENCHANTMENT("Custom enchantment or magical effect"),    
-    ITEM("Item with special lore"),
-    PLAYER("Server players"),
-    FACTION("Faction-related lore"),
-    QUEST("Quest-related lore"),    
-    OTHER("Miscellaneous lore entry");    
-    private final String description;
+    /**
+     * Generic/unspecified lore type
+     */
+    GENERIC("Generic/unspecified lore type"),
     
+    /**
+     * Player character lore
+     */
+    PLAYER("Player related events and milestones"),
+    
+    /**
+     * City/settlement lore
+     */
+    CITY("City/settlement lore"),
+    
+    /**
+     * Notable landmark
+     */
+    LANDMARK("Notable landmark"),
+    
+    /**
+     * Faction or group
+     */
+    FACTION("Faction or group"),
+    
+    /**
+     * Path or road
+     */
+    PATH("Path or road"),
+    
+    /**
+     * Crafted or special item
+     */
+    ITEM("Crafted or special item"),
+    
+    /**
+     * Event that occurred
+     */
+    EVENT("Event that occurred"),
+    
+    /**
+     * Quest or mission
+     */
+    QUEST("Quest or mission"),
+    
+    /**
+     * Enchantment on an item
+     */
+    ENCHANTMENT("Enchantment on an item"),
+    
+    /**
+     * Decorative head item
+     */
+    HEAD("Decorative head item"),
+    
+    /**
+     * Player head item
+     */
+    PLAYER_HEAD("Player head item"),
+    
+    /**
+     * Mob head item
+     */
+    MOB_HEAD("Mob head item"),
+    
+    /**
+     * Decorative hat
+     */
+    HAT("Decorative hat");
+
+    private final String description;
+
     LoreType(String description) {
         this.description = description;
     }
-    
+
     public String getDescription() {
-        return description;
-    }
-    
-    public static LoreType fromString(String typeStr) {
-        try {
-            return valueOf(typeStr.toUpperCase());
-        } catch (IllegalArgumentException e) {
-            return OTHER;
-        }
+        return this.description;
     }
 }
