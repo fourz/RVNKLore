@@ -3,6 +3,8 @@ package org.fourz.RVNKLore.handler;
 import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.PluginManager;
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.handler.event.PlayerDeathLoreHandler;
+import org.fourz.RVNKLore.handler.event.PlayerJoinLoreHandler;
 import org.fourz.RVNKLore.lore.LoreType;
 import org.fourz.RVNKLore.lore.QuestLoreHandler;
 import org.fourz.RVNKLore.util.Debug;
@@ -21,6 +23,7 @@ import java.util.HashSet;
  * Combines functionality from LoreHandlerManager to prevent duplicate initialization
  */
 public class HandlerFactory {
+    private static final String CLASS_NAME = "HandlerFactory";
     private final RVNKLore plugin;
     private final Debug debug;
     // Cache handlers to avoid creating new instances repeatedly - use EnumMap for better performance
@@ -35,7 +38,11 @@ public class HandlerFactory {
     
     public HandlerFactory(RVNKLore plugin) {
         this.plugin = plugin;
-        this.debug = Debug.createDebugger(plugin, "HandlerFactory", Level.FINE);
+        // Use the global log level from ConfigManager
+        this.debug = new Debug(plugin, CLASS_NAME, plugin.getConfigManager().getLogLevel()) {};
+        
+        // Ensure debug level is properly configured
+        plugin.getConfigManager().configureDebugInstance(debug);
     }
     
     /**

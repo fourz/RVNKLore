@@ -12,7 +12,6 @@ import org.fourz.RVNKLore.util.Debug;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.logging.Level;
 
 /**
  * Handler for special item lore entries
@@ -23,7 +22,7 @@ public class ItemLoreHandler implements LoreHandler {
     
     public ItemLoreHandler(RVNKLore plugin) {
         this.plugin = plugin;
-        this.debug = Debug.createDebugger(plugin, "ItemLoreHandler", Level.FINE);
+        this.debug = Debug.createDebugger(plugin, "ItemLoreHandler", plugin.getConfigManager().getLogLevel());
     }
 
     @Override
@@ -43,10 +42,8 @@ public class ItemLoreHandler implements LoreHandler {
             return false;
         }
         
-        // Items should have a material type defined
         if (entry.getMetadata("material") == null || entry.getMetadata("material").isEmpty()) {
             debug.debug("Item lore validation warning: Material not specified");
-            // Not a hard failure, but a warning
         }
         
         return true;
@@ -54,7 +51,6 @@ public class ItemLoreHandler implements LoreHandler {
 
     @Override
     public ItemStack createLoreItem(LoreEntry entry) {
-        // Try to use the specified material, or default to NETHER_STAR
         Material material = Material.NETHER_STAR;
         if (entry.getMetadata("material") != null) {
             try {
@@ -73,20 +69,17 @@ public class ItemLoreHandler implements LoreHandler {
             List<String> lore = new ArrayList<>();
             lore.add(ChatColor.GRAY + "Type: " + ChatColor.AQUA + "Legendary Item");
             
-            // Add creator if available
             if (entry.getSubmittedBy() != null) {
                 lore.add(ChatColor.GRAY + "Crafted by: " + ChatColor.YELLOW + entry.getSubmittedBy());
             }
             
             lore.add("");
             
-            // Split description into lines for better readability
             String[] descLines = entry.getDescription().split("\\n");
             for (String line : descLines) {
                 lore.add(ChatColor.WHITE + line);
             }
             
-            // Add properties if available
             if (entry.getMetadata("properties") != null) {
                 lore.add("");
                 lore.add(ChatColor.GRAY + "Properties:");
@@ -108,20 +101,17 @@ public class ItemLoreHandler implements LoreHandler {
         player.sendMessage(ChatColor.AQUA + "==== " + entry.getName() + " ====");
         player.sendMessage(ChatColor.GRAY + "Type: " + ChatColor.AQUA + "Legendary Item");
         
-        // Add creator if available
         if (entry.getSubmittedBy() != null) {
             player.sendMessage(ChatColor.GRAY + "Crafted by: " + ChatColor.YELLOW + entry.getSubmittedBy());
         }
         
         player.sendMessage("");
         
-        // Display description
         String[] descLines = entry.getDescription().split("\\n");
         for (String line : descLines) {
             player.sendMessage(ChatColor.WHITE + line);
         }
         
-        // Add properties if available
         if (entry.getMetadata("properties") != null) {
             player.sendMessage("");
             player.sendMessage(ChatColor.GRAY + "Properties:");

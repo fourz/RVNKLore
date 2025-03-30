@@ -14,7 +14,8 @@ public class DatabaseConnectionFactory {
     
     public DatabaseConnectionFactory(RVNKLore plugin) {
         this.plugin = plugin;
-        this.debug = Debug.createDebugger(plugin, "DatabaseConnectionFactory", Level.FINE);
+        Level logLevel = plugin.getConfigManager().getLogLevel();
+        this.debug = Debug.createDebugger(plugin, "DatabaseConnectionFactory", logLevel);
     }
     
     /**

@@ -26,8 +26,7 @@ public class HandlerSignLandmark extends DefaultLoreHandler {
     
     public HandlerSignLandmark(RVNKLore plugin) {
         super(plugin);
-        // Set debug level without creating a new debug instance
-        super.debug.setLogLevel(Level.FINE);
+        // Don't override the log level - let it inherit from ConfigManager
     }
     
     @Override
@@ -97,8 +96,8 @@ public class HandlerSignLandmark extends DefaultLoreHandler {
         entry.addMetadata("z", String.valueOf(block.getZ()));
         entry.addMetadata("source", "sign");
         
-        // New landmarks from signs start unapproved if approval is required
-        boolean autoApprove = plugin.getConfig().getBoolean("landmarks.signs.auto_approve", false);
+        // Use ConfigManager instead of direct getConfig() access for consistency
+        boolean autoApprove = plugin.getConfigManager().getConfig().getBoolean("landmarks.signs.auto_approve", false);
         entry.setApproved(autoApprove || player.hasPermission("rvnklore.approve.own"));
         
         // Save the entry

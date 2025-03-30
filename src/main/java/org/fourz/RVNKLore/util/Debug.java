@@ -67,14 +67,21 @@ public abstract class Debug {
         log(Level.FINE, message);
     }
 
+    /**
+     * Determine if the given message level should be logged
+     */
     private boolean shouldLog(Level messageLevel) {
+        // Always suppress logging if level is OFF
         if (logLevel == Level.OFF) {
             return false;
         }
+        
         // Special handling for FINE (debug) level
         if (messageLevel == Level.FINE) {
-            return logLevel == Level.FINE;
+            return logLevel == Level.FINE; // Only log FINE if we're actually at FINE level
         }
+        
+        // For other levels, follow normal level hierarchy
         return messageLevel.intValue() >= logLevel.intValue();
     }
 

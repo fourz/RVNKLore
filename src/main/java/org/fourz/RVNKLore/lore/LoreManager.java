@@ -23,7 +23,8 @@ public class LoreManager {
 
     public LoreManager(RVNKLore plugin) {
         this.plugin = plugin;
-        this.debug = Debug.createDebugger(plugin, "LoreManager", Level.FINE);
+        // Use the configured log level from ConfigManager instead of hardcoding Level.FINE
+        this.debug = Debug.createDebugger(plugin, "LoreManager", plugin.getConfigManager().getLogLevel());
         // Initialize lists for all lore types
         for (LoreType type : LoreType.values()) {
             loreByType.put(type, new ArrayList<>());

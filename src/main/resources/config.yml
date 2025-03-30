@@ -4,6 +4,25 @@ general:
   # Default: INFO
   logLevel: INFO
 
+lore:
+  nearbyRadius: 50.0
+  requireApproval: true
+  handlers:
+    GENERIC: DEFAULT
+    PLAYER: DEFAULT
+    CITY: DEFAULT
+    LANDMARK: DEFAULT
+    FACTION: DEFAULT
+    PATH: DEFAULT
+    ITEM: DEFAULT
+    EVENT: DEFAULT
+    QUEST: DEFAULT
+    ENCHANTMENT: DEFAULT
+    HEAD: DEFAULT
+    PLAYER_HEAD: DEFAULT
+    MOB_HEAD: DEFAULT
+    HAT: DEFAULT  
+
 storage:
   type: sqlite
   mysql:

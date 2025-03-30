@@ -26,7 +26,7 @@ public class PlayerLoreHandler implements LoreHandler {
     
     public PlayerLoreHandler(RVNKLore plugin) {
         this.plugin = plugin;
-        this.debug = Debug.createDebugger(plugin, "PlayerLoreHandler", Level.FINE);
+        this.debug = Debug.createDebugger(plugin, "PlayerLoreHandler", plugin.getConfigManager().getLogLevel());
     }
     
     @Override

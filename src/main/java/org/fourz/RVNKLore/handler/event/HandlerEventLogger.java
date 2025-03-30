@@ -1,4 +1,4 @@
-package org.fourz.RVNKLore.handler;
+package org.fourz.RVNKLore.handler.event;
 
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;

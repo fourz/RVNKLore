@@ -1,4 +1,4 @@
-package org.fourz.RVNKLore.handler;
+package org.fourz.RVNKLore.handler.event;
 
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
@@ -8,6 +8,7 @@ import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.handler.DefaultLoreHandler;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
 

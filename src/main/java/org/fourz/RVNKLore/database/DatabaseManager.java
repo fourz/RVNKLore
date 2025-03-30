@@ -37,7 +37,8 @@ public class DatabaseManager {
      */
     public DatabaseManager(RVNKLore plugin) {
         this.plugin = plugin;
-        this.debug = Debug.createDebugger(plugin, "DatabaseManager", Level.FINE);
+        // Use the configured log level from ConfigManager instead of hardcoding Level.FINE
+        this.debug = Debug.createDebugger(plugin, "DatabaseManager", plugin.getConfigManager().getLogLevel());
         
         // Initialize components
         this.connectionFactory = new DatabaseConnectionFactory(plugin);

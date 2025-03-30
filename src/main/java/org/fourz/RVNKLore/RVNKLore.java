@@ -22,10 +22,15 @@ public class RVNKLore extends JavaPlugin {
     
     @Override
     public void onEnable() {
-        // Initialize ConfigManager first
+        // Initialize ConfigManager first to get the log level
         configManager = new ConfigManager(this);
+        
+        // Initialize debugger with the configured log level
         debugger = new Debug(this, "RVNKLore", configManager.getLogLevel()) {};
-        configManager.initDebugLogging(); // Initialize debug in the config manager
+        
+        // Initialize debug in ConfigManager
+        configManager.initDebugLogging();
+        
         debugger.info("Initializing RVNKLore...");
         
         try {

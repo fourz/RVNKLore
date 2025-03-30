@@ -8,7 +8,6 @@ import org.fourz.RVNKLore.util.Debug;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.logging.Level;
 
 /**
  * Manages command registration and execution for the RVNKLore plugin.
@@ -20,7 +19,7 @@ public class CommandManager {
 
     public CommandManager(RVNKLore plugin) {
         this.plugin = plugin;
-        this.debug = Debug.createDebugger(plugin, "CommandManager", Level.FINE);
+        this.debug = Debug.createDebugger(plugin, "CommandManager", plugin.getConfigManager().getLogLevel());
         registerCommands();
     }
 

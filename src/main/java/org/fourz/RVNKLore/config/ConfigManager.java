@@ -7,7 +7,6 @@ import org.fourz.RVNKLore.handler.HandlerFactory;
 import org.fourz.RVNKLore.handler.LoreHandler;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
-
 import org.fourz.RVNKLore.util.Debug;
 
 import java.util.HashMap;
@@ -16,14 +15,18 @@ import java.util.Map;
 import java.util.logging.Level;
 
 public class ConfigManager {
+    private static final String CLASS_NAME = "ConfigManager";
     private final RVNKLore plugin;
     private FileConfiguration config;
     private Debug debug;
     private HandlerFactory handlerFactory;
+    private Level globalLogLevel;
 
     public ConfigManager(RVNKLore plugin) {
         this.plugin = plugin;
         loadConfig();
+        // Initialize global log level immediately after loading config
+        this.globalLogLevel = parseLogLevel();
     }
 
     private void loadConfig() {
@@ -57,8 +60,55 @@ public class ConfigManager {
 
     // Called after Debug is initialized
     public void initDebugLogging() {
-        this.debug = Debug.createDebugger(plugin, "ConfigManager", Level.FINE);
-        debug.debug("Configuration system initialized");
+        this.debug = new Debug(plugin, CLASS_NAME, globalLogLevel) {};
+        debug.debug("Configuration system initialized with log level: " + globalLogLevel.getName());
+    }
+
+    /**
+     * Parse log level from config with proper error handling
+     */
+    private Level parseLogLevel() {
+        String levelStr = config.getString("general.logLevel", "INFO");
+        try {
+            // Special handling for DEBUG which maps to FINE
+            if (levelStr.equalsIgnoreCase("DEBUG")) {
+                return Level.FINE;
+            }
+            return Level.parse(levelStr.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            plugin.getLogger().warning("Invalid log level in config: " + levelStr + ". Using INFO level instead.");
+            return Level.INFO;
+        }
+    }
+
+    /**
+     * Get the globally configured log level
+     */
+    public Level getLogLevel() {
+        return globalLogLevel;
+    }
+
+    /**
+     * Update global log level after config reload
+     */
+    private void updateGlobalLogLevel() {
+        Level newLevel = parseLogLevel();
+        
+        // Only update and propagate if the level has actually changed
+        if (!newLevel.equals(globalLogLevel)) {
+            globalLogLevel = newLevel;
+            plugin.getLogger().info("Log level changed to: " + newLevel.getName());
+            
+            // Update debug instance for this class
+            if (debug != null) {
+                debug.setLogLevel(newLevel);
+            }
+            
+            // Update main plugin debugger if available
+            if (plugin.getDebugger() != null) {
+                plugin.getDebugger().setLogLevel(newLevel);
+            }
+        }
     }
 
     /**
@@ -122,14 +172,6 @@ public class ConfigManager {
         }
     }
 
-    public Level getLogLevel() {
-        String level = config.getString("general.logLevel", "INFO");
-        if (level.equalsIgnoreCase("DEBUG")) {
-            return Level.FINE;
-        }
-        return Level.parse(level.toUpperCase());
-    }
-
     public String getStorageType() {
         return config.getString("storage.type", "sqlite");
     }
@@ -149,8 +191,12 @@ public class ConfigManager {
     public void reloadConfig() {
         plugin.reloadConfig();
         config = plugin.getConfig();
+        
+        // Update log level whenever config is reloaded
+        updateGlobalLogLevel();
+        
         if (debug != null) {
-            debug.debug("Configuration reloaded");
+            debug.debug("Configuration reloaded with log level: " + globalLogLevel.getName());
         }
     }
 
@@ -164,5 +210,14 @@ public class ConfigManager {
             initHandlerFactory();
         }
         return handlerFactory;
+    }
+
+    /**
+     * Configure log level for any new debug instances
+     */
+    public void configureDebugInstance(Debug debugInstance) {
+        if (debugInstance != null) {
+            debugInstance.setLogLevel(globalLogLevel);
+        }
     }
 }

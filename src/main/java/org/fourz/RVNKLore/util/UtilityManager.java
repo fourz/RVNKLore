@@ -1,7 +1,6 @@
 package org.fourz.RVNKLore.util;
 
 import org.fourz.RVNKLore.RVNKLore;
-import java.util.logging.Level;
 
 /**
  * Manager for utility classes to provide centralized access
@@ -14,7 +13,7 @@ public class UtilityManager {
     
     private UtilityManager(RVNKLore plugin) {
         this.plugin = plugin;
-        this.debug = Debug.createDebugger(plugin, "UtilityManager", Level.FINE);
+        this.debug = Debug.createDebugger(plugin, "UtilityManager", plugin.getConfigManager().getLogLevel());
         this.diagnosticUtil = new DiagnosticUtil(plugin);
     }
     

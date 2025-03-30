@@ -19,7 +19,8 @@ public abstract class DatabaseConnection {
     
     public DatabaseConnection(RVNKLore plugin) {
         this.plugin = plugin;
-        this.debug = Debug.createDebugger(plugin, "DatabaseConnection", Level.FINE);
+        Level logLevel = plugin.getConfigManager().getLogLevel();
+        this.debug = Debug.createDebugger(plugin, "DatabaseConnection", logLevel);
     }
     
     /**

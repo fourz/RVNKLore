@@ -24,7 +24,7 @@ public class HeadLoreHandler implements LoreHandler {
     
     public HeadLoreHandler(RVNKLore plugin) {
         this.plugin = plugin;
-        this.debug = Debug.createDebugger(plugin, "HeadLoreHandler", Level.FINE);
+        this.debug = Debug.createDebugger(plugin, "HeadLoreHandler", plugin.getConfigManager().getLogLevel());
     }
 
     @Override
