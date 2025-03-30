@@ -29,6 +29,9 @@ public class DatabaseManager {
     private LoreEntryRepository loreRepository;
     private DatabaseBackupService backupService;
     private DatabaseHelper databaseHelper;
+    private volatile boolean connectionValid = false;
+    private int reconnectAttempts = 0;
+    private static final int MAX_RECONNECT_ATTEMPTS = 5;
     
     /**
      * Create a new DatabaseManager instance
@@ -61,8 +64,11 @@ public class DatabaseManager {
             loreRepository = new LoreEntryRepository(plugin, connection);
             backupService = new DatabaseBackupService(plugin, connection);
             
+            connectionValid = true;
+            reconnectAttempts = 0;
             debug.debug("Database initialized successfully");
         } catch (Exception e) {
+            connectionValid = false;
             debug.error("Failed to initialize database", e);
         }
     }
@@ -74,6 +80,10 @@ public class DatabaseManager {
      * @return true if successful, false otherwise
      */
     public boolean addLoreEntry(LoreEntry entry) {
+        if (!validateConnection()) {
+            debug.warning("Database connection invalid, cannot add lore entry");
+            return false;
+        }
         return loreRepository.addLoreEntry(entry);
     }
     
@@ -84,6 +94,10 @@ public class DatabaseManager {
      * @return true if successful, false otherwise
      */
     public boolean updateLoreEntry(LoreEntry entry) {
+        if (!validateConnection()) {
+            debug.warning("Database connection invalid, cannot update lore entry");
+            return false;
+        }
         return loreRepository.updateLoreEntry(entry);
     }
     
@@ -113,6 +127,10 @@ public class DatabaseManager {
      * @return true if successful, false otherwise
      */
     public boolean deleteLoreEntry(UUID id) {
+        if (!validateConnection()) {
+            debug.warning("Database connection invalid, cannot delete lore entry");
+            return false;
+        }
         return loreRepository.deleteLoreEntry(id);
     }
     
@@ -278,5 +296,31 @@ public class DatabaseManager {
      */
     public DatabaseHelper getDatabaseHelper() {
         return databaseHelper;
+    }
+    
+    /**
+     * Validates and attempts to fix database connection if needed
+     */
+    private boolean validateConnection() {
+        if (connectionValid && isConnected()) {
+            return true;
+        }
+        
+        if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+            debug.severe("Maximum reconnection attempts reached. Database operations disabled.");
+            return false;
+        }
+        
+        debug.warning("Database connection invalid, attempting reconnect");
+        boolean reconnected = reconnect();
+        if (reconnected) {
+            connectionValid = true;
+            reconnectAttempts = 0;
+            return true;
+        } else {
+            reconnectAttempts++;
+            connectionValid = false;
+            return false;
+        }
     }
 }

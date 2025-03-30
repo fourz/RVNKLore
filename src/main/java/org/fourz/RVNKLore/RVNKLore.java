@@ -19,6 +19,9 @@ public class RVNKLore extends JavaPlugin {
     private HandlerFactory handlerFactory;
     private UtilityManager utilityManager;
     private int healthCheckTaskId = -1;
+    private Thread shutdownHook;
+    private boolean shuttingDown = false;
+    private final Object shutdownLock = new Object();
     
     @Override
     public void onEnable() {
@@ -30,6 +33,8 @@ public class RVNKLore extends JavaPlugin {
         
         // Initialize debug in ConfigManager
         configManager.initDebugLogging();
+        
+        registerShutdownHook();
         
         debugger.info("Initializing RVNKLore...");
         
@@ -59,6 +64,9 @@ public class RVNKLore extends JavaPlugin {
             // Finally initialize command system
             commandManager = new CommandManager(this);
             
+            // Start periodic health check
+            startHealthCheck();
+            
             debugger.info("RVNKLore has been enabled!");
         } catch (Exception e) {
             debugger.error("Failed to initialize plugin", e);
@@ -66,8 +74,45 @@ public class RVNKLore extends JavaPlugin {
         }
     }
 
+    private void registerShutdownHook() {
+        shutdownHook = new Thread(() -> {
+            synchronized(shutdownLock) {
+                if (!shuttingDown) {
+                    shuttingDown = true;
+                    debugger.info("Server shutdown detected - cleaning up resources");
+                    cleanupManagers();
+                }
+            }
+        });
+        Runtime.getRuntime().addShutdownHook(shutdownHook);
+    }
+    
+    private void startHealthCheck() {
+        healthCheckTaskId = getServer().getScheduler().scheduleSyncRepeatingTask(this, () -> {
+            // Check database connection
+            if (databaseManager != null && !databaseManager.isConnected()) {
+                debugger.warning("Database connection lost, attempting reconnect");
+                databaseManager.reconnect();
+            }
+            
+            // Log any accumulated errors
+            int errorCount = Debug.getErrorCount();
+            if (errorCount > 0) {
+                debugger.warning("There have been " + errorCount + " errors since last health check");
+                Debug.resetErrorCount();
+            }
+        }, 1200L, 1200L); // Check every minute (20 ticks/sec * 60 sec)
+    }
+
     @Override
     public void onDisable() {
+        synchronized(shutdownLock) {
+            if (shuttingDown) {
+                return; // Already shutting down from shutdown hook
+            }
+            shuttingDown = true;
+        }
+        
         if (debugger == null) {
             getLogger().warning("Debugger was null during shutdown");
             return;
@@ -80,6 +125,13 @@ public class RVNKLore extends JavaPlugin {
             if (healthCheckTaskId != -1) {
                 getServer().getScheduler().cancelTask(healthCheckTaskId);
                 healthCheckTaskId = -1;
+            }
+            
+            // Remove shutdown hook to prevent duplicate cleanup
+            try {
+                Runtime.getRuntime().removeShutdownHook(shutdownHook);
+            } catch (IllegalStateException e) {
+                // JVM is already shutting down, ignore
             }
             
             cleanupManagers();

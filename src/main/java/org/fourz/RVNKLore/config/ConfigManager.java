@@ -34,8 +34,29 @@ public class ConfigManager {
         plugin.reloadConfig();
         config = plugin.getConfig();
         
-        // Set config defaults if they don't exist
+        validateConfig();
         setDefaults();
+    }
+    
+    private void validateConfig() {
+        // Check essential configuration sections
+        if (!config.contains("general.logLevel")) {
+            plugin.getLogger().warning("No log level defined in config, using default: INFO");
+        }
+        
+        if (!config.contains("storage.type")) {
+            plugin.getLogger().warning("No storage type defined in config, using default: sqlite");
+        }
+        
+        // Validate database connection settings
+        String storageType = getStorageType();
+        if ("mysql".equalsIgnoreCase(storageType)) {
+            if (!config.contains("storage.mysql.host") || 
+                !config.contains("storage.mysql.database") ||
+                !config.contains("storage.mysql.username")) {
+                plugin.getLogger().warning("Missing required MySQL settings - check your config.yml");
+            }
+        }
     }
     
     private void setDefaults() {
@@ -219,5 +240,36 @@ public class ConfigManager {
         if (debugInstance != null) {
             debugInstance.setLogLevel(globalLogLevel);
         }
+    }
+    
+    /**
+     * Get database connection settings for MySQL
+     */
+    public Map<String, Object> getMySQLSettings() {
+        Map<String, Object> settings = new HashMap<>();
+        settings.put("host", config.getString("storage.mysql.host", "localhost"));
+        settings.put("port", config.getInt("storage.mysql.port", 3306));
+        settings.put("database", config.getString("storage.mysql.database", "minecraft"));
+        settings.put("username", config.getString("storage.mysql.username", "root"));
+        settings.put("password", config.getString("storage.mysql.password", ""));
+        settings.put("useSSL", config.getBoolean("storage.mysql.useSSL", false));
+        settings.put("tablePrefix", config.getString("storage.mysql.tablePrefix", ""));
+        return settings;
+    }
+    
+    /**
+     * Get database connection settings for SQLite
+     */
+    public Map<String, Object> getSQLiteSettings() {
+        Map<String, Object> settings = new HashMap<>();
+        settings.put("database", config.getString("storage.sqlite.database", "data.db"));
+        return settings;
+    }
+    
+    /**
+     * Get test mode setting
+     */
+    public boolean isTestMode() {
+        return "yes".equalsIgnoreCase(config.getString("storage.test-mode", "no"));
     }
 }

@@ -2,6 +2,9 @@ package org.fourz.RVNKLore.util;
 
 import org.bukkit.plugin.java.JavaPlugin;
 import java.util.logging.Level;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.io.StringWriter;
+import java.io.PrintWriter;
 
 /**
  * Debug logging utility class that provides structured logging with different severity levels.
@@ -26,6 +29,7 @@ public abstract class Debug {
     private final String className;
     private Level logLevel;
     private boolean debugEnabled;
+    private static final AtomicInteger errorCount = new AtomicInteger(0);
 
     protected Debug(JavaPlugin plugin, String className, Level level) {
         this.plugin = plugin;
@@ -39,7 +43,6 @@ public abstract class Debug {
 
     private void log(Level level, String message) {
         if (shouldLog(level)) {
-            // Map FINE to INFO when actually logging
             Level logLevel = (level == Level.FINE) ? Level.INFO : level;
             plugin.getLogger().log(logLevel,
                 String.format("[%s] %s%s", 
@@ -50,16 +53,21 @@ public abstract class Debug {
     }
 
     public void error(String message, Throwable e) {
+        errorCount.incrementAndGet();
         log(Level.SEVERE, message);
         if (e != null && shouldLog(Level.SEVERE)) {
-            e.printStackTrace();
+            StringWriter sw = new StringWriter();
+            PrintWriter pw = new PrintWriter(sw);
+            e.printStackTrace(pw);
+            log(Level.SEVERE, "Stack trace: " + sw.toString());
         }
     }
 
     public void warning(String message) {
         log(Level.WARNING, message);
     }
-     public void severe(String message) {
+
+    public void severe(String message) {
         log(Level.SEVERE, message);
     }
 
@@ -67,21 +75,15 @@ public abstract class Debug {
         log(Level.FINE, message);
     }
 
-    /**
-     * Determine if the given message level should be logged
-     */
     private boolean shouldLog(Level messageLevel) {
-        // Always suppress logging if level is OFF
         if (logLevel == Level.OFF) {
             return false;
         }
         
-        // Special handling for FINE (debug) level
         if (messageLevel == Level.FINE) {
-            return logLevel == Level.FINE; // Only log FINE if we're actually at FINE level
+            return logLevel == Level.FINE;
         }
         
-        // For other levels, follow normal level hierarchy
         return messageLevel.intValue() >= logLevel.intValue();
     }
 
@@ -110,12 +112,15 @@ public abstract class Debug {
         return new Debug(plugin, className, level) {};
     }
 
-    /**
-     * Checks if the specified debug level is enabled
-     * @param level The log level to check
-     * @return true if the current log level is equal to or more detailed than the specified level
-     */
     public boolean isDebugLevel(Level level) {
         return shouldLog(level);
+    }
+    
+    public static int getErrorCount() {
+        return errorCount.get();
+    }
+    
+    public static void resetErrorCount() {
+        errorCount.set(0);
     }
 }

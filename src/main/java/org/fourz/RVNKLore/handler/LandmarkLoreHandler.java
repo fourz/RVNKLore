@@ -23,7 +23,7 @@ public class LandmarkLoreHandler implements LoreHandler {
     
     public LandmarkLoreHandler(RVNKLore plugin) {
         this.plugin = plugin;
-        this.debug = Debug.createDebugger(plugin, "LandmarkLoreHandler", Level.FINE);
+        this.debug = Debug.createDebugger(plugin, "LandmarkLoreHandler", plugin.getConfigManager().getLogLevel());
     }
 
     @Override
