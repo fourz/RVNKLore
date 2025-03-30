@@ -7,6 +7,7 @@ import org.fourz.RVNKLore.util.Debug;
 import org.fourz.RVNKLore.config.ConfigManager;
 import org.fourz.RVNKLore.command.CommandManager;
 import org.fourz.RVNKLore.database.DatabaseManager;
+import org.fourz.RVNKLore.util.UtilityManager;
 import java.util.logging.Level;
 
 public class RVNKLore extends JavaPlugin {
@@ -16,6 +17,8 @@ public class RVNKLore extends JavaPlugin {
     private CommandManager commandManager;
     private DatabaseManager databaseManager;
     private HandlerFactory handlerFactory;
+    private UtilityManager utilityManager;
+    private int healthCheckTaskId = -1;
     
     @Override
     public void onEnable() {
@@ -37,6 +40,9 @@ public class RVNKLore extends JavaPlugin {
             // Initialize handler factory first to prevent duplicate initializations
             handlerFactory = new HandlerFactory(this);
             handlerFactory.initialize();
+            
+            // Initialize utility manager for diagnostics
+            utilityManager = UtilityManager.getInstance(this);
             
             // Continue with other managers
             loreManager = new LoreManager(this);
@@ -85,6 +91,12 @@ public class RVNKLore extends JavaPlugin {
         debugger.info("RVNKLore is shutting down...");
         
         try {
+            // Cancel health check task if running
+            if (healthCheckTaskId != -1) {
+                getServer().getScheduler().cancelTask(healthCheckTaskId);
+                healthCheckTaskId = -1;
+            }
+            
             cleanupManagers();
         } catch (Exception e) {
             debugger.error("Failed to cleanup managers", e);
@@ -95,6 +107,11 @@ public class RVNKLore extends JavaPlugin {
     }
 
     private void cleanupManagers() {
+        if (utilityManager != null) {
+            utilityManager.cleanup();
+            utilityManager = null;
+        }
+        
         if (handlerFactory != null) {
             handlerFactory.unregisterAllHandlers();
             handlerFactory = null;
@@ -151,5 +168,12 @@ public class RVNKLore extends JavaPlugin {
             handlerFactory.initialize();
         }
         return handlerFactory;
+    }
+
+    /**
+     * Get the utility manager
+     */
+    public UtilityManager getUtilityManager() {
+        return utilityManager;
     }
 }

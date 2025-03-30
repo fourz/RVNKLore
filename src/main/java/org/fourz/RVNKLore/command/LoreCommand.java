@@ -43,6 +43,7 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
         commands.put("approve", new LoreApproveSubCommand(plugin));
         commands.put("reload", new LoreReloadSubCommand(plugin));
         commands.put("export", new LoreExportSubCommand(plugin));
+        commands.put("debug", new LoreDebugSubCommand(plugin));
         
         // Add all commands to the subCommands map
         commands.forEach(this::registerSubCommand);

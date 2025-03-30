@@ -148,9 +148,19 @@ public class HandlerFactory {
     private LoreHandler createHandler(LoreType type) {
         Class<? extends LoreHandler> handlerClass = handlerClasses.get(type.name());
         
+        if (handlerClass == null) {
+            debug.warning("No handler class registered for type: " + type + ", using default");
+            return new DefaultLoreHandler(plugin);
+        }
+        
         try {
             LoreHandler handler = handlerClass.getConstructor(RVNKLore.class).newInstance(plugin);
-            handler.initialize();
+            try {
+                handler.initialize();
+            } catch (Exception e) {
+                debug.error("Handler initialization failed for type: " + type, e);
+                // Continue with the handler even if initialization failed
+            }
             debug.debug("Created handler for lore type: " + type + " using " + handlerClass.getSimpleName());
             return handler;
         } catch (Exception e) {

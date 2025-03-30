@@ -94,11 +94,26 @@ public class LoreManager {
      * @return True if successful, false otherwise
      */
     public boolean addLoreEntry(LoreEntry entry) {
+        if (entry == null) {
+            debug.warning("Attempted to add null lore entry");
+            return false;
+        }
+        
+        if (entry.getType() == null) {
+            debug.warning("Lore entry has null type: " + entry.getName());
+            return false;
+        }
+        
         debug.debug("Adding lore entry: " + entry.getName() + " of type " + entry.getType());
         
         // Validate the entry using the appropriate handler
         LoreHandler handler = handlers.get(entry.getType());
-        if (handler != null && !handler.validateEntry(entry)) {
+        if (handler == null) {
+            debug.warning("No handler found for lore type: " + entry.getType());
+            return false;
+        }
+        
+        if (!handler.validateEntry(entry)) {
             debug.warning("Lore entry validation failed for: " + entry.getName());
             return false;
         }
@@ -190,12 +205,24 @@ public class LoreManager {
      * @return A list of nearby lore entries
      */
     public List<LoreEntry> findNearbyLoreEntries(Location location, double radius) {
+        if (location == null) {
+            debug.warning("Attempted to find nearby lore with null location");
+            return new ArrayList<>();
+        }
+        
         return cachedEntries.stream()
                 .filter(LoreEntry::isApproved)
                 .filter(entry -> {
                     if (entry.getLocation() == null) return false;
-                    if (!entry.getLocation().getWorld().equals(location.getWorld())) return false;
-                    return entry.getLocation().distance(location) <= radius;
+                    if (entry.getLocation().getWorld() == null) return false;
+                    if (location.getWorld() == null) return false;
+                    try {
+                        return entry.getLocation().getWorld().getName().equals(location.getWorld().getName()) 
+                            && entry.getLocation().distance(location) <= radius;
+                    } catch (IllegalArgumentException e) {
+                        debug.debug("Error calculating distance for lore: " + entry.getId());
+                        return false;
+                    }
                 })
                 .collect(Collectors.toList());
     }
