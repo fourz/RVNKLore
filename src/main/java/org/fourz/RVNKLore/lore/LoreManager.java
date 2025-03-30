@@ -242,29 +242,29 @@ public class LoreManager {
     }
 
     /**
-     * Handle player head lore specifically
+     * Handle player head lore specifically (filter by metadata)
      */
     public List<LoreEntry> getPlayerHeadLore() {
-        return getLoreEntriesByType(LoreType.PLAYER_HEAD);
+        return getLoreEntriesByType(LoreType.HEAD).stream()
+            .filter(entry -> "player".equals(entry.getMetadata("head_type")))
+            .collect(Collectors.toList());
     }
 
     /**
-     * Handle mob head lore specifically
+     * Handle mob head lore specifically (filter by metadata)
      */
     public List<LoreEntry> getMobHeadLore() {
-        return getLoreEntriesByType(LoreType.MOB_HEAD);
+        return getLoreEntriesByType(LoreType.HEAD).stream()
+            .filter(entry -> "mob".equals(entry.getMetadata("head_type")))
+            .collect(Collectors.toList());
     }
 
     /**
      * Get all lore related to wearable items
      */
     public List<LoreEntry> getWearableLore() {
-        List<LoreEntry> wearables = new ArrayList<>();
-        wearables.addAll(getLoreEntriesByType(LoreType.PLAYER_HEAD));
-        wearables.addAll(getLoreEntriesByType(LoreType.MOB_HEAD));
-        wearables.addAll(getLoreEntriesByType(LoreType.HEAD));
-        wearables.addAll(getLoreEntriesByType(LoreType.HAT));
-        return wearables;
+        // Now just return all HEAD type entries, as they include all head subtypes
+        return getLoreEntriesByType(LoreType.HEAD);
     }
 
     /**

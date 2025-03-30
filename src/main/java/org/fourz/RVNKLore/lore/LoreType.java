@@ -55,24 +55,9 @@ public enum LoreType {
     ENCHANTMENT("Enchantment on an item"),
     
     /**
-     * Decorative head item
+     * Decorative head item (includes player heads, mob heads, custom heads, and hats)
      */
-    HEAD("Decorative head item"),
-    
-    /**
-     * Player head item
-     */
-    PLAYER_HEAD("Player head item"),
-    
-    /**
-     * Mob head item
-     */
-    MOB_HEAD("Mob head item"),
-    
-    /**
-     * Decorative hat
-     */
-    HAT("Decorative hat");
+    HEAD("Decorative head or hat item");
 
     private final String description;
 

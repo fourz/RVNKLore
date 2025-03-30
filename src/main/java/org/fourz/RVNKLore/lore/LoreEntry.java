@@ -348,8 +348,7 @@ public class LoreEntry {
         }
         
         // Head/hat lore typically requires NBT data
-        if ((type == LoreType.PLAYER_HEAD || type == LoreType.MOB_HEAD || 
-             type == LoreType.HEAD || type == LoreType.HAT) && (nbtData == null || nbtData.isEmpty())) {
+        if ((type == LoreType.HEAD ) && (nbtData == null || nbtData.isEmpty())) {
             return false;
         }
         

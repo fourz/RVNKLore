@@ -71,8 +71,7 @@ public class LoreAddSubCommand implements SubCommand {
         }
         
         // If player has item in hand and type is a head/hat type, get NBT data
-        if ((type == LoreType.HEAD || type == LoreType.HAT || 
-             type == LoreType.PLAYER_HEAD || type == LoreType.MOB_HEAD) && 
+        if ((type == LoreType.HEAD) && 
             player.getInventory().getItemInMainHand() != null) {
             // In a real implementation, you would use an NBT API to extract NBT data
             // For this example, we'll use a placeholder

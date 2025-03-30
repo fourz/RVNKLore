@@ -101,8 +101,7 @@ public class ValidationUtil {
      * Check if a lore type is head/hat-based
      */
     public static boolean isHeadType(LoreType type) {
-        return type == LoreType.PLAYER_HEAD || type == LoreType.MOB_HEAD || 
-               type == LoreType.HEAD || type == LoreType.HAT;
+        return type == LoreType.HEAD;
     }
     
     /**

@@ -48,7 +48,9 @@ public class HandlerFactory {
             handlerClasses.put("PATH", PathLoreHandler.class);
             handlerClasses.put("FACTION", FactionLoreHandler.class);
             handlerClasses.put("ITEM", ItemLoreHandler.class);
-            handlerClasses.put("HEAD", HeadLoreHandler.class);
+            
+            // Replace individual head handlers with the unified CommonHeadHandler
+            handlerClasses.put("HEAD", CommonHeadHandler.class);
             
             // Event-specific handlers
             handlerClasses.put("PLAYER_JOIN", PlayerJoinLoreHandler.class);
