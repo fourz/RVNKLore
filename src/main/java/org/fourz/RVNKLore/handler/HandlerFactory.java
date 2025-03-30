@@ -12,6 +12,9 @@ import java.util.Map;
 import java.util.logging.Level;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.EnumMap;
+import java.util.Set;
+import java.util.HashSet;
 
 /**
  * Factory for creating and managing lore handlers
@@ -19,10 +22,12 @@ import java.util.List;
 public class HandlerFactory {
     private final RVNKLore plugin;
     private final Debug debug;
-    // Cache handlers to avoid creating new instances repeatedly
-    private final Map<LoreType, LoreHandler> handlerCache = new HashMap<>();
+    // Cache handlers to avoid creating new instances repeatedly - use EnumMap for better performance
+    private final Map<LoreType, LoreHandler> handlerCache = new EnumMap<>(LoreType.class);
     // Map of type names to handler classes for dynamic instantiation
     private final Map<String, Class<? extends LoreHandler>> handlerClasses = new HashMap<>();
+    // Track registered event listeners
+    private final Set<LoreHandler> registeredListeners = new HashSet<>();
     
     public HandlerFactory(RVNKLore plugin) {
         this.plugin = plugin;
@@ -35,48 +40,31 @@ public class HandlerFactory {
      */
     private void registerDefaultHandlers() {
         try {
-            Map<String, Boolean> registrationStatus = new HashMap<>();
-            
-            // Core handlers
+            // Core handlers - only register the ones we have actual implementations for
             handlerClasses.put("GENERIC", DefaultLoreHandler.class);
             handlerClasses.put("PLAYER", PlayerLoreHandler.class);
             handlerClasses.put("CITY", CityLoreHandler.class);
             handlerClasses.put("LANDMARK", LandmarkLoreHandler.class);
             handlerClasses.put("PATH", PathLoreHandler.class);
             handlerClasses.put("FACTION", FactionLoreHandler.class);
+            handlerClasses.put("ITEM", ItemLoreHandler.class);
+            handlerClasses.put("HEAD", HeadLoreHandler.class);
             
-            // Event handlers
+            // Event-specific handlers
             handlerClasses.put("PLAYER_JOIN", PlayerJoinLoreHandler.class);
             handlerClasses.put("PLAYER_DEATH", PlayerDeathLoreHandler.class);
             handlerClasses.put("ENCHANTED_ITEM", EnchantedItemLoreHandler.class);
             
-            // Identify missing handlers
-            List<String> missingHandlers = new ArrayList<>();
+            // Check for missing handlers but don't log warnings yet - will use default
             for (LoreType type : LoreType.values()) {
                 if (!handlerClasses.containsKey(type.name())) {
-                    debug.warning("Missing handler implementation for: " + type.name());
-                    missingHandlers.add(type.name());
                     handlerClasses.put(type.name(), DefaultLoreHandler.class);
-                    registrationStatus.put(type.name(), false);
-                } else {
-                    registrationStatus.put(type.name(), true);
                 }
             }
             
-            // Log handler registration summary
-            debug.info("Handler registration summary:");
-            registrationStatus.forEach((type, hasImpl) -> 
-                debug.info(String.format("%s: %s", type, hasImpl ? "Custom Implementation" : "Default Fallback")));
-            
-            // Log specific warning about missing handlers
-            if (!missingHandlers.isEmpty()) {
-                debug.warning("Missing implementations for " + missingHandlers.size() + " handlers: " + 
-                            String.join(", ", missingHandlers));
-            }
-            
+            debug.info("Registered " + handlerClasses.size() + " handler classes");
         } catch (Exception e) {
             debug.error("Failed to register handlers", e);
-            throw new RuntimeException("Handler registration failed", e);
         }
     }
     
@@ -106,43 +94,33 @@ public class HandlerFactory {
     
     /**
      * Create a new handler for the specified type
-     * 
-     * @param type The lore type
-     * @return A new handler instance
      */
     private LoreHandler createHandler(LoreType type) {
-        debug.debug("Creating handler for lore type: " + type);
+        Class<? extends LoreHandler> handlerClass = handlerClasses.get(type.name());
         
         try {
-            Class<? extends LoreHandler> handlerClass = handlerClasses.get(type.name());
-            
-            // If no specific handler is registered, use the default
-            if (handlerClass == null) {
-                debug.debug("No specific handler found for type " + type + ", using default");
-                handlerClass = DefaultLoreHandler.class;
-            }
-            
-            // Instantiate the handler
             LoreHandler handler = handlerClass.getConstructor(RVNKLore.class).newInstance(plugin);
             handler.initialize();
+            debug.debug("Created handler for lore type: " + type + " using " + handlerClass.getSimpleName());
             return handler;
-            
         } catch (Exception e) {
             debug.error("Failed to create handler for type " + type, e);
-            // Return a default handler as fallback
             return new DefaultLoreHandler(plugin);
         }
     }
     
     /**
-     * Register a handler as an event listener
-     * 
-     * @param handler The handler to register
+     * Register a handler as an event listener only if it hasn't been registered already
      */
     private void registerEventListener(LoreHandler handler) {
+        if (registeredListeners.contains(handler)) {
+            return;
+        }
+        
         try {
             PluginManager pm = plugin.getServer().getPluginManager();
             pm.registerEvents(handler, plugin);
+            registeredListeners.add(handler);
             debug.debug("Registered event listener for handler: " + handler.getHandlerType());
         } catch (Exception e) {
             debug.error("Failed to register event listener for handler", e);
@@ -150,25 +128,13 @@ public class HandlerFactory {
     }
     
     /**
-     * Register a custom handler for a lore type
-     * 
-     * @param type The lore type
-     * @param handlerClass The handler class
-     */
-    public void registerHandler(LoreType type, Class<? extends LoreHandler> handlerClass) {
-        handlerClasses.put(type.name(), handlerClass);
-        // Clear from cache to ensure the new class is used
-        handlerCache.remove(type);
-        debug.debug("Registered custom handler for type: " + type);
-    }
-    
-    /**
      * Unregister all handlers from event handling
      */
     public void unregisterAllHandlers() {
-        for (LoreHandler handler : handlerCache.values()) {
+        for (LoreHandler handler : registeredListeners) {
             HandlerList.unregisterAll(handler);
         }
+        registeredListeners.clear();
         handlerCache.clear();
         debug.debug("Unregistered all handler event listeners");
     }
@@ -177,9 +143,10 @@ public class HandlerFactory {
      * Initialize all handlers for all lore types
      */
     public void initializeAllHandlers() {
+        // Only initialize handlers for types we expect to use
         for (LoreType type : LoreType.values()) {
             try {
-                getHandler(type); // This will create, cache, and register the handler
+                getHandler(type);
             } catch (Exception e) {
                 debug.error("Failed to initialize handler for type: " + type, e);
             }

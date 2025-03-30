@@ -12,7 +12,9 @@ import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
 import org.fourz.RVNKLore.util.Debug;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.logging.Level;
 
@@ -21,11 +23,8 @@ import java.util.logging.Level;
  */
 public class PlayerJoinLoreHandler extends DefaultLoreHandler {
     
-    private Debug debug; // Add explicit field declaration
-    
     public PlayerJoinLoreHandler(RVNKLore plugin) {
         super(plugin);
-        this.debug = Debug.createDebugger(plugin, "PlayerJoinLoreHandler", Level.FINE);
     }
     
     @Override
@@ -43,8 +42,6 @@ public class PlayerJoinLoreHandler extends DefaultLoreHandler {
         // Only create entry for first-time joins
         if (!player.hasPlayedBefore()) {
             createNewPlayerJoinLoreEntry(player);
-        } else {
-            updatePlayerJoinLoreEntry(player);
         }
     }
     
@@ -57,18 +54,25 @@ public class PlayerJoinLoreHandler extends DefaultLoreHandler {
         LoreEntry entry = new LoreEntry();
         entry.setType(LoreType.PLAYER);
         entry.setName(player.getName() + "'s First Arrival");
-        entry.setDescription("On " + java.time.LocalDate.now().toString() + ", " + 
-                             player.getName() + " first set foot in our world.");
+        
+        // Format date using SimpleDateFormat for consistent display
+        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
+        String dateString = dateFormat.format(new Date());
+        
+        entry.setDescription(player.getName() + " first set foot in our world on " + dateString + ".");
         entry.setLocation(player.getLocation());
         entry.setSubmittedBy("Server");
         
-        // Add metadata
+        // Add essential metadata
         entry.addMetadata("player_uuid", player.getUniqueId().toString());
         entry.addMetadata("first_join_date", System.currentTimeMillis() + "");
-        entry.addMetadata("join_location_x", player.getLocation().getX() + "");
-        entry.addMetadata("join_location_y", player.getLocation().getY() + "");
-        entry.addMetadata("join_location_z", player.getLocation().getZ() + "");
-        entry.addMetadata("join_location_world", player.getLocation().getWorld().getName());
+        
+        // Location coordinates as metadata
+        entry.addMetadata("join_location", String.format("%s,%d,%d,%d", 
+            player.getLocation().getWorld().getName(),
+            (int)player.getLocation().getX(),
+            (int)player.getLocation().getY(),
+            (int)player.getLocation().getZ()));
         
         // Auto-approve server-generated entries
         entry.setApproved(true);
@@ -76,17 +80,6 @@ public class PlayerJoinLoreHandler extends DefaultLoreHandler {
         
         // Notify the player
         player.sendMessage(ChatColor.GOLD + "Your arrival has been recorded in the annals of history!");
-    }
-    
-    /**
-     * Update a player's join lore for returning players
-     */
-    private void updatePlayerJoinLoreEntry(Player player) {
-        debug.debug("Player rejoined: " + player.getName());
-        
-        // For frequently returning players, we don't need to spam the lore database
-        // Maybe update an existing entry or add a new one only for long absences
-        // This is just a placeholder for future implementation
     }
 
     @Override
@@ -104,30 +97,25 @@ public class PlayerJoinLoreHandler extends DefaultLoreHandler {
             String playerName = entry.getName().replace("'s First Arrival", "");
             lore.add(ChatColor.GRAY + "Player: " + ChatColor.WHITE + playerName);
             
-            // Get join date if available
-            if (entry.hasMetadata("first_join_date")) {
-                try {
-                    long joinTimestamp = Long.parseLong(entry.getMetadata("first_join_date"));
-                    java.util.Date joinDate = new java.util.Date(joinTimestamp);
-                    lore.add(ChatColor.GRAY + "Date: " + ChatColor.WHITE + 
-                             new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm").format(joinDate));
-                } catch (NumberFormatException e) {
-                    debug.debug("Could not parse join date");
-                }
+            // Format join date if available
+            String joinDate = formatJoinDate(entry);
+            if (joinDate != null) {
+                lore.add(ChatColor.GRAY + "Date: " + ChatColor.WHITE + joinDate);
             }
             
-            // Split description into lines
-            String[] descLines = entry.getDescription().split("\\n");
-            for (String line : descLines) {
-                lore.add(ChatColor.WHITE + line);
-            }
+            // Add description
+            lore.add("");
+            lore.add(ChatColor.WHITE + entry.getDescription());
             
+            // Add location if available
             if (entry.getLocation() != null) {
-                lore.add(ChatColor.GRAY + "Location: " + 
-                        ChatColor.WHITE + entry.getLocation().getWorld().getName() + " at " + 
-                        (int)entry.getLocation().getX() + ", " + 
-                        (int)entry.getLocation().getY() + ", " + 
-                        (int)entry.getLocation().getZ());
+                lore.add("");
+                lore.add(ChatColor.GRAY + "Location: " + ChatColor.WHITE + 
+                    String.format("%s (%d, %d, %d)", 
+                        entry.getLocation().getWorld().getName(),
+                        (int)entry.getLocation().getX(),
+                        (int)entry.getLocation().getY(),
+                        (int)entry.getLocation().getZ()));
             }
             
             meta.setLore(lore);
@@ -136,9 +124,26 @@ public class PlayerJoinLoreHandler extends DefaultLoreHandler {
         
         return item;
     }
+    
+    /**
+     * Format join date from metadata
+     */
+    private String formatJoinDate(LoreEntry entry) {
+        try {
+            String dateValue = entry.getMetadata("first_join_date");
+            if (dateValue != null && !dateValue.isEmpty()) {
+                long timestamp = Long.parseLong(dateValue);
+                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
+                return sdf.format(new Date(timestamp));
+            }
+        } catch (Exception e) {
+            debug.debug("Error formatting join date: " + e.getMessage());
+        }
+        return null;
+    }
 
     @Override
     public LoreType getHandlerType() {
-        return LoreType.PLAYER; // Was incorrectly returning PLAYER
+        return LoreType.PLAYER;
     }
 }

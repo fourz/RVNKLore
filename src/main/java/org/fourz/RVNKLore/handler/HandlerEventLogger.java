@@ -14,6 +14,7 @@ import org.fourz.RVNKLore.util.Debug;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 
 /**
@@ -22,8 +23,15 @@ import java.util.logging.Level;
 public class HandlerEventLogger implements Listener {
     private final RVNKLore plugin;
     private final Debug debug;
-    private final Map<Class<? extends Event>, Integer> eventCounts = new HashMap<>();
+    private final Map<Class<? extends Event>, Integer> eventCounts = new ConcurrentHashMap<>();
     private boolean enabled = false;
+    
+    // Events to monitor
+    private static final Class<?>[] MONITORED_EVENTS = {
+        PlayerJoinEvent.class,
+        PlayerDeathEvent.class,
+        EnchantItemEvent.class
+    };
     
     public HandlerEventLogger(RVNKLore plugin) {
         this.plugin = plugin;
@@ -55,10 +63,11 @@ public class HandlerEventLogger implements Listener {
      * Register listeners for all relevant events
      */
     private void registerEventListeners() {
-        registerEventListener(PlayerJoinEvent.class);
-        registerEventListener(PlayerDeathEvent.class);
-        registerEventListener(EnchantItemEvent.class);
-        // Add more events as needed
+        for (Class<?> eventClass : MONITORED_EVENTS) {
+            if (Event.class.isAssignableFrom(eventClass)) {
+                registerEventListener((Class<? extends Event>) eventClass);
+            }
+        }
     }
     
     /**
@@ -88,42 +97,32 @@ public class HandlerEventLogger implements Listener {
      */
     private void logEvent(Event event) {
         Class<? extends Event> eventClass = event.getClass();
-        int count = eventCounts.getOrDefault(eventClass, 0) + 1;
-        eventCounts.put(eventClass, count);
+        eventCounts.compute(eventClass, (k, v) -> (v == null) ? 1 : v + 1);
         
-        // Log detailed information based on event type
+        // Only log detailed info for debug level
+        if (debug.isDebugLevel(Level.FINE)) {
+            logDetailedEventInfo(event);
+        }
+    }
+    
+    /**
+     * Log detailed information for specific event types
+     */
+    private void logDetailedEventInfo(Event event) {
         if (event instanceof PlayerJoinEvent) {
             PlayerJoinEvent e = (PlayerJoinEvent) event;
-            debug.debug("PlayerJoinEvent detected: " + e.getPlayer().getName());
+            debug.debug("PlayerJoinEvent: " + e.getPlayer().getName());
         } else if (event instanceof PlayerDeathEvent) {
             PlayerDeathEvent e = (PlayerDeathEvent) event;
-            debug.debug("PlayerDeathEvent detected: " + e.getEntity().getName() + 
-                       " - Death message: " + e.getDeathMessage());
+            debug.debug("PlayerDeathEvent: " + e.getEntity().getName() + 
+                      " - " + e.getDeathMessage());
         } else if (event instanceof EnchantItemEvent) {
             EnchantItemEvent e = (EnchantItemEvent) event;
-            debug.debug("EnchantItemEvent detected: " + e.getEnchanter().getName() + 
-                       " enchanted " + e.getItem().getType() + 
-                       " with " + e.getEnchantsToAdd().size() + " enchantments");
+            debug.debug("EnchantItemEvent: " + e.getEnchanter().getName() + 
+                      " enchanted " + e.getItem().getType());
         } else {
-            debug.debug("Event detected: " + eventClass.getSimpleName());
+            debug.debug("Event: " + event.getClass().getSimpleName());
         }
-    }
-    
-    /**
-     * Get event statistics
-     */
-    public void printEventStatistics() {
-        debug.debug("Handler Event Statistics:");
-        for (Map.Entry<Class<? extends Event>, Integer> entry : eventCounts.entrySet()) {
-            debug.debug("  " + entry.getKey().getSimpleName() + ": " + entry.getValue() + " events");
-        }
-    }
-    
-    /**
-     * Reset event counters
-     */
-    public void resetCounters() {
-        eventCounts.clear();
     }
     
     /**
@@ -131,9 +130,8 @@ public class HandlerEventLogger implements Listener {
      */
     public void sendStatisticsToPlayer(Player player) {
         player.sendMessage("§6§lHandler Event Statistics:");
-        for (Map.Entry<Class<? extends Event>, Integer> entry : eventCounts.entrySet()) {
-            player.sendMessage("§e  " + entry.getKey().getSimpleName() + "§7: " + 
-                              entry.getValue() + " events");
-        }
+        eventCounts.forEach((eventClass, count) -> 
+            player.sendMessage("§e  " + eventClass.getSimpleName() + "§7: " + count + " events")
+        );
     }
 }

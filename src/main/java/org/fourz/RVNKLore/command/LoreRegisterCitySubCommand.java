@@ -68,14 +68,16 @@ public class LoreRegisterCitySubCommand implements SubCommand {
                 return false;
             }
 
+            // Get existing city entries only once for efficiency
+            List<LoreEntry> cityEntries = plugin.getLoreManager().getLoreEntriesByType(LoreType.CITY);
+            
             // Check distance to other cities
-            for (LoreEntry existingEntry : plugin.getLoreManager().getAllLoreEntries()) {
-                if (existingEntry.getType() == LoreType.CITY) {
-                    double distance = player.getLocation().distance(existingEntry.getLocation());
-                    if (distance < MIN_CITY_DISTANCE) {
-                        player.sendMessage(ChatColor.RED + "Cities must be at least " + MIN_CITY_DISTANCE + " blocks apart. Too close to " + existingEntry.getName());
-                        return false;
-                    }
+            for (LoreEntry existingEntry : cityEntries) {
+                double distance = player.getLocation().distance(existingEntry.getLocation());
+                if (distance < MIN_CITY_DISTANCE) {
+                    player.sendMessage(ChatColor.RED + "Cities must be at least " + MIN_CITY_DISTANCE + 
+                                      " blocks apart. Too close to " + existingEntry.getName());
+                    return false;
                 }
             }
 

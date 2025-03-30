@@ -102,4 +102,13 @@ public abstract class Debug {
     public static Debug createDebugger(JavaPlugin plugin, String className, Level level) {
         return new Debug(plugin, className, level) {};
     }
+
+    /**
+     * Checks if the specified debug level is enabled
+     * @param level The log level to check
+     * @return true if the current log level is equal to or more detailed than the specified level
+     */
+    public boolean isDebugLevel(Level level) {
+        return shouldLog(level);
+    }
 }
