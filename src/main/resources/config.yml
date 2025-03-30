@@ -1,0 +1,30 @@
+general:
+  # Valid log levels: OFF, SEVERE, WARNING, INFO, DEBUG, FINE
+  # DEBUG and FINE are equivalent and both enable debug logging
+  # Default: INFO
+  logLevel: INFO
+
+storage:
+  type: sqlite
+  mysql:
+    host: localhost
+    port: 3306
+    username: root
+    password: ''
+    useSSL: false
+    database: 
+    tablePrefix: 
+  sqlite:
+    database: data.db
+messages:
+  generic:
+    error:
+    - '[Error]'
+    success:
+    - '[Success]'
+    info:
+    - '[Info]'
+    help:
+    - '[Help]'
+    no_held_item:
+    - 'You must be holding an item!'

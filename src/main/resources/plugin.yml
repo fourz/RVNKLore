@@ -1,0 +1,12 @@
+name: RVNKLore
+api: "1.17"
+version: 1.0.0
+description: A quest system for Minecraft
+authors: [YourName]
+main: org.fourz.RVNKLore.RVNKLore
+api-version: 1.17
+
+commands:
+
+
+permissions:

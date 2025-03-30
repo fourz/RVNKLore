@@ -1,0 +1,5 @@
+*.jar
+.vscode/
+target/
+BuildTools/
+.github/
