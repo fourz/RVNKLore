@@ -10,7 +10,7 @@ A comprehensive lore and history plugin for Minecraft servers that allows player
 - **Location Awareness**: Automatically connects lore to locations in your Minecraft world
 - **Automatic Events**: Optionally create lore entries for significant player events like first joins, notable deaths, etc.
 - **Custom Lore Items**: Allow players to customize lore and trigger registration to the lore database.
-- **Support for VotingPlugin**: Dynamically Generfate Reward files for Votifier-driven Vote Rewards.
+- **Support for VotingPlugin**: Dynamically generate reward files for Votifier-driven vote rewards.
 - **Entity Name Generator**: Add richness to your world with the automatic name generator for special mobs
 - **Seamless Integration**: Works with existing plugins and doesn't interfere with core gameplay
 - **PlaceHolder API Support**: (planned)
@@ -87,8 +87,6 @@ storage:
     database: rvnklore
   sqlite:
     database: data.db
-
-# More configuration options available...
 ```
 
 ## Examples
@@ -230,7 +228,6 @@ rvnkLore.getHandlerFactory().registerHandler(LoreType.CUSTOM, new CustomLoreHand
 
 ### Long-term Goals
 - **LoreScript**: Simple scripting language for creating interactive lore
-- **Voice Narration**: Text-to-speech option for lore entries
 - **Procedural Generation**: AI-assisted lore generation based on world features
 - **Resource Pack Integration**: Custom models and textures for lore items
 
