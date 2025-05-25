@@ -1,6 +1,7 @@
-package org.fourz.RVNKLore.lore;
+package org.fourz.RVNKLore.lore.enchant;
 
 import org.bukkit.enchantments.Enchantment;
+
 import java.util.Map;
 
 /**

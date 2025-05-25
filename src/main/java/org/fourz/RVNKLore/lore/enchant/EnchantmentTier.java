@@ -1,4 +1,4 @@
-package org.fourz.RVNKLore.lore;
+package org.fourz.RVNKLore.lore.enchant;
 
 /**
  * Represents rarity tiers for enchanted items (e.g., COMMON, RARE, EPIC, LEGENDARY).
