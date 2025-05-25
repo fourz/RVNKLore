@@ -7,8 +7,10 @@ import org.bukkit.entity.EntityType;
 import org.bukkit.inventory.meta.SkullMeta;
 
 import java.lang.reflect.Field;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -67,5 +69,69 @@ public class HeadUtil {
      */
     public static String getMobTextureData(EntityType entityType) {
         return MOB_TEXTURES.get(entityType);
+    }
+    
+    /**
+     * Apply texture from a URL (for modern head creation).
+     * This creates the texture data format expected by Minecraft.
+     *
+     * @param meta The skull meta to apply texture to
+     * @param textureUrl The URL of the texture
+     */
+    public static void applyTextureFromUrl(SkullMeta meta, String textureUrl) {
+        if (textureUrl == null || textureUrl.trim().isEmpty()) {
+            return;
+        }
+        
+        // Create the texture JSON format
+        String textureJson = "{\"textures\":{\"SKIN\":{\"url\":\"" + textureUrl + "\"}}}";
+        String encodedTexture = Base64.getEncoder().encodeToString(textureJson.getBytes());
+        
+        applyTextureData(meta, encodedTexture);
+    }
+    
+    /**
+     * Get all available mob types that have texture data.
+     *
+     * @return Set of EntityTypes with available textures
+     */
+    public static Set<EntityType> getAvailableMobTypes() {
+        return MOB_TEXTURES.keySet();
+    }
+    
+    /**
+     * Add a new mob texture to the registry.
+     *
+     * @param entityType The mob type
+     * @param textureData The base64 encoded texture data
+     */
+    public static void addMobTexture(EntityType entityType, String textureData) {
+        if (isValidTextureData(textureData)) {
+            MOB_TEXTURES.put(entityType, textureData);
+        }
+    }
+    
+    /**
+     * Create a GameProfile with texture data for advanced head manipulation.
+     *
+     * @param textureData Base64 encoded texture data
+     * @return GameProfile with texture applied
+     */
+    public static GameProfile createTexturedProfile(String textureData) {
+        GameProfile profile = new GameProfile(UUID.randomUUID(), null);
+        profile.getProperties().put("textures", new Property("textures", textureData));
+        return profile;
+    }
+    
+    /**
+     * Validate if an EntityType is supported for head creation.
+     *
+     * @param entityType The entity type to check
+     * @return True if the entity type can be used for heads
+     */
+    public static boolean isSupportedMobType(EntityType entityType) {
+        // Check if it's in our registry or if it's a generally supported mob
+        return MOB_TEXTURES.containsKey(entityType) || 
+               entityType.isSpawnable() && entityType.isAlive();
     }
 }
