@@ -4,6 +4,7 @@ import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.PluginManager;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.debug.Debug;
+import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.lore.LoreType;
 
 import java.util.EnumMap;
@@ -15,13 +16,13 @@ import java.util.logging.Level;
  */
 public class LoreHandlerManager {
     private final RVNKLore plugin;
-    private final Debug debug;
+    private final LogManager logger;
     private final Map<LoreType, LoreHandler> handlers = new EnumMap<>(LoreType.class);
     private final HandlerFactory factory;
     
     public LoreHandlerManager(RVNKLore plugin) {
         this.plugin = plugin;
-        this.debug = Debug.createDebugger(plugin, "LoreHandlerManager", Level.FINE);
+        this.logger = LogManager.getInstance(plugin, "LoreHandlerManager");
         this.factory = new HandlerFactory(plugin);
         initializeHandlers();
     }
@@ -30,22 +31,19 @@ public class LoreHandlerManager {
      * Initialize all handlers for supported lore types
      */
     private void initializeHandlers() {
-        debug.debug("Initializing lore handlers");
-        
+        logger.info("Initializing lore handlers");
         try {
             // Initialize only the actively used lore types
             LoreType[] activeTypes = {
                 LoreType.GENERIC, LoreType.PLAYER, LoreType.CITY, 
                 LoreType.LANDMARK, LoreType.FACTION, LoreType.PATH
             };
-            
             for (LoreType type : activeTypes) {
                 getHandler(type); // This will create and cache the handler
             }
-            
-            debug.debug("All core lore handlers initialized successfully");
+            logger.info("All core lore handlers initialized successfully");
         } catch (Exception e) {
-            debug.error("Error initializing lore handlers", e);
+            logger.error("Error initializing lore handlers", e);
         }
     }
     
@@ -57,18 +55,19 @@ public class LoreHandlerManager {
      */
     public LoreHandler getHandler(LoreType type) {
         // Use computeIfAbsent to avoid redundant handler creation
-        return handlers.computeIfAbsent(type, t -> {
-            LoreHandler handler = factory.getHandler(t);
-            debug.debug("Retrieved handler for lore type: " + t);
-            return handler;
+        LoreHandler handler = handlers.computeIfAbsent(type, t -> {
+            LoreHandler h = factory.getHandler(t);
+            logger.info("Retrieved handler for lore type: " + t);
+            return h;
         });
+        return handler;
     }
     
     /**
      * Unregister all event handlers
      */
     public void unregisterAllHandlers() {
-        debug.debug("Unregistering all lore handlers");
+        logger.info("Unregistering all lore handlers");
         factory.unregisterAllHandlers();
         handlers.clear();
     }
@@ -77,7 +76,7 @@ public class LoreHandlerManager {
      * Reload all handlers
      */
     public void reloadHandlers() {
-        debug.debug("Reloading lore handlers");
+        logger.info("Reloading lore handlers");
         unregisterAllHandlers();
         initializeHandlers();
     }

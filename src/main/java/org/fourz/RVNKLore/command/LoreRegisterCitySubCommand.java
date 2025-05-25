@@ -5,7 +5,7 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.Location;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.Debug;
+import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
 import org.fourz.RVNKLore.handler.LoreHandler;
@@ -13,19 +13,18 @@ import org.fourz.RVNKLore.handler.LoreHandler;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.logging.Level;
 
 /**
  * Subcommand for registering city lore entries
  */
 public class LoreRegisterCitySubCommand implements SubCommand {
     private final RVNKLore plugin;
-    private final Debug debug;
+    private final LogManager logger;
     private static final double MIN_CITY_DISTANCE = 100.0; // Minimum blocks between cities
     
     public LoreRegisterCitySubCommand(RVNKLore plugin) {
         this.plugin = plugin;
-        this.debug = Debug.createDebugger(plugin, "CitySubCommand", Level.FINE);
+        this.logger = LogManager.getInstance(plugin, "LoreRegisterCitySubCommand");
     }
 
     @Override
@@ -85,7 +84,7 @@ public class LoreRegisterCitySubCommand implements SubCommand {
             String transactionId = java.util.UUID.randomUUID().toString();
             LoreEntry entry = new LoreEntry();
             entry.addMetadata("transaction_id", transactionId);
-            debug.debug("Starting city registration transaction: " + transactionId);
+            logger.debug("Starting city registration transaction: " + transactionId);
 
             entry.setType(LoreType.CITY);
             entry.setName(cityName);
@@ -136,18 +135,18 @@ public class LoreRegisterCitySubCommand implements SubCommand {
                     "rvnklore.admin"
                 );
                 
-                debug.debug("City lore entry registered successfully: " + cityName);
+                logger.debug("City lore entry registered successfully: " + cityName);
             } else {
                 player.sendMessage(ChatColor.RED + "Failed to register city. Please try again later.");
-                debug.debug("Failed to register city lore entry: " + cityName);
+                logger.debug("Failed to register city lore entry: " + cityName);
             }
         } catch (IllegalArgumentException e) {
-            debug.error("Invalid city registration parameters", e);
+            logger.error("Invalid city registration parameters", e);
             player.sendMessage(ChatColor.RED + "Invalid parameters: " + e.getMessage());
             return false;
         } catch (Exception e) {
             String errorId = java.util.UUID.randomUUID().toString();
-            debug.error("Error ID: " + errorId + " - Error registering city", e);
+            logger.error("Error ID: " + errorId + " - Error registering city", e);
             player.sendMessage(ChatColor.RED + "An error occurred (ID: " + errorId + "). Please report this to an administrator.");
             return false;
         }

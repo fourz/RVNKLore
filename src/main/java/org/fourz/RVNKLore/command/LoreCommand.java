@@ -6,13 +6,12 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.Debug;
+import org.fourz.RVNKLore.debug.LogManager;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.logging.Level;
 
 /**
  * Main command handler for the /lore command.
@@ -20,14 +19,12 @@ import java.util.logging.Level;
  */
 public class LoreCommand implements CommandExecutor, TabCompleter {
     private final RVNKLore plugin;
-    private final Debug debug;
+    private final LogManager logger;
     private final Map<String, SubCommand> subCommands = new HashMap<>();
 
     public LoreCommand(RVNKLore plugin) {
         this.plugin = plugin;
-        // Get log level from config instead of hardcoding Level.FINE
-        Level logLevel = plugin.getConfigManager().getLogLevel();
-        this.debug = Debug.createDebugger(plugin, "LoreCommand", logLevel);
+        this.logger = LogManager.getInstance(plugin, "LoreCommand");
         registerSubCommands();
     }
 
@@ -35,7 +32,7 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
      * Registers all subcommands
      */
     private void registerSubCommands() {
-        debug.debug("Registering subcommands...");
+        logger.debug("Registering subcommands...");
         
         // Register all subcommands at once to reduce debug log spam
         Map<String, SubCommand> commands = new HashMap<>();
@@ -50,7 +47,7 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
         // Add all commands to the subCommands map
         commands.forEach(this::registerSubCommand);
         
-        debug.debug("Registered " + commands.size() + " subcommands successfully");
+        logger.debug("Registered " + commands.size() + " subcommands successfully");
     }
 
     /**
@@ -88,7 +85,7 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
         String[] subCommandArgs = new String[args.length - 1];
         System.arraycopy(args, 1, subCommandArgs, 0, args.length - 1);
 
-        debug.debug("Executing subcommand: " + subCommandName);
+        logger.debug("Executing subcommand: " + subCommandName);
         return subCommand.execute(sender, subCommandArgs);
     }
 

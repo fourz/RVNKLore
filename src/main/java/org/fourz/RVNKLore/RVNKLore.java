@@ -6,13 +6,13 @@ import org.fourz.RVNKLore.lore.LoreManager;
 import org.fourz.RVNKLore.config.ConfigManager;
 import org.fourz.RVNKLore.data.DatabaseManager;
 import org.fourz.RVNKLore.debug.Debug;
+import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.command.CommandManager;
 import org.fourz.RVNKLore.util.UtilityManager;
-import java.util.logging.Level;
 
 public class RVNKLore extends JavaPlugin {
     private LoreManager loreManager;
-    private Debug debugger;
+    private LogManager logger;
     private ConfigManager configManager;
     private CommandManager commandManager;
     private DatabaseManager databaseManager;
@@ -21,22 +21,20 @@ public class RVNKLore extends JavaPlugin {
     private int healthCheckTaskId = -1;
     private Thread shutdownHook;
     private boolean shuttingDown = false;
-    private final Object shutdownLock = new Object();
-    
-    @Override
+    private final Object shutdownLock = new Object();      @Override
     public void onEnable() {
+        // Initialize logger first
+        logger = LogManager.getInstance(this, "RVNKLore");
+        
         // Initialize ConfigManager first to get the log level
         configManager = new ConfigManager(this);
-        
-        // Initialize debugger with the configured log level
-        debugger = new Debug(this, "RVNKLore", configManager.getLogLevel()) {};
         
         // Initialize debug in ConfigManager
         configManager.initDebugLogging();
         
         registerShutdownHook();
         
-        debugger.info("Initializing RVNKLore...");
+        logger.info("Initializing RVNKLore...");
         
         try {
             // First try to initialize the database
@@ -52,9 +50,8 @@ public class RVNKLore extends JavaPlugin {
             
             // Initialize utility manager for diagnostics
             utilityManager = UtilityManager.getInstance(this);
-            
-            // First initialize the handler factory completely before LoreManager needs it
-            debugger.info("Initializing core systems...");
+              // First initialize the handler factory completely before LoreManager needs it
+            logger.info("Initializing core systems...");
             handlerFactory.initialize();
             
             // Now initialize LoreManager after HandlerFactory is fully initialized
@@ -63,23 +60,21 @@ public class RVNKLore extends JavaPlugin {
             
             // Finally initialize command system
             commandManager = new CommandManager(this);
-            
-            // Start periodic health check
+              // Start periodic health check
             startHealthCheck();
             
-            debugger.info("RVNKLore has been enabled!");
+            logger.info("RVNKLore has been enabled!");
         } catch (Exception e) {
-            debugger.error("Failed to initialize plugin", e);
+            logger.error("Failed to initialize plugin", e);
             getServer().getPluginManager().disablePlugin(this);
         }
     }
 
     private void registerShutdownHook() {
-        shutdownHook = new Thread(() -> {
-            synchronized(shutdownLock) {
+        shutdownHook = new Thread(() -> {            synchronized(shutdownLock) {
                 if (!shuttingDown) {
                     shuttingDown = true;
-                    debugger.info("Server shutdown detected - cleaning up resources");
+                    logger.info("Server shutdown detected - cleaning up resources");
                     cleanupManagers();
                 }
             }
@@ -87,18 +82,17 @@ public class RVNKLore extends JavaPlugin {
         Runtime.getRuntime().addShutdownHook(shutdownHook);
     }
     
-    private void startHealthCheck() {
-        healthCheckTaskId = getServer().getScheduler().scheduleSyncRepeatingTask(this, () -> {
+    private void startHealthCheck() {        healthCheckTaskId = getServer().getScheduler().scheduleSyncRepeatingTask(this, () -> {
             // Check database connection
             if (databaseManager != null && !databaseManager.isConnected()) {
-                debugger.warning("Database connection lost, attempting reconnect");
+                logger.warning("Database connection lost, attempting reconnect");
                 databaseManager.reconnect();
             }
             
             // Log any accumulated errors
             int errorCount = Debug.getErrorCount();
             if (errorCount > 0) {
-                debugger.warning("There have been " + errorCount + " errors since last health check");
+                logger.warning("There have been " + errorCount + " errors since last health check");
                 Debug.resetErrorCount();
             }
         }, 1200L, 1200L); // Check every minute (20 ticks/sec * 60 sec)
@@ -112,13 +106,12 @@ public class RVNKLore extends JavaPlugin {
             }
             shuttingDown = true;
         }
-        
-        if (debugger == null) {
-            getLogger().warning("Debugger was null during shutdown");
+          if (logger == null) {
+            getLogger().warning("Logger was null during shutdown");
             return;
         }
 
-        debugger.info("RVNKLore is shutting down...");
+        logger.info("RVNKLore is shutting down...");
         
         try {
             // Cancel health check task if running
@@ -136,10 +129,10 @@ public class RVNKLore extends JavaPlugin {
             
             cleanupManagers();
         } catch (Exception e) {
-            debugger.error("Failed to cleanup managers", e);
+            logger.error("Failed to cleanup managers", e);
         } finally {
-            debugger.info("RVNKLore has been disabled!");
-            debugger = null;
+            logger.info("RVNKLore has been disabled!");
+            logger = null;
         }
     }
 
@@ -175,10 +168,12 @@ public class RVNKLore extends JavaPlugin {
 
     public LoreManager getLoreManager() {
         return loreManager;
+    }    public LogManager getLogManager() {
+        return logger;
     }
 
     public Debug getDebugger() {
-        return debugger;
+        return logger != null ? logger.getDebug() : null;
     }
 
     public ConfigManager getConfigManager() {
@@ -197,10 +192,9 @@ public class RVNKLore extends JavaPlugin {
      * Get the handler factory for this plugin
      * 
      * @return The handler factory
-     */
-    public HandlerFactory getHandlerFactory() {
+     */    public HandlerFactory getHandlerFactory() {
         if (handlerFactory == null) {
-            debugger.warning("Handler factory requested but was null. Creating new instance.");
+            logger.warning("Handler factory requested but was null. Creating new instance.");
             handlerFactory = new HandlerFactory(this);
             // Only initialize if it's actually null - avoids repeated initialization
             handlerFactory.initialize();

@@ -4,25 +4,21 @@ import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.Debug;
 import org.fourz.RVNKLore.util.DiagnosticUtil;
 
 import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.logging.Level;
 
 /**
  * Debug command for administrators to troubleshoot the plugin
  */
 public class LoreDebugSubCommand implements SubCommand {
     private final RVNKLore plugin;
-    private final Debug debug;
     private final DiagnosticUtil diagnosticUtil;
 
     public LoreDebugSubCommand(RVNKLore plugin) {
         this.plugin = plugin;
-        this.debug = Debug.createDebugger(plugin, "LoreDebugCommand", Level.FINE);
         this.diagnosticUtil = new DiagnosticUtil(plugin);
     }
 

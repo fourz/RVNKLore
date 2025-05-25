@@ -2,16 +2,13 @@ package org.fourz.RVNKLore.command;
 
 import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
-import org.bukkit.entity.Player;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.Debug;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.logging.Level;
 import java.util.stream.Collectors;
 
 /**
@@ -20,12 +17,10 @@ import java.util.stream.Collectors;
  */
 public class LoreListSubCommand implements SubCommand {
     private final RVNKLore plugin;
-    private final Debug debug;
     private static final int ITEMS_PER_PAGE = 10;
 
     public LoreListSubCommand(RVNKLore plugin) {
         this.plugin = plugin;
-        this.debug = Debug.createDebugger(plugin, "LoreListCommand", Level.FINE);
     }
 
     @Override

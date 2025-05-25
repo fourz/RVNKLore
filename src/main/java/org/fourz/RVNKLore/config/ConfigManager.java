@@ -3,6 +3,7 @@ package org.fourz.RVNKLore.config;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.debug.Debug;
+import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.handler.DefaultLoreHandler;
 import org.fourz.RVNKLore.handler.HandlerFactory;
 import org.fourz.RVNKLore.handler.LoreHandler;
@@ -12,49 +13,45 @@ import org.fourz.RVNKLore.lore.LoreType;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.logging.Level;
 
 public class ConfigManager {
-    private static final String CLASS_NAME = "ConfigManager";
     private final RVNKLore plugin;
     private FileConfiguration config;
-    private Debug debug;
     private HandlerFactory handlerFactory;
-    private Level globalLogLevel;
+    private LogManager logger;
 
     public ConfigManager(RVNKLore plugin) {
         this.plugin = plugin;
+        this.logger = LogManager.getInstance(plugin, "ConfigManager");
         loadConfig();
-        // Initialize global log level immediately after loading config
-        this.globalLogLevel = parseLogLevel();
-    }
-
-    private void loadConfig() {
+    }    private void loadConfig() {
         plugin.saveDefaultConfig();
         plugin.reloadConfig();
         config = plugin.getConfig();
         
         validateConfig();
         setDefaults();
+        
+        // Apply log level from config to all LogManager instances
+        java.util.logging.Level configLevel = getLogLevel();
+        updateAllLogManagers(configLevel);
     }
     
     private void validateConfig() {
         // Check essential configuration sections
         if (!config.contains("general.logLevel")) {
-            plugin.getLogger().warning("No log level defined in config, using default: INFO");
+            logger.warning("No log level defined in config, using default: INFO");
         }
-        
         if (!config.contains("storage.type")) {
-            plugin.getLogger().warning("No storage type defined in config, using default: sqlite");
+            logger.warning("No storage type defined in config, using default: sqlite");
         }
-        
         // Validate database connection settings
         String storageType = getStorageType();
         if ("mysql".equalsIgnoreCase(storageType)) {
             if (!config.contains("storage.mysql.host") || 
                 !config.contains("storage.mysql.database") ||
                 !config.contains("storage.mysql.username")) {
-                plugin.getLogger().warning("Missing required MySQL settings - check your config.yml");
+                logger.warning("Missing required MySQL settings - check your config.yml");
             }
         }
     }
@@ -77,58 +74,50 @@ public class ConfigManager {
         
         config.options().copyDefaults(true);
         plugin.saveConfig();
-    }
-
-    // Called after Debug is initialized
-    public void initDebugLogging() {
-        this.debug = new Debug(plugin, CLASS_NAME, globalLogLevel) {};
-        debug.debug("Configuration system initialized with log level: " + globalLogLevel.getName());
-    }
-
-    /**
-     * Parse log level from config with proper error handling
+    }    /**
+     * Initialize logging system and apply configuration.
+     * This method ensures LogManager instances use the correct log level from config.
      */
-    private Level parseLogLevel() {
-        String levelStr = config.getString("general.logLevel", "INFO");
+    public void initDebugLogging() {
+        java.util.logging.Level configLevel = getLogLevel();
+        updateAllLogManagers(configLevel);
+        logger.info("Configuration system initialized with log level: " + configLevel.getName());
+    }/**
+     * Get the configured log level from config file.
+     * @return The log level from configuration
+     */
+    public java.util.logging.Level getLogLevel() {
+        String levelString = config.getString("general.logLevel", "INFO").toUpperCase();
         try {
-            // Special handling for DEBUG which maps to FINE
-            if (levelStr.equalsIgnoreCase("DEBUG")) {
-                return Level.FINE;
-            }
-            return Level.parse(levelStr.toUpperCase());
+            return java.util.logging.Level.parse(levelString);
         } catch (IllegalArgumentException e) {
-            plugin.getLogger().warning("Invalid log level in config: " + levelStr + ". Using INFO level instead.");
-            return Level.INFO;
+            logger.warning("Invalid log level in config: " + levelString + ", using INFO as default");
+            return java.util.logging.Level.INFO;
         }
     }
 
     /**
-     * Get the globally configured log level
+     * Set the log level in configuration and update all LogManager instances.
+     * @param level The new log level to set
      */
-    public Level getLogLevel() {
-        return globalLogLevel;
+    public void setLogLevel(java.util.logging.Level level) {
+        config.set("general.logLevel", level.getName());
+        plugin.saveConfig();
+        updateAllLogManagers(level);
+        logger.info("Log level changed to: " + level.getName());
     }
 
     /**
-     * Update global log level after config reload
+     * Update log level for all LogManager instances and legacy Debug instances.
+     * This is called when the configuration changes.
      */
-    private void updateGlobalLogLevel() {
-        Level newLevel = parseLogLevel();
+    private void updateAllLogManagers(java.util.logging.Level newLevel) {
+        // Update all LogManager instances
+        LogManager.updateAllLogLevels(newLevel);
         
-        // Only update and propagate if the level has actually changed
-        if (!newLevel.equals(globalLogLevel)) {
-            globalLogLevel = newLevel;
-            plugin.getLogger().info("Log level changed to: " + newLevel.getName());
-            
-            // Update debug instance for this class
-            if (debug != null) {
-                debug.setLogLevel(newLevel);
-            }
-            
-            // Update main plugin debugger if available
-            if (plugin.getDebugger() != null) {
-                plugin.getDebugger().setLogLevel(newLevel);
-            }
+        // Update legacy Debug instance if it exists (for backward compatibility)
+        if (plugin.getDebugger() != null) {
+            plugin.getDebugger().setLogLevel(newLevel);
         }
     }
 
@@ -145,29 +134,22 @@ public class ConfigManager {
      * @return A map of lore types to their handlers
      */
     public Map<LoreType, LoreHandler> loadLoreHandlers() {
-        if (debug == null) {
-            initDebugLogging();
-        }
-        
         if (handlerFactory == null) {
             initHandlerFactory();
         }
-        
-        debug.debug("Loading lore handlers from configuration...");
+        logger.info("Loading lore handlers from configuration...");
         Map<LoreType, LoreHandler> handlers = new HashMap<>();
-        
         // Register handlers for all lore types
         for (LoreType type : LoreType.values()) {
             try {
                 LoreHandler handler = handlerFactory.getHandler(type);
                 handlers.put(type, handler);
-                debug.debug("Registered handler for " + type + ": " + handler.getClass().getSimpleName());
+                logger.info("Registered handler for " + type + ": " + handler.getClass().getSimpleName());
             } catch (Exception e) {
-                debug.error("Failed to create handler for type " + type + ", using default handler", e);
+                logger.error("Failed to create handler for type " + type + ", using default handler", e);
                 handlers.put(type, new DefaultLoreHandler(plugin));
             }
         }
-        
         return handlers;
     }
     
@@ -179,16 +161,12 @@ public class ConfigManager {
      * @return True if successful, false otherwise
      */
     public boolean exportLoreEntriesToFile(List<LoreEntry> entries, String filePath) {
-        if (debug == null) {
-            initDebugLogging();
-        }
-        
-        debug.debug("Exporting " + entries.size() + " lore entries to file: " + filePath);
+        logger.info("Exporting " + entries.size() + " lore entries to file: " + filePath);
         try {
             // Use the database manager to handle the export
             return plugin.getDatabaseManager().exportLoreEntriesToFile(entries, filePath);
         } catch (Exception e) {
-            debug.warning("Failed to export lore entries: " + e.getMessage());
+            logger.warning("Failed to export lore entries: " + e.getMessage());
             return false;
         }
     }
@@ -207,18 +185,12 @@ public class ConfigManager {
 
     public FileConfiguration getConfig() {
         return config;
-    }
-
-    public void reloadConfig() {
+    }    public void reloadConfig() {
         plugin.reloadConfig();
         config = plugin.getConfig();
-        
-        // Update log level whenever config is reloaded
-        updateGlobalLogLevel();
-        
-        if (debug != null) {
-            debug.debug("Configuration reloaded with log level: " + globalLogLevel.getName());
-        }
+        java.util.logging.Level newLevel = getLogLevel();
+        updateAllLogManagers(newLevel);
+        logger.info("Configuration reloaded with log level: " + newLevel.getName());
     }
 
     /**
@@ -231,15 +203,37 @@ public class ConfigManager {
             initHandlerFactory();
         }
         return handlerFactory;
-    }
-
-    /**
+    }    /**
      * Configure log level for any new debug instances
      */
     public void configureDebugInstance(Debug debugInstance) {
         if (debugInstance != null) {
-            debugInstance.setLogLevel(globalLogLevel);
+            debugInstance.setLogLevel(getLogLevel());
         }
+    }
+
+    /**
+     * Set log level using string value (for command usage).
+     * @param levelString The log level as a string (e.g., "INFO", "WARNING", "SEVERE")
+     * @return True if successful, false if invalid level string
+     */
+    public boolean setLogLevel(String levelString) {
+        try {
+            java.util.logging.Level level = java.util.logging.Level.parse(levelString.toUpperCase());
+            setLogLevel(level);
+            return true;
+        } catch (IllegalArgumentException e) {
+            logger.warning("Invalid log level: " + levelString + ". Valid levels are: SEVERE, WARNING, INFO, CONFIG, FINE, FINER, FINEST");
+            return false;
+        }
+    }
+
+    /**
+     * Get available log level names.
+     * @return Array of valid log level names
+     */
+    public String[] getAvailableLogLevels() {
+        return new String[]{"SEVERE", "WARNING", "INFO", "CONFIG", "FINE", "FINER", "FINEST"};
     }
     
     /**

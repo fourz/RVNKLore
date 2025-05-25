@@ -1,20 +1,20 @@
 package org.fourz.RVNKLore.util;
 
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.Debug;
+import org.fourz.RVNKLore.debug.LogManager;
 
 /**
  * Manager for utility classes to provide centralized access
  */
 public class UtilityManager {
     private final RVNKLore plugin;
-    private final Debug debug;
+    private final LogManager logger;
     private final DiagnosticUtil diagnosticUtil;
     private static UtilityManager instance;
     
     private UtilityManager(RVNKLore plugin) {
         this.plugin = plugin;
-        this.debug = Debug.createDebugger(plugin, "UtilityManager", plugin.getConfigManager().getLogLevel());
+        this.logger = LogManager.getInstance(plugin, "UtilityManager");
         this.diagnosticUtil = new DiagnosticUtil(plugin);
     }
     
@@ -28,18 +28,17 @@ public class UtilityManager {
     public DiagnosticUtil getDiagnosticUtil() {
         return diagnosticUtil;
     }
-    
-    public void runHealthCheck() {
-        debug.debug("Running periodic health check");
+      public void runHealthCheck() {
+        logger.debug("Running periodic health check");
         
         try {
             boolean healthy = diagnosticUtil.checkSystemHealth();
             if (!healthy) {
-                debug.warning("Health check failed, system may have issues");
+                logger.warning("Health check failed, system may have issues");
                 diagnosticUtil.logDiagnostics();
             }
         } catch (Exception e) {
-            debug.error("Error during health check", e);
+            logger.error("Error during health check", e);
         }
     }
     

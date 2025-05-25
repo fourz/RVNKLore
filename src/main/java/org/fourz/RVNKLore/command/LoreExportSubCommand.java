@@ -3,7 +3,7 @@ package org.fourz.RVNKLore.command;
 import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.Debug;
+import org.fourz.RVNKLore.debug.LogManager;
 
 import java.io.File;
 import java.io.FileWriter;
@@ -12,7 +12,6 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.logging.Level;
 
 /**
  * Subcommand for exporting lore data to a JSON file
@@ -20,11 +19,11 @@ import java.util.logging.Level;
  */
 public class LoreExportSubCommand implements SubCommand {
     private final RVNKLore plugin;
-    private final Debug debug;
+    private final LogManager logger;
 
     public LoreExportSubCommand(RVNKLore plugin) {
         this.plugin = plugin;
-        this.debug = Debug.createDebugger(plugin, "LoreExportCommand", Level.FINE);
+        this.logger = LogManager.getInstance(plugin, "LoreExportSubCommand");
     }
 
     @Override
@@ -60,11 +59,11 @@ public class LoreExportSubCommand implements SubCommand {
             }
             
             sender.sendMessage(ChatColor.GREEN + "Lore data exported successfully to: " + exportFile.getAbsolutePath());
-            debug.info("Lore data exported to: " + exportFile.getAbsolutePath());
+            logger.info("Lore data exported to: " + exportFile.getAbsolutePath());
             
         } catch (IOException e) {
             sender.sendMessage(ChatColor.RED + "Failed to export lore data: " + e.getMessage());
-            debug.error("Failed to export lore data", e);
+            logger.error("Failed to export lore data", e);
             return false;
         }
         

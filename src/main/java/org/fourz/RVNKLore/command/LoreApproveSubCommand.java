@@ -3,13 +3,12 @@ package org.fourz.RVNKLore.command;
 import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.Debug;
+import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.lore.LoreEntry;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.logging.Level;
 
 /**
  * Subcommand for approving lore entries
@@ -17,11 +16,11 @@ import java.util.logging.Level;
  */
 public class LoreApproveSubCommand implements SubCommand {
     private final RVNKLore plugin;
-    private final Debug debug;
+    private final LogManager logger;
 
     public LoreApproveSubCommand(RVNKLore plugin) {
         this.plugin = plugin;
-        this.debug = Debug.createDebugger(plugin, "LoreApproveCommand", Level.FINE);
+        this.logger = LogManager.getInstance(plugin, "LoreApproveSubCommand");
     }
 
     @Override
@@ -59,7 +58,7 @@ public class LoreApproveSubCommand implements SubCommand {
             sender.sendMessage(ChatColor.GREEN + "Lore entry approved successfully!");
             
             // Log the approval
-            debug.info("Lore entry " + id + " (" + entry.getName() + ") approved by " + sender.getName());
+            logger.info("Lore entry " + id + " (" + entry.getName() + ") approved by " + sender.getName());
         } else {
             sender.sendMessage(ChatColor.RED + "Failed to approve lore entry. Please check console for errors.");
         }

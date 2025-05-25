@@ -4,14 +4,12 @@ import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.Debug;
 import org.fourz.RVNKLore.handler.LoreHandler;
 import org.fourz.RVNKLore.lore.LoreEntry;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.logging.Level;
 
 /**
  * Subcommand for getting lore entries by ID
@@ -19,11 +17,9 @@ import java.util.logging.Level;
  */
 public class LoreGetSubCommand implements SubCommand {
     private final RVNKLore plugin;
-    private final Debug debug;
 
     public LoreGetSubCommand(RVNKLore plugin) {
         this.plugin = plugin;
-        this.debug = Debug.createDebugger(plugin, "LoreGetCommand", Level.FINE);
     }
 
     @Override

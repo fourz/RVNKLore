@@ -2,11 +2,10 @@ package org.fourz.RVNKLore.lore;
 
 import org.bukkit.Location;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.Debug;
+import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.handler.LoreHandler;
 
 import java.util.*;
-import java.util.logging.Level;
 import java.util.stream.Collectors;
 
 /**
@@ -14,7 +13,7 @@ import java.util.stream.Collectors;
  */
 public class LoreManager {
     private final RVNKLore plugin;
-    private final Debug debug;
+    private final LogManager logger;
     private final Set<LoreEntry> cachedEntries = new HashSet<>();
     private final Map<LoreType, List<LoreEntry>> loreByType = new HashMap<>();
     private static LoreManager instance;
@@ -23,8 +22,9 @@ public class LoreManager {
 
     public LoreManager(RVNKLore plugin) {
         this.plugin = plugin;
+        this.logger = LogManager.getInstance(plugin, "LoreManager");
         // Use the configured log level from ConfigManager instead of hardcoding Level.FINE
-        this.debug = Debug.createDebugger(plugin, "LoreManager", plugin.getConfigManager().getLogLevel());
+        //this.debug = Debug.createDebugger(plugin, "LoreManager", plugin.getConfigManager().getLogLevel());
         // Initialize lists for all lore types
         for (LoreType type : LoreType.values()) {
             loreByType.put(type, new ArrayList<>());
@@ -46,23 +46,19 @@ public class LoreManager {
      */
     public void initializeLore() {
         if (initializing) {
-            debug.debug("Lore system initialization already in progress, skipping recursive call");
+            logger.info("Lore system initialization already in progress, skipping recursive call");
             return;
         }
-        
         try {
             initializing = true;
-            debug.debug("Initializing lore system...");
-            
+            logger.info("Initializing lore system...");
             // First load entries from database (doesn't require handlers)
             loadLoreEntries();
-            
             // Then create the LoreFinder (should be after entries are loaded)
             this.loreFinder = new LoreFinder(plugin, this);
-            
-            debug.debug("Lore system initialized successfully");
+            logger.info("Lore system initialized successfully");
         } catch (Exception e) {
-            debug.error("Error initializing lore system", e);
+            logger.error("Error initializing lore system", e);
         } finally {
             initializing = false;
         }
@@ -72,17 +68,15 @@ public class LoreManager {
      * Load all lore entries from the database
      */
     private void loadLoreEntries() {
-        debug.debug("Loading lore entries from database...");
+        logger.info("Loading lore entries from database...");
         cachedEntries.clear();
         List<LoreEntry> entries = plugin.getDatabaseManager().getAllLoreEntries();
         cachedEntries.addAll(entries);
-        
         // Populate loreByType map
         for (LoreEntry entry : entries) {
             loreByType.get(entry.getType()).add(entry);
         }
-        
-        debug.debug("Loaded " + cachedEntries.size() + " lore entries");
+        logger.info("Loaded " + cachedEntries.size() + " lore entries");
     }
 
     /**
@@ -93,39 +87,33 @@ public class LoreManager {
      */
     public boolean addLoreEntry(LoreEntry entry) {
         if (entry == null) {
-            debug.warning("Attempted to add null lore entry");
+            logger.warning("Attempted to add null lore entry");
             return false;
         }
-        
         if (entry.getType() == null) {
-            debug.warning("Lore entry has null type: " + entry.getName());
+            logger.warning("Lore entry has null type: " + entry.getName());
             return false;
         }
-        
-        debug.debug("Adding lore entry: " + entry.getName() + " of type " + entry.getType());
-        
+        logger.info("Adding lore entry: " + entry.getName() + " of type " + entry.getType());
         // Validate the entry using the appropriate handler from HandlerFactory
         LoreHandler handler = plugin.getHandlerFactory().getHandler(entry.getType());
         if (handler == null) {
-            debug.warning("No handler found for lore type: " + entry.getType());
+            logger.warning("No handler found for lore type: " + entry.getType());
             return false;
         }
-        
         if (!handler.validateEntry(entry)) {
-            debug.warning("Lore entry validation failed for: " + entry.getName());
+            logger.warning("Lore entry validation failed for: " + entry.getName());
             return false;
         }
-        
         // Add to database
         boolean success = plugin.getDatabaseManager().addLoreEntry(entry);
         if (success) {
             cachedEntries.add(entry);
             loreByType.get(entry.getType()).add(entry);
-            debug.debug("Lore entry added successfully: " + entry.getId());
+            logger.info("Lore entry added successfully: " + entry.getId());
         } else {
-            debug.warning("Failed to add lore entry to database: " + entry.getName());
+            logger.warning("Failed to add lore entry to database: " + entry.getName());
         }
-        
         return success;
     }
 
@@ -172,18 +160,16 @@ public class LoreManager {
     public boolean approveLoreEntry(UUID id) {
         LoreEntry entry = loreFinder.getLoreEntry(id);
         if (entry == null) {
+            logger.warning("Attempted to approve non-existent lore entry: " + id);
             return false;
         }
-        
         entry.setApproved(true);
         boolean success = plugin.getDatabaseManager().updateLoreEntry(entry);
-        
         if (success) {
-            debug.debug("Lore entry approved: " + id);
+            logger.info("Lore entry approved: " + id);
         } else {
-            debug.warning("Failed to approve lore entry: " + id);
+            logger.warning("Failed to approve lore entry: " + id);
         }
-        
         return success;
     }
 
@@ -191,7 +177,7 @@ public class LoreManager {
      * Reload all lore entries from the database
      */
     public void reloadLore() {
-        debug.debug("Reloading lore entries...");
+        logger.info("Reloading lore entries...");
         loadLoreEntries();
     }
 
@@ -204,7 +190,7 @@ public class LoreManager {
      */
     public List<LoreEntry> findNearbyLoreEntries(Location location, double radius) {
         if (location == null) {
-            debug.warning("Attempted to find nearby lore with null location");
+            logger.warning("Attempted to find nearby lore with null location");
             return new ArrayList<>();
         }
         
@@ -218,7 +204,7 @@ public class LoreManager {
                         return entry.getLocation().getWorld().getName().equals(location.getWorld().getName()) 
                             && entry.getLocation().distance(location) <= radius;
                     } catch (IllegalArgumentException e) {
-                        debug.debug("Error calculating distance for lore: " + entry.getId());
+                        logger.debug("Error calculating distance for lore: " + entry.getId());
                         return false;
                     }
                 })
@@ -238,7 +224,7 @@ public class LoreManager {
      * Clean up resources when the plugin is disabled
      */
     public void cleanup() {
-        debug.debug("Cleaning up lore manager...");
+        logger.info("Cleaning up lore manager...");
         cachedEntries.clear();
         loreByType.clear();
         instance = null;
@@ -252,7 +238,7 @@ public class LoreManager {
      */
     public LoreHandler getHandler(LoreType type) {
         if (initializing) {
-            debug.warning("Handler requested during LoreManager initialization - potential circular dependency");
+            logger.warning("Handler requested during LoreManager initialization - potential circular dependency");
         }
         return plugin.getHandlerFactory().getHandler(type);
     }
@@ -364,7 +350,7 @@ public class LoreManager {
      * @return The lore entry, or null if not found
      */
     public LoreEntry getLoreEntryByName(String name) {
-        debug.debug("Looking up lore entry by name: " + name);
+        logger.info("Looking up lore entry by name: " + name);
         
         return cachedEntries.stream()
             .filter(entry -> entry.getName().equalsIgnoreCase(name))

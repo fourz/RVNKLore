@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.debug.Debug;
+import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
 import org.json.simple.JSONObject;
@@ -23,7 +24,7 @@ import java.util.logging.Level;
  */
 public class DatabaseManager {
     private final RVNKLore plugin;
-    private final Debug debug;
+    private final LogManager logger;
     private final DatabaseConnectionFactory connectionFactory;
     private DatabaseConnection connection;
     private LoreEntryRepository loreRepository;
@@ -37,11 +38,9 @@ public class DatabaseManager {
      * Create a new DatabaseManager instance
      * 
      * @param plugin The RVNKLore plugin instance
-     */
-    public DatabaseManager(RVNKLore plugin) {
+     */    public DatabaseManager(RVNKLore plugin) {
         this.plugin = plugin;
-        // Use the configured log level from ConfigManager instead of hardcoding Level.FINE
-        this.debug = Debug.createDebugger(plugin, "DatabaseManager", plugin.getConfigManager().getLogLevel());
+        this.logger = LogManager.getInstance(plugin, "DatabaseManager");
         
         // Initialize components
         this.connectionFactory = new DatabaseConnectionFactory(plugin);
@@ -51,9 +50,8 @@ public class DatabaseManager {
     
     /**
      * Initialize the database connection and related components
-     */
-    private void initializeDatabase() {
-        debug.debug("Initializing database...");
+     */    private void initializeDatabase() {
+        logger.debug("Initializing database...");
         try {
             // Create and initialize the connection
             connection = connectionFactory.createConnection();
@@ -63,13 +61,12 @@ public class DatabaseManager {
             // Initialize repositories and services using the connection
             loreRepository = new LoreEntryRepository(plugin, connection);
             backupService = new DatabaseBackupService(plugin, connection);
-            
-            connectionValid = true;
+              connectionValid = true;
             reconnectAttempts = 0;
-            debug.debug("Database initialized successfully");
+            logger.debug("Database initialized successfully");
         } catch (Exception e) {
             connectionValid = false;
-            debug.error("Failed to initialize database", e);
+            logger.error("Failed to initialize database", e);
         }
     }
     
@@ -78,10 +75,9 @@ public class DatabaseManager {
      * 
      * @param entry The lore entry to add
      * @return true if successful, false otherwise
-     */
-    public boolean addLoreEntry(LoreEntry entry) {
+     */    public boolean addLoreEntry(LoreEntry entry) {
         if (!validateConnection()) {
-            debug.warning("Database connection invalid, cannot add lore entry");
+            logger.warning("Database connection invalid, cannot add lore entry");
             return false;
         }
         return loreRepository.addLoreEntry(entry);
@@ -92,10 +88,9 @@ public class DatabaseManager {
      * 
      * @param entry The lore entry to update
      * @return true if successful, false otherwise
-     */
-    public boolean updateLoreEntry(LoreEntry entry) {
+     */    public boolean updateLoreEntry(LoreEntry entry) {
         if (!validateConnection()) {
-            debug.warning("Database connection invalid, cannot update lore entry");
+            logger.warning("Database connection invalid, cannot update lore entry");
             return false;
         }
         return loreRepository.updateLoreEntry(entry);
@@ -125,10 +120,9 @@ public class DatabaseManager {
      * 
      * @param id The UUID of the entry to delete
      * @return true if successful, false otherwise
-     */
-    public boolean deleteLoreEntry(UUID id) {
+     */    public boolean deleteLoreEntry(UUID id) {
         if (!validateConnection()) {
-            debug.warning("Database connection invalid, cannot delete lore entry");
+            logger.warning("Database connection invalid, cannot delete lore entry");
             return false;
         }
         return loreRepository.deleteLoreEntry(id);
@@ -179,10 +173,9 @@ public class DatabaseManager {
      * @param entries The lore entries to export
      * @param filePath The file to export to
      * @return true if successful, false otherwise
-     */
-    public boolean exportLoreEntriesToFile(List<LoreEntry> entries, String filePath) {
+     */    public boolean exportLoreEntriesToFile(List<LoreEntry> entries, String filePath) {
         try {
-            debug.debug("Exporting " + entries.size() + " lore entries to file: " + filePath);
+            logger.debug("Exporting " + entries.size() + " lore entries to file: " + filePath);
             
             File file = new File(filePath);
             file.getParentFile().mkdirs();
@@ -199,15 +192,14 @@ public class DatabaseManager {
             
             Gson gson = new GsonBuilder().setPrettyPrinting().create();
             String jsonContent = gson.toJson(result);
-            
-            try (FileWriter writer = new FileWriter(file)) {
+              try (FileWriter writer = new FileWriter(file)) {
                 writer.write(jsonContent);
             }
             
-            debug.info("Exported " + entries.size() + " lore entries to " + filePath);
+            logger.info("Exported " + entries.size() + " lore entries to " + filePath);
             return true;
         } catch (Exception e) {
-            debug.error("Failed to export lore entries to file", e);
+            logger.error("Failed to export lore entries to file", e);
             return false;
         }
     }
@@ -305,13 +297,12 @@ public class DatabaseManager {
         if (connectionValid && isConnected()) {
             return true;
         }
-        
-        if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-            debug.severe("Maximum reconnection attempts reached. Database operations disabled.");
+          if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+            logger.error("Maximum reconnection attempts reached. Database operations disabled.", null);
             return false;
         }
         
-        debug.warning("Database connection invalid, attempting reconnect");
+        logger.warning("Database connection invalid, attempting reconnect");
         boolean reconnected = reconnect();
         if (reconnected) {
             connectionValid = true;

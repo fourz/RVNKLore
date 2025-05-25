@@ -3,11 +3,10 @@ package org.fourz.RVNKLore.command;
 import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.Debug;
+import org.fourz.RVNKLore.debug.LogManager;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.logging.Level;
 
 /**
  * Subcommand for reloading the plugin
@@ -15,23 +14,23 @@ import java.util.logging.Level;
  */
 public class LoreReloadSubCommand implements SubCommand {
     private final RVNKLore plugin;
-    private final Debug debug;
+    private final LogManager logger;
 
     public LoreReloadSubCommand(RVNKLore plugin) {
         this.plugin = plugin;
-        this.debug = Debug.createDebugger(plugin, "LoreReloadCommand", Level.FINE);
+        this.logger = LogManager.getInstance(plugin, "LoreReloadSubCommand");
     }
 
     @Override
     public boolean execute(CommandSender sender, String[] args) {
-        debug.debug("Executing reload command");
+        logger.debug("Executing reload command");
         sender.sendMessage(ChatColor.YELLOW + "Reloading RVNKLore plugin...");
         
         // Reload configuration
         plugin.getConfigManager().reloadConfig();
         
         // Update log level
-        debug.setLogLevel(plugin.getConfigManager().getLogLevel());
+        logger.setLogLevel(plugin.getConfigManager().getLogLevel());
         
         // Reload lore data
         plugin.getLoreManager().reloadLore();
