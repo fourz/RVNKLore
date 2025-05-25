@@ -8,7 +8,7 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.Debug;
+import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.handler.DefaultLoreHandler;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
@@ -17,20 +17,21 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.logging.Level;
 
 /**
  * Handler for player join events to create lore entries
  */
 public class PlayerJoinLoreHandler extends DefaultLoreHandler {
+    private final LogManager logger;
     
     public PlayerJoinLoreHandler(RVNKLore plugin) {
         super(plugin);
+        this.logger = LogManager.getInstance(plugin, "PlayerJoinLoreHandler");
     }
     
     @Override
     public void initialize() {
-        debug.debug("Initializing player join lore handler");
+        logger.debug("Initializing player join lore handler");
     }
 
     /**
@@ -50,7 +51,7 @@ public class PlayerJoinLoreHandler extends DefaultLoreHandler {
      * Create a lore entry for a new player
      */
     private void createNewPlayerJoinLoreEntry(Player player) {
-        debug.debug("Creating join lore entry for new player: " + player.getName());
+        logger.debug("Creating join lore entry for new player: " + player.getName());
         
         LoreEntry entry = new LoreEntry();
         entry.setType(LoreType.PLAYER);
@@ -138,7 +139,7 @@ public class PlayerJoinLoreHandler extends DefaultLoreHandler {
                 return sdf.format(new Date(timestamp));
             }
         } catch (Exception e) {
-            debug.debug("Error formatting join date: " + e.getMessage());
+            logger.debug("Error formatting join date: " + e.getMessage());
         }
         return null;
     }

@@ -7,40 +7,39 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.inventory.meta.SkullMeta;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.Debug;
+import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.logging.Level;
 
 /**
  * Handler for decorative head lore entries
  */
 public class HeadLoreHandler implements LoreHandler {
     private final RVNKLore plugin;
-    private final Debug debug;
+    private final LogManager logger;
     
     public HeadLoreHandler(RVNKLore plugin) {
         this.plugin = plugin;
-        this.debug = Debug.createDebugger(plugin, "HeadLoreHandler", plugin.getConfigManager().getLogLevel());
+        this.logger = LogManager.getInstance(plugin, "HeadLoreHandler");
     }
 
     @Override
     public void initialize() {
-        debug.debug("Initializing head lore handler");
+        logger.info("Initializing head lore handler");
     }
 
     @Override
     public boolean validateEntry(LoreEntry entry) {
         if (entry.getName() == null || entry.getName().isEmpty()) {
-            debug.debug("Head lore validation failed: Name is required");
+            logger.warning("Head lore validation failed: Name is required");
             return false;
         }
         
         if (entry.getDescription() == null || entry.getDescription().isEmpty()) {
-            debug.debug("Head lore validation failed: Description is required");
+            logger.warning("Head lore validation failed: Description is required");
             return false;
         }
         
@@ -60,7 +59,7 @@ public class HeadLoreHandler implements LoreHandler {
                 try {
                     meta.setOwner(entry.getMetadata("head_owner"));
                 } catch (Exception e) {
-                    debug.debug("Could not set skull owner: " + entry.getMetadata("head_owner"));
+                    logger.warning("Could not set skull owner: " + entry.getMetadata("head_owner"));
                 }
             }
             

@@ -6,45 +6,44 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.Debug;
+import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.logging.Level;
 
 /**
  * Handler for path/road lore entries
  */
 public class PathLoreHandler implements LoreHandler {
     private final RVNKLore plugin;
-    private final Debug debug;
+    private final LogManager logger;
     
     public PathLoreHandler(RVNKLore plugin) {
         this.plugin = plugin;
-        this.debug = Debug.createDebugger(plugin, "PathLoreHandler", Level.FINE);
+        this.logger = LogManager.getInstance(plugin, "PathLoreHandler");
     }
 
     @Override
     public void initialize() {
-        debug.debug("Initializing path lore handler");
+        logger.debug("Initializing path lore handler");
     }
 
     @Override
     public boolean validateEntry(LoreEntry entry) {
         if (entry.getName() == null || entry.getName().isEmpty()) {
-            debug.debug("Path lore validation failed: Name is required");
+            logger.debug("Path lore validation failed: Name is required");
             return false;
         }
         
         if (entry.getDescription() == null || entry.getDescription().isEmpty()) {
-            debug.debug("Path lore validation failed: Description is required");
+            logger.debug("Path lore validation failed: Description is required");
             return false;
         }
         
         if (entry.getLocation() == null) {
-            debug.debug("Path lore validation failed: Starting location is required");
+            logger.debug("Path lore validation failed: Starting location is required");
             return false;
         }
         

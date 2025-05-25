@@ -6,40 +6,39 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.Debug;
+import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.logging.Level;
 
 /**
  * Handler for enchantment lore entries
  */
 public class EnchantmentLoreHandler implements LoreHandler {
     private final RVNKLore plugin;
-    private final Debug debug;
+    private final LogManager logger;
     
     public EnchantmentLoreHandler(RVNKLore plugin) {
         this.plugin = plugin;
-        this.debug = Debug.createDebugger(plugin, "EnchantmentLoreHandler", Level.FINE);
+        this.logger = LogManager.getInstance(plugin, "EnchantmentLoreHandler");
     }
 
     @Override
     public void initialize() {
-        debug.debug("Initializing enchantment lore handler");
+        logger.debug("Initializing enchantment lore handler");
     }
 
     @Override
     public boolean validateEntry(LoreEntry entry) {
         if (entry.getName() == null || entry.getName().isEmpty()) {
-            debug.debug("Enchantment lore validation failed: Name is required");
+            logger.debug("Enchantment lore validation failed: Name is required");
             return false;
         }
         
         if (entry.getDescription() == null || entry.getDescription().isEmpty()) {
-            debug.debug("Enchantment lore validation failed: Description is required");
+            logger.debug("Enchantment lore validation failed: Description is required");
             return false;
         }
         

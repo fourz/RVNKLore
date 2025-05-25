@@ -6,7 +6,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.Debug;
+import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
 
@@ -21,16 +21,16 @@ import java.util.logging.Level;
  */
 public class FactionLoreHandler implements LoreHandler {
     private final RVNKLore plugin;
-    private final Debug debug;
+    private final LogManager logger;
     
     public FactionLoreHandler(RVNKLore plugin) {
         this.plugin = plugin;
-        this.debug = Debug.createDebugger(plugin, "FactionLoreHandler", Level.FINE);
+        this.logger = LogManager.getInstance(plugin, "FactionLoreHandler");
     }
 
     @Override
     public void initialize() {
-        debug.debug("Initializing faction lore handler");
+        logger.debug("Initializing faction lore handler");
     }
 
     @Override
@@ -55,7 +55,7 @@ public class FactionLoreHandler implements LoreHandler {
         }
         
         if (!validationErrors.isEmpty()) {
-            debug.debug("Faction validation failed: " + String.join(", ", validationErrors));
+            logger.debug("Faction validation failed: " + String.join(", ", validationErrors));
             return false;
         }
         
@@ -81,7 +81,7 @@ public class FactionLoreHandler implements LoreHandler {
                     SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
                     lore.add(ChatColor.GRAY + "Founded: " + ChatColor.WHITE + sdf.format(foundingDate));
                 } catch (NumberFormatException e) {
-                    debug.debug("Could not parse founding date for faction: " + entry.getName());
+                    logger.debug("Could not parse founding date for faction: " + entry.getName());
                 }
             }
             
@@ -133,7 +133,7 @@ public class FactionLoreHandler implements LoreHandler {
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
                 player.sendMessage(ChatColor.GRAY + "Founded: " + ChatColor.WHITE + sdf.format(foundingDate));
             } catch (NumberFormatException e) {
-                debug.debug("Could not parse founding date");
+                logger.debug("Could not parse founding date");
             }
         }
         

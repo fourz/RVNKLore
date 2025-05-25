@@ -9,7 +9,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.inventory.meta.SkullMeta;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.Debug;
+import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
 
@@ -22,16 +22,16 @@ import java.util.logging.Level;
  */
 public class PlayerLoreHandler implements LoreHandler {
     private final RVNKLore plugin;
-    private final Debug debug;
+    private final LogManager logger;
     
     public PlayerLoreHandler(RVNKLore plugin) {
         this.plugin = plugin;
-        this.debug = Debug.createDebugger(plugin, "PlayerLoreHandler", plugin.getConfigManager().getLogLevel());
+        this.logger = LogManager.getInstance(plugin, "PlayerLoreHandler");
     }
     
     @Override
     public void initialize() {
-        debug.debug("Initializing player lore handler with event listener");
+        logger.info("Initializing player lore handler with event listener");
     }
     
     /**
@@ -64,7 +64,7 @@ public class PlayerLoreHandler implements LoreHandler {
      * Create a new lore entry for a player
      */
     private void createPlayerLoreEntry(Player player) {
-        debug.debug("Creating new player lore entry for: " + player.getName());
+        logger.info("Creating new player lore entry for: " + player.getName());
         
         LoreEntry entry = new LoreEntry();
         entry.setType(LoreType.PLAYER);
@@ -82,18 +82,18 @@ public class PlayerLoreHandler implements LoreHandler {
         entry.setApproved(true);
         plugin.getLoreManager().addLoreEntry(entry);
         
-        debug.debug("Player lore entry created for: " + player.getName());
+        logger.info("Player lore entry created for: " + player.getName());
     }
 
     @Override
     public boolean validateEntry(LoreEntry entry) {
         if (entry.getName() == null || entry.getName().isEmpty()) {
-            debug.debug("Player lore validation failed: Name is required");
+            logger.warning("Player lore validation failed: Name is required");
             return false;
         }
         
         if (entry.getDescription() == null || entry.getDescription().isEmpty()) {
-            debug.debug("Player lore validation failed: Description is required");
+            logger.warning("Player lore validation failed: Description is required");
             return false;
         }
         
@@ -112,7 +112,7 @@ public class PlayerLoreHandler implements LoreHandler {
             try {
                 meta.setOwner(entry.getName());
             } catch (Exception e) {
-                debug.debug("Could not set skull owner to " + entry.getName());
+                logger.warning("Could not set skull owner to " + entry.getName());
             }
             
             List<String> lore = new ArrayList<>();

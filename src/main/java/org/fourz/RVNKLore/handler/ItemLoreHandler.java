@@ -6,7 +6,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.Debug;
+import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
 
@@ -18,32 +18,32 @@ import java.util.List;
  */
 public class ItemLoreHandler implements LoreHandler {
     private final RVNKLore plugin;
-    private final Debug debug;
+    private final LogManager logger;
     
     public ItemLoreHandler(RVNKLore plugin) {
         this.plugin = plugin;
-        this.debug = Debug.createDebugger(plugin, "ItemLoreHandler", plugin.getConfigManager().getLogLevel());
+        this.logger = LogManager.getInstance(plugin, "ItemLoreHandler");
     }
 
     @Override
     public void initialize() {
-        debug.debug("Initializing item lore handler");
+        logger.info("Initializing item lore handler");
     }
 
     @Override
     public boolean validateEntry(LoreEntry entry) {
         if (entry.getName() == null || entry.getName().isEmpty()) {
-            debug.debug("Item lore validation failed: Name is required");
+            logger.warning("Item lore validation failed: Name is required");
             return false;
         }
         
         if (entry.getDescription() == null || entry.getDescription().isEmpty()) {
-            debug.debug("Item lore validation failed: Description is required");
+            logger.warning("Item lore validation failed: Description is required");
             return false;
         }
         
         if (entry.getMetadata("material") == null || entry.getMetadata("material").isEmpty()) {
-            debug.debug("Item lore validation warning: Material not specified");
+            logger.warning("Item lore validation warning: Material not specified");
         }
         
         return true;
@@ -56,7 +56,7 @@ public class ItemLoreHandler implements LoreHandler {
             try {
                 material = Material.valueOf(entry.getMetadata("material").toUpperCase());
             } catch (IllegalArgumentException e) {
-                debug.debug("Invalid material specified for item: " + entry.getName());
+                logger.warning("Invalid material specified for item: " + entry.getName());
             }
         }
         

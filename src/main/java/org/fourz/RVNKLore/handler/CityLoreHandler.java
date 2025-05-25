@@ -6,7 +6,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.Debug;
+import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
 
@@ -21,18 +21,18 @@ import java.util.logging.Level;
  */
 public class CityLoreHandler implements LoreHandler {
     private final RVNKLore plugin;
-    private final Debug debug;
+    private final LogManager logger;
     private static final int MAX_DESCRIPTION_LENGTH = 1000;
     private static final int MIN_DESCRIPTION_LENGTH = 10;
     
     public CityLoreHandler(RVNKLore plugin) {
         this.plugin = plugin;
-        this.debug = Debug.createDebugger(plugin, "CityLoreHandler", Level.FINE);
+        this.logger = LogManager.getInstance(plugin, "CityLoreHandler");
     }
 
     @Override
     public void initialize() {
-        debug.debug("Initializing city lore handler");
+        logger.debug("Initializing city lore handler");
     }
 
     @Override
@@ -81,7 +81,7 @@ public class CityLoreHandler implements LoreHandler {
         
         // Log validation errors
         if (!validationErrors.isEmpty()) {
-            debug.debug("City validation failed for " + entry.getName() + 
+            logger.debug("City validation failed for " + entry.getName() + 
                        " (Transaction: " + entry.getMetadata("transaction_id") + "): " + 
                        String.join(", ", validationErrors));
             return false;
@@ -115,7 +115,7 @@ public class CityLoreHandler implements LoreHandler {
                     SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
                     lore.add(ChatColor.GRAY + "Founded: " + ChatColor.WHITE + sdf.format(foundingDate));
                 } catch (NumberFormatException e) {
-                    debug.debug("Could not parse founding date for city: " + entry.getName());
+                    logger.debug("Could not parse founding date for city: " + entry.getName());
                 }
             }
             
@@ -161,7 +161,7 @@ public class CityLoreHandler implements LoreHandler {
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
                 player.sendMessage(ChatColor.GRAY + "Founded: " + ChatColor.WHITE + sdf.format(foundingDate));
             } catch (NumberFormatException e) {
-                debug.debug("Could not parse founding date for city: " + entry.getName());
+                logger.debug("Could not parse founding date for city: " + entry.getName());
             }
         }
         

@@ -6,7 +6,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.Debug;
+import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
 
@@ -18,29 +18,29 @@ import java.util.logging.Level;
  * Default implementation of LoreHandler for generic lore types
  */
 public class DefaultLoreHandler implements LoreHandler {
-    protected final RVNKLore plugin;
-    protected final Debug debug;
+    private final RVNKLore plugin;
+    private final LogManager logger;
     
     public DefaultLoreHandler(RVNKLore plugin) {
         this.plugin = plugin;
-        this.debug = Debug.createDebugger(plugin, "DefaultLoreHandler", Level.FINE);
+        this.logger = LogManager.getInstance(plugin, "DefaultLoreHandler");
     }
     
     @Override
     public void initialize() {
-        debug.debug("Initializing default lore handler");
+        logger.debug("Initializing default lore handler");
     }
 
     @Override
     public boolean validateEntry(LoreEntry entry) {
         // Basic validation common to all lore entries
         if (entry.getName() == null || entry.getName().isEmpty()) {
-            debug.debug("Lore validation failed: Name is required");
+            logger.debug("Lore validation failed: Name is required");
             return false;
         }
         
         if (entry.getDescription() == null || entry.getDescription().isEmpty()) {
-            debug.debug("Lore validation failed: Description is required");
+            logger.debug("Lore validation failed: Description is required");
             return false;
         }
         
@@ -125,13 +125,13 @@ public class DefaultLoreHandler implements LoreHandler {
     protected String getMetadataSafe(LoreEntry entry, String key) {
         try {
             if (entry == null) {
-                debug.warning("Attempted to get metadata from null entry: " + key);
+                logger.warning("Attempted to get metadata from null entry: " + key);
                 return null;
             }
             
             return entry.getMetadata(key);
         } catch (Exception e) {
-            debug.error("Error retrieving metadata " + key, e);
+            logger.error("Error retrieving metadata " + key, e);
             return null;
         }
     }
@@ -147,11 +147,16 @@ public class DefaultLoreHandler implements LoreHandler {
             }
             return Long.parseLong(value);
         } catch (NumberFormatException e) {
-            debug.debug("Failed to parse " + key + " as long: " + getMetadataSafe(entry, key));
+            logger.debug("Failed to parse " + key + " as long: " + getMetadataSafe(entry, key));
             return null;
         } catch (Exception e) {
-            debug.error("Error parsing " + key + " as long", e);
+            logger.error("Error parsing " + key + " as long", e);
             return null;
         }
+    }
+    
+
+    public RVNKLore getPlugin() {
+        return plugin;
     }
 }

@@ -27,7 +27,7 @@ public class EnchantedItemLoreHandler extends DefaultLoreHandler {
     
     @Override
     public void initialize() {
-        debug.debug("Initializing enchanted item lore handler");
+        //logger.debug("Initializing enchanted item lore handler");
     }
 
     /**
@@ -73,7 +73,7 @@ public class EnchantedItemLoreHandler extends DefaultLoreHandler {
         // Auto-approve since it's system-generated
         entry.setApproved(true);
         
-        plugin.getLoreManager().addLoreEntry(entry);
+        getPlugin().getLoreManager().addLoreEntry(entry);
     }
 
     @Override

@@ -8,21 +8,20 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.inventory.meta.SkullMeta;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.Debug;
+import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
 import org.fourz.RVNKLore.util.HeadUtil;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.logging.Level;
 
 /**
  * Unified handler for all head-related lore entries (player, mob, custom heads, and hats)
  */
 public class CommonHeadHandler implements LoreHandler {
     private final RVNKLore plugin;
-    private final Debug debug;
+    private final LogManager logger;
     
     // Constants for metadata keys
     public static final String META_HEAD_TYPE = "head_type";
@@ -39,51 +38,51 @@ public class CommonHeadHandler implements LoreHandler {
     
     public CommonHeadHandler(RVNKLore plugin) {
         this.plugin = plugin;
-        this.debug = Debug.createDebugger(plugin, "CommonHeadHandler", Level.FINE);
+        this.logger = LogManager.getInstance(plugin, "CommonHeadHandler");
     }
 
     @Override
     public void initialize() {
-        debug.debug("Initializing common head handler");
+        logger.debug("Initializing common head handler");
     }
 
     @Override
     public boolean validateEntry(LoreEntry entry) {
         if (entry.getName() == null || entry.getName().isEmpty()) {
-            debug.debug("Head lore validation failed: Name is required");
+            logger.debug("Head lore validation failed: Name is required");
             return false;
         }
         
         if (entry.getDescription() == null || entry.getDescription().isEmpty()) {
-            debug.debug("Head lore validation failed: Description is required");
+            logger.debug("Head lore validation failed: Description is required");
             return false;
         }
         
         // Validate based on head type
         String headType = entry.getMetadata(META_HEAD_TYPE);
         if (headType == null || headType.isEmpty()) {
-            debug.debug("Head lore validation failed: Head type is required");
+            logger.debug("Head lore validation failed: Head type is required");
             return false;
         }
         
         switch (headType) {
             case TYPE_PLAYER:
                 if (entry.getMetadata(META_HEAD_OWNER) == null) {
-                    debug.debug("Player head validation failed: Owner is required");
+                    logger.debug("Player head validation failed: Owner is required");
                     return false;
                 }
                 break;
                 
             case TYPE_MOB:
                 if (entry.getMetadata(META_MOB_TYPE) == null) {
-                    debug.debug("Mob head validation failed: Mob type is required");
+                    logger.debug("Mob head validation failed: Mob type is required");
                     return false;
                 }
                 break;
                 
             case TYPE_CUSTOM:
                 if (entry.getMetadata(META_TEXTURE_DATA) == null) {
-                    debug.debug("Custom head validation failed: Texture data is required");
+                    logger.debug("Custom head validation failed: Texture data is required");
                     return false;
                 }
                 break;
@@ -93,7 +92,7 @@ public class CommonHeadHandler implements LoreHandler {
                 break;
                 
             default:
-                debug.debug("Unknown head type: " + headType);
+                logger.debug("Unknown head type: " + headType);
                 return false;
         }
         
@@ -106,7 +105,7 @@ public class CommonHeadHandler implements LoreHandler {
         SkullMeta meta = (SkullMeta) item.getItemMeta();
         
         if (meta == null) {
-            debug.warning("Failed to get SkullMeta for head item");
+            logger.warning("Failed to get SkullMeta for head item");
             return item;
         }
         
@@ -122,7 +121,7 @@ public class CommonHeadHandler implements LoreHandler {
         try {
             applyHeadTypeProperties(meta, entry, headType);
         } catch (Exception e) {
-            debug.error("Error applying head properties", e);
+            logger.error("Error applying head properties", e);
         }
         
         // Create lore text
@@ -135,7 +134,7 @@ public class CommonHeadHandler implements LoreHandler {
             try {
                 meta.setCustomModelData(Integer.parseInt(customModelData));
             } catch (NumberFormatException e) {
-                debug.debug("Invalid custom model data: " + customModelData);
+                logger.debug("Invalid custom model data: " + customModelData);
             }
         }
         
@@ -163,7 +162,7 @@ public class CommonHeadHandler implements LoreHandler {
                         // Apply mob skull texture - using a hypothetical HeadUtil class
                         HeadUtil.applyMobTexture(meta, entityType);
                     } catch (IllegalArgumentException e) {
-                        debug.debug("Invalid mob type: " + mobType);
+                        logger.debug("Invalid mob type: " + mobType);
                     }
                 }
                 break;

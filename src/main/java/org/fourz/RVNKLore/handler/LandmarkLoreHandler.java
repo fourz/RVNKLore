@@ -6,29 +6,28 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.Debug;
+import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.logging.Level;
 
 /**
  * Handler for landmark lore entries
  */
 public class LandmarkLoreHandler implements LoreHandler {
     private final RVNKLore plugin;
-    private final Debug debug;
+    private final LogManager logger;
     
     public LandmarkLoreHandler(RVNKLore plugin) {
         this.plugin = plugin;
-        this.debug = Debug.createDebugger(plugin, "LandmarkLoreHandler", plugin.getConfigManager().getLogLevel());
+        this.logger = LogManager.getInstance(plugin, "LandmarkLoreHandler");
     }
 
     @Override
     public void initialize() {
-        debug.debug("Initializing landmark lore handler");
+        logger.info("Initializing landmark lore handler");
     }
 
     @Override
@@ -50,7 +49,7 @@ public class LandmarkLoreHandler implements LoreHandler {
         }
         
         if (!validationErrors.isEmpty()) {
-            debug.debug("Landmark validation failed: " + String.join(", ", validationErrors));
+            logger.warning("Landmark validation failed: " + String.join(", ", validationErrors));
             return false;
         }
         

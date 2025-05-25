@@ -168,7 +168,8 @@ public class RVNKLore extends JavaPlugin {
 
     public LoreManager getLoreManager() {
         return loreManager;
-    }    public LogManager getLogManager() {
+    }    
+    public LogManager getLogManager() {
         return logger;
     }
 
