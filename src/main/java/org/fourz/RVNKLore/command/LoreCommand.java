@@ -7,7 +7,7 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.command.cosmetic.CosmeticCollectionSubCommand;
-import org.fourz.RVNKLore.command.cosmetic.CosmeticGrantSubCommand;
+import org.fourz.RVNKLore.command.cosmetic.CosmeticGiveSubCommand;
 import org.fourz.RVNKLore.debug.LogManager;
 
 import java.util.ArrayList;
@@ -48,7 +48,7 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
         // Add cosmetic management commands
         if (plugin.getCosmeticManager() != null) {
             commands.put("collection", new CosmeticCollectionSubCommand(plugin, plugin.getCosmeticManager()));
-            commands.put("grant", new CosmeticGrantSubCommand(plugin, plugin.getCosmeticManager()));
+            commands.put("give", new CosmeticGiveSubCommand(plugin, plugin.getCosmeticManager()));
         }
         
         // Add all commands to the subCommands map

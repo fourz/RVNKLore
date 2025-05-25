@@ -13,16 +13,16 @@ import java.util.List;
 
 /**
  * Sub-command for administrative management of cosmetic heads.
- * Allows staff to grant heads to players and manage the cosmetic system.
+ * Allows staff to give heads to players and manage the cosmetic system.
  */
-public class CosmeticGrantSubCommand implements SubCommand {
+public class CosmeticGiveSubCommand implements SubCommand {
     private final RVNKLore plugin;
     private final LogManager logger;
     private final CosmeticManager cosmeticManager;
 
-    public CosmeticGrantSubCommand(RVNKLore plugin, CosmeticManager cosmeticManager) {
+    public CosmeticGiveSubCommand(RVNKLore plugin, CosmeticManager cosmeticManager) {
         this.plugin = plugin;
-        this.logger = LogManager.getInstance(plugin, "CosmeticGrantSubCommand");
+        this.logger = LogManager.getInstance(plugin, "CosmeticGiveSubCommand");
         this.cosmeticManager = cosmeticManager;
     }
 
@@ -33,7 +33,7 @@ public class CosmeticGrantSubCommand implements SubCommand {
     }
     @Override
     public boolean execute(CommandSender sender, String[] args) {
-        if (!sender.hasPermission("rvnklore.admin.cosmetic.grant")) {
+        if (!sender.hasPermission("rvnklore.admin.cosmetic.give")) {
             sender.sendMessage("&c✖ You don't have permission to use this command");
             return true;
         }
@@ -47,27 +47,27 @@ public class CosmeticGrantSubCommand implements SubCommand {
         switch (action) {
             case "head":
                 if (args.length < 3) {
-                    sender.sendMessage("&c▶ Usage: /lore grant head <player> <head_id>");
+                    sender.sendMessage("&c▶ Usage: /lore give head <player> <head_id>");
                     return true;
                 }
-                grantHead(sender, args[1], args[2]);
+                giveHead(sender, args[1], args[2]);
                 break;
                 
             case "collection":
                 if (args.length < 3) {
-                    sender.sendMessage("&c▶ Usage: /lore grant collection <player> <collection_id>");
+                    sender.sendMessage("&c▶ Usage: /lore give collection <player> <collection_id>");
                     return true;
                 }
-                grantCollection(sender, args[1], args[2]);
+                giveCollection(sender, args[1], args[2]);
                 break;
                 
             case "random":
                 if (args.length < 2) {
-                    sender.sendMessage("&c▶ Usage: /lore grant random <player> [rarity]");
+                    sender.sendMessage("&c▶ Usage: /lore give random <player> [rarity]");
                     return true;
                 }
                 String rarity = args.length > 2 ? args[2] : null;
-                grantRandomHead(sender, args[1], rarity);
+                giveRandomHead(sender, args[1], rarity);
                 break;
                 
             default:
@@ -79,16 +79,16 @@ public class CosmeticGrantSubCommand implements SubCommand {
     }
 
     /**
-     * Grant a specific head variant to a player.
+     * Give a specific head variant to a player.
      * @param sender The command sender (player or console)
      * @param playerName The name of the player to grant the head to
      * @param headId The ID of the head variant to grant
      */
 
     /**
-     * Grant a specific head variant to a player.
+     * Give a specific head variant to a player.
      */
-    private void grantHead(CommandSender sender, String playerName, String headId) {
+    private void giveHead(CommandSender sender, String playerName, String headId) {
         Player target = Bukkit.getPlayer(playerName);
         if (target == null) {
             sender.sendMessage("&c✖ Player not found: " + playerName);
@@ -119,9 +119,9 @@ public class CosmeticGrantSubCommand implements SubCommand {
     }
 
     /**
-     * Grant all heads from a collection to a player.
+     * Give all heads from a collection to a player.
      */
-    private void grantCollection(CommandSender sender, String playerName, String collectionId) {
+    private void giveCollection(CommandSender sender, String playerName, String collectionId) {
         Player target = Bukkit.getPlayer(playerName);
         if (target == null) {
             sender.sendMessage("&c✖ Player not found: " + playerName);
@@ -160,9 +160,9 @@ public class CosmeticGrantSubCommand implements SubCommand {
     }
 
     /**
-     * Grant a random head of specified rarity to a player.
+     * Give a random head of specified rarity to a player.
      */
-    private void grantRandomHead(CommandSender sender, String playerName, String rarityName) {
+    private void giveRandomHead(CommandSender sender, String playerName, String rarityName) {
         Player target = Bukkit.getPlayer(playerName);
         if (target == null) {
             sender.sendMessage("&c✖ Player not found: " + playerName);
@@ -280,19 +280,19 @@ public class CosmeticGrantSubCommand implements SubCommand {
      * Show command usage information.
      */
     private void showUsage(CommandSender sender) {
-        sender.sendMessage("&c▶ Cosmetic Grant Commands:");
-        sender.sendMessage("&f/lore grant head <player> <head_id> &7- Grant specific head");
-        sender.sendMessage("&f/lore grant collection <player> <collection_id> &7- Grant entire collection");
-        sender.sendMessage("&f/lore grant random <player> [rarity] &7- Grant random head");
+        sender.sendMessage("&c▶ Cosmetic Give Commands:");
+        sender.sendMessage("&f/lore give head <player> <head_id> &7- Give specific head");
+        sender.sendMessage("&f/lore give collection <player> <collection_id> &7- Give entire collection");
+        sender.sendMessage("&f/lore give random <player> [rarity] &7- Give random head");
         sender.sendMessage("");
-        sender.sendMessage("&7   Requires permission: &frvnklore.admin.cosmetic.grant");
+        sender.sendMessage("&7   Requires permission: &frvnklore.admin.cosmetic.give");
     }
 
     @Override
     public List<String> getTabCompletions(CommandSender sender, String[] args) {
         List<String> completions = new ArrayList<>();
 
-        if (!sender.hasPermission("rvnklore.admin.cosmetic.grant")) {
+        if (!sender.hasPermission("rvnklore.admin.cosmetic.give")) {
             return completions;
         }
 
@@ -333,10 +333,10 @@ public class CosmeticGrantSubCommand implements SubCommand {
 
     @Override
     public String getDescription() {
-        return "Grant cosmetic heads to players (admin only)";
+        return "Give cosmetic heads to players (admin only)";
     }
 
     public String getUsage() {
-        return "/lore grant [head|collection|random] <player> [args...]";
+        return "/lore give [head|collection|random] <player> [args...]";
     }
 }
