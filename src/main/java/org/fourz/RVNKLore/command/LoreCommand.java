@@ -6,6 +6,8 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.command.cosmetic.CosmeticCollectionSubCommand;
+import org.fourz.RVNKLore.command.cosmetic.CosmeticGrantSubCommand;
 import org.fourz.RVNKLore.debug.LogManager;
 
 import java.util.ArrayList;
@@ -33,8 +35,7 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
      */
     private void registerSubCommands() {
         logger.debug("Registering subcommands...");
-        
-        // Register all subcommands at once to reduce debug log spam
+          // Register all subcommands at once to reduce debug log spam
         Map<String, SubCommand> commands = new HashMap<>();
         commands.put("add", new LoreAddSubCommand(plugin));
         commands.put("get", new LoreGetSubCommand(plugin));
@@ -43,6 +44,12 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
         commands.put("reload", new LoreReloadSubCommand(plugin));
         commands.put("export", new LoreExportSubCommand(plugin));
         commands.put("debug", new LoreDebugSubCommand(plugin));
+        
+        // Add cosmetic management commands
+        if (plugin.getCosmeticManager() != null) {
+            commands.put("collection", new CosmeticCollectionSubCommand(plugin, plugin.getCosmeticManager()));
+            commands.put("grant", new CosmeticGrantSubCommand(plugin, plugin.getCosmeticManager()));
+        }
         
         // Add all commands to the subCommands map
         commands.forEach(this::registerSubCommand);

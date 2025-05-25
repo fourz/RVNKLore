@@ -22,10 +22,15 @@ public class CosmeticGrantSubCommand implements SubCommand {
 
     public CosmeticGrantSubCommand(RVNKLore plugin, CosmeticManager cosmeticManager) {
         this.plugin = plugin;
-        this.logger = LogManager.getInstance(plugin);
+        this.logger = LogManager.getInstance(plugin, "CosmeticGrantSubCommand");
         this.cosmeticManager = cosmeticManager;
     }
 
+    @Override
+    public boolean hasPermission(CommandSender sender) {
+        // TODO Auto-generated method stub
+        return false;
+    }
     @Override
     public boolean execute(CommandSender sender, String[] args) {
         if (!sender.hasPermission("rvnklore.admin.cosmetic.grant")) {
@@ -72,6 +77,13 @@ public class CosmeticGrantSubCommand implements SubCommand {
 
         return true;
     }
+
+    /**
+     * Grant a specific head variant to a player.
+     * @param sender The command sender (player or console)
+     * @param playerName The name of the player to grant the head to
+     * @param headId The ID of the head variant to grant
+     */
 
     /**
      * Grant a specific head variant to a player.
@@ -324,7 +336,6 @@ public class CosmeticGrantSubCommand implements SubCommand {
         return "Grant cosmetic heads to players (admin only)";
     }
 
-    @Override
     public String getUsage() {
         return "/lore grant [head|collection|random] <player> [args...]";
     }

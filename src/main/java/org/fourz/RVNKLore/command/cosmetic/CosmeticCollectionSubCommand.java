@@ -22,8 +22,14 @@ public class CosmeticCollectionSubCommand implements SubCommand {
 
     public CosmeticCollectionSubCommand(RVNKLore plugin, CosmeticManager cosmeticManager) {
         this.plugin = plugin;
-        this.logger = LogManager.getInstance(plugin);
+        this.logger = LogManager.getInstance(plugin, "CosmeticCollectionSubCommand");
         this.cosmeticManager = cosmeticManager;
+    }
+
+    @Override
+    public boolean hasPermission(CommandSender sender) {
+        // TODO Auto-generated method stub
+        return false;
     }
 
     @Override
@@ -317,7 +323,6 @@ public class CosmeticCollectionSubCommand implements SubCommand {
         return "Manage and view head collections";
     }
 
-    @Override
     public String getUsage() {
         return "/lore collection [list|view|progress|theme] [args...]";
     }

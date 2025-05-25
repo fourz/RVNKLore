@@ -4,6 +4,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.fourz.RVNKLore.handler.HandlerFactory;
 import org.fourz.RVNKLore.lore.LoreManager;
 import org.fourz.RVNKLore.config.ConfigManager;
+import org.fourz.RVNKLore.cosmetic.CosmeticManager;
 import org.fourz.RVNKLore.data.DatabaseManager;
 import org.fourz.RVNKLore.debug.Debug;
 import org.fourz.RVNKLore.debug.LogManager;
@@ -18,10 +19,11 @@ public class RVNKLore extends JavaPlugin {
     private DatabaseManager databaseManager;
     private HandlerFactory handlerFactory;
     private UtilityManager utilityManager;
+    private CosmeticManager cosmeticManager;
     private int healthCheckTaskId = -1;
     private Thread shutdownHook;
     private boolean shuttingDown = false;
-    private final Object shutdownLock = new Object();      @Override
+    private final Object shutdownLock = new Object();@Override
     public void onEnable() {
         // Initialize logger first
         logger = LogManager.getInstance(this, "RVNKLore");
@@ -53,10 +55,13 @@ public class RVNKLore extends JavaPlugin {
               // First initialize the handler factory completely before LoreManager needs it
             logger.info("Initializing core systems...");
             handlerFactory.initialize();
-            
-            // Now initialize LoreManager after HandlerFactory is fully initialized
+              // Now initialize LoreManager after HandlerFactory is fully initialized
             loreManager = LoreManager.getInstance(this);
             loreManager.initializeLore();
+            
+            // Initialize cosmetic management system
+            cosmeticManager = new CosmeticManager(this);
+            cosmeticManager.initialize();
             
             // Finally initialize command system
             commandManager = new CommandManager(this);
@@ -146,10 +151,14 @@ public class RVNKLore extends JavaPlugin {
             handlerFactory.unregisterAllHandlers();
             handlerFactory = null;
         }
-        
-        if (loreManager != null) {
+          if (loreManager != null) {
             loreManager.cleanup();
             loreManager = null;
+        }
+        
+        if (cosmeticManager != null) {
+            cosmeticManager.shutdown();
+            cosmeticManager = null;
         }
 
         if (commandManager != null) {
@@ -208,5 +217,14 @@ public class RVNKLore extends JavaPlugin {
      */
     public UtilityManager getUtilityManager() {
         return utilityManager;
+    }
+    
+    /**
+     * Get the cosmetic manager for head collections and variants.
+     * 
+     * @return The cosmetic manager
+     */
+    public CosmeticManager getCosmeticManager() {
+        return cosmeticManager;
     }
 }
