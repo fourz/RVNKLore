@@ -5,8 +5,8 @@ import org.fourz.RVNKLore.handler.HandlerFactory;
 import org.fourz.RVNKLore.lore.LoreManager;
 import org.fourz.RVNKLore.util.Debug;
 import org.fourz.RVNKLore.config.ConfigManager;
+import org.fourz.RVNKLore.data.DatabaseManager;
 import org.fourz.RVNKLore.command.CommandManager;
-import org.fourz.RVNKLore.database.DatabaseManager;
 import org.fourz.RVNKLore.util.UtilityManager;
 import java.util.logging.Level;
 

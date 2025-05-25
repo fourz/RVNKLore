@@ -1,4 +1,4 @@
-package org.fourz.RVNKLore.database;
+package org.fourz.RVNKLore.data;
 
 import org.fourz.RVNKLore.RVNKLore;
 

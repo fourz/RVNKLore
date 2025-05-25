@@ -1,4 +1,4 @@
-package org.fourz.RVNKLore.database;
+package org.fourz.RVNKLore.data;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
