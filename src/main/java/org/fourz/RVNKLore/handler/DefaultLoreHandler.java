@@ -18,8 +18,8 @@ import java.util.logging.Level;
  * Default implementation of LoreHandler for generic lore types
  */
 public class DefaultLoreHandler implements LoreHandler {
-    private final RVNKLore plugin;
-    private final LogManager logger;
+    protected final RVNKLore plugin;
+    protected final LogManager logger;
     
     public DefaultLoreHandler(RVNKLore plugin) {
         this.plugin = plugin;

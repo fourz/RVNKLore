@@ -4,6 +4,7 @@ import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -24,11 +25,12 @@ public class PlayerDeathLoreHandler extends DefaultLoreHandler {
     
     public PlayerDeathLoreHandler(RVNKLore plugin) {
         super(plugin);
+        // logger is already initialized in DefaultLoreHandler; do not reassign
     }
     
     @Override
     public void initialize() {
-        debug.debug("Initializing player death lore handler");
+        logger.debug("Initializing player death lore handler");
     }
 
     /**
@@ -43,7 +45,7 @@ public class PlayerDeathLoreHandler extends DefaultLoreHandler {
                 createDeathLoreEntry(player, event.getDeathMessage());
             }
         } catch (Exception e) {
-            debug.error("Error processing player death event", e);
+            logger.error("Error processing player death event", e);
         }
     }
     
@@ -71,7 +73,7 @@ public class PlayerDeathLoreHandler extends DefaultLoreHandler {
                    player.getInventory().all(Material.NETHERITE_INGOT).size() > 0;
 
         } catch (Exception e) {
-            debug.error("Error checking death significance", e);
+            logger.error("Error checking death significance", e);
             return false;
         }
     }
@@ -80,7 +82,7 @@ public class PlayerDeathLoreHandler extends DefaultLoreHandler {
      * Create a lore entry for a player death
      */
     private void createDeathLoreEntry(Player player, String deathMessage) {
-        debug.debug("Creating death lore entry for: " + player.getName());
+        logger.debug("Creating death lore entry for: " + player.getName());
         
         SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd");
         String dateString = formatter.format(new Date());
@@ -108,7 +110,7 @@ public class PlayerDeathLoreHandler extends DefaultLoreHandler {
         entry.setApproved(false);
         plugin.getLoreManager().addLoreEntry(entry);
         
-        debug.debug("Death lore entry created for: " + player.getName());
+        logger.debug("Death lore entry created for: " + player.getName());
     }
 
     @Override
@@ -130,7 +132,7 @@ public class PlayerDeathLoreHandler extends DefaultLoreHandler {
                     lore.add(ChatColor.GRAY + "Date: " + ChatColor.WHITE + 
                              new SimpleDateFormat("yyyy-MM-dd").format(deathDate));
                 } catch (NumberFormatException e) {
-                    debug.debug("Could not parse death date");
+                    logger.debug("Could not parse death date");
                 }
             }
             

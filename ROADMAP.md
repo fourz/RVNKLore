@@ -1,6 +1,6 @@
 # RVNKLore Development Roadmap
 
-*Last Updated: April 12, 2025*
+**Last Updated**: May 25, 2025
 
 This document outlines the planned features and improvements for the RVNKLore plugin.
 
@@ -12,10 +12,18 @@ RVNKLore has established a solid foundation with core functionality in place:
 - ✅ Basic lore entry creation and management
 - ✅ Handler system for different lore types
 - ✅ Command framework for player interaction
-- ✅ Debug and logging systems
+- ✅ LogManager-based logging pattern (refactored most classes away from Debug)
+- 🚧 Remaining classes still using Debug directly: `HandlerEventLogger`, `DiagnosticUtil`
 - ✅ Content versioning and approval workflow
 - ✅ Event-driven architecture for lore generation
 - ✅ Integration with VotingPlugin for dynamic rewards
+
+## Logging Refactoring Tasks
+
+To complete the transition to the `LogManager` logging pattern, the following classes still need refactoring:
+
+- [ ] HandlerEventLogger (use LogManager instead of Debug)
+- [ ] DiagnosticUtil (use LogManager instead of Debug)
 
 ## Q2 2025 Priorities
 

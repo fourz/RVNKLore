@@ -10,10 +10,10 @@ import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.handler.DefaultLoreHandler;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
+import org.fourz.RVNKLore.debug.LogManager;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.logging.Level;
 
 /**
  * Handler for creating landmarks via sign creation
@@ -23,15 +23,16 @@ import java.util.logging.Level;
 public class HandlerSignLandmark extends DefaultLoreHandler {
     private static final String LANDMARK_SIGN_HEADER = "[Landmark]";
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+    private final LogManager logger;
     
     public HandlerSignLandmark(RVNKLore plugin) {
         super(plugin);
-        // Don't override the log level - let it inherit from ConfigManager
+        this.logger = LogManager.getInstance(plugin, "HandlerSignLandmark");
     }
     
     @Override
     public void initialize() {
-        debug.debug("Initializing sign landmark handler");
+        logger.debug("Initializing sign landmark handler");
     }
     
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
@@ -46,7 +47,7 @@ public class HandlerSignLandmark extends DefaultLoreHandler {
         
         // Check if player has permission to create landmark signs
         if (!player.hasPermission("rvnklore.sign.landmark")) {
-            debug.debug(player.getName() + " tried to create a landmark sign but lacks permission");
+            logger.debug(player.getName() + " tried to create a landmark sign but lacks permission");
             event.setLine(0, ChatColor.RED + "[Landmark]");
             player.sendMessage(ChatColor.RED + "You don't have permission to create landmark signs.");
             return;
@@ -106,10 +107,10 @@ public class HandlerSignLandmark extends DefaultLoreHandler {
         if (success) {
             player.sendMessage(ChatColor.GREEN + "Landmark '" + name + "' has been " + 
                 (entry.isApproved() ? "created" : "submitted for approval") + ".");
-            debug.debug("Created landmark via sign: " + name + " by " + player.getName());
+            logger.debug("Created landmark via sign: " + name + " by " + player.getName());
         } else {
             player.sendMessage(ChatColor.RED + "Failed to create landmark. Please try again or contact an admin.");
-            debug.warning("Failed to create landmark via sign: " + name + " by " + player.getName());
+            logger.warning("Failed to create landmark via sign: " + name + " by " + player.getName());
         }
     }
     

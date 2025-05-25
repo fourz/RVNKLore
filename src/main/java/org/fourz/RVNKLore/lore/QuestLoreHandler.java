@@ -6,21 +6,17 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.Debug;
 import org.fourz.RVNKLore.handler.DefaultLoreHandler;
-import org.fourz.RVNKLore.handler.LoreHandler;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.logging.Level;
 
 /**
  * Handler for quest-related lore entries
  */
-public class QuestLoreHandler extends DefaultLoreHandler implements LoreHandler {
+public class QuestLoreHandler extends DefaultLoreHandler {
     
     public QuestLoreHandler(RVNKLore plugin) {
-        // Inherit debug setup from DefaultLoreHandler
         super(plugin);
     }
 
@@ -32,7 +28,7 @@ public class QuestLoreHandler extends DefaultLoreHandler implements LoreHandler 
         }
         
         if (entry.getType() != LoreType.QUEST) {
-            debug.debug("Entry type mismatch: expected QUEST, got " + entry.getType());
+            logger.debug("Entry type mismatch: expected QUEST, got " + entry.getType());
             return false;
         }
         

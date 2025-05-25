@@ -1,28 +1,25 @@
 package org.fourz.RVNKLore.util;
 
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.Debug;
+import org.fourz.RVNKLore.debug.LogManager;
 
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.logging.Level;
 
 /**
  * Manages plugin transactions for tracking operations and debugging
  */
 public class TransactionManager {
-    private final RVNKLore plugin;
-    private final Debug debug;
+    private final LogManager logger;
     private final Map<String, TransactionInfo> transactions = new ConcurrentHashMap<>();
     private final AtomicInteger transactionCount = new AtomicInteger(0);
     
     private static TransactionManager instance;
     
     private TransactionManager(RVNKLore plugin) {
-        this.plugin = plugin;
-        this.debug = Debug.createDebugger(plugin, "TransactionManager", plugin.getConfigManager().getLogLevel());
+        this.logger = LogManager.getInstance(plugin, "TransactionManager");
     }
     
     public static synchronized TransactionManager getInstance(RVNKLore plugin) {
@@ -40,7 +37,7 @@ public class TransactionManager {
         TransactionInfo info = new TransactionInfo(type, System.currentTimeMillis());
         transactions.put(id, info);
         transactionCount.incrementAndGet();
-        debug.debug("Starting transaction: " + id + " [" + type + "]");
+        logger.debug("Starting transaction: " + id + " [" + type + "]");
         return id;
     }
     
@@ -50,20 +47,16 @@ public class TransactionManager {
     public void completeTransaction(String id, boolean success) {
         TransactionInfo info = transactions.get(id);
         if (info == null) {
-            debug.warning("Attempted to complete unknown transaction: " + id);
+            logger.warning("Attempted to complete unknown transaction: " + id);
             return;
         }
-        
         info.complete(success);
         long duration = info.getDuration();
-        
         if (success) {
-            debug.debug("Transaction completed successfully: " + id + " (" + duration + "ms)");
+            logger.debug("Transaction completed successfully: " + id + " (" + duration + "ms)");
         } else {
-            debug.warning("Transaction failed: " + id + " (" + duration + "ms)");
+            logger.warning("Transaction failed: " + id + " (" + duration + "ms)");
         }
-        
-        // Remove old transactions to avoid memory leaks
         cleanupOldTransactions();
     }
     
@@ -80,10 +73,9 @@ public class TransactionManager {
     public void addTransactionNote(String id, String note) {
         TransactionInfo info = transactions.get(id);
         if (info == null) {
-            debug.warning("Attempted to add note to unknown transaction: " + id);
+            logger.warning("Attempted to add note to unknown transaction: " + id);
             return;
         }
-        
         info.addNote(note);
     }
     

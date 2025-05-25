@@ -3,26 +3,23 @@ package org.fourz.RVNKLore.lore;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.Debug;
+import org.fourz.RVNKLore.debug.LogManager;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.logging.Level;
 import java.util.stream.Collectors;
 
 /**
  * Utility class for finding lore entries
  */
 public class LoreFinder {
-    private final RVNKLore plugin;
     private final LoreManager loreManager;
-    private final Debug debug;
+    private final LogManager logger;
     
     public LoreFinder(RVNKLore plugin, LoreManager loreManager) {
-        this.plugin = plugin;
         this.loreManager = loreManager;
-        this.debug = Debug.createDebugger(plugin, "LoreFinder", Level.FINE);
+        this.logger = LogManager.getInstance(plugin, "LoreFinder");
     }
     
     /**
@@ -33,7 +30,7 @@ public class LoreFinder {
      * @return List of nearby lore entries
      */
     public List<LoreEntry> findNearbyLore(Location location, double radius) {
-        debug.debug("Finding lore near " + location.getWorld().getName() + 
+        logger.debug("Finding lore near " + location.getWorld().getName() + 
                    " at " + location.getX() + "," + location.getY() + "," + location.getZ() + 
                    " with radius " + radius);
                    
@@ -54,7 +51,7 @@ public class LoreFinder {
      * @return List of lore entries in the world
      */
     public List<LoreEntry> findLoreInWorld(String worldName) {
-        debug.debug("Finding lore in world: " + worldName);
+        logger.debug("Finding lore in world: " + worldName);
         
         return loreManager.getCachedEntries().stream()
                 .filter(LoreEntry::isApproved)
@@ -72,7 +69,7 @@ public class LoreFinder {
      * @return List of lore entries submitted by the player
      */
     public List<LoreEntry> findLoreBySubmitter(String playerName) {
-        debug.debug("Finding lore submitted by: " + playerName);
+        logger.debug("Finding lore submitted by: " + playerName);
         
         return loreManager.getCachedEntries().stream()
                 .filter(entry -> {
@@ -138,7 +135,7 @@ public class LoreFinder {
         }
         
         String lowerCaseSearch = searchText.toLowerCase();
-        debug.debug("Searching for lore containing: " + lowerCaseSearch);
+        logger.debug("Searching for lore containing: " + lowerCaseSearch);
         
         return loreManager.getCachedEntries().stream()
                 .filter(LoreEntry::isApproved)
