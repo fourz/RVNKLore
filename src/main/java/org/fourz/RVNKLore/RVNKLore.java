@@ -90,11 +90,11 @@ public class RVNKLore extends JavaPlugin {
             }
             
             // Log any accumulated errors
-            int errorCount = Debug.getErrorCount();
-            if (errorCount > 0) {
-                logger.warning("There have been " + errorCount + " errors since last health check");
-                Debug.resetErrorCount();
-            }
+            // int errorCount = Debug.getErrorCount();
+            // if (errorCount > 0) {
+            //     logger.warning("There have been " + errorCount + " errors since last health check");
+            //     Debug.resetErrorCount();
+            // }
         }, 1200L, 1200L); // Check every minute (20 ticks/sec * 60 sec)
     }
 

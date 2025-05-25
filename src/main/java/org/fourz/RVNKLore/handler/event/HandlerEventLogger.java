@@ -10,19 +10,18 @@ import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.plugin.EventExecutor;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.Debug;
+import org.fourz.RVNKLore.debug.LogManager;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.logging.Level;
 
 /**
  * Utility class to track and debug handler events
  */
 public class HandlerEventLogger implements Listener {
     private final RVNKLore plugin;
-    private final Debug debug;
+    private final LogManager logger;
     private final Map<Class<? extends Event>, Integer> eventCounts = new ConcurrentHashMap<>();
     private boolean enabled = false;
     
@@ -35,7 +34,7 @@ public class HandlerEventLogger implements Listener {
     
     public HandlerEventLogger(RVNKLore plugin) {
         this.plugin = plugin;
-        this.debug = Debug.createDebugger(plugin, "HandlerEventLogger", Level.FINE);
+        this.logger = LogManager.getInstance(plugin, "HandlerEventLogger");
     }
     
     /**
@@ -43,8 +42,7 @@ public class HandlerEventLogger implements Listener {
      */
     public void enable() {
         if (enabled) return;
-        
-        debug.debug("Enabling handler event logging");
+        logger.debug("Enabling handler event logging");
         registerEventListeners();
         enabled = true;
     }
@@ -54,14 +52,14 @@ public class HandlerEventLogger implements Listener {
      */
     public void disable() {
         if (!enabled) return;
-        
-        debug.debug("Disabling handler event logging");
+        logger.debug("Disabling handler event logging");
         enabled = false;
     }
     
     /**
      * Register listeners for all relevant events
      */
+    @SuppressWarnings("unchecked")
     private void registerEventListeners() {
         for (Class<?> eventClass : MONITORED_EVENTS) {
             if (Event.class.isAssignableFrom(eventClass)) {
@@ -79,7 +77,6 @@ public class HandlerEventLogger implements Listener {
                 logEvent(event);
             }
         };
-        
         Bukkit.getPluginManager().registerEvent(
             eventClass,
             this,
@@ -88,8 +85,7 @@ public class HandlerEventLogger implements Listener {
             plugin,
             false
         );
-        
-        debug.debug("Registered event logger for: " + eventClass.getSimpleName());
+        logger.debug("Registered event logger for: " + eventClass.getSimpleName());
     }
     
     /**
@@ -98,9 +94,8 @@ public class HandlerEventLogger implements Listener {
     private void logEvent(Event event) {
         Class<? extends Event> eventClass = event.getClass();
         eventCounts.compute(eventClass, (k, v) -> (v == null) ? 1 : v + 1);
-        
         // Only log detailed info for debug level
-        if (debug.isDebugLevel(Level.FINE)) {
+        if (logger.getLogLevel().intValue() <= java.util.logging.Level.FINE.intValue()) {
             logDetailedEventInfo(event);
         }
     }
@@ -111,17 +106,17 @@ public class HandlerEventLogger implements Listener {
     private void logDetailedEventInfo(Event event) {
         if (event instanceof PlayerJoinEvent) {
             PlayerJoinEvent e = (PlayerJoinEvent) event;
-            debug.debug("PlayerJoinEvent: " + e.getPlayer().getName());
+            logger.debug("PlayerJoinEvent: " + e.getPlayer().getName());
         } else if (event instanceof PlayerDeathEvent) {
             PlayerDeathEvent e = (PlayerDeathEvent) event;
-            debug.debug("PlayerDeathEvent: " + e.getEntity().getName() + 
+            logger.debug("PlayerDeathEvent: " + e.getEntity().getName() +
                       " - " + e.getDeathMessage());
         } else if (event instanceof EnchantItemEvent) {
             EnchantItemEvent e = (EnchantItemEvent) event;
-            debug.debug("EnchantItemEvent: " + e.getEnchanter().getName() + 
+            logger.debug("EnchantItemEvent: " + e.getEnchanter().getName() +
                       " enchanted " + e.getItem().getType());
         } else {
-            debug.debug("Event: " + event.getClass().getSimpleName());
+            logger.debug("Event: " + event.getClass().getSimpleName());
         }
     }
     

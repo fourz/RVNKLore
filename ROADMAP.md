@@ -12,18 +12,14 @@ RVNKLore has established a solid foundation with core functionality in place:
 - ✅ Basic lore entry creation and management
 - ✅ Handler system for different lore types
 - ✅ Command framework for player interaction
-- ✅ LogManager-based logging pattern (refactored most classes away from Debug)
-- 🚧 Remaining classes still using Debug directly: `HandlerEventLogger`, `DiagnosticUtil`
+- ✅ LogManager-based logging pattern (all major classes now use LogManager; Debug fully removed from production code)
 - ✅ Content versioning and approval workflow
 - ✅ Event-driven architecture for lore generation
 - ✅ Integration with VotingPlugin for dynamic rewards
 
 ## Logging Refactoring Tasks
 
-To complete the transition to the `LogManager` logging pattern, the following classes still need refactoring:
-
-- [ ] HandlerEventLogger (use LogManager instead of Debug)
-- [ ] DiagnosticUtil (use LogManager instead of Debug)
+All core classes now use the LogManager logger pattern (`logger.debug`, `logger.info`, `logger.error`, etc.). No remaining classes use Debug directly. This milestone is complete.
 
 ## Q2 2025 Priorities
 
