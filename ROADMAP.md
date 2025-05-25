@@ -34,10 +34,9 @@ The next major focus for RVNKLore is building a comprehensive item generation sy
   - Supports compound enchantments and custom display names
   - Next: Expand for rarity tiers and vanilla compatibility
 
-- [ ] **Item Lore Interface** *(High Priority)*
-  - In-game interface for players to add lore to items
-  - Customizable lore formatting and display options
-  - Support for lore templates (predefined text structures)
+- [x] **Item Lore Interface** *(High Priority)*
+  - Created `ItemLoreInterface` stub for in-game lore editing and formatting
+  - Next: Implement UI and lore template support
 
 - [ ] **Head & Cosmetic System** *(High Priority)*
   - Player head texture application and management
