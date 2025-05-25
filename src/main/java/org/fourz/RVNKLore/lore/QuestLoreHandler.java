@@ -6,9 +6,9 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.debug.Debug;
 import org.fourz.RVNKLore.handler.DefaultLoreHandler;
 import org.fourz.RVNKLore.handler.LoreHandler;
-import org.fourz.RVNKLore.util.Debug;
 
 import java.util.ArrayList;
 import java.util.List;

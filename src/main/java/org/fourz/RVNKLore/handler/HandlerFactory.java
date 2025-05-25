@@ -3,11 +3,11 @@ package org.fourz.RVNKLore.handler;
 import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.PluginManager;
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.debug.Debug;
 import org.fourz.RVNKLore.handler.event.PlayerDeathLoreHandler;
 import org.fourz.RVNKLore.handler.event.PlayerJoinLoreHandler;
 import org.fourz.RVNKLore.lore.LoreType;
 import org.fourz.RVNKLore.lore.QuestLoreHandler;
-import org.fourz.RVNKLore.util.Debug;
 
 import java.util.HashMap;
 import java.util.Map;

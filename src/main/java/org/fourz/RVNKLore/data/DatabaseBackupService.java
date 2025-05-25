@@ -3,8 +3,8 @@ package org.fourz.RVNKLore.data;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.debug.Debug;
 import org.fourz.RVNKLore.lore.LoreEntry;
-import org.fourz.RVNKLore.util.Debug;
 import org.json.simple.JSONObject;
 
 import java.io.File;

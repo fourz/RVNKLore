@@ -10,7 +10,7 @@ import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.plugin.EventExecutor;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.util.Debug;
+import org.fourz.RVNKLore.debug.Debug;
 
 import java.util.HashMap;
 import java.util.Map;

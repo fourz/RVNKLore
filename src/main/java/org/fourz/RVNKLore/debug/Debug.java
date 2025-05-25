@@ -1,4 +1,4 @@
-package org.fourz.RVNKLore.util;
+package org.fourz.RVNKLore.debug;
 
 import org.bukkit.plugin.java.JavaPlugin;
 import java.util.logging.Level;

@@ -3,7 +3,7 @@ package org.fourz.RVNKLore.command;
 import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.util.Debug;
+import org.fourz.RVNKLore.debug.Debug;
 
 import java.util.ArrayList;
 import java.util.List;

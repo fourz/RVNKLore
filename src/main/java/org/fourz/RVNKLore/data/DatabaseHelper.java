@@ -1,9 +1,9 @@
 package org.fourz.RVNKLore.data;
 
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.debug.Debug;
 import org.fourz.RVNKLore.exception.LoreException;
 import org.fourz.RVNKLore.exception.LoreException.LoreExceptionType;
-import org.fourz.RVNKLore.util.Debug;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;

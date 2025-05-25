@@ -4,7 +4,7 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.command.TabCompleter;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.util.Debug;
+import org.fourz.RVNKLore.debug.Debug;
 
 import java.util.HashMap;
 import java.util.Map;

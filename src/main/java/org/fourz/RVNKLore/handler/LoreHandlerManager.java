@@ -3,8 +3,8 @@ package org.fourz.RVNKLore.handler;
 import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.PluginManager;
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.debug.Debug;
 import org.fourz.RVNKLore.lore.LoreType;
-import org.fourz.RVNKLore.util.Debug;
 
 import java.util.EnumMap;
 import java.util.Map;

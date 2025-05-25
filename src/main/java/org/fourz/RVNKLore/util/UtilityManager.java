@@ -1,6 +1,7 @@
 package org.fourz.RVNKLore.util;
 
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.debug.Debug;
 
 /**
  * Manager for utility classes to provide centralized access

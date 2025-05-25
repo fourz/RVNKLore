@@ -2,8 +2,8 @@ package org.fourz.RVNKLore.lore;
 
 import org.bukkit.Location;
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.debug.Debug;
 import org.fourz.RVNKLore.handler.LoreHandler;
-import org.fourz.RVNKLore.util.Debug;
 
 import java.util.*;
 import java.util.logging.Level;
