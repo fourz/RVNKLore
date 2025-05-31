@@ -29,53 +29,12 @@ public class CosmeticGiveSubCommand implements SubCommand {
 
     @Override
     public boolean hasPermission(CommandSender sender) {
-        // TODO Auto-generated method stub
+        // Deprecated: use LoreItemGiveSubCommand instead
         return false;
     }
     @Override
     public boolean execute(CommandSender sender, String[] args) {
-        if (!sender.hasPermission("rvnklore.admin.cosmetic.give")) {
-            sender.sendMessage("&c✖ You don't have permission to use this command");
-            return true;
-        }
-
-        if (args.length < 2) {
-            showUsage(sender);
-            return true;
-        }
-
-        String action = args[0].toLowerCase();
-        switch (action) {
-            case "head":
-                if (args.length < 3) {
-                    sender.sendMessage("&c▶ Usage: /lore give head <player> <head_id>");
-                    return true;
-                }
-                giveHead(sender, args[1], args[2]);
-                break;
-                
-            case "collection":
-                if (args.length < 3) {
-                    sender.sendMessage("&c▶ Usage: /lore give collection <player> <collection_id>");
-                    return true;
-                }
-                giveCollection(sender, args[1], args[2]);
-                break;
-                
-            case "random":
-                if (args.length < 2) {
-                    sender.sendMessage("&c▶ Usage: /lore give random <player> [rarity]");
-                    return true;
-                }
-                String rarity = args.length > 2 ? args[2] : null;
-                giveRandomHead(sender, args[1], rarity);
-                break;
-                
-            default:
-                showUsage(sender);
-                break;
-        }
-
+        sender.sendMessage("&c✖ This command is deprecated. Use /lore itemgive <item_name> <player> instead.");
         return true;
     }
 
@@ -291,50 +250,12 @@ public class CosmeticGiveSubCommand implements SubCommand {
 
     @Override
     public List<String> getTabCompletions(CommandSender sender, String[] args) {
-        List<String> completions = new ArrayList<>();
-
-        if (!sender.hasPermission("rvnklore.admin.cosmetic.give")) {
-            return completions;
-        }
-
-        if (args.length == 1) {
-            completions.add("head");
-            completions.add("collection");
-            completions.add("random");
-        } else if (args.length == 2) {
-            // Add online player names
-            for (Player player : Bukkit.getOnlinePlayers()) {
-                completions.add(player.getName());
-            }
-        } else if (args.length == 3) {
-            String action = args[0].toLowerCase();
-            
-            if ("head".equals(action)) {
-                // Add head variant IDs
-                for (HeadCollection collection : cosmeticItem.getAllCollections()) {
-                    for (HeadVariant variant : collection.getAllHeads()) {
-                        completions.add(variant.getId());
-                    }
-                }
-            } else if ("collection".equals(action)) {
-                // Add collection IDs
-                for (HeadCollection collection : cosmeticItem.getAllCollections()) {
-                    completions.add(collection.getId());
-                }
-            } else if ("random".equals(action)) {
-                // Add rarity names
-                for (HeadRarity rarity : HeadRarity.values()) {
-                    completions.add(rarity.getDisplayName());
-                }
-            }
-        }
-
-        return completions;
+        return new ArrayList<>();
     }
 
     @Override
     public String getDescription() {
-        return "Give cosmetic heads to players (admin only)";
+        return "[DEPRECATED] Use /lore itemgive instead.";
     }
 
     public String getUsage() {

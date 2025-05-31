@@ -60,6 +60,13 @@ public class CosmeticCollectionSubCommand implements SubCommand {
             case "progress":
                 showProgress(player);
                 break;
+            case "claim":
+                if (args.length < 2) {
+                    player.sendMessage("&c▶ Usage: /lore collection claim <collection_id>");
+                    return true;
+                }
+                claimCollectionReward(player, args[1]);
+                break;
             case "theme":
                 if (args.length < 2) {
                     listThemes(player);
@@ -211,6 +218,30 @@ public class CosmeticCollectionSubCommand implements SubCommand {
             player.sendMessage("");
             player.sendMessage("&a✓ Collection Complete! Rewards claimed.");
         }
+    }
+
+    /**
+     * Allow players to claim rewards for a completed collection.
+     */
+    private void claimCollectionReward(Player player, String collectionId) {
+        HeadCollection collection = cosmeticItem.getCollection(collectionId);
+        if (collection == null) {
+            player.sendMessage("&c✖ Collection not found: " + collectionId);
+            return;
+        }
+        Map<String, Double> progress = cosmeticItem.getPlayerCollectionProgress(player);
+        double completionPercent = progress.getOrDefault(collection.getId(), 0.0) * 100;
+        if (completionPercent < 100.0) {
+            player.sendMessage("&e⚠ You must complete the collection to claim rewards.");
+            return;
+        }
+        if (!collection.getRewards().hasRewards()) {
+            player.sendMessage("&e⚠ No rewards available for this collection.");
+            return;
+        }
+        // Award rewards (delegates to CosmeticItem)
+        cosmeticItem.awardCollectionRewards(player, collection, collection.getRewards());
+        player.sendMessage("&a✓ Rewards claimed for collection: " + collection.getName());
     }
 
     /**

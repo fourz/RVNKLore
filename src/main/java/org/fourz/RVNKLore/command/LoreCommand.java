@@ -7,7 +7,6 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.command.cosmetic.CosmeticCollectionSubCommand;
-import org.fourz.RVNKLore.command.cosmetic.CosmeticGiveSubCommand;
 import org.fourz.RVNKLore.debug.LogManager;
 
 import java.util.ArrayList;
@@ -49,7 +48,10 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
         //if (plugin.getItemManager() != null && plugin.getItemManager().getCosmeticManager() != null) {
         if (plugin.getItemManager() != null && plugin.getItemManager().getCosmeticItem() != null) {
             commands.put("collection", new CosmeticCollectionSubCommand(plugin.getItemManager().getCosmeticItem()));
-            commands.put("give", new CosmeticGiveSubCommand(plugin, plugin.getItemManager().getCosmeticItem()));
+            // Register the new unified item give command
+            commands.put("itemgive", new LoreItemGiveSubCommand(plugin, plugin.getItemManager()));
+            // Remove/deprecate the old cosmetic give command
+            // commands.put("give", new CosmeticGiveSubCommand(plugin, plugin.getItemManager().getCosmeticItem())); // Deprecated
         }
         
         // Add all commands to the subCommands map
@@ -103,13 +105,25 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
      */
     private void showHelp(CommandSender sender) {
         sender.sendMessage(ChatColor.GOLD + "===== RVNKLore Commands =====");
-        
         for (Map.Entry<String, SubCommand> entry : subCommands.entrySet()) {
             if (entry.getValue().hasPermission(sender)) {
-                sender.sendMessage(ChatColor.YELLOW + "/lore " + entry.getKey() + 
-                                   ChatColor.WHITE + " - " + entry.getValue().getDescription());
+                // Update help for unified item give command
+                if ("itemgive".equals(entry.getKey())) {
+                    sender.sendMessage(ChatColor.YELLOW + "/lore itemgive <item_name> <player>" +
+                        ChatColor.WHITE + " - Give any lore item (cosmetic, collection, etc.) by name");
+                } else if ("collection".equals(entry.getKey())) {
+                    sender.sendMessage(ChatColor.YELLOW + "/lore collection <view|claim> <collection_id>" +
+                        ChatColor.WHITE + " - View or claim collection progress/rewards");
+                } else if ("give".equals(entry.getKey())) {
+                    sender.sendMessage(ChatColor.DARK_GRAY + "/lore give ... [DEPRECATED, use /lore itemgive]" +
+                        ChatColor.GRAY + " - Deprecated: use /lore itemgive");
+                } else {
+                    sender.sendMessage(ChatColor.YELLOW + "/lore " + entry.getKey() + 
+                        ChatColor.WHITE + " - " + entry.getValue().getDescription());
+                }
             }
         }
+        sender.sendMessage(ChatColor.GRAY + "\nSee /lore itemgive and /lore collection for unified item and collection management.");
     }
 
     @Override

@@ -8,6 +8,9 @@ import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
 import org.fourz.RVNKLore.lore.item.cosmetic.CosmeticItem;
 import org.fourz.RVNKLore.lore.item.model.ModelDataManager;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Base manager class for all item-related functionality in the lore system.
  * Acts as a central orchestrator for enchantments, cosmetics, collections, and model data.
@@ -132,6 +135,57 @@ public class ItemManager {
             default:
                 throw new IllegalArgumentException("Unsupported item type: " + type);
         }
+    }
+
+    /**
+     * Returns a list of all registered item names for tab completion and lookup.
+     * Includes cosmetic, collection, and enchanted items.
+     *
+     * @return List of all item names
+     */
+    public List<String> getAllItemNames() {
+        List<String> names = new ArrayList<>();
+        // Cosmetic items
+        if (cosmeticItem != null) {
+            for (var collection : cosmeticItem.getAllCollections()) {
+                collection.getAllHeads().forEach(head -> names.add(head.getId()));
+            }
+        }
+        // Collection items
+        if (collectionManager != null) {
+            names.addAll(collectionManager.getAllCollections().keySet());
+        }
+        // TODO: Add enchanted and other item types as needed
+        return names;
+    }
+
+    /**
+     * Create a lore item by name, searching all registered item types.
+     * Returns null if not found.
+     *
+     * @param itemName The unique item name or ID
+     * @return An ItemStack for the item, or null if not found
+     */
+    public ItemStack createLoreItem(String itemName) {
+        // Cosmetic heads
+        if (cosmeticItem != null) {
+            var variant = cosmeticItem.getHeadVariant(itemName);
+            if (variant != null) {
+                return cosmeticItem.createHeadItem(variant);
+            }
+        }
+        // Collection items
+        if (collectionManager != null) {
+            var collection = collectionManager.getCollection(itemName);
+            if (collection != null) {
+                // Create a representative item for the collection
+                var props = new ItemProperties(org.bukkit.Material.PAPER, collection.getName());
+                props.setCollectionId(collection.getId());
+                return collectionManager.createCollectionItem(props);
+            }
+        }
+        // TODO: Add enchanted and other item types as needed
+        return null;
     }
     
     /**

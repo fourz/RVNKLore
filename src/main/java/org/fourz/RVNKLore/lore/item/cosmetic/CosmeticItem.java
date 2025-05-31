@@ -352,37 +352,29 @@ public class CosmeticItem {
     }
     
     /**
-     * Award rewards for completing a collection.
-     *
-     * @param player The player to award
-     * @param collection The completed collection
-     * @param rewards The rewards to give
+     * Allow players to claim rewards for a completed collection.
      */
-    private void awardCollectionRewards(Player player, HeadCollection collection, CollectionRewards rewards) {
+    public void awardCollectionRewards(Player player, HeadCollection collection, CollectionRewards rewards) {
         // Give item rewards
-        for (ItemStack item : rewards.getItems()) {
+        for (org.bukkit.inventory.ItemStack item : rewards.getItems()) {
             player.getInventory().addItem(item);
         }
-        
         // Execute command rewards
         for (String command : rewards.getCommands()) {
             String processedCommand = command.replace("{player}", player.getName());
             plugin.getServer().dispatchCommand(plugin.getServer().getConsoleSender(), processedCommand);
         }
-        
         // Give experience
         if (rewards.getExperiencePoints() > 0) {
             player.giveExp(rewards.getExperiencePoints());
         }
-        
         // Send completion message
         if (rewards.getCompletionMessage() != null) {
             player.sendMessage("§a✓ " + rewards.getCompletionMessage());
         } else {
             player.sendMessage("§a✓ Completed collection: " + collection.getName());
         }
-        
-        logger.info("Awarded collection completion rewards to " + player.getName() + 
+        logger.info("Awarded collection completion rewards to " + player.getName() +
                    " for collection: " + collection.getName());
     }
     

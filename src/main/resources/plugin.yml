@@ -14,35 +14,33 @@ commands:
 permissions:
   rvnklore.*:
     description: Gives access to all RVNKLore commands
-    default: true
   rvnklore.admin:
     description: Gives access to administrative commands
     default: op
     children: {}
   rvnklore.command.*:
     description: Gives access to all basic lore commands
-    default: true
   rvnklore.register.*:
     description: Gives access to all registration commands
-    default: true
   rvnklore.command.add:
     description: Allows adding new lore entries
-    default: true
   rvnklore.command.get:
     description: Allows viewing lore entries
-    default: true
   rvnklore.command.list:
     description: Allows listing lore entries
-    default: true
   rvnklore.command.getitem:
     description: Allows getting lore items
     default: op
   rvnklore.register.city:
     description: Allows registering new cities
-    default: true
   rvnklore.sign.landmark:
     description: Allows players to create landmark signs
     default: op
   rvnklore.approve.own:
     description: Allows players to auto-approve their own submissions
     default: op
+  rvnklore.admin.item.give:
+    description: Allows giving any lore item via /lore item give
+    default: op
+  rvnklore.command.collection:
+    description: Allows viewing and claiming collection progress and rewards
