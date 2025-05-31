@@ -10,7 +10,6 @@ import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.command.CommandManager;
 import org.fourz.RVNKLore.util.UtilityManager;
 import org.fourz.RVNKLore.lore.item.ItemManager;
-import org.fourz.RVNKLore.lore.item.cosmetic.CosmeticManager;
 
 public class RVNKLore extends JavaPlugin {
     private LoreManager loreManager;
@@ -231,13 +230,5 @@ public class RVNKLore extends JavaPlugin {
      */
     public ItemManager getItemManager() {
         return itemManager;
-    }
-
-    /**
-     * Get the cosmetic manager for head collections and variants.
-     * @return The cosmetic manager (delegated to ItemManager)
-     */
-    public CosmeticManager getCosmeticManager() {
-        return itemManager != null ? itemManager.getCosmeticManager() : null;
     }
 }

@@ -4,8 +4,8 @@ import org.bukkit.inventory.ItemStack;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.lore.item.enchant.EnchantManager;
-import org.fourz.RVNKLore.lore.item.cosmetic.CosmeticManager;
 import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
+import org.fourz.RVNKLore.lore.item.cosmetic.CosmeticItem;
 import org.fourz.RVNKLore.lore.item.model.ModelDataManager;
 
 /**
@@ -21,7 +21,7 @@ public class ItemManager {
     
     // Sub-managers for different item domains
     private EnchantManager enchantManager;
-    private CosmeticManager cosmeticManager;
+    private CosmeticItem cosmeticItem;
     private CollectionManager collectionManager;
     private ModelDataManager modelDataManager;
     
@@ -31,6 +31,22 @@ public class ItemManager {
         
         logger.info("Initializing ItemManager...");
         initializeSubManagers();
+        
+        // Initialize cosmetic manager (move from plugin to here)
+        this.cosmeticItem = new CosmeticItem(plugin);
+        logger.info("CosmeticItem initialized");
+        
+        // Initialize collection manager
+        this.collectionManager = new CollectionManager(plugin);
+        logger.info("CollectionManager initialized");
+        
+        // Initialize enchant manager
+        this.enchantManager = new EnchantManager(plugin);
+        logger.info("EnchantManager initialized");
+        
+        // Initialize model data manager
+        this.modelDataManager = new ModelDataManager(plugin);
+        logger.info("ModelDataManager initialized");
     }
     
     /**
@@ -43,8 +59,8 @@ public class ItemManager {
             logger.info("EnchantManager initialized");
             
             // Initialize cosmetic manager (move from plugin to here)
-            this.cosmeticManager = plugin.getCosmeticManager();
-            logger.info("CosmeticManager registered with ItemManager");
+            this.cosmeticItem = new CosmeticItem(plugin);
+            logger.info("CosmeticItem initialized");
             
             // Initialize collection manager
             this.collectionManager = new CollectionManager(plugin);
@@ -70,16 +86,16 @@ public class ItemManager {
     }
     
     /**
-     * Get the cosmetic manager for head collections and cosmetic items.
+     * Get the cosmetic manager for head collections and variants.
      * 
      * @return The CosmeticManager instance
      */
-    public CosmeticManager getCosmeticManager() {
-        return cosmeticManager;
+    public CosmeticItem getCosmeticItem() {
+        return cosmeticItem;
     }
     
     /**
-     * Get the collection manager for organizing items into thematic groups.
+     * Get the collection manager for item collections.
      * 
      * @return The CollectionManager instance
      */
@@ -110,7 +126,7 @@ public class ItemManager {
             case ENCHANTED:
                 return enchantManager.createEnchantedItem(properties);
             case COSMETIC:
-                return cosmeticManager.createCosmeticItem(properties);
+                return cosmeticItem.createCosmeticItem(properties);
             case COLLECTION:
                 return collectionManager.createCollectionItem(properties);
             default:
@@ -132,8 +148,8 @@ public class ItemManager {
             collectionManager.shutdown();
         }
         
-        if (cosmeticManager != null) {
-            cosmeticManager.shutdown();
+        if (cosmeticItem != null) {
+            cosmeticItem.shutdown();
         }
         
         if (enchantManager != null) {

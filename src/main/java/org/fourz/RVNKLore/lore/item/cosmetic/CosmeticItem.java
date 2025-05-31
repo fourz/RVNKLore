@@ -18,7 +18,7 @@ import java.util.stream.Collectors;
  * Handles registration, retrieval, and player progress tracking for all head variants.
  * Integrates with the broader ItemManager system for unified item creation.
  */
-public class CosmeticManager {
+public class CosmeticItem {
     private final RVNKLore plugin;
     private final LogManager logger;
     private final Map<String, HeadCollection> collections;
@@ -26,9 +26,9 @@ public class CosmeticManager {
     private final Map<UUID, Set<String>> playerOwnedHeads;
     private final Map<CollectionTheme, List<HeadCollection>> themeIndex;
 
-    public CosmeticManager(RVNKLore plugin) {
+    public CosmeticItem(RVNKLore plugin) {
         this.plugin = plugin;
-        this.logger = LogManager.getInstance(plugin, "CosmeticManager");
+        this.logger = LogManager.getInstance(plugin, "CosmeticItem");
         this.collections = new ConcurrentHashMap<>();
         this.headVariants = new ConcurrentHashMap<>();
         this.playerOwnedHeads = new ConcurrentHashMap<>();

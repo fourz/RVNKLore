@@ -9,7 +9,7 @@ import org.fourz.RVNKLore.lore.item.cosmetic.HeadCollection;
 import org.fourz.RVNKLore.lore.item.cosmetic.HeadVariant;
 import org.fourz.RVNKLore.lore.item.cosmetic.HeadRarity;
 import org.fourz.RVNKLore.debug.LogManager;
-import org.fourz.RVNKLore.lore.item.cosmetic.CosmeticManager;
+import org.fourz.RVNKLore.lore.item.cosmetic.CosmeticItem;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -20,11 +20,11 @@ import java.util.List;
  */
 public class CosmeticGiveSubCommand implements SubCommand {
     private final LogManager logger;
-    private final CosmeticManager cosmeticManager;
+    private final CosmeticItem cosmeticItem;
 
-    public CosmeticGiveSubCommand(RVNKLore plugin, CosmeticManager cosmeticManager) {
+    public CosmeticGiveSubCommand(RVNKLore plugin, CosmeticItem cosmeticItem) {
         this.logger = LogManager.getInstance(plugin, "CosmeticGiveSubCommand");
-        this.cosmeticManager = cosmeticManager;
+        this.cosmeticItem = cosmeticItem;
     }
 
     @Override
@@ -96,18 +96,18 @@ public class CosmeticGiveSubCommand implements SubCommand {
             return;
         }
 
-        HeadVariant variant = cosmeticManager.getHeadVariant(headId);
+        HeadVariant variant = cosmeticItem.getHeadVariant(headId);
         if (variant == null) {
             sender.sendMessage("&c✖ Head variant not found: " + headId);
             return;
         }
 
-        if (cosmeticManager.playerOwnsHead(target, headId)) {
+        if (cosmeticItem.playerOwnsHead(target, headId)) {
             sender.sendMessage("&e⚠ Player " + target.getName() + " already owns: " + variant.getName());
             return;
         }
 
-        if (cosmeticManager.grantHeadToPlayer(target, headId)) {
+        if (cosmeticItem.grantHeadToPlayer(target, headId)) {
             sender.sendMessage("&a✓ Granted " + variant.getRarity().getColoredDisplayName() + 
                              " &f" + variant.getName() + " &ato " + target.getName());
             target.sendMessage("&a✓ You received a new head: " + variant.getRarity().getColoredDisplayName() + 
@@ -129,7 +129,7 @@ public class CosmeticGiveSubCommand implements SubCommand {
             return;
         }
 
-        HeadCollection collection = cosmeticManager.getCollection(collectionId);
+        HeadCollection collection = cosmeticItem.getCollection(collectionId);
         if (collection == null) {
             sender.sendMessage("&c✖ Collection not found: " + collectionId);
             return;
@@ -139,8 +139,8 @@ public class CosmeticGiveSubCommand implements SubCommand {
         int skipped = 0;
 
         for (HeadVariant variant : collection.getAllHeads()) {
-            if (!cosmeticManager.playerOwnsHead(target, variant.getId())) {
-                if (cosmeticManager.grantHeadToPlayer(target, variant.getId())) {
+            if (!cosmeticItem.playerOwnsHead(target, variant.getId())) {
+                if (cosmeticItem.grantHeadToPlayer(target, variant.getId())) {
                     granted++;
                 } else {
                     skipped++;
@@ -183,10 +183,10 @@ public class CosmeticGiveSubCommand implements SubCommand {
         List<HeadVariant> availableHeads = new ArrayList<>();
         
         // Collect all available heads matching criteria
-        for (HeadCollection collection : cosmeticManager.getAvailableCollections()) {
+        for (HeadCollection collection : cosmeticItem.getAvailableCollections()) {
             for (HeadVariant variant : collection.getAllHeads()) {
                 // Skip if player already owns this head
-                if (cosmeticManager.playerOwnsHead(target, variant.getId())) {
+                if (cosmeticItem.playerOwnsHead(target, variant.getId())) {
                     continue;
                 }
                 
@@ -213,7 +213,7 @@ public class CosmeticGiveSubCommand implements SubCommand {
         // Select random head weighted by rarity
         HeadVariant selectedHead = selectRandomHead(availableHeads);
         
-        if (cosmeticManager.grantHeadToPlayer(target, selectedHead.getId())) {
+        if (cosmeticItem.grantHeadToPlayer(target, selectedHead.getId())) {
             sender.sendMessage("&a✓ Granted random head to " + target.getName() + ": " + 
                              selectedHead.getRarity().getColoredDisplayName() + " &f" + selectedHead.getName());
             target.sendMessage("&a✓ You received a random head: " + 
@@ -311,14 +311,14 @@ public class CosmeticGiveSubCommand implements SubCommand {
             
             if ("head".equals(action)) {
                 // Add head variant IDs
-                for (HeadCollection collection : cosmeticManager.getAllCollections()) {
+                for (HeadCollection collection : cosmeticItem.getAllCollections()) {
                     for (HeadVariant variant : collection.getAllHeads()) {
                         completions.add(variant.getId());
                     }
                 }
             } else if ("collection".equals(action)) {
                 // Add collection IDs
-                for (HeadCollection collection : cosmeticManager.getAllCollections()) {
+                for (HeadCollection collection : cosmeticItem.getAllCollections()) {
                     completions.add(collection.getId());
                 }
             } else if ("random".equals(action)) {

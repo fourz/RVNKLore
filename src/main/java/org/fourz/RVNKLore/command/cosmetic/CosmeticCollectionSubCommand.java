@@ -3,7 +3,7 @@ package org.fourz.RVNKLore.command.cosmetic;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.fourz.RVNKLore.command.SubCommand;
-import org.fourz.RVNKLore.lore.item.cosmetic.CosmeticManager;
+import org.fourz.RVNKLore.lore.item.cosmetic.CosmeticItem;
 import org.fourz.RVNKLore.lore.item.cosmetic.HeadCollection;
 import org.fourz.RVNKLore.lore.item.cosmetic.HeadVariant;
 import org.fourz.RVNKLore.lore.item.cosmetic.HeadRarity;
@@ -18,32 +18,33 @@ import java.util.Map;
  * Provides player-facing interface for browsing collections and checking progress.
  */
 public class CosmeticCollectionSubCommand implements SubCommand {
-    private final CosmeticManager cosmeticManager;
+    private final CosmeticItem cosmeticItem;
 
-    public CosmeticCollectionSubCommand(CosmeticManager cosmeticManager) {
-        this.cosmeticManager = cosmeticManager;
+    public CosmeticCollectionSubCommand(CosmeticItem cosmeticItem) {
+        this.cosmeticItem = cosmeticItem;
     }
 
     @Override
     public boolean hasPermission(CommandSender sender) {
-        // TODO Auto-generated method stub
-        return false;
+        // Only allow players with the base collection permission or admin
+        return sender.hasPermission("rvnklore.command.collection") || sender.hasPermission("rvnklore.admin");
     }
 
     @Override
     public boolean execute(CommandSender sender, String[] args) {
+        if (!hasPermission(sender)) {
+            sender.sendMessage("&c✖ You don't have permission to use this command");
+            return true;
+        }
         if (!(sender instanceof Player)) {
             sender.sendMessage("&c▶ This command can only be used by players");
             return true;
         }
-
         Player player = (Player) sender;
-
         if (args.length == 0) {
             showCollectionOverview(player);
             return true;
         }
-
         String action = args[0].toLowerCase();
         switch (action) {
             case "list":
@@ -70,7 +71,6 @@ public class CosmeticCollectionSubCommand implements SubCommand {
                 showUsage(player);
                 break;
         }
-
         return true;
     }
 
@@ -81,8 +81,8 @@ public class CosmeticCollectionSubCommand implements SubCommand {
         player.sendMessage("&6⚙ &lHead Collections Overview");
         player.sendMessage("");
 
-        Map<String, Double> progress = cosmeticManager.getPlayerCollectionProgress(player);
-        int totalCollections = cosmeticManager.getAvailableCollections().size();
+        Map<String, Double> progress = cosmeticItem.getPlayerCollectionProgress(player);
+        int totalCollections = cosmeticItem.getAvailableCollections().size();
         int completedCollections = (int) progress.values().stream().mapToLong(p -> p >= 1.0 ? 1 : 0).sum();
 
         player.sendMessage("&a✓ Completed Collections: &f" + completedCollections + "&7/&f" + totalCollections);
@@ -109,10 +109,10 @@ public class CosmeticCollectionSubCommand implements SubCommand {
                 listThemes(player);
                 return;
             }
-            collections = cosmeticManager.getCollectionsByTheme(theme);
+            collections = cosmeticItem.getCollectionsByTheme(theme);
             player.sendMessage("&6⚙ &lCollections - " + theme.getDisplayName());
         } else {
-            collections = cosmeticManager.getAvailableCollections();
+            collections = cosmeticItem.getAvailableCollections();
             player.sendMessage("&6⚙ &lAll Available Collections");
         }
 
@@ -122,7 +122,7 @@ public class CosmeticCollectionSubCommand implements SubCommand {
         }
 
         player.sendMessage("");
-        Map<String, Double> progress = cosmeticManager.getPlayerCollectionProgress(player);
+        Map<String, Double> progress = cosmeticItem.getPlayerCollectionProgress(player);
 
         for (HeadCollection collection : collections) {
             double completionPercent = progress.getOrDefault(collection.getId(), 0.0) * 100;
@@ -145,7 +145,7 @@ public class CosmeticCollectionSubCommand implements SubCommand {
      * View detailed information about a specific collection.
      */
     private void viewCollection(Player player, String collectionId) {
-        HeadCollection collection = cosmeticManager.getCollection(collectionId);
+        HeadCollection collection = cosmeticItem.getCollection(collectionId);
         if (collection == null) {
             player.sendMessage("&c✖ Collection not found: " + collectionId);
             return;
@@ -160,7 +160,7 @@ public class CosmeticCollectionSubCommand implements SubCommand {
         player.sendMessage("");
 
         // Show progress
-        Map<String, Double> progress = cosmeticManager.getPlayerCollectionProgress(player);
+        Map<String, Double> progress = cosmeticItem.getPlayerCollectionProgress(player);
         double completionPercent = progress.getOrDefault(collection.getId(), 0.0) * 100;
         boolean isComplete = completionPercent >= 100.0;
         
@@ -186,7 +186,7 @@ public class CosmeticCollectionSubCommand implements SubCommand {
         player.sendMessage("&fHeads in Collection:");
         
         for (HeadVariant variant : collection.getAllHeads()) {
-            boolean owned = cosmeticManager.playerOwnsHead(player, variant.getId());
+            boolean owned = cosmeticItem.playerOwnsHead(player, variant.getId());
             String status = owned ? "&a✓" : "&c✖";
             String rarity = variant.getRarity().getColoredDisplayName();
             
@@ -220,7 +220,7 @@ public class CosmeticCollectionSubCommand implements SubCommand {
         player.sendMessage("&6⚙ &lYour Collection Progress");
         player.sendMessage("");
 
-        Map<String, Double> progress = cosmeticManager.getPlayerCollectionProgress(player);
+        Map<String, Double> progress = cosmeticItem.getPlayerCollectionProgress(player);
         
         if (progress.isEmpty()) {
             player.sendMessage("&e⚠ No collection progress to display");
@@ -228,7 +228,7 @@ public class CosmeticCollectionSubCommand implements SubCommand {
         }
 
         for (Map.Entry<String, Double> entry : progress.entrySet()) {
-            HeadCollection collection = cosmeticManager.getCollection(entry.getKey());
+            HeadCollection collection = cosmeticItem.getCollection(entry.getKey());
             if (collection == null) continue;
 
             double percent = entry.getValue() * 100;
@@ -251,7 +251,7 @@ public class CosmeticCollectionSubCommand implements SubCommand {
         player.sendMessage("");
         
         for (CollectionTheme theme : CollectionTheme.values()) {
-            int collectionCount = cosmeticManager.getCollectionsByTheme(theme).size();
+            int collectionCount = cosmeticItem.getCollectionsByTheme(theme).size();
             if (collectionCount > 0) {
                 player.sendMessage("&f" + theme.getDisplayName() + " &7(" + collectionCount + " collections)");
                 player.sendMessage("&7   " + theme.getDescription());
@@ -291,7 +291,9 @@ public class CosmeticCollectionSubCommand implements SubCommand {
     @Override
     public List<String> getTabCompletions(CommandSender sender, String[] args) {
         List<String> completions = new ArrayList<>();
-
+        if (!hasPermission(sender)) {
+            return completions;
+        }
         if (args.length == 1) {
             completions.add("list");
             completions.add("view");
@@ -299,20 +301,16 @@ public class CosmeticCollectionSubCommand implements SubCommand {
             completions.add("theme");
         } else if (args.length == 2) {
             String action = args[0].toLowerCase();
-            
             if ("view".equals(action)) {
-                // Add collection IDs
-                for (HeadCollection collection : cosmeticManager.getAvailableCollections()) {
+                for (HeadCollection collection : cosmeticItem.getAvailableCollections()) {
                     completions.add(collection.getId());
                 }
             } else if ("list".equals(action) || "theme".equals(action)) {
-                // Add theme names
                 for (CollectionTheme theme : CollectionTheme.values()) {
                     completions.add(theme.getDisplayName());
                 }
             }
         }
-
         return completions;
     }
 
