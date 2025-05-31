@@ -5,8 +5,11 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.command.SubCommand;
-import org.fourz.RVNKLore.cosmetic.*;
+import org.fourz.RVNKLore.lore.item.cosmetic.HeadCollection;
+import org.fourz.RVNKLore.lore.item.cosmetic.HeadVariant;
+import org.fourz.RVNKLore.lore.item.cosmetic.HeadRarity;
 import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.RVNKLore.lore.item.cosmetic.CosmeticManager;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -16,12 +19,10 @@ import java.util.List;
  * Allows staff to give heads to players and manage the cosmetic system.
  */
 public class CosmeticGiveSubCommand implements SubCommand {
-    private final RVNKLore plugin;
     private final LogManager logger;
     private final CosmeticManager cosmeticManager;
 
     public CosmeticGiveSubCommand(RVNKLore plugin, CosmeticManager cosmeticManager) {
-        this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "CosmeticGiveSubCommand");
         this.cosmeticManager = cosmeticManager;
     }
@@ -171,7 +172,7 @@ public class CosmeticGiveSubCommand implements SubCommand {
 
         HeadRarity targetRarity = null;
         if (rarityName != null) {
-            targetRarity = HeadRarity.fromDisplayName(rarityName);
+            targetRarity = HeadRarity.fromString(rarityName);
             if (targetRarity == null) {
                 sender.sendMessage("&c✖ Unknown rarity: " + rarityName);
                 sender.sendMessage("&7   Available rarities: Common, Uncommon, Rare, Epic, Legendary, Mythic, Event");

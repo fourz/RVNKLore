@@ -1,4 +1,4 @@
-package org.fourz.RVNKLore.lore.enchant;
+package org.fourz.RVNKLore.lore.item.enchant;
 
 import org.bukkit.enchantments.Enchantment;
 

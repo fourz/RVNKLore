@@ -4,12 +4,13 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.fourz.RVNKLore.handler.HandlerFactory;
 import org.fourz.RVNKLore.lore.LoreManager;
 import org.fourz.RVNKLore.config.ConfigManager;
-import org.fourz.RVNKLore.cosmetic.CosmeticManager;
 import org.fourz.RVNKLore.data.DatabaseManager;
 import org.fourz.RVNKLore.debug.Debug;
 import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.command.CommandManager;
 import org.fourz.RVNKLore.util.UtilityManager;
+import org.fourz.RVNKLore.lore.item.ItemManager;
+import org.fourz.RVNKLore.lore.item.cosmetic.CosmeticManager;
 
 public class RVNKLore extends JavaPlugin {
     private LoreManager loreManager;
@@ -19,7 +20,7 @@ public class RVNKLore extends JavaPlugin {
     private DatabaseManager databaseManager;
     private HandlerFactory handlerFactory;
     private UtilityManager utilityManager;
-    private CosmeticManager cosmeticManager;
+    private ItemManager itemManager;
     private int healthCheckTaskId = -1;
     private Thread shutdownHook;
     private boolean shuttingDown = false;
@@ -58,10 +59,11 @@ public class RVNKLore extends JavaPlugin {
               // Now initialize LoreManager after HandlerFactory is fully initialized
             loreManager = LoreManager.getInstance(this);
             loreManager.initializeLore();
-            
-            // Initialize cosmetic management system
-            cosmeticManager = new CosmeticManager(this);
-            cosmeticManager.initialize();
+            // Initialize ItemManager through LoreManager
+            this.itemManager = loreManager.getItemManager();
+            // Remove direct CosmeticManager initialization (now handled by ItemManager)
+            // cosmeticManager = new CosmeticManager(this);
+            // cosmeticManager.initialize();
             
             // Finally initialize command system
             commandManager = new CommandManager(this);
@@ -155,10 +157,14 @@ public class RVNKLore extends JavaPlugin {
             loreManager.cleanup();
             loreManager = null;
         }
-        
-        if (cosmeticManager != null) {
-            cosmeticManager.shutdown();
-            cosmeticManager = null;
+        // Remove direct CosmeticManager shutdown (now handled by ItemManager)
+        // if (cosmeticManager != null) {
+        //     cosmeticManager.shutdown();
+        //     cosmeticManager = null;
+        // }
+        if (itemManager != null) {
+            itemManager.shutdown();
+            itemManager = null;
         }
 
         if (commandManager != null) {
@@ -220,11 +226,18 @@ public class RVNKLore extends JavaPlugin {
     }
     
     /**
+     * Get the item manager for all item-related systems.
+     * @return The ItemManager instance
+     */
+    public ItemManager getItemManager() {
+        return itemManager;
+    }
+
+    /**
      * Get the cosmetic manager for head collections and variants.
-     * 
-     * @return The cosmetic manager
+     * @return The cosmetic manager (delegated to ItemManager)
      */
     public CosmeticManager getCosmeticManager() {
-        return cosmeticManager;
+        return itemManager != null ? itemManager.getCosmeticManager() : null;
     }
 }

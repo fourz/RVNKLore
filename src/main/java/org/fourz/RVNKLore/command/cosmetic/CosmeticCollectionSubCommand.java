@@ -2,10 +2,12 @@ package org.fourz.RVNKLore.command.cosmetic;
 
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
-import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.command.SubCommand;
-import org.fourz.RVNKLore.cosmetic.*;
-import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.RVNKLore.lore.item.cosmetic.CosmeticManager;
+import org.fourz.RVNKLore.lore.item.cosmetic.HeadCollection;
+import org.fourz.RVNKLore.lore.item.cosmetic.HeadVariant;
+import org.fourz.RVNKLore.lore.item.cosmetic.HeadRarity;
+import org.fourz.RVNKLore.lore.item.cosmetic.CollectionTheme;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -16,13 +18,9 @@ import java.util.Map;
  * Provides player-facing interface for browsing collections and checking progress.
  */
 public class CosmeticCollectionSubCommand implements SubCommand {
-    private final RVNKLore plugin;
-    private final LogManager logger;
     private final CosmeticManager cosmeticManager;
 
-    public CosmeticCollectionSubCommand(RVNKLore plugin, CosmeticManager cosmeticManager) {
-        this.plugin = plugin;
-        this.logger = LogManager.getInstance(plugin, "CosmeticCollectionSubCommand");
+    public CosmeticCollectionSubCommand(CosmeticManager cosmeticManager) {
         this.cosmeticManager = cosmeticManager;
     }
 

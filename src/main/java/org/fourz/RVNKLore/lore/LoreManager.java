@@ -4,6 +4,7 @@ import org.bukkit.Location;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.handler.LoreHandler;
+import org.fourz.RVNKLore.lore.item.ItemManager;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -18,6 +19,7 @@ public class LoreManager {
     private final Map<LoreType, List<LoreEntry>> loreByType = new HashMap<>();
     private static LoreManager instance;
     private LoreFinder loreFinder;
+    private ItemManager itemManager;
     private boolean initializing = false;
 
     public LoreManager(RVNKLore plugin) {
@@ -43,8 +45,7 @@ public class LoreManager {
 
     /**
      * Initialize the lore system and load handlers
-     */
-    public void initializeLore() {
+     */    public void initializeLore() {
         if (initializing) {
             logger.info("Lore system initialization already in progress, skipping recursive call");
             return;
@@ -52,6 +53,11 @@ public class LoreManager {
         try {
             initializing = true;
             logger.info("Initializing lore system...");
+            
+            // Initialize the unified item management system
+            this.itemManager = new ItemManager(plugin);
+            logger.info("Item management system initialized");
+            
             // First load entries from database (doesn't require handlers)
             loadLoreEntries();
             // Then create the LoreFinder (should be after entries are loaded)
@@ -218,16 +224,30 @@ public class LoreManager {
      */
     public String exportToJson() {
         return plugin.getDatabaseManager().exportLoreEntriesToJson();
-    }
-
-    /**
+    }    /**
      * Clean up resources when the plugin is disabled
      */
     public void cleanup() {
         logger.info("Cleaning up lore manager...");
+        
+        // Cleanup item manager first
+        if (itemManager != null) {
+            itemManager.cleanup();
+            itemManager = null;
+        }
+        
         cachedEntries.clear();
         loreByType.clear();
         instance = null;
+    }
+
+    /**
+     * Get the item manager for handling all item-related operations.
+     *
+     * @return The ItemManager instance, or null if not initialized
+     */
+    public ItemManager getItemManager() {
+        return itemManager;
     }
 
     /**
