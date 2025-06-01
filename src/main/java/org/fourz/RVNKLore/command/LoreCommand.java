@@ -48,10 +48,9 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
         //if (plugin.getItemManager() != null && plugin.getItemManager().getCosmeticManager() != null) {
         if (plugin.getItemManager() != null && plugin.getItemManager().getCosmeticItem() != null) {
             commands.put("collection", new CosmeticCollectionSubCommand(plugin.getItemManager().getCosmeticItem()));
-            // Register the new unified item give command
-            commands.put("itemgive", new LoreItemGiveSubCommand(plugin, plugin.getItemManager()));
-            // Remove/deprecate the old cosmetic give command
-            // commands.put("give", new CosmeticGiveSubCommand(plugin, plugin.getItemManager().getCosmeticItem())); // Deprecated
+            // Register the /lore item parent subcommand and its children
+            commands.put("item", new LoreItemSubCommand(plugin));
+            // Remove /lore itemgive registration
         }
         
         // Add all commands to the subCommands map

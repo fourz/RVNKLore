@@ -33,15 +33,13 @@ public class ItemManager {
         this.logger = LogManager.getInstance(plugin, "ItemManager");
         
         logger.info("Initializing ItemManager...");
-        initializeSubManagers();
+        // Remove direct initialization of collectionManager here to avoid double init
+        // this.collectionManager = new CollectionManager(plugin);
+        // logger.info("CollectionManager initialized");
         
         // Initialize cosmetic manager (move from plugin to here)
         this.cosmeticItem = new CosmeticItem(plugin);
         logger.info("CosmeticItem initialized");
-        
-        // Initialize collection manager
-        this.collectionManager = new CollectionManager(plugin);
-        logger.info("CollectionManager initialized");
         
         // Initialize enchant manager
         this.enchantManager = new EnchantManager(plugin);
@@ -50,33 +48,6 @@ public class ItemManager {
         // Initialize model data manager
         this.modelDataManager = new ModelDataManager(plugin);
         logger.info("ModelDataManager initialized");
-    }
-    
-    /**
-     * Initialize all sub-managers for item management domains.
-     */
-    private void initializeSubManagers() {
-        try {
-            // Initialize enchant manager
-            this.enchantManager = new EnchantManager(plugin);
-            logger.info("EnchantManager initialized");
-            
-            // Initialize cosmetic manager (move from plugin to here)
-            this.cosmeticItem = new CosmeticItem(plugin);
-            logger.info("CosmeticItem initialized");
-            
-            // Initialize collection manager
-            this.collectionManager = new CollectionManager(plugin);
-            logger.info("CollectionManager initialized");
-            
-            // Initialize model data manager
-            this.modelDataManager = new ModelDataManager(plugin);
-            logger.info("ModelDataManager initialized");
-            
-        } catch (Exception e) {
-            logger.error("Failed to initialize ItemManager sub-managers", e);
-            throw new RuntimeException("ItemManager initialization failed", e);
-        }
     }
     
     /**
