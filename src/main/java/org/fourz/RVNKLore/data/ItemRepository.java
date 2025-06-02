@@ -16,6 +16,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -49,7 +50,66 @@ public class ItemRepository {
         this.dbConnection = dbConnection;
         this.dbHelper = new DatabaseHelper(plugin);
         
+        // Initialize database tables
+        initializeTables();
+        
         logger.info("ItemRepository initialized");
+    }
+    
+    /**
+     * Initialize required database tables
+     */
+    private void initializeTables() {
+        try {
+            Connection conn = dbConnection.getConnection();
+            
+            // Create lore_item table if it doesn't exist
+            String createItemTable = "CREATE TABLE IF NOT EXISTS lore_item (" +
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                    "name VARCHAR(64) NOT NULL UNIQUE, " +
+                    "description TEXT, " +
+                    "item_type VARCHAR(32) NOT NULL, " +
+                    "rarity VARCHAR(32) NOT NULL, " +
+                    "material VARCHAR(64) NOT NULL, " +
+                    "is_obtainable BOOLEAN DEFAULT 1, " +
+                    "custom_model_data INTEGER, " +
+                    "item_properties TEXT, " +
+                    "created_by VARCHAR(64), " +
+                    "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                    "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
+                    ")";
+            
+            // Create collection table if it doesn't exist
+            String createCollectionTable = "CREATE TABLE IF NOT EXISTS collection (" +
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                    "name VARCHAR(64) NOT NULL UNIQUE, " +
+                    "description TEXT, " +
+                    "theme VARCHAR(32), " +
+                    "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                    "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
+                    ")";
+                    
+            // Create collection_item table for managing relationships
+            String createCollectionItemTable = "CREATE TABLE IF NOT EXISTS collection_item (" +
+                    "collection_id INTEGER, " +
+                    "item_id INTEGER, " +
+                    "sequence_number INTEGER DEFAULT 0, " +
+                    "item_config TEXT, " +
+                    "PRIMARY KEY (collection_id, item_id), " +
+                    "FOREIGN KEY (collection_id) REFERENCES collection(id) ON DELETE CASCADE, " +
+                    "FOREIGN KEY (item_id) REFERENCES lore_item(id) ON DELETE CASCADE" +
+                    ")";
+                    
+            // Execute the table creation statements
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute(createItemTable);
+                stmt.execute(createCollectionTable);
+                stmt.execute(createCollectionItemTable);
+                logger.info("Item database tables created/verified");
+            }
+        } catch (SQLException e) {
+            logger.error("Failed to initialize item database tables", e);
+        }
     }
     
     /**
