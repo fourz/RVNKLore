@@ -291,6 +291,15 @@ public class DatabaseManager {
     }
     
     /**
+     * Get the database connection object
+     * 
+     * @return The DatabaseConnection instance
+     */
+    public DatabaseConnection getDatabaseConnection() {
+        return connection;
+    }
+    
+    /**
      * Validates and attempts to fix database connection if needed
      */
     private boolean validateConnection() {

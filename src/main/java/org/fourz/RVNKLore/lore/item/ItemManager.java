@@ -2,6 +2,8 @@ package org.fourz.RVNKLore.lore.item;
 
 import org.bukkit.inventory.ItemStack;
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.data.DatabaseConnection;
+import org.fourz.RVNKLore.data.ItemRepository;
 import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.lore.item.enchant.EnchantManager;
 import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
@@ -10,13 +12,12 @@ import org.fourz.RVNKLore.lore.item.model.ModelDataManager;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Base manager class for all item-related functionality in the lore system.
  * Acts as a central orchestrator for enchantments, cosmetics, collections, and model data.
- * 
- * This class follows the manager pattern, providing a unified interface for accessing
- * specialized item management subsystems while maintaining clear separation of concerns.
  */
 public class ItemManager {
     private final RVNKLore plugin;
@@ -27,17 +28,32 @@ public class ItemManager {
     private CosmeticItem cosmeticItem;
     private CollectionManager collectionManager;
     private ModelDataManager modelDataManager;
+    private ItemRepository itemRepository;
+    
+    // Caches for better performance
+    private final Map<String, ItemProperties> itemCache = new ConcurrentHashMap<>();
+    private final Map<Integer, List<ItemProperties>> collectionCache = new ConcurrentHashMap<>();
+    private boolean cacheInitialized = false;
     
     public ItemManager(RVNKLore plugin) {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "ItemManager");
-        
         logger.info("Initializing ItemManager...");
-        // Remove direct initialization of collectionManager here to avoid double init
-        // this.collectionManager = new CollectionManager(plugin);
-        // logger.info("CollectionManager initialized");
+
+        // Initialize database repository
+        if (plugin.getDatabaseManager() != null && plugin.getDatabaseManager().isConnected()) {
+            DatabaseConnection dbConnection = plugin.getDatabaseManager().getDatabaseConnection();
+            if (dbConnection != null) {
+                this.itemRepository = new ItemRepository(plugin, dbConnection);
+                logger.info("ItemRepository initialized");
+            } else {
+                logger.warning("Database connection is null, ItemRepository will not be available");
+            }
+        } else {
+            logger.warning("Database not available - some item features may be limited");
+        }
         
-        // Initialize cosmetic manager (move from plugin to here)
+        // Initialize cosmetic manager
         this.cosmeticItem = new CosmeticItem(plugin);
         logger.info("CosmeticItem initialized");
         
@@ -48,6 +64,13 @@ public class ItemManager {
         // Initialize model data manager
         this.modelDataManager = new ModelDataManager(plugin);
         logger.info("ModelDataManager initialized");
+        
+        // Initialize collection manager after other managers
+        this.collectionManager = new CollectionManager(plugin);
+        logger.info("CollectionManager initialized");
+        
+        // Initial cache load in async task to avoid blocking startup
+        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, this::initializeCache);
     }
     
     /**
@@ -88,12 +111,6 @@ public class ItemManager {
     
     /**
      * Create a generic lore item with basic properties.
-     * This method provides a unified interface for item creation across all domains.
-     * 
-     * @param type The type of item to create
-     * @param name The display name for the item
-     * @param properties Additional properties for the item
-     * @return The created ItemStack
      */
     public ItemStack createLoreItem(ItemType type, String name, ItemProperties properties) {
         switch (type) {
@@ -103,60 +120,158 @@ public class ItemManager {
                 return cosmeticItem.createCosmeticItem(properties);
             case COLLECTION:
                 return collectionManager.createCollectionItem(properties);
+            case MODEL_DATA:
+                if (modelDataManager != null) {
+                    ItemStack item = new ItemStack(properties.getMaterial());
+                    // Map ItemType to ModelDataCategory if possible, else use ModelDataCategory.COSMETIC as default
+                    org.fourz.RVNKLore.lore.item.model.ModelDataCategory category = org.fourz.RVNKLore.lore.item.model.ModelDataCategory.COSMETIC;
+                    try {
+                        category = org.fourz.RVNKLore.lore.item.model.ModelDataCategory.valueOf(type.name());
+                    } catch (IllegalArgumentException ignored) {}
+                    return modelDataManager.applyModelData(item, name, category);
+                }
+                // Fallback to standard item creation
+                ItemStack fallback = new ItemStack(properties.getMaterial());
+                org.bukkit.inventory.meta.ItemMeta fallbackMeta = fallback.getItemMeta();
+                if (fallbackMeta != null) {
+                    if (properties.getDisplayName() != null) {
+                        fallbackMeta.setDisplayName(properties.getDisplayName());
+                    }
+                    if (properties.getLore() != null && !properties.getLore().isEmpty()) {
+                        fallbackMeta.setLore(properties.getLore());
+                    }
+                    if (properties.getCustomModelData() != null) {
+                        fallbackMeta.setCustomModelData(properties.getCustomModelData());
+                    }
+                    fallback.setItemMeta(fallbackMeta);
+                }
+                return fallback;
             default:
-                throw new IllegalArgumentException("Unsupported item type: " + type);
+                // For standard items, create a basic item with the properties
+                ItemStack item = new ItemStack(properties.getMaterial());
+                org.bukkit.inventory.meta.ItemMeta meta = item.getItemMeta();
+                if (meta != null) {
+                    if (properties.getDisplayName() != null) {
+                        meta.setDisplayName(properties.getDisplayName());
+                    }
+                    if (properties.getLore() != null && !properties.getLore().isEmpty()) {
+                        meta.setLore(properties.getLore());
+                    }
+                    if (properties.getCustomModelData() != null) {
+                        meta.setCustomModelData(properties.getCustomModelData());
+                    }
+                    item.setItemMeta(meta);
+                }
+                return item;
         }
     }
 
     /**
      * Returns a list of all registered item names for tab completion and lookup.
-     * Includes cosmetic, collection, and enchanted items.
-     *
-     * @return List of all item names
      */
     public List<String> getAllItemNames() {
         List<String> names = new ArrayList<>();
-        // Cosmetic items
-        if (cosmeticItem != null) {
-            for (var collection : cosmeticItem.getAllCollections()) {
-                collection.getAllHeads().forEach(head -> names.add(head.getId()));
+        
+        // Add items from database if available
+        if (itemRepository != null && cacheInitialized) {
+            // Use the cached items
+            names.addAll(itemCache.keySet());
+        } else {
+            // Fallback to memory-based items
+            if (cosmeticItem != null) {
+                for (var collection : cosmeticItem.getAllCollections()) {
+                    collection.getAllHeads().forEach(head -> names.add(head.getId()));
+                }
+            }
+            if (collectionManager != null) {
+                names.addAll(collectionManager.getAllCollections().keySet());
             }
         }
-        // Collection items
-        if (collectionManager != null) {
-            names.addAll(collectionManager.getAllCollections().keySet());
-        }
-        // TODO: Add enchanted and other item types as needed
+        
         return names;
     }
 
     /**
-     * Create a lore item by name, searching all registered item types.
-     * Returns null if not found.
-     *
-     * @param itemName The unique item name or ID
-     * @return An ItemStack for the item, or null if not found
+     * Create a lore item by name.
      */
     public ItemStack createLoreItem(String itemName) {
-        // Cosmetic heads
+        // First try to get from database cache
+        if (itemRepository != null && cacheInitialized && itemCache.containsKey(itemName)) {
+            ItemProperties props = itemCache.get(itemName);
+            return createLoreItem(props.getItemType(), itemName, props);
+        }
+        
+        // If not in cache, try to load directly from database
+        if (itemRepository != null) {
+            ItemProperties props = itemRepository.getItemByName(itemName);
+            if (props != null) {
+                // Add to cache for future lookups
+                itemCache.put(itemName, props);
+                return createLoreItem(props.getItemType(), itemName, props);
+            }
+        }
+        
+        // Fallback to memory-based items
         if (cosmeticItem != null) {
             var variant = cosmeticItem.getHeadVariant(itemName);
             if (variant != null) {
                 return cosmeticItem.createHeadItem(variant);
             }
         }
-        // Collection items
+        
         if (collectionManager != null) {
             var collection = collectionManager.getCollection(itemName);
             if (collection != null) {
-                // Create a representative item for the collection
                 var props = new ItemProperties(org.bukkit.Material.PAPER, collection.getName());
                 props.setCollectionId(collection.getId());
                 return collectionManager.createCollectionItem(props);
             }
         }
-        // TODO: Add enchanted and other item types as needed
+        
         return null;
+    }
+    
+    /**
+     * Initialize or refresh the item cache from database
+     */
+    private void initializeCache() {
+        if (itemRepository == null) {
+            logger.warning("Cannot initialize cache: ItemRepository is null");
+            return;
+        }
+        
+        try {
+            logger.info("Initializing item cache from database...");
+            
+            // Clear existing caches
+            itemCache.clear();
+            collectionCache.clear();
+            
+            // Load all items
+            List<ItemProperties> allItems = itemRepository.getAllItems();
+            for (ItemProperties item : allItems) {
+                itemCache.put(item.getDisplayName(), item);
+            }
+            
+            // Load all collections
+            Map<Integer, String> collections = itemRepository.getAllCollections();
+            for (Integer collectionId : collections.keySet()) {
+                collectionCache.put(collectionId, itemRepository.getItemsByCollection(collectionId));
+            }
+            
+            cacheInitialized = true;
+            logger.info("Item cache initialized with " + itemCache.size() + " items and " + 
+                        collectionCache.size() + " collections");
+        } catch (Exception e) {
+            logger.error("Error initializing item cache", e);
+        }
+    }
+    
+    /**
+     * Refresh the item cache, reloading all data from the database.
+     */
+    public void refreshCache() {
+        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, this::initializeCache);
     }
     
     /**

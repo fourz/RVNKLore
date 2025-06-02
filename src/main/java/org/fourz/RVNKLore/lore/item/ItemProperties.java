@@ -5,6 +5,7 @@ import org.bukkit.enchantments.Enchantment;
 import org.fourz.RVNKLore.lore.item.cosmetic.HeadVariant;
 import org.fourz.RVNKLore.lore.item.enchant.EnchantmentTier;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -18,6 +19,16 @@ public class ItemProperties {
     private String displayName;
     private List<String> lore;
     private Integer customModelData;
+    private ItemType type = ItemType.STANDARD;  // Default to standard type
+    private boolean isGlow = false;
+    private String skullTexture;
+    private String createdBy;
+    private boolean obtainable = true;
+    private String rarity = "COMMON";
+    private String description;
+    private Map<String, Object> customProperties;
+    private Map<String, String> metadata;
+    private int databaseId;
     
     // Enchantment properties
     private Map<Enchantment, Integer> enchantments;
@@ -32,16 +43,8 @@ public class ItemProperties {
     private String collectionId;
     private String themeId;
     private String rarityLevel;
+    private Integer collectionSequence;
     
-    // Generic metadata
-    private Map<String, String> metadata;
-    
-    /**
-     * Create new item properties with basic configuration.
-     * 
-     * @param material The item material
-     * @param displayName The display name
-     */
     public ItemProperties(Material material, String displayName) {
         this.material = material;
         this.displayName = displayName;
@@ -189,5 +192,122 @@ public class ItemProperties {
      */
     public String getMetadata(String key) {
         return metadata != null ? metadata.get(key) : null;
+    }
+    
+    public ItemType getItemType() {
+        return type;
+    }
+    
+    public ItemProperties setItemType(ItemType type) {
+        this.type = type;
+        return this;
+    }
+    
+    public boolean isGlow() {
+        return isGlow;
+    }
+    
+    public ItemProperties setGlow(boolean glow) {
+        this.isGlow = glow;
+        return this;
+    }
+    
+    public String getSkullTexture() {
+        return skullTexture;
+    }
+    
+    public ItemProperties setSkullTexture(String texture) {
+        this.skullTexture = texture;
+        return this;
+    }
+    
+    public String getCreatedBy() {
+        return createdBy;
+    }
+    
+    public ItemProperties setCreatedBy(String creator) {
+        this.createdBy = creator;
+        return this;
+    }
+    
+    public boolean isObtainable() {
+        return obtainable;
+    }
+    
+    public ItemProperties setObtainable(boolean obtainable) {
+        this.obtainable = obtainable;
+        return this;
+    }
+    
+    public String getRarity() {
+        return rarity;
+    }
+    
+    public ItemProperties setRarity(String rarity) {
+        this.rarity = rarity;
+        return this;
+    }
+    
+    public String getDescription() {
+        return description;
+    }
+    
+    public ItemProperties setDescription(String description) {
+        this.description = description;
+        return this;
+    }
+    
+    public int getDatabaseId() {
+        return databaseId;
+    }
+    
+    public ItemProperties setDatabaseId(int databaseId) {
+        this.databaseId = databaseId;
+        return this;
+    }
+    
+    public void setCustomProperty(String key, Object value) {
+        if (customProperties == null) {
+            customProperties = new HashMap<>();
+        }
+        customProperties.put(key, value);
+    }
+    
+    public Object getCustomProperty(String key) {
+        return customProperties != null ? customProperties.get(key) : null;
+    }
+    
+    public Map<String, Object> getAllCustomProperties() {
+        return customProperties != null ? customProperties : new HashMap<>();
+    }
+    
+    public boolean hasCustomProperties() {
+        return customProperties != null && !customProperties.isEmpty();
+    }
+    
+    /**
+     * Gets all metadata as a map
+     * @return Map of metadata key-value pairs
+     */
+    public Map<String, String> getAllMetadata() {
+        return metadata != null ? metadata : new HashMap<>();
+    }
+    
+    /**
+     * Get the sequence number of this item within its collection
+     * @return The sequence number, or null if not in a collection
+     */
+    public Integer getCollectionSequence() {
+        return collectionSequence;
+    }
+    
+    /**
+     * Set the sequence number for this item within its collection
+     * @param sequence The sequence number
+     * @return This ItemProperties instance for chaining
+     */
+    public ItemProperties setCollectionSequence(Integer sequence) {
+        this.collectionSequence = sequence;
+        return this;
     }
 }
