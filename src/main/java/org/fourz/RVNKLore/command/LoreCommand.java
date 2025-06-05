@@ -6,7 +6,6 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.command.cosmetic.CosmeticCollectionSubCommand;
 import org.fourz.RVNKLore.debug.LogManager;
 
 import java.util.ArrayList;
@@ -47,7 +46,7 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
         // Add cosmetic management commands using the new ItemManager-based API
         //if (plugin.getItemManager() != null && plugin.getItemManager().getCosmeticManager() != null) {
         if (plugin.getItemManager() != null && plugin.getItemManager().getCosmeticItem() != null) {
-            commands.put("collection", new CosmeticCollectionSubCommand(plugin.getItemManager().getCosmeticItem()));
+            commands.put("collection", new LoreCollectionSubCommand(plugin.getItemManager().getCosmeticItem()));
             // Register the /lore item parent subcommand and its children
             commands.put("item", new LoreItemSubCommand(plugin));
             // Remove /lore itemgive registration

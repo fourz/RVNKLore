@@ -14,13 +14,10 @@ public enum CollectionTheme {
     SEASONAL("Seasonal", "Items tied to specific seasons or holidays"),
     MYTHOLOGY("Mythology", "Items inspired by various mythologies"),
     ANIMALS("Animals", "Animal-themed heads and variants"),
-    PROFESSIONS("Professions", "Job and occupation themed items"),
     GAMING("Gaming", "Video game character inspired items"),
-    CELEBRITIES("Celebrities", "Famous person themed items"),
     CUSTOM("Custom", "Community created and unique items"),
     EVENT("Event", "Special server event exclusive items"),
-    RARE("Rare", "Extremely limited or difficult to obtain items"),
-    COMMON("Common", "Easily accessible starter items");
+    LEGENDARY("Legendary", "Items of great power and significance");
     
     private final String displayName;
     private final String description;

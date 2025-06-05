@@ -1,8 +1,7 @@
-package org.fourz.RVNKLore.command.cosmetic;
+package org.fourz.RVNKLore.command;
 
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
-import org.fourz.RVNKLore.command.SubCommand;
 import org.fourz.RVNKLore.lore.item.cosmetic.CosmeticItem;
 import org.fourz.RVNKLore.lore.item.cosmetic.HeadCollection;
 import org.fourz.RVNKLore.lore.item.cosmetic.HeadVariant;
@@ -17,10 +16,10 @@ import java.util.Map;
  * Sub-command for managing and viewing head collections.
  * Provides player-facing interface for browsing collections and checking progress.
  */
-public class CosmeticCollectionSubCommand implements SubCommand {
+public class LoreCollectionSubCommand implements SubCommand {
     private final CosmeticItem cosmeticItem;
 
-    public CosmeticCollectionSubCommand(CosmeticItem cosmeticItem) {
+    public LoreCollectionSubCommand(CosmeticItem cosmeticItem) {
         this.cosmeticItem = cosmeticItem;
     }
 
