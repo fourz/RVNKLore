@@ -126,6 +126,11 @@ public class CollectionManager {
         return collection != null ? collection.getItems() : new ArrayList<>();
     }
 
+    public Integer getItemCount(String collectionId) {
+        ItemCollection collection = getCollection(collectionId);
+        return collection != null ? collection.getItemCount() : 0;
+    }
+
     public void registerTheme(CollectionTheme theme) {
         if (theme == null) return;
         themes.put(theme.name().toLowerCase(), theme);

@@ -7,6 +7,7 @@ import org.bukkit.inventory.meta.SkullMeta;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.lore.item.ItemProperties;
+import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
 import org.fourz.RVNKLore.util.HeadUtil;
 
 import java.util.*;
@@ -137,6 +138,8 @@ public class CosmeticItem {
     public HeadCollection getCollection(String collectionId) {
         return collections.get(collectionId);
     }
+
+
     
     /**
      * Get all registered collections.
