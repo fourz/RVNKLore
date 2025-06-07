@@ -839,4 +839,55 @@ public class ItemRepository {
             return null;
         }
     }
+
+    /**
+     * Save a collection to the database with transaction support
+     *
+     * @param collection The collection to save
+     * @return True if successfully saved
+     */
+    public boolean saveCollection(org.fourz.RVNKLore.lore.item.collection.ItemCollection collection) {
+        String sql = "INSERT OR REPLACE INTO collection (collection_id, name, description, theme_id, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?)";
+        try {
+            return dbHelper.executeUpdate(sql, stmt -> {
+                stmt.setString(1, collection.getId());
+                stmt.setString(2, collection.getName());
+                stmt.setString(3, collection.getDescription());
+                stmt.setString(4, collection.getThemeId());
+                stmt.setBoolean(5, collection.isActive());
+                stmt.setLong(6, collection.getCreatedAt());
+            }) > 0;
+        } catch (org.fourz.RVNKLore.exception.LoreException e) {
+            logger.error("Failed to save collection: " + collection.getId(), e);
+            return false;
+        }
+    }
+
+    /**
+     * Load all collections from database
+     *
+     * @return List of collections
+     */
+    public java.util.List<org.fourz.RVNKLore.lore.item.collection.ItemCollection> loadAllCollections() {
+        String sql = "SELECT collection_id, name, description, theme_id, is_active, created_at FROM collection WHERE is_active = 1";
+        try {
+            return dbHelper.executeQuery(sql, null, rs -> {
+                java.util.List<org.fourz.RVNKLore.lore.item.collection.ItemCollection> collections = new java.util.ArrayList<>();
+                while (rs.next()) {
+                    org.fourz.RVNKLore.lore.item.collection.ItemCollection collection = new org.fourz.RVNKLore.lore.item.collection.ItemCollection(
+                        rs.getString("collection_id"),
+                        rs.getString("name"),
+                        rs.getString("description")
+                    );
+                    collection.setThemeId(rs.getString("theme_id"));
+                    collection.setActive(rs.getBoolean("is_active"));
+                    collections.add(collection);
+                }
+                return collections;
+            });
+        } catch (org.fourz.RVNKLore.exception.LoreException e) {
+            logger.error("Failed to load collections from database", e);
+            return new java.util.ArrayList<>();
+        }
+    }
 }

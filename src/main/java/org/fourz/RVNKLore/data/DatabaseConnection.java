@@ -59,6 +59,35 @@ public abstract class DatabaseConnection {
         try (Statement stmt = connection.createStatement()) {
             stmt.execute(createLoreTable);
             stmt.execute(createMetadataTable);
+            // --- Collection System Tables ---
+            String createCollectionTable = "CREATE TABLE IF NOT EXISTS collection (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "collection_id TEXT UNIQUE NOT NULL, " +
+                "name TEXT NOT NULL, " +
+                "description TEXT, " +
+                "theme_id TEXT, " +
+                "is_active BOOLEAN DEFAULT 1, " +
+                "created_at INTEGER NOT NULL" +
+            ")";
+            String createPlayerCollectionProgressTable = "CREATE TABLE IF NOT EXISTS player_collection_progress (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "player_id TEXT NOT NULL, " +
+                "collection_id TEXT NOT NULL, " +
+                "progress REAL DEFAULT 0.0, " +
+                "completed_at INTEGER, " +
+                "last_updated INTEGER NOT NULL, " +
+                "UNIQUE(player_id, collection_id)" +
+            ")";
+            String createCollectionRewardTable = "CREATE TABLE IF NOT EXISTS collection_reward (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "collection_id TEXT NOT NULL, " +
+                "reward_type TEXT NOT NULL, " +
+                "reward_data TEXT, " +
+                "is_claimed BOOLEAN DEFAULT 0" +
+            ")";
+            stmt.execute(createCollectionTable);
+            stmt.execute(createPlayerCollectionProgressTable);
+            stmt.execute(createCollectionRewardTable);
             debug.debug("Database tables created/verified");
         }
     }

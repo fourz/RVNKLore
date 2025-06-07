@@ -8,6 +8,7 @@ import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.lore.item.ItemProperties;
 import org.fourz.RVNKLore.lore.item.cosmetic.HeadCollection;
 import org.fourz.RVNKLore.lore.item.cosmetic.CollectionTheme;
+import org.fourz.RVNKLore.data.ItemRepository;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -149,5 +150,47 @@ public class CollectionManager {
         collections.clear();
         themes.clear();
         logger.info("CollectionManager shutdown");
+    }
+
+    /**
+     * Initialize collections from database on startup
+     */
+    private void loadCollectionsFromDatabase() {
+        if (plugin.getDatabaseManager() == null || !plugin.getDatabaseManager().isConnected()) {
+            logger.warning("Database not available - using default collections only");
+            return;
+        }
+        ItemRepository repository = new ItemRepository(plugin, plugin.getDatabaseManager().getDatabaseConnection());
+        List<ItemCollection> loadedCollections = repository.loadAllCollections();
+        for (ItemCollection collection : loadedCollections) {
+            collections.put(collection.getId(), collection);
+            logger.info("Loaded collection from database: " + collection.getName());
+        }
+        logger.info("Loaded " + loadedCollections.size() + " collections from database");
+    }
+
+    /**
+     * Save a collection to the database
+     *
+     * @param collection The collection to persist
+     * @return True if successfully saved
+     */
+    public boolean saveCollection(ItemCollection collection) {
+        if (collection == null) {
+            logger.warning("Cannot save null collection");
+            return false;
+        }
+        if (plugin.getDatabaseManager() == null || !plugin.getDatabaseManager().isConnected()) {
+            logger.warning("Database not available - collection will not be persisted");
+            return false;
+        }
+        ItemRepository repository = new ItemRepository(plugin, plugin.getDatabaseManager().getDatabaseConnection());
+        boolean saved = repository.saveCollection(collection);
+        if (saved) {
+            logger.info("Successfully saved collection: " + collection.getId());
+        } else {
+            logger.warning("Failed to save collection: " + collection.getId());
+        }
+        return saved;
     }
 }
