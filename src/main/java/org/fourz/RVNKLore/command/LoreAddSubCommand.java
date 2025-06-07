@@ -32,34 +32,30 @@ public class LoreAddSubCommand implements SubCommand {
 
         Player player = (Player) sender;
 
-        if (args.length < 3) {
-            player.sendMessage(ChatColor.RED + "Usage: /lore add <type> <name> <description>");
+        // Require at least type and name
+        if (args.length < 2) {
+            player.sendMessage(ChatColor.RED + "Usage: /lore add <type> <name>");
             return true;
         }
 
         String typeStr = args[0].toUpperCase();
-        String name = args[1];
-        
-        // Combine remaining args into description
-        StringBuilder description = new StringBuilder();
-        for (int i = 2; i < args.length; i++) {
-            if (i > 2) description.append(" ");
-            description.append(args[i]);
-        }
 
-        // Get lore type
+        // Accept all remaining args as the name (to allow spaces)
+        String name = String.join(" ", java.util.Arrays.copyOfRange(args, 1, args.length));
+
+        // Only allow ITEM type for this syntax
         LoreType type;
         try {
             type = LoreType.valueOf(typeStr);
         } catch (IllegalArgumentException e) {
             player.sendMessage(ChatColor.RED + "Invalid lore type: " + typeStr);
-            player.sendMessage(ChatColor.RED + "Valid types: " + 
+            player.sendMessage(ChatColor.RED + "Valid types: " +
                     Arrays.stream(LoreType.values()).map(LoreType::name).collect(Collectors.joining(", ")));
             return true;
         }
 
         // Create lore entry
-        LoreEntry entry = new LoreEntry(name, description.toString(), type, player);
+        LoreEntry entry = new LoreEntry(name, null, type, player);
         
         // For location-based lore types, add player's current location
         if (type == LoreType.LANDMARK || type == LoreType.CITY || type == LoreType.PATH) {
@@ -76,14 +72,14 @@ public class LoreAddSubCommand implements SubCommand {
 
         // Add the entry
         boolean success = plugin.getLoreManager().addLoreEntry(entry);
-        
+
         if (success) {
             player.sendMessage(ChatColor.GREEN + "Lore entry added successfully! ID: " + entry.getId());
             player.sendMessage(ChatColor.YELLOW + "Your submission will be reviewed by a staff member.");
         } else {
             player.sendMessage(ChatColor.RED + "Failed to add lore entry. Please check console for errors.");
         }
-        
+
         return true;
     }
 

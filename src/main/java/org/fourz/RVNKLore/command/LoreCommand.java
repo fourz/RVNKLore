@@ -46,7 +46,7 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
         // Add cosmetic management commands using the new ItemManager-based API
         //if (plugin.getItemManager() != null && plugin.getItemManager().getCosmeticManager() != null) {
         if (plugin.getItemManager() != null && plugin.getItemManager().getCosmeticItem() != null) {
-            commands.put("collection", new LoreCollectionSubCommand(plugin, plugin.getItemManager().getCosmeticItem()));
+            commands.put("collection", new LoreCollectionSubCommand(plugin));
             // Register the /lore item parent subcommand and its children
             commands.put("item", new LoreItemSubCommand(plugin));
             // Remove /lore itemgive registration

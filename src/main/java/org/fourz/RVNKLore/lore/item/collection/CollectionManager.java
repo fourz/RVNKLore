@@ -46,15 +46,100 @@ public class CollectionManager {
         }
     }
 
+    /**
+     * Creates a new collection with validation
+     * 
+     * @param id Collection identifier
+     * @param name Display name
+     * @param description Collection description
+     * @return The created collection, or null if validation failed
+     */
     public ItemCollection createCollection(String id, String name, String description) {
+        // Validate the collection before creation
+        if (!validateNewCollection(id, name, description)) {
+            logger.warning("Failed to create collection due to validation errors: " + id);
+            return null;
+        }
+        
         ItemCollection collection = new ItemCollection(id, name, description);
         collections.put(id, collection);
         logger.info("Created collection: " + name + " (" + id + ")");
         return collection;
     }
-
+    
+    /**
+     * Validate a new collection before creation
+     * 
+     * @param id Collection identifier
+     * @param name Display name
+     * @param description Collection description
+     * @return True if valid, false otherwise
+     */
+    private boolean validateNewCollection(String id, String name, String description) {
+        if (id == null || id.trim().isEmpty()) {
+            logger.warning("Collection validation failed: missing or empty ID");
+            return false;
+        }
+        
+        if (name == null || name.trim().isEmpty()) {
+            logger.warning("Collection validation failed: missing or empty name");
+            return false;
+        }
+        
+        // Check for duplicate IDs
+        if (collections.containsKey(id)) {
+            logger.warning("Collection validation failed: duplicate ID - " + id);
+            return false;
+        }
+        
+        // Validate ID format (lowercase alphanumeric + underscore)
+        if (!id.matches("^[a-z0-9_]+$")) {
+            logger.warning("Collection validation failed: invalid ID format - " + id);
+            return false;
+        }
+        
+        logger.debug("Collection validation passed: " + id);
+        return true;
+    }
+    
+    /**
+     * Validate an existing collection
+     * 
+     * @param collection The collection to validate
+     * @return True if valid, false otherwise
+     */
+    private boolean validateCollection(ItemCollection collection) {
+        if (collection == null) {
+            logger.warning("Collection validation failed: null collection");
+            return false;
+        }
+        
+        if (collection.getId() == null || collection.getId().trim().isEmpty()) {
+            logger.warning("Collection validation failed: missing or empty ID");
+            return false;
+        }
+        
+        if (collection.getName() == null || collection.getName().trim().isEmpty()) {
+            logger.warning("Collection validation failed: missing or empty name");
+            return false;
+        }
+        
+        logger.debug("Collection validation passed: " + collection.getId());
+        return true;
+    }
+    
     public ItemCollection getCollection(String id) {
-        return collections.get(id);
+        if (id == null || id.trim().isEmpty()) {
+            logger.warning("Cannot retrieve collection: null or empty ID provided");
+            return null;
+        }
+        
+        ItemCollection collection = collections.get(id);
+        if (collection == null) {
+            logger.debug("Collection not found: " + id);
+        }
+        
+        return collection;
     }
 
     public Map<String, ItemCollection> getAllCollections() {
@@ -170,28 +255,39 @@ public class CollectionManager {
     }
 
     /**
-     * Save a collection to the database
+     * Save a collection to the database with enhanced error handling
      *
      * @param collection The collection to persist
      * @return True if successfully saved
      */
     public boolean saveCollection(ItemCollection collection) {
-        if (collection == null) {
-            logger.warning("Cannot save null collection");
+        if (!validateCollection(collection)) {
+            logger.warning("Cannot save invalid collection");
             return false;
         }
+        
         if (plugin.getDatabaseManager() == null || !plugin.getDatabaseManager().isConnected()) {
             logger.warning("Database not available - collection will not be persisted");
             return false;
         }
-        ItemRepository repository = new ItemRepository(plugin, plugin.getDatabaseManager().getDatabaseConnection());
-        boolean saved = repository.saveCollection(collection);
-        if (saved) {
-            logger.info("Successfully saved collection: " + collection.getId());
-        } else {
-            logger.warning("Failed to save collection: " + collection.getId());
+        
+        try {
+            ItemRepository repository = new ItemRepository(plugin, plugin.getDatabaseManager().getDatabaseConnection());
+            boolean saved = repository.saveCollection(collection);
+            
+            if (saved) {
+                logger.info("Successfully saved collection: " + collection.getId());
+                // Update the in-memory collection
+                collections.put(collection.getId(), collection);
+            } else {
+                logger.warning("Failed to save collection: " + collection.getId());
+            }
+            
+            return saved;
+        } catch (Exception e) {
+            logger.error("Error saving collection: " + collection.getId(), e);
+            return false;
         }
-        return saved;
     }
 
     /**
@@ -315,5 +411,42 @@ public class CollectionManager {
      */
     public enum ChangeType {
         CREATED, UPDATED, DELETED, COMPLETED
+    }
+
+    /**
+     * Get all collections, optionally filtered by theme.
+     * 
+     * @param themeId The theme ID to filter by, or null for all
+     * @return Map of collection IDs to ItemCollection
+     */
+    public Map<String, ItemCollection> getCollectionsByTheme(String themeId) {
+        if (themeId == null) {
+            return getAllCollections();
+        }
+        Map<String, ItemCollection> filtered = new HashMap<>();
+        for (Map.Entry<String, ItemCollection> entry : collections.entrySet()) {
+            if (themeId.equalsIgnoreCase(entry.getValue().getThemeId())) {
+                filtered.put(entry.getKey(), entry.getValue());
+            }
+        }
+        return filtered;
+    }
+
+    /**
+     * Reload all collections from the database.
+     * This will replace the in-memory map with the latest from storage.
+     */
+    public void reloadCollectionsFromDatabase() {
+        if (plugin.getDatabaseManager() == null || !plugin.getDatabaseManager().isConnected()) {
+            logger.warning("Database not available - cannot reload collections");
+            return;
+        }
+        ItemRepository repository = new ItemRepository(plugin, plugin.getDatabaseManager().getDatabaseConnection());
+        List<ItemCollection> loadedCollections = repository.loadAllCollections();
+        collections.clear();
+        for (ItemCollection collection : loadedCollections) {
+            collections.put(collection.getId(), collection);
+        }
+        logger.info("Reloaded " + loadedCollections.size() + " collections from database");
     }
 }

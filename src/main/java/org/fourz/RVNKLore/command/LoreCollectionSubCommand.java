@@ -13,6 +13,8 @@ import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
 import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -23,10 +25,15 @@ import java.util.Map;
 public class LoreCollectionSubCommand implements SubCommand {
     private final CosmeticItem cosmeticItem;
     private final RVNKLore plugin;
+    private final Map<String, SubCommand> subCommands = new HashMap<>();
 
-    public LoreCollectionSubCommand(RVNKLore plugin, CosmeticItem cosmeticItem) {
-        this.cosmeticItem = cosmeticItem;
+    public LoreCollectionSubCommand(RVNKLore plugin) {        
         this.plugin = plugin;
+        this.cosmeticItem = plugin.getItemManager().getCosmeticItem();
+        
+        // Register sub-commands
+        subCommands.put("add", new LoreCollectionAddSubCommand(plugin));
+        subCommands.put("list", new LoreCollectionListSubCommand(plugin));
     }
 
     @Override
@@ -37,6 +44,20 @@ public class LoreCollectionSubCommand implements SubCommand {
 
     @Override
     public boolean execute(CommandSender sender, String[] args) {
+        // Check if the first argument is a registered subcommand
+        if (args.length > 0 && subCommands.containsKey(args[0].toLowerCase())) {
+            String subCommandName = args[0].toLowerCase();
+            SubCommand subCommand = subCommands.get(subCommandName);
+            
+            if (subCommand.hasPermission(sender)) {
+                return subCommand.execute(sender, Arrays.copyOfRange(args, 1, args.length));
+            } else {
+                sender.sendMessage(ChatColor.RED + "✖ You don't have permission to use this command");
+                return true;
+            }
+        }
+
+        // If not a subcommand, handle with existing logic
         if (!hasPermission(sender)) {
             sender.sendMessage(ChatColor.RED + "✖ You don't have permission to use this command");
             return true;
@@ -47,10 +68,12 @@ public class LoreCollectionSubCommand implements SubCommand {
         }
         Player player = (Player) sender;
         if (args.length == 0) {
-            sender.sendMessage(ChatColor.RED + "▶ Usage: /lore collection <view|claim|list> [collection_id]");
-            sender.sendMessage(ChatColor.GRAY + "   View, claim, or list item collections.");
+            sender.sendMessage(ChatColor.RED + "▶ Usage: /lore collection <view|claim|list|add> [collection_id]");
+            sender.sendMessage(ChatColor.GRAY + "   View, claim, list, or add item collections.");
             return true;
         }
+        
+        // Original switch case handling remains the same
         String sub = args[0].toLowerCase();
         switch (sub) {
             case "view":
@@ -355,25 +378,31 @@ public class LoreCollectionSubCommand implements SubCommand {
     @Override
     public List<String> getTabCompletions(CommandSender sender, String[] args) {
         List<String> completions = new ArrayList<>();
-        if (!hasPermission(sender)) {
-            return completions;
-        }
+        
         if (args.length == 1) {
-            completions.add("list");
+            // Add original commands
             completions.add("view");
-            completions.add("progress");
-            completions.add("theme");
-        } else if (args.length == 2) {
-            String action = args[0].toLowerCase();
-            if ("view".equals(action)) {
-                for (HeadCollection collection : cosmeticItem.getAvailableCollections()) {
-                    completions.add(collection.getId());
-                }
-            } else if ("list".equals(action) || "theme".equals(action)) {
-                for (CollectionTheme theme : CollectionTheme.values()) {
-                    completions.add(theme.getDisplayName());
+            completions.add("claim");
+            completions.add("list");
+            // Add registered subcommands
+            for (String cmd : subCommands.keySet()) {
+                if (subCommands.get(cmd).hasPermission(sender)) {
+                    completions.add(cmd);
                 }
             }
+            return completions;
+        } else if (args.length > 1) {
+            // If first arg is a registered subcommand, delegate completion
+            String subCommandName = args[0].toLowerCase();
+            if (subCommands.containsKey(subCommandName)) {
+                SubCommand subCommand = subCommands.get(subCommandName);
+                if (subCommand.hasPermission(sender)) {
+                    return subCommand.getTabCompletions(sender, Arrays.copyOfRange(args, 1, args.length));
+                }
+                return completions;
+            }
+            
+            // ...existing code...
         }
         return completions;
     }
