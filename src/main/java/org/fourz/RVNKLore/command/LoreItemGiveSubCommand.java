@@ -42,9 +42,7 @@ public class LoreItemGiveSubCommand implements SubCommand {
     @Override
     public boolean hasPermission(CommandSender sender) {
         return sender.hasPermission("rvnklore.admin.item.give");
-    }
-
-    @Override
+    }    @Override
     public boolean execute(CommandSender sender, String[] args) {
         if (args.length < 2) {
             sender.sendMessage(ChatColor.RED + "▶ Usage: /lore item give <item_name> <player>");
@@ -53,22 +51,24 @@ public class LoreItemGiveSubCommand implements SubCommand {
         }
         String itemName = args[0];
         String playerName = args[1];
+        
         Player target = Bukkit.getPlayerExact(playerName);
         if (target == null) {
             sender.sendMessage(ChatColor.RED + "✖ Player '" + playerName + "' not found or not online.");
             return true;
         }
+        
         if (itemManager == null) {
             sender.sendMessage(ChatColor.RED + "✖ Item system is not available. Please try again later.");
             logger.error("ItemManager is null when trying to give item: " + itemName, null);
             return true;
         }
-        ItemStack item = itemManager.createLoreItem(itemName);
-        if (item == null) {
+        
+        if (!itemManager.giveItemToPlayer(itemName, target)) {
             sender.sendMessage(ChatColor.RED + "✖ Item not found: " + itemName);
             return true;
         }
-        target.getInventory().addItem(item);
+        
         sender.sendMessage(ChatColor.GREEN + "✓ Gave " + itemName + " to " + playerName);
         return true;
     }

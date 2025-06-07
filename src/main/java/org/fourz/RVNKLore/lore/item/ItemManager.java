@@ -110,6 +110,111 @@ public class ItemManager {
     }
     
     /**
+     * Give a lore item to a player.
+     * 
+     * @param itemName Name of the item to give
+     * @param player Player to receive the item
+     * @return True if item was given successfully, false otherwise
+     */
+    public boolean giveItemToPlayer(String itemName, org.bukkit.entity.Player player) {
+        if (player == null) {
+            logger.error("Cannot give item - player is null", null);
+            return false;
+        }
+        
+        ItemStack item = createLoreItem(itemName);
+        if (item == null) {
+            return false;
+        }
+        
+        player.getInventory().addItem(item);
+        return true;
+    }
+    
+    /**
+     * Display detailed information about an item to a CommandSender.
+     * 
+     * @param itemName The name of the item to show information for
+     * @param sender The CommandSender to show information to
+     * @return True if item was found and info displayed, false otherwise
+     */
+    public boolean displayItemInfo(String itemName, org.bukkit.command.CommandSender sender) {
+        ItemStack item = createLoreItem(itemName);
+        if (item == null) {
+            return false;
+        }
+        
+        org.bukkit.inventory.meta.ItemMeta meta = item.getItemMeta();
+        sender.sendMessage(org.bukkit.ChatColor.GOLD + "===== Item Info: " + itemName + " =====");
+        sender.sendMessage(org.bukkit.ChatColor.YELLOW + "Material: " + item.getType());
+        
+        if (meta != null) {
+            if (meta.hasDisplayName()) {
+                sender.sendMessage(org.bukkit.ChatColor.YELLOW + "Display Name: " + meta.getDisplayName());
+            }
+            if (meta.hasLore()) {
+                sender.sendMessage(org.bukkit.ChatColor.YELLOW + "Lore:");
+                for (String line : meta.getLore()) {
+                    sender.sendMessage(org.bukkit.ChatColor.GRAY + "  " + line);
+                }
+            }
+            if (meta.hasCustomModelData()) {
+                sender.sendMessage(org.bukkit.ChatColor.YELLOW + "Custom Model Data: " + meta.getCustomModelData());
+            }            if (meta.hasEnchants()) {
+                sender.sendMessage(org.bukkit.ChatColor.YELLOW + "Enchantments:");
+                for (Map.Entry<org.bukkit.enchantments.Enchantment, Integer> entry : meta.getEnchants().entrySet()) {
+                    String enchantName = entry.getKey().toString().replace("Enchantment[", "").replace("]", "");
+                    sender.sendMessage(org.bukkit.ChatColor.GRAY + "  " + 
+                            formatEnchantmentName(enchantName) + " " + entry.getValue());
+                }
+            }
+        }
+        
+        return true;
+    }
+    
+    /**
+     * Display a list of all available items to a CommandSender.
+     * 
+     * @param sender The CommandSender to show available items to
+     */
+    public void displayAvailableItems(org.bukkit.command.CommandSender sender) {
+        sender.sendMessage(org.bukkit.ChatColor.GOLD + "Available Items:");
+        List<String> allItems = getAllItemNames();
+        
+        if (allItems.isEmpty()) {
+            sender.sendMessage(org.bukkit.ChatColor.GRAY + "   No items available.");
+            return;
+        }
+        
+        for (String name : allItems) {
+            sender.sendMessage(org.bukkit.ChatColor.YELLOW + " - " + name);
+        }
+    }
+    
+    /**
+     * Format enchantment name for user-friendly display
+     * Converts snake_case to Title Case
+     * 
+     * @param enchantName Raw enchantment name
+     * @return Formatted enchantment name
+     */
+    private String formatEnchantmentName(String enchantName) {
+        String[] parts = enchantName.split("_");
+        StringBuilder formatted = new StringBuilder();
+        
+        for (String part : parts) {
+            if (part.length() > 0) {
+                formatted.append(part.substring(0, 1).toUpperCase())
+                         .append(part.substring(1).toLowerCase())
+                         .append(" ");
+            }
+        }
+        
+        return formatted.toString().trim();
+    }
+    
+    /**
      * Create a generic lore item with basic properties.
      */
     public ItemStack createLoreItem(ItemType type, String name, ItemProperties properties) {
