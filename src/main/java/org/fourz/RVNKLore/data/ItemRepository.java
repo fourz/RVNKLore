@@ -8,6 +8,7 @@ import org.fourz.RVNKLore.exception.LoreException;
 import org.fourz.RVNKLore.exception.LoreException.LoreExceptionType;
 import org.fourz.RVNKLore.lore.item.ItemProperties;
 import org.fourz.RVNKLore.lore.item.ItemType;
+import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
@@ -100,11 +101,23 @@ public class ItemRepository {
                     "FOREIGN KEY (item_id) REFERENCES lore_item(id) ON DELETE CASCADE" +
                     ")";
                     
+            // Create player_collection_progress table for tracking player progress
+            String createPlayerProgressTable = "CREATE TABLE IF NOT EXISTS player_collection_progress (" +
+                    "player_id VARCHAR(36), " +  // UUIDs as strings
+                    "collection_id INTEGER, " +
+                    "progress REAL DEFAULT 0.0, " +
+                    "last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                    "completed_at TIMESTAMP, " +
+                    "PRIMARY KEY (player_id, collection_id), " +
+                    "FOREIGN KEY (collection_id) REFERENCES collection(id) ON DELETE CASCADE" +
+                    ")";
+            
             // Execute the table creation statements
             try (Statement stmt = conn.createStatement()) {
                 stmt.execute(createItemTable);
                 stmt.execute(createCollectionTable);
                 stmt.execute(createCollectionItemTable);
+                stmt.execute(createPlayerProgressTable);
                 logger.info("Item database tables created/verified");
             }
         } catch (SQLException e) {
@@ -841,13 +854,174 @@ public class ItemRepository {
     }
 
     /**
-     * Save a collection to the database with transaction support
-     *
+     * Get a player's progress for a specific collection
+     * 
+     * @param playerId The player's UUID as string
+     * @param collectionId The collection identifier
+     * @return Progress value between 0.0 and 1.0
+     */
+    public double getPlayerCollectionProgress(String playerId, String collectionId) {
+        if (playerId == null || collectionId == null) {
+            return 0.0;
+        }
+
+        String sql = "SELECT progress FROM player_collection_progress WHERE player_id = ? AND collection_id = ?";
+        
+        try {
+            return dbHelper.executeQuery(sql, stmt -> {
+                stmt.setString(1, playerId);
+                stmt.setString(2, collectionId);
+            }, rs -> {
+                if (rs.next()) {
+                    return rs.getDouble("progress");
+                }
+                return 0.0;
+            });
+        } catch (LoreException e) {
+            logger.error("Failed to get collection progress for player " + playerId, e);
+            return 0.0;
+        }
+    }
+
+    /**
+     * Update a player's progress for a collection
+     * 
+     * @param playerId The player's UUID as string
+     * @param collectionId The collection identifier
+     * @param progress Progress value between 0.0 and 1.0
+     * @return True if successfully updated
+     */
+    public boolean updatePlayerCollectionProgress(String playerId, String collectionId, double progress) {
+        if (playerId == null || collectionId == null) {
+            return false;
+        }
+        
+        // Ensure progress is between 0 and 1
+        final double percent = Math.max(0.0, Math.min(1.0, progress));
+        long currentTime = System.currentTimeMillis();
+        
+        String sql = "INSERT INTO player_collection_progress (player_id, collection_id, progress, last_updated) " +
+                     "VALUES (?, ?, ?, ?) " +
+                     "ON CONFLICT(player_id, collection_id) DO UPDATE SET " +
+                     "progress = ?, last_updated = ?";
+        
+        try {
+            return dbHelper.executeUpdate(sql, stmt -> {
+                stmt.setString(1, playerId);
+                stmt.setString(2, collectionId);
+                stmt.setDouble(3, percent);
+                stmt.setLong(4, currentTime);
+                stmt.setDouble(5, percent);
+                stmt.setLong(6, currentTime);
+            }) > 0;
+        } catch (LoreException e) {
+            logger.error("Failed to update collection progress for player " + playerId, e);
+            return false;
+        }
+    }
+
+    /**
+     * Mark a collection as completed by a player
+     * 
+     * @param playerId The player's UUID as string
+     * @param collectionId The collection identifier
+     * @param completedAt Timestamp when the collection was completed
+     * @return True if successfully marked as completed
+     */
+    public boolean markCollectionCompleted(String playerId, String collectionId, long completedAt) {
+        if (playerId == null || collectionId == null) {
+            return false;
+        }
+        
+        String sql = "UPDATE player_collection_progress SET progress = 1.0, completed_at = ?, last_updated = ? " +
+                     "WHERE player_id = ? AND collection_id = ?";
+        
+        try {
+            return dbHelper.executeUpdate(sql, stmt -> {
+                stmt.setLong(1, completedAt);
+                stmt.setLong(2, completedAt);
+                stmt.setString(3, playerId);
+                stmt.setString(4, collectionId);
+            }) > 0;
+        } catch (LoreException e) {
+            logger.error("Failed to mark collection as completed for player " + playerId, e);
+            return false;
+        }
+    }
+
+    /**
+     * Get all collections completed by a player
+     * 
+     * @param playerId The player's UUID as string
+     * @return List of collection IDs completed by the player
+     */
+    public List<String> getCompletedCollections(String playerId) {
+        if (playerId == null) {
+            return new ArrayList<>();
+        }
+        
+        String sql = "SELECT collection_id FROM player_collection_progress " +
+                     "WHERE player_id = ? AND progress >= 1.0 AND completed_at IS NOT NULL";
+        
+        try {
+            return dbHelper.executeQuery(sql, stmt -> {
+                stmt.setString(1, playerId);
+            }, rs -> {
+                List<String> collections = new ArrayList<>();
+                while (rs.next()) {
+                    collections.add(rs.getString("collection_id"));
+                }
+                return collections;
+            });
+        } catch (LoreException e) {
+            logger.error("Failed to get completed collections for player " + playerId, e);
+            return new ArrayList<>();
+        }
+    }
+
+    /**
+     * Get progress for all collections for a player
+     * 
+     * @param playerId The player's UUID as string
+     * @return Map of collection IDs to progress values
+     */
+    public Map<String, Double> getAllPlayerProgress(String playerId) {
+        if (playerId == null) {
+            return new HashMap<>();
+        }
+        
+        String sql = "SELECT collection_id, progress FROM player_collection_progress WHERE player_id = ?";
+        
+        try {
+            return dbHelper.executeQuery(sql, stmt -> {
+                stmt.setString(1, playerId);
+            }, rs -> {
+                Map<String, Double> progress = new HashMap<>();
+                while (rs.next()) {
+                    progress.put(rs.getString("collection_id"), rs.getDouble("progress"));
+                }
+                return progress;
+            });
+        } catch (LoreException e) {
+            logger.error("Failed to get all collection progress for player " + playerId, e);
+            return new HashMap<>();
+        }
+    }
+    
+    /**
+     * Save a collection to the database
+     * 
      * @param collection The collection to save
      * @return True if successfully saved
      */
-    public boolean saveCollection(org.fourz.RVNKLore.lore.item.collection.ItemCollection collection) {
-        String sql = "INSERT OR REPLACE INTO collection (collection_id, name, description, theme_id, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?)";
+    public boolean saveCollection(ItemCollection collection) {
+        if (collection == null) {
+            return false;
+        }
+        
+        String sql = "INSERT OR REPLACE INTO collection (collection_id, name, description, theme_id, is_active, created_at) " +
+                     "VALUES (?, ?, ?, ?, ?, ?)";
+        
         try {
             return dbHelper.executeUpdate(sql, stmt -> {
                 stmt.setString(1, collection.getId());
@@ -857,27 +1031,28 @@ public class ItemRepository {
                 stmt.setBoolean(5, collection.isActive());
                 stmt.setLong(6, collection.getCreatedAt());
             }) > 0;
-        } catch (org.fourz.RVNKLore.exception.LoreException e) {
+        } catch (LoreException e) {
             logger.error("Failed to save collection: " + collection.getId(), e);
             return false;
         }
     }
 
     /**
-     * Load all collections from database
-     *
-     * @return List of collections
+     * Load all collections from the database
+     * 
+     * @return List of all collections
      */
-    public java.util.List<org.fourz.RVNKLore.lore.item.collection.ItemCollection> loadAllCollections() {
-        String sql = "SELECT collection_id, name, description, theme_id, is_active, created_at FROM collection WHERE is_active = 1";
+    public List<ItemCollection> loadAllCollections() {
+        String sql = "SELECT collection_id, name, description, theme_id, is_active, created_at FROM collection";
+        
         try {
             return dbHelper.executeQuery(sql, null, rs -> {
-                java.util.List<org.fourz.RVNKLore.lore.item.collection.ItemCollection> collections = new java.util.ArrayList<>();
+                List<ItemCollection> collections = new ArrayList<>();
                 while (rs.next()) {
-                    org.fourz.RVNKLore.lore.item.collection.ItemCollection collection = new org.fourz.RVNKLore.lore.item.collection.ItemCollection(
-                        rs.getString("collection_id"),
-                        rs.getString("name"),
-                        rs.getString("description")
+                    ItemCollection collection = new ItemCollection(
+                            rs.getString("collection_id"),
+                            rs.getString("name"),
+                            rs.getString("description")
                     );
                     collection.setThemeId(rs.getString("theme_id"));
                     collection.setActive(rs.getBoolean("is_active"));
@@ -885,9 +1060,12 @@ public class ItemRepository {
                 }
                 return collections;
             });
-        } catch (org.fourz.RVNKLore.exception.LoreException e) {
-            logger.error("Failed to load collections from database", e);
-            return new java.util.ArrayList<>();
+        } catch (LoreException e) {
+            logger.error("Failed to load collections", e);
+            return new ArrayList<>();
         }
     }
+    
+   
+
 }

@@ -193,4 +193,108 @@ public class CollectionManager {
         }
         return saved;
     }
+
+    /**
+     * Get a player's progress for a specific collection
+     * 
+     * @param playerId The player's UUID
+     * @param collectionId The collection identifier
+     * @return Progress value between 0.0 and 1.0
+     */
+    public double getPlayerProgress(UUID playerId, String collectionId) {
+        if (playerId == null || collectionId == null) {
+            return 0.0;
+        }
+        
+        if (plugin.getDatabaseManager() == null || !plugin.getDatabaseManager().isConnected()) {
+            logger.warning("Database not available - cannot retrieve player progress");
+            return 0.0;
+        }
+        
+        ItemRepository repository = new ItemRepository(plugin, plugin.getDatabaseManager().getDatabaseConnection());
+        return repository.getPlayerCollectionProgress(playerId.toString(), collectionId);
+    }
+
+    /**
+     * Update a player's progress for a collection
+     * 
+     * @param playerId The player's UUID
+     * @param collectionId The collection identifier
+     * @param progress Progress value between 0.0 and 1.0
+     * @return True if successfully updated
+     */
+    public boolean updatePlayerProgress(UUID playerId, String collectionId, double progress) {
+        if (playerId == null || collectionId == null || progress < 0.0 || progress > 1.0) {
+            logger.warning("Invalid parameters for progress update");
+            return false;
+        }
+        
+        if (plugin.getDatabaseManager() == null || !plugin.getDatabaseManager().isConnected()) {
+            logger.warning("Database not available - cannot update player progress");
+            return false;
+        }
+        
+        ItemRepository repository = new ItemRepository(plugin, plugin.getDatabaseManager().getDatabaseConnection());
+        boolean updated = repository.updatePlayerCollectionProgress(playerId.toString(), collectionId, progress);
+        
+        if (updated) {
+            logger.info("Updated progress for player " + playerId + " in collection " + collectionId + ": " + String.format("%.1f%%", progress * 100));
+            
+            // Check for completion and trigger rewards
+            if (progress >= 1.0) {
+                handleCollectionCompletion(playerId, collectionId);
+            }
+        }
+        
+        return updated;
+    }
+    
+    /**
+     * Handle collection completion events and rewards
+     * 
+     * @param playerId The player who completed the collection
+     * @param collectionId The completed collection
+     */
+    private void handleCollectionCompletion(UUID playerId, String collectionId) {
+        ItemCollection collection = getCollection(collectionId);
+        if (collection == null) {
+            logger.warning("Cannot handle completion for unknown collection: " + collectionId);
+            return;
+        }
+
+        logger.info("Player " + playerId + " completed collection: " + collection.getName());
+
+        // Emit a collection completion event for external systems (to be integrated)
+        // TODO: Fire CollectionChangeEvent with ChangeType.COMPLETED for event-driven handling
+
+        // Mark completion timestamp in the database
+        ItemRepository repository = new ItemRepository(plugin, plugin.getDatabaseManager().getDatabaseConnection());
+        repository.markCollectionCompleted(playerId.toString(), collectionId, System.currentTimeMillis());
+    }
+
+    /**
+     * Grant collection rewards to a player
+     * 
+     * @param playerId The player's UUID
+     * @param collectionId The collection identifier
+     * @return True if rewards were successfully granted
+     */
+    public boolean grantCollectionReward(UUID playerId, String collectionId) {
+        if (getPlayerProgress(playerId, collectionId) < 1.0) {
+            logger.warning("Cannot grant rewards - collection not completed by player " + playerId);
+            return false;
+        }
+
+        ItemCollection collection = getCollection(collectionId);
+        if (collection == null) {
+            logger.warning("Cannot grant rewards for unknown collection: " + collectionId);
+            return false;
+        }
+
+        // TODO: Integrate with the reward system to actually distribute rewards.
+        // This may involve firing an event or directly awarding items.
+
+        logger.info("Granted collection rewards to player " + playerId + " for collection: " + collectionId);
+        return true;
+    }
 }
