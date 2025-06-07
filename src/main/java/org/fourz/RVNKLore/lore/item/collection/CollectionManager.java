@@ -284,7 +284,7 @@ public class CollectionManager {
             logger.warning("Cannot grant rewards - collection not completed by player " + playerId);
             return false;
         }
-
+        
         ItemCollection collection = getCollection(collectionId);
         if (collection == null) {
             logger.warning("Cannot grant rewards for unknown collection: " + collectionId);
@@ -296,5 +296,24 @@ public class CollectionManager {
 
         logger.info("Granted collection rewards to player " + playerId + " for collection: " + collectionId);
         return true;
+    }
+
+    /**
+     * Emit collection change events for other systems to listen to
+     * TODO: Implement when event system is available
+     *
+     * @param collection The collection that changed
+     * @param changeType The type of change
+     */
+    private void fireCollectionChangeEvent(ItemCollection collection, ChangeType changeType) {
+        // Placeholder for event system integration
+        logger.debug("Collection change event: " + changeType + " for " + collection.getId());
+    }
+
+    /**
+     * Types of collection changes for event system
+     */
+    public enum ChangeType {
+        CREATED, UPDATED, DELETED, COMPLETED
     }
 }

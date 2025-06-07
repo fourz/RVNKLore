@@ -8,6 +8,9 @@ import org.fourz.RVNKLore.lore.item.cosmetic.HeadCollection;
 import org.fourz.RVNKLore.lore.item.cosmetic.HeadVariant;
 import org.fourz.RVNKLore.lore.item.cosmetic.HeadRarity;
 import org.fourz.RVNKLore.lore.item.cosmetic.CollectionTheme;
+import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
+import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -19,9 +22,11 @@ import java.util.Map;
  */
 public class LoreCollectionSubCommand implements SubCommand {
     private final CosmeticItem cosmeticItem;
+    private final RVNKLore plugin;
 
-    public LoreCollectionSubCommand(CosmeticItem cosmeticItem) {
+    public LoreCollectionSubCommand(RVNKLore plugin, CosmeticItem cosmeticItem) {
         this.cosmeticItem = cosmeticItem;
+        this.plugin = plugin;
     }
 
     @Override
@@ -277,25 +282,27 @@ public class LoreCollectionSubCommand implements SubCommand {
         player.sendMessage(ChatColor.YELLOW + "⚙ " + ChatColor.BOLD + "Your Collection Progress");
         player.sendMessage("");
 
-        Map<String, Double> progress = cosmeticItem.getPlayerCollectionProgress(player);
-        
-        if (progress.isEmpty()) {
-            player.sendMessage(ChatColor.YELLOW + "⚠ No collection progress to display");
+        // Use CollectionManager from ItemManager for progress tracking
+        CollectionManager collectionManager = plugin.getItemManager().getCollectionManager();
+        Map<String, ItemCollection> allCollections = collectionManager.getAllCollections();
+
+        if (allCollections.isEmpty()) {
+            player.sendMessage(ChatColor.YELLOW + "⚠ No collections available");
             return;
         }
 
-        for (Map.Entry<String, Double> entry : progress.entrySet()) {
-            HeadCollection collection = cosmeticItem.getCollection(entry.getKey());
-            if (collection == null) continue;
+        for (org.fourz.RVNKLore.lore.item.collection.ItemCollection collection : allCollections.values()) {
+            double progress = collectionManager.getPlayerProgress(player.getUniqueId(), collection.getId());
+            double percent = progress * 100;
 
-            double percent = entry.getValue() * 100;
             String status = percent >= 100.0 ? ChatColor.GREEN + "✓ COMPLETE" : ChatColor.YELLOW + String.format("%.1f%%", percent);
-            
+
             player.sendMessage(ChatColor.WHITE + collection.getName() + ": " + status);
-            
+
             if (percent < 100.0) {
-                int owned = (int) (collection.getHeadCount() * entry.getValue());
-                player.sendMessage(ChatColor.GRAY + "   " + owned + "/" + collection.getHeadCount() + " heads collected");
+                int totalItems = collection.getItemCount();
+                int ownedItems = (int) (totalItems * progress);
+                player.sendMessage(ChatColor.GRAY + "   " + ownedItems + "/" + totalItems + " items collected");
             }
         }
     }
