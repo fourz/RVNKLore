@@ -38,8 +38,7 @@ public class ItemLoreHandler implements LoreHandler {
         }
         
         if (entry.getDescription() == null || entry.getDescription().isEmpty()) {
-            logger.warning("Item lore validation failed: Description is required");
-            return false;
+            entry.setDescription("");   
         }
         
         if (entry.getMetadata("material") == null || entry.getMetadata("material").isEmpty()) {

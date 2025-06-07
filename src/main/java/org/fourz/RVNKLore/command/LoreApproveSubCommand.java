@@ -121,16 +121,16 @@ public class LoreApproveSubCommand implements SubCommand {
             
             // Only provide completions if at least 2 characters have been typed
             if (partial.length() >= 2) {
-                // Get all non-approved lore entries and filter by matching UUID
+                // Get all non-approved lore entries and filter by matching UUID or name
                 plugin.getLoreManager().getAllLoreEntries().stream()
                     .filter(entry -> !entry.isApproved())
-                    .filter(entry -> entry.getId().toString().toLowerCase().startsWith(partial))
+                    .filter(entry -> {
+                        String shortId = entry.getId().toString().substring(0, 8).toLowerCase();
+                        String name = entry.getName().toLowerCase();
+                        return shortId.startsWith(partial) || name.contains(partial);
+                    })
                     .forEach(entry -> {
-                        // Add the UUID only - Minecraft doesn't support colors in tab completion
-                        completions.add(entry.getId().toString());
-                        
-                        // Also add a user-friendly version with the ID and name for easy identification
-                        // Format: "name (first 8 chars of UUID)"
+                        // Add a user-friendly version with the name and shortened ID for easy identification
                         String shortId = entry.getId().toString().substring(0, 8);
                         completions.add(entry.getName() + " (" + shortId + ")");
                     });

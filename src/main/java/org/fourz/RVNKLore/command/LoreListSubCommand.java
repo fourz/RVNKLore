@@ -90,16 +90,19 @@ public class LoreListSubCommand implements SubCommand {
                 String approvalStatus = entry.isApproved() ? 
                         ChatColor.GREEN + "[✓]" : 
                         ChatColor.RED + "[✗]";
+                
+                // Get shortened UUID (first 8 characters)
+                String shortId = entry.getId().substring(0, 8);
                         
                 if (sender.hasPermission("rvnklore.admin")) {
                     sender.sendMessage(approvalStatus + " " + 
                             ChatColor.YELLOW + entry.getName() + 
                             ChatColor.GRAY + " (" + entry.getType() + ") - " + 
-                            ChatColor.WHITE + entry.getId());
+                            ChatColor.WHITE + shortId);
                 } else {
                     sender.sendMessage(ChatColor.YELLOW + entry.getName() + 
                             ChatColor.GRAY + " (" + entry.getType() + ") - " + 
-                            ChatColor.WHITE + entry.getId());
+                            ChatColor.WHITE + shortId);
                 }
             }
         }
