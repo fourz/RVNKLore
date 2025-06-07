@@ -4,7 +4,6 @@ import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
-import org.bukkit.inventory.ItemStack;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.lore.item.ItemManager;
@@ -51,24 +50,23 @@ public class LoreItemGiveSubCommand implements SubCommand {
         }
         String itemName = args[0];
         String playerName = args[1];
-        
         Player target = Bukkit.getPlayerExact(playerName);
         if (target == null) {
             sender.sendMessage(ChatColor.RED + "✖ Player '" + playerName + "' not found or not online.");
             return true;
         }
-        
         if (itemManager == null) {
             sender.sendMessage(ChatColor.RED + "✖ Item system is not available. Please try again later.");
             logger.error("ItemManager is null when trying to give item: " + itemName, null);
             return true;
         }
-        
-        if (!itemManager.giveItemToPlayer(itemName, target)) {
+        // Use ItemManager for item lookup and giving
+        org.bukkit.inventory.ItemStack item = itemManager.createLoreItem(itemName);
+        if (item == null) {
             sender.sendMessage(ChatColor.RED + "✖ Item not found: " + itemName);
             return true;
         }
-        
+        target.getInventory().addItem(item);
         sender.sendMessage(ChatColor.GREEN + "✓ Gave " + itemName + " to " + playerName);
         return true;
     }

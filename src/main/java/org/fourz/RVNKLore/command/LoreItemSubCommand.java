@@ -34,25 +34,60 @@ public class LoreItemSubCommand implements SubCommand {
             showUsage(sender);
             return true;
         }
-        
+
         String subCommandName = args[0].toLowerCase();
         SubCommand subCommand = subCommands.get(subCommandName);
-        
+
+        // Special handling for /lore item info <short uuid>|<full uuid>
+        if ("info".equals(subCommandName) && args.length == 2) {
+            String idArg = args[1];
+            // Try to match by short or full UUID
+            org.fourz.RVNKLore.lore.LoreEntry matched = null;
+            for (org.fourz.RVNKLore.lore.LoreEntry entry : plugin.getLoreManager().getAllLoreEntries()) {
+                String uuid = entry.getId().toString();
+                if (uuid.equalsIgnoreCase(idArg) || uuid.substring(0, 8).equalsIgnoreCase(idArg)) {
+                    matched = entry;
+                    break;
+                }
+            }
+            if (matched != null) {
+                sender.sendMessage(org.bukkit.ChatColor.GOLD + "===== Item Info: " + matched.getName() + " =====");
+                sender.sendMessage(org.bukkit.ChatColor.YELLOW + "Type: " + matched.getType());
+                sender.sendMessage(org.bukkit.ChatColor.YELLOW + "ID: " + matched.getId());
+                if (matched.getDescription() != null && !matched.getDescription().isEmpty()) {
+                    sender.sendMessage(org.bukkit.ChatColor.YELLOW + "Description: " + matched.getDescription());
+                }
+                if (matched.getSubmittedBy() != null) {
+                    sender.sendMessage(org.bukkit.ChatColor.YELLOW + "Submitted by: " + matched.getSubmittedBy());
+                }
+                if (matched.getMetadata() != null && !matched.getMetadata().isEmpty()) {
+                    sender.sendMessage(org.bukkit.ChatColor.YELLOW + "Metadata:");
+                    matched.getMetadata().forEach((k, v) ->
+                        sender.sendMessage(org.bukkit.ChatColor.GRAY + "  " + k + ": " + v)
+                    );
+                }
+                return true;
+            } else {
+                sender.sendMessage(org.bukkit.ChatColor.RED + "✖ No lore entry found with ID: " + idArg);
+                return true;
+            }
+        }
+
         if (subCommand == null) {
             sender.sendMessage(ChatColor.RED + "✖ Unknown item command: " + subCommandName);
             showUsage(sender);
             return true;
         }
-        
+
         // Check permissions
         if (!subCommand.hasPermission(sender)) {
             sender.sendMessage(ChatColor.RED + "✖ You don't have permission to use this command.");
             return true;
         }
-        
+
         // Execute with remaining arguments
         String[] subArgs = Arrays.copyOfRange(args, 1, args.length);
-        
+
         try {
             return subCommand.execute(sender, subArgs);
         } catch (Exception e) {
@@ -62,7 +97,7 @@ public class LoreItemSubCommand implements SubCommand {
             return false;
         }
     }
-    
+
     /**
      * Display usage information for the item command.
      */
@@ -83,6 +118,15 @@ public class LoreItemSubCommand implements SubCommand {
                 if (subCommands.get(cmd).hasPermission(sender)) {
                     completions.add(cmd);
                 }
+            }
+            return completions;
+        } else if (args.length == 2 && "info".equalsIgnoreCase(args[0])) {
+            // Tab completion for /lore item info <short uuid>
+            List<String> completions = new ArrayList<>();
+            for (org.fourz.RVNKLore.lore.LoreEntry entry : plugin.getLoreManager().getAllLoreEntries()) {
+                String shortId = entry.getId().toString().substring(0, 8);
+                completions.add(shortId);
+                completions.add(entry.getId().toString());
             }
             return completions;
         } else if (args.length > 1) {
