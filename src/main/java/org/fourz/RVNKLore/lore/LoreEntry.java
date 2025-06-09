@@ -364,4 +364,8 @@ public class LoreEntry {
         
         return true;
     }
+
+    public String getSubmitter() {
+        return submittedBy;
+    }
 }

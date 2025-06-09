@@ -29,19 +29,20 @@ public class LoreApproveSubCommand implements SubCommand {
         }
 
         String idInput = args[0];
-        UUID id = null;
         LoreEntry matchedEntry = null;
-        
-        // Try to find a matching entry by short UUID or full description
-        if (idInput.length() >= 8) {
-            String shortUuidPart = idInput.substring(0, Math.min(8, idInput.length()));
-            
-            // Search for matching entries
+
+        // Try to match by full UUID
+        try {
+            UUID id = UUID.fromString(idInput);
+            matchedEntry = plugin.getLoreManager().getLoreEntry(id);
+        } catch (IllegalArgumentException ignored) {}
+
+        // Try to match by short UUID (first 8 chars)
+        if (matchedEntry == null && idInput.length() >= 8) {
+            String shortUuidPart = idInput.substring(0, 8);
             for (LoreEntry entry : plugin.getLoreManager().findLoreEntries(shortUuidPart)) {
                 if (!entry.isApproved()) {
                     String entryShortId = entry.getId().toString().substring(0, 8);
-                    
-                    // Check if the short UUID matches exactly
                     if (entryShortId.equalsIgnoreCase(shortUuidPart)) {
                         matchedEntry = entry;
                         break;
@@ -49,44 +50,30 @@ public class LoreApproveSubCommand implements SubCommand {
                 }
             }
         }
-        
-        // If no match was found with short UUID, try to find a matching full UUID
-        if (matchedEntry == null) {
-            try {
-                id = UUID.fromString(idInput);
-                matchedEntry = plugin.getLoreManager().getLoreEntry(id);
-            } catch (IllegalArgumentException ignored) {
-                // Not a UUID format - continue to other matching methods
-            }
-        }
-        
-        // If still no match, check if the command included a description part
-        if (matchedEntry == null && idInput.contains("-")) {
-            String[] parts = idInput.split("-", 2);
-            if (parts.length > 0 && parts[0].trim().length() >= 8) {
-                String shortId = parts[0].trim();
-                
-                // Search for entries with matching short UUID
-                for (LoreEntry entry : plugin.getLoreManager().findLoreEntries(shortId)) {
-                    if (!entry.isApproved()) {
-                        String entryShortId = entry.getId().toString().substring(0, 8);
-                        if (entryShortId.equalsIgnoreCase(shortId)) {
-                            matchedEntry = entry;
-                            break;
-                        }
+
+        // Try to match by short UUID with details (e.g. "shortid Name ...")
+        if (matchedEntry == null && idInput.length() >= 8) {
+            String[] parts = idInput.split(" ", 2);
+            String shortId = parts[0].trim();
+            for (LoreEntry entry : plugin.getLoreManager().findLoreEntries(shortId)) {
+                if (!entry.isApproved()) {
+                    String entryShortId = entry.getId().toString().substring(0, 8);
+                    if (entryShortId.equalsIgnoreCase(shortId)) {
+                        matchedEntry = entry;
+                        break;
                     }
                 }
             }
         }
-        
+
         if (matchedEntry == null) {
-            sender.sendMessage(ChatColor.RED + "✖ No valid lore entry found matching: " + idInput);
+            sender.sendMessage(ChatColor.RED + "✖ No valid unapproved lore entry found matching: " + idInput);
             return true;
         }
-        
+
         return processApproval(sender, matchedEntry.getUUID());
     }
-    
+
     /**
      * Process the approval of a lore entry
      * 
@@ -136,35 +123,28 @@ public class LoreApproveSubCommand implements SubCommand {
         if (args.length == 1) {
             String partial = args[0].toLowerCase();
 
-            // Only provide completions if at least 2 characters have been typed
             if (partial.length() >= 2) {
                 for (LoreEntry entry : plugin.getLoreManager().findLoreEntries(partial)) {
                     if (!entry.isApproved()) {
                         String uuid = entry.getId().toString();
                         String shortId = uuid.substring(0, 8);
-                        
-                        // First level tab completion - just show the short UUID
+
+                        // Stage 1: If they're typing and it matches short ID
                         if (shortId.startsWith(partial)) {
                             completions.add(shortId);
                         }
-                        // Second level - if they've already typed the exact short ID, show detailed entry
+                        // Stage 2: If they've entered exact short ID, show full details (no dash, just spaces)
                         else if (shortId.equalsIgnoreCase(partial)) {
                             String submitter = entry.getSubmittedBy() != null ? entry.getSubmittedBy() : "Unknown";
-                            String description = entry.getDescription() != null && !entry.getDescription().isEmpty() 
-                                    ? entry.getDescription() : "No description";
-                            
-                            // Format: shortId - Name - Description - Submitter
-                            completions.add(shortId + " - " + entry.getName() + " - " + 
+                            String description = entry.getDescription() != null ? entry.getDescription() : "No description";
+                            completions.add(shortId + " " + entry.getName() + " " +
                                     description.replaceAll("\\n", " ") + " - " + submitter);
-                        }
-                        // Handle case where user is typing a full UUID
-                        else if (uuid.startsWith(partial)) {
-                            completions.add(uuid);
                         }
                     }
                 }
             }
         }
+
         return completions;
     }
 }
