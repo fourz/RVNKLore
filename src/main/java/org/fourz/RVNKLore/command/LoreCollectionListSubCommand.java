@@ -8,8 +8,10 @@ import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
 import org.fourz.RVNKLore.lore.item.collection.CollectionTheme;
 import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
+import org.fourz.RVNKLore.command.output.DisplayFactory;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
@@ -59,31 +61,16 @@ public class LoreCollectionListSubCommand implements SubCommand {
                     collectionsToShow.add(collection);
                 }
             }
-            player.sendMessage(ChatColor.YELLOW + "⚙ " + ChatColor.BOLD + "Collections - " + theme.getDisplayName());
         } else {
             collectionsToShow.addAll(collectionManager.getAllCollections().values());
-            player.sendMessage(ChatColor.YELLOW + "⚙ " + ChatColor.BOLD + "All Available Collections");
         }
 
-        if (collectionsToShow.isEmpty()) {
-            player.sendMessage(ChatColor.YELLOW + "⚠ No collections available" + (themeFilter != null ? " for theme: " + themeFilter : ""));
-            return true;
-        }
+        // Sort newest to oldest
+        collectionsToShow.sort(Comparator.comparingLong(ItemCollection::getCreatedAt).reversed());
 
-        player.sendMessage("");
-        for (ItemCollection collection : collectionsToShow) {
-            double progress = collectionManager.getPlayerProgress(player.getUniqueId(), collection.getId());
-            double percent = progress * 100;
-            String status = percent >= 100.0 ? ChatColor.GREEN + "✓" : ChatColor.YELLOW + String.format("%.0f%%", percent);
+        // Output via DisplayFactory
+        DisplayFactory.displayCollectionList(player, collectionsToShow);
 
-            player.sendMessage(ChatColor.WHITE + collection.getName() + " " + ChatColor.GRAY + "(" + collection.getId() + ") " + status);
-            player.sendMessage(ChatColor.GRAY + "   " + collection.getDescription());
-            String themeName = collection.getThemeId() != null ? collection.getThemeId() : "custom";
-            player.sendMessage(ChatColor.GRAY + "   " + collection.getItemCount() + " items • " + themeName);
-        }
-
-        player.sendMessage("");
-        player.sendMessage(ChatColor.GRAY + "   Use " + ChatColor.WHITE + "/lore collection view <id> " + ChatColor.GRAY + "for details");
         return true;
     }
 

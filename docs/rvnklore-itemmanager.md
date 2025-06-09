@@ -5,28 +5,36 @@ The `ItemManager` is the central orchestrator for all item-related functionality
 ## Responsibilities
 - Initialize and manage sub-managers:
   - `EnchantManager` (enchantments)
-  - `CosmeticManager` (cosmetic items and heads)
+  - `CosmeticsManager` (cosmetic items and heads)
   - `CollectionManager` (item collections)
-  - `ModelDataManager` (custom model data)
+  - `CustomModelDataManager` (custom model data)
 - Provide a single entry point for item creation via `createLoreItem()`
 - Handle resource cleanup and shutdown for all sub-managers
+- Maintain in-memory and database-backed caches for item properties and collections
+- Support paginated, sorted item listing for commands
 
 ## Key Methods
 - `getEnchantManager()`: Access the enchantment manager
-- `getCosmeticManager()`: Access the cosmetic manager
+- `getCosmeticItem()`: Access the cosmetics manager
 - `getCollectionManager()`: Access the collection manager
-- `getModelDataManager()`: Access the model data manager
+- `getModelDataManager()`: Access the custom model data manager
 - `createLoreItem(ItemType, String, ItemProperties)`: Unified item creation
+- `createLoreItem(String)`: Lookup and create item by name
+- `getAllItemNames()`: List all registered item names
+- `getAllItemsWithProperties()`: List all items with metadata for sorting and display
 - `shutdown()`, `cleanup()`: Resource management
 
 ## Example Usage
 ```java
 ItemManager itemManager = plugin.getItemManager();
 ItemStack enchantedSword = itemManager.createLoreItem(ItemType.ENCHANTED, "Frost Edge", properties);
+List<String> allItems = itemManager.getAllItemNames();
 ```
 
 ## Design Notes
 - Follows the manager pattern for modularity and separation of concerns
 - Integrates with the plugin's logging system via `LogManager`
 - Sub-managers are initialized in a fail-safe manner
-- CosmeticManager is now managed exclusively through ItemManager
+- CosmeticsManager is now managed exclusively through ItemManager
+- Supports async cache initialization and refresh for performance
+- Provides sorted, paginated item lists for command output via DisplayFactory

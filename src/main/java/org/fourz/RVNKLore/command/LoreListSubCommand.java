@@ -69,6 +69,11 @@ public class LoreListSubCommand implements SubCommand {
             entries = type != null ? 
                     plugin.getLoreManager().getLoreEntriesByType(type) : 
                     new ArrayList<>(plugin.getDatabaseManager().getAllLoreEntries());
+        } else {
+            // Filter out unapproved entries for non-admins            
+            entries = entries.stream()
+                    .filter(LoreEntry::isApproved)
+                    .collect(Collectors.toList());
         }
 
         // Calculate pagination

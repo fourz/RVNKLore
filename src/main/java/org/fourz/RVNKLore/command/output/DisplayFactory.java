@@ -5,6 +5,7 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.fourz.RVNKLore.lore.LoreEntry;
+import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
 import org.fourz.RVNKLore.lore.item.ItemManager;
 import org.fourz.RVNKLore.lore.item.ItemProperties;
 
@@ -13,6 +14,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
+import java.util.function.Function;
 
 /**
  * Factory class for standardized command output formatting.
@@ -38,9 +40,9 @@ public class DisplayFactory {
         
         // Sort items by creation date
         if (newestFirst) {
-            items.sort(Comparator.comparing(ItemProperties::getCreatedAt).reversed());
+            items.sort(Comparator.comparing(ItemProperties::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())).reversed());
         } else {
-            items.sort(Comparator.comparing(ItemProperties::getCreatedAt));
+            items.sort(Comparator.comparing(ItemProperties::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())));
         }
         
         // Calculate pagination
@@ -159,6 +161,31 @@ public class DisplayFactory {
     }
     
     /**
+     * Display a paginated list of collections
+     *
+     * @param sender The command sender
+     * @param collections The list of collections to display
+     * @return true if the display was successful
+     */
+    public static boolean displayCollectionList(CommandSender sender, List<ItemCollection> collections) {
+        sender.sendMessage(ChatColor.GOLD + "===== Collections (Newest First) =====");
+        if (collections.isEmpty()) {
+            sender.sendMessage(ChatColor.YELLOW + "⚠ No collections found");
+            return true;
+        }
+        for (ItemCollection collection : collections) {
+            String dateStr = DATE_FORMAT.format(new Date(collection.getCreatedAt()));
+            sender.sendMessage(ChatColor.WHITE + collection.getName() + ChatColor.GRAY + " (" + collection.getId() + ")"
+                    + ChatColor.YELLOW + " - " + dateStr);
+            sender.sendMessage(ChatColor.GRAY + "   " + collection.getDescription());
+            sender.sendMessage(ChatColor.GRAY + "   " + collection.getItemCount() + " items • " +
+                    (collection.getThemeId() != null ? collection.getThemeId() : "custom"));
+        }
+        sender.sendMessage(ChatColor.GRAY + "   Use " + ChatColor.WHITE + "/lore collection view <id> " + ChatColor.GRAY + "for details");
+        return true;
+    }
+
+    /**
      * Format enchantment name for user-friendly display
      * Converts snake_case to Title Case
      * 
@@ -198,7 +225,7 @@ public class DisplayFactory {
             List<T> items, 
             int page, 
             int itemsPerPage,
-            java.util.function.Function<T, String> formatter) {
+            Function<T, String> formatter) {
         
         // Calculate pagination
         int totalItems = items.size();

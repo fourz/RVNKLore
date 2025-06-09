@@ -1,6 +1,5 @@
 package org.fourz.RVNKLore.lore.item.custommodeldata;
 
-import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.fourz.RVNKLore.RVNKLore;
@@ -16,7 +15,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * no conflicts between different item types.
  * 
  * Model ID ranges are allocated as follows:
- * - 1-100: Reserved for system use
+ * - 1-100: Reserved for server-specific items
  * - 101-200: Weapons
  * - 201-300: Armor
  * - 301-400: Tools

@@ -386,4 +386,22 @@ public class LoreManager {
     public List<LoreEntry> getAllLoreEntries() {
         return new ArrayList<>(cachedEntries);
     }
+
+    /**
+     * Find lore entries whose name or UUID starts with the given fragment (case-insensitive).
+     *
+     * @param startsWith The string fragment to match at the start of name or UUID
+     * @return A list of matching lore entries
+     */
+    public List<LoreEntry> findLoreEntries(String startsWith) {
+        String fragment = startsWith.toLowerCase();
+        List<LoreEntry> result = new ArrayList<>();
+        for (LoreEntry entry : cachedEntries) {
+            if (entry.getId().toLowerCase().startsWith(fragment) ||
+                entry.getName().toLowerCase().startsWith(fragment)) {
+                result.add(entry);
+            }
+        }
+        return result;
+    }
 }

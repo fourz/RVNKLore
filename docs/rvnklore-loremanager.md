@@ -26,3 +26,4 @@ LoreEntry entry = loreManager.getLoreEntryByName("Frost Edge");
 - Follows the manager pattern for extensibility
 - All logging is handled via `LogManager`
 - Integrates with HandlerFactory for lore type handlers
+- Supports paginated, sorted output for lore entry listing commands
