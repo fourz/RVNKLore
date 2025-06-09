@@ -1,14 +1,14 @@
-package org.fourz.RVNKLore.lore.item.model;
+package org.fourz.RVNKLore.lore.item.custommodeldata;
 
 /**
  * Represents a range of model data IDs for a specific category.
  * Used to manage allocation boundaries and prevent conflicts.
  */
-public class ModelDataRange {
+public class CustomModelDataRange {
     private final int start;
     private final int end;
     
-    public ModelDataRange(int start, int end) {
+    public CustomModelDataRange(int start, int end) {
         if (start > end) {
             throw new IllegalArgumentException("Start must be less than or equal to end");
         }
@@ -63,7 +63,7 @@ public class ModelDataRange {
         if (this == obj) return true;
         if (obj == null || getClass() != obj.getClass()) return false;
         
-        ModelDataRange that = (ModelDataRange) obj;
+        CustomModelDataRange that = (CustomModelDataRange) obj;
         return start == that.start && end == that.end;
     }
     

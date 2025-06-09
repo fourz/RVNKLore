@@ -6,8 +6,8 @@ import org.bukkit.entity.Player;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
+import org.fourz.RVNKLore.lore.item.collection.CollectionTheme;
 import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
-import org.fourz.RVNKLore.lore.item.cosmetic.CollectionTheme;
 
 import java.util.ArrayList;
 import java.util.Arrays;

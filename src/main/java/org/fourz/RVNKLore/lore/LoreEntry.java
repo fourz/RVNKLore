@@ -218,6 +218,16 @@ public class LoreEntry {
     public boolean hasMetadata(String key) {
         return metadata != null && metadata.containsKey(key);
     }
+
+        /**
+     * Check if this entry has metadata with the given key
+     * 
+     * @param key The metadata key
+     * @return True if metadata exists, false otherwise
+     */
+    public boolean hasMetadata() {
+        return metadata != null;
+    }
     
     /**
      * Get all metadata for this entry

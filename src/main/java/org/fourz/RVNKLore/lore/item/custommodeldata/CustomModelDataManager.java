@@ -1,4 +1,4 @@
-package org.fourz.RVNKLore.lore.item.model;
+package org.fourz.RVNKLore.lore.item.custommodeldata;
 
 import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
@@ -27,32 +27,32 @@ import java.util.concurrent.ConcurrentHashMap;
  * - 801-900: Event items
  * - 901-1000: Special/Legendary items
  */
-public class ModelDataManager {
+public class CustomModelDataManager {
     private final RVNKLore plugin;
     private final LogManager logger;
     
     // Model ID tracking
-    private final Map<ModelDataCategory, Integer> categoryCounters = new ConcurrentHashMap<>();
+    private final Map<CustomModelDataCategory, Integer> categoryCounters = new ConcurrentHashMap<>();
     private final Map<String, Integer> itemModelIds = new ConcurrentHashMap<>();
     private final Map<Integer, String> modelIdItems = new ConcurrentHashMap<>();
     
     // Category ranges
-    private static final Map<ModelDataCategory, ModelDataRange> CATEGORY_RANGES = new HashMap<>();
+    private static final Map<CustomModelDataCategory, CustomModelDataRange> CATEGORY_RANGES = new HashMap<>();
     
     static {
-        CATEGORY_RANGES.put(ModelDataCategory.SYSTEM, new ModelDataRange(1, 100));
-        CATEGORY_RANGES.put(ModelDataCategory.WEAPONS, new ModelDataRange(101, 200));
-        CATEGORY_RANGES.put(ModelDataCategory.ARMOR, new ModelDataRange(201, 300));
-        CATEGORY_RANGES.put(ModelDataCategory.TOOLS, new ModelDataRange(301, 400));
-        CATEGORY_RANGES.put(ModelDataCategory.COSMETIC, new ModelDataRange(401, 500));
-        CATEGORY_RANGES.put(ModelDataCategory.DECORATIVE, new ModelDataRange(501, 600));
-        CATEGORY_RANGES.put(ModelDataCategory.CONSUMABLES, new ModelDataRange(601, 700));
-        CATEGORY_RANGES.put(ModelDataCategory.SEASONAL, new ModelDataRange(701, 800));
-        CATEGORY_RANGES.put(ModelDataCategory.EVENT, new ModelDataRange(801, 900));
-        CATEGORY_RANGES.put(ModelDataCategory.LEGENDARY, new ModelDataRange(901, 1000));
+        CATEGORY_RANGES.put(CustomModelDataCategory.SYSTEM, new CustomModelDataRange(1, 100));
+        CATEGORY_RANGES.put(CustomModelDataCategory.WEAPONS, new CustomModelDataRange(101, 200));
+        CATEGORY_RANGES.put(CustomModelDataCategory.ARMOR, new CustomModelDataRange(201, 300));
+        CATEGORY_RANGES.put(CustomModelDataCategory.TOOLS, new CustomModelDataRange(301, 400));
+        CATEGORY_RANGES.put(CustomModelDataCategory.COSMETIC, new CustomModelDataRange(401, 500));
+        CATEGORY_RANGES.put(CustomModelDataCategory.DECORATIVE, new CustomModelDataRange(501, 600));
+        CATEGORY_RANGES.put(CustomModelDataCategory.CONSUMABLES, new CustomModelDataRange(601, 700));
+        CATEGORY_RANGES.put(CustomModelDataCategory.SEASONAL, new CustomModelDataRange(701, 800));
+        CATEGORY_RANGES.put(CustomModelDataCategory.EVENT, new CustomModelDataRange(801, 900));
+        CATEGORY_RANGES.put(CustomModelDataCategory.LEGENDARY, new CustomModelDataRange(901, 1000));
     }
     
-    public ModelDataManager(RVNKLore plugin) {
+    public CustomModelDataManager(RVNKLore plugin) {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "ModelDataManager");
         
@@ -64,7 +64,7 @@ public class ModelDataManager {
      * Initialize category counters to start of their respective ranges.
      */
     private void initializeCategoryCounters() {
-        for (Map.Entry<ModelDataCategory, ModelDataRange> entry : CATEGORY_RANGES.entrySet()) {
+        for (Map.Entry<CustomModelDataCategory, CustomModelDataRange> entry : CATEGORY_RANGES.entrySet()) {
             categoryCounters.put(entry.getKey(), entry.getValue().getStart());
         }
     }
@@ -76,14 +76,14 @@ public class ModelDataManager {
      * @param category The model data category
      * @return The allocated model ID, or -1 if allocation failed
      */
-    public int allocateModelId(String itemKey, ModelDataCategory category) {
+    public int allocateModelId(String itemKey, CustomModelDataCategory category) {
         // Check if item already has a model ID
         if (itemModelIds.containsKey(itemKey)) {
             logger.warning("Item already has allocated model ID: " + itemKey);
             return itemModelIds.get(itemKey);
         }
         
-        ModelDataRange range = CATEGORY_RANGES.get(category);
+        CustomModelDataRange range = CATEGORY_RANGES.get(category);
         if (range == null) {
             logger.warning("Unknown model data category: " + category);
             return -1;
@@ -145,7 +145,7 @@ public class ModelDataManager {
      * @param category The model data category
      * @return The modified ItemStack
      */
-    public ItemStack applyModelData(ItemStack item, String itemKey, ModelDataCategory category) {
+    public ItemStack applyModelData(ItemStack item, String itemKey, CustomModelDataCategory category) {
         if (item == null) {
             return null;
         }
@@ -173,9 +173,9 @@ public class ModelDataManager {
      * @param modelId The model ID
      * @return The category, or null if not found
      */
-    public ModelDataCategory getCategoryForModelId(int modelId) {
-        for (Map.Entry<ModelDataCategory, ModelDataRange> entry : CATEGORY_RANGES.entrySet()) {
-            ModelDataRange range = entry.getValue();
+    public CustomModelDataCategory getCategoryForModelId(int modelId) {
+        for (Map.Entry<CustomModelDataCategory, CustomModelDataRange> entry : CATEGORY_RANGES.entrySet()) {
+            CustomModelDataRange range = entry.getValue();
             if (modelId >= range.getStart() && modelId <= range.getEnd()) {
                 return entry.getKey();
             }
@@ -189,7 +189,7 @@ public class ModelDataManager {
      * @param category The category
      * @return The model data range
      */
-    public ModelDataRange getCategoryRange(ModelDataCategory category) {
+    public CustomModelDataRange getCategoryRange(CustomModelDataCategory category) {
         return CATEGORY_RANGES.get(category);
     }
     
@@ -223,11 +223,11 @@ public class ModelDataManager {
      * 
      * @return Map of categories to usage counts
      */
-    public Map<ModelDataCategory, Integer> getUsageStatistics() {
-        Map<ModelDataCategory, Integer> stats = new HashMap<>();
+    public Map<CustomModelDataCategory, Integer> getUsageStatistics() {
+        Map<CustomModelDataCategory, Integer> stats = new HashMap<>();
         
-        for (ModelDataCategory category : ModelDataCategory.values()) {
-            ModelDataRange range = CATEGORY_RANGES.get(category);
+        for (CustomModelDataCategory category : CustomModelDataCategory.values()) {
+            CustomModelDataRange range = CATEGORY_RANGES.get(category);
             int startCounter = range.getStart();
             int currentCounter = categoryCounters.get(category);
             int used = currentCounter - startCounter;

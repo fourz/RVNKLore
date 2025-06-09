@@ -7,8 +7,8 @@ import org.fourz.RVNKLore.data.ItemRepository;
 import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.lore.item.enchant.EnchantManager;
 import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
-import org.fourz.RVNKLore.lore.item.cosmetic.CosmeticItem;
-import org.fourz.RVNKLore.lore.item.model.ModelDataManager;
+import org.fourz.RVNKLore.lore.item.cosmetic.CosmeticsManager;
+import org.fourz.RVNKLore.lore.item.custommodeldata.CustomModelDataManager;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -25,9 +25,9 @@ public class ItemManager {
     
     // Sub-managers for different item domains
     private EnchantManager enchantManager;
-    private CosmeticItem cosmeticItem;
+    private CosmeticsManager cosmeticItem;
     private CollectionManager collectionManager;
-    private ModelDataManager modelDataManager;
+    private CustomModelDataManager modelDataManager;
     private ItemRepository itemRepository;
     
     // Caches for better performance
@@ -54,7 +54,7 @@ public class ItemManager {
         }
         
         // Initialize cosmetic manager
-        this.cosmeticItem = new CosmeticItem(plugin);
+        this.cosmeticItem = new CosmeticsManager(plugin);
         logger.info("CosmeticItem initialized");
         
         // Initialize enchant manager
@@ -62,7 +62,7 @@ public class ItemManager {
         logger.info("EnchantManager initialized");
         
         // Initialize model data manager
-        this.modelDataManager = new ModelDataManager(plugin);
+        this.modelDataManager = new CustomModelDataManager(plugin);
         logger.info("ModelDataManager initialized");
         
         // Initialize collection manager after other managers
@@ -87,7 +87,7 @@ public class ItemManager {
      * 
      * @return The CosmeticManager instance
      */
-    public CosmeticItem getCosmeticItem() {
+    public CosmeticsManager getCosmeticItem() {
         return cosmeticItem;
     }
     
@@ -105,7 +105,7 @@ public class ItemManager {
      * 
      * @return The ModelDataManager instance
      */
-    public ModelDataManager getModelDataManager() {
+    public CustomModelDataManager getModelDataManager() {
         return modelDataManager;
     }
     
@@ -229,9 +229,9 @@ public class ItemManager {
                 if (modelDataManager != null) {
                     ItemStack item = new ItemStack(properties.getMaterial());
                     // Map ItemType to ModelDataCategory if possible, else use ModelDataCategory.COSMETIC as default
-                    org.fourz.RVNKLore.lore.item.model.ModelDataCategory category = org.fourz.RVNKLore.lore.item.model.ModelDataCategory.COSMETIC;
+                    org.fourz.RVNKLore.lore.item.custommodeldata.CustomModelDataCategory category = org.fourz.RVNKLore.lore.item.custommodeldata.CustomModelDataCategory.COSMETIC;
                     try {
-                        category = org.fourz.RVNKLore.lore.item.model.ModelDataCategory.valueOf(type.name());
+                        category = org.fourz.RVNKLore.lore.item.custommodeldata.CustomModelDataCategory.valueOf(type.name());
                     } catch (IllegalArgumentException ignored) {}
                     return modelDataManager.applyModelData(item, name, category);
                 }
@@ -427,5 +427,43 @@ public class ItemManager {
      */
     protected LogManager getLogger() {
         return logger;
+    }
+
+    /**
+     * Get all items with their properties, including creation timestamp for sorting
+     * 
+     * @return A list of ItemProperties for all items
+     */
+    public List<ItemProperties> getAllItemsWithProperties() {
+        List<ItemProperties> result = new ArrayList<>();
+        
+        // Add items from database if available
+        if (itemRepository != null && cacheInitialized) {
+            // Use the cached items
+            result.addAll(itemCache.values());
+        } else {
+            // Fallback to memory-based items
+            if (cosmeticItem != null) {
+                for (var collection : cosmeticItem.getAllCollections()) {
+                    collection.getAllHeads().forEach(head -> {
+                        ItemProperties props = new ItemProperties(org.bukkit.Material.PLAYER_HEAD, head.getName());
+                        props.setItemType(ItemType.COSMETIC);
+                        props.setCreatedAt(System.currentTimeMillis() - (long)(Math.random() * 10000000)); // Placeholder timestamp
+                        result.add(props);
+                    });
+                }
+            }
+            if (collectionManager != null) {
+                for (var entry : collectionManager.getAllCollections().entrySet()) {
+                    ItemProperties props = new ItemProperties(org.bukkit.Material.PAPER, entry.getValue().getName());
+                    props.setItemType(ItemType.COLLECTION);
+                    props.setCollectionId(entry.getKey());
+                    props.setCreatedAt(entry.getValue().getCreatedAt());
+                    result.add(props);
+                }
+            }
+        }
+        
+        return result;
     }
 }

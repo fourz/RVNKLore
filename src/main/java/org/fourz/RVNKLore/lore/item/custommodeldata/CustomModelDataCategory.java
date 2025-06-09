@@ -1,10 +1,10 @@
-package org.fourz.RVNKLore.lore.item.model;
+package org.fourz.RVNKLore.lore.item.custommodeldata;
 
 /**
  * Enumeration of model data categories for organized ID allocation.
  * Each category has a dedicated range to prevent conflicts.
  */
-public enum ModelDataCategory {
+public enum CustomModelDataCategory {
     /**
      * Reserved for system use - IDs 1-100
      */

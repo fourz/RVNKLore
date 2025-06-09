@@ -1,4 +1,4 @@
-package org.fourz.RVNKLore.lore.item.cosmetic;
+package org.fourz.RVNKLore.lore.item.collection;
 
 import org.bukkit.inventory.ItemStack;
 

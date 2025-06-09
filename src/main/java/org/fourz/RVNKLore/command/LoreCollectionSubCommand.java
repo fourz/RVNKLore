@@ -3,13 +3,13 @@ package org.fourz.RVNKLore.command;
 import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
-import org.fourz.RVNKLore.lore.item.cosmetic.CosmeticItem;
+import org.fourz.RVNKLore.lore.item.cosmetic.CosmeticsManager;
 import org.fourz.RVNKLore.lore.item.cosmetic.HeadCollection;
 import org.fourz.RVNKLore.lore.item.cosmetic.HeadVariant;
 import org.fourz.RVNKLore.lore.item.cosmetic.HeadRarity;
-import org.fourz.RVNKLore.lore.item.cosmetic.CollectionTheme;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
+import org.fourz.RVNKLore.lore.item.collection.CollectionTheme;
 import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
 
 import java.util.ArrayList;
@@ -23,7 +23,7 @@ import java.util.Map;
  * Provides player-facing interface for browsing collections and checking progress.
  */
 public class LoreCollectionSubCommand implements SubCommand {
-    private final CosmeticItem cosmeticItem;
+    private final CosmeticsManager cosmeticItem;
     private final RVNKLore plugin;
     private final Map<String, SubCommand> subCommands = new HashMap<>();
 

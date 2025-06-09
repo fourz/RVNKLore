@@ -2,6 +2,9 @@ package org.fourz.RVNKLore.lore.item.cosmetic;
 
 import java.util.*;
 
+import org.fourz.RVNKLore.lore.item.collection.CollectionRewards;
+import org.fourz.RVNKLore.lore.item.collection.CollectionTheme;
+
 /**
  * Represents a thematic collection of heads with shared properties and grouping.
  * Collections provide organized access to related head items and track completion status.

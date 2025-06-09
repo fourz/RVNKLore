@@ -45,6 +45,10 @@ public class ItemProperties {
     private String rarityLevel;
     private Integer collectionSequence;
     
+    // Additional properties
+    private Long createdAt;
+    private ItemType itemType = ItemType.STANDARD;
+
     public ItemProperties(Material material, String displayName) {
         this.material = material;
         this.displayName = displayName;
@@ -194,14 +198,7 @@ public class ItemProperties {
         return metadata != null ? metadata.get(key) : null;
     }
     
-    public ItemType getItemType() {
-        return type;
-    }
-    
-    public ItemProperties setItemType(ItemType type) {
-        this.type = type;
-        return this;
-    }
+
     
     public boolean isGlow() {
         return isGlow;
@@ -309,5 +306,41 @@ public class ItemProperties {
     public ItemProperties setCollectionSequence(Integer sequence) {
         this.collectionSequence = sequence;
         return this;
+    }
+
+    /**
+     * Get the creation timestamp of this item
+     * 
+     * @return Creation timestamp in milliseconds since epoch
+     */
+    public Long getCreatedAt() {
+        return createdAt;
+    }
+
+    /**
+     * Set the creation timestamp for this item
+     * 
+     * @param createdAt Creation timestamp in milliseconds since epoch
+     */
+    public void setCreatedAt(Long createdAt) {
+        this.createdAt = createdAt;
+    }
+    
+    /**
+     * Get the item type
+     * 
+     * @return The ItemType enum value
+     */
+    public ItemType getItemType() {
+        return itemType;
+    }
+    
+    /**
+     * Set the item type
+     * 
+     * @param itemType The ItemType enum value
+     */
+    public void setItemType(ItemType itemType) {
+        this.itemType = itemType;
     }
 }

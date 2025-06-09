@@ -7,6 +7,8 @@ import org.bukkit.inventory.meta.SkullMeta;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.lore.item.ItemProperties;
+import org.fourz.RVNKLore.lore.item.collection.CollectionRewards;
+import org.fourz.RVNKLore.lore.item.collection.CollectionTheme;
 import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
 import org.fourz.RVNKLore.util.HeadUtil;
 
@@ -19,7 +21,7 @@ import java.util.stream.Collectors;
  * Handles registration, retrieval, and player progress tracking for all head variants.
  * Integrates with the broader ItemManager system for unified item creation.
  */
-public class CosmeticItem {
+public class CosmeticsManager {
     private final RVNKLore plugin;
     private final LogManager logger;
     private final Map<String, HeadCollection> collections;
@@ -27,7 +29,7 @@ public class CosmeticItem {
     private final Map<UUID, Set<String>> playerOwnedHeads;
     private final Map<CollectionTheme, List<HeadCollection>> themeIndex;
 
-    public CosmeticItem(RVNKLore plugin) {
+    public CosmeticsManager(RVNKLore plugin) {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "CosmeticItem");
         this.collections = new ConcurrentHashMap<>();
@@ -45,7 +47,7 @@ public class CosmeticItem {
      * Initialize the cosmetic manager and load default collections.
      */
     public void initialize() {
-        logger.info("Initializing cosmetic manager");
+        logger.info("Initializing cosmetics manager");
         loadDefaultCollections();
         logger.info("Loaded " + collections.size() + " head collections with " + 
                    headVariants.size() + " total variants");

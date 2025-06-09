@@ -7,7 +7,6 @@ import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.lore.item.ItemProperties;
 import org.fourz.RVNKLore.lore.item.cosmetic.HeadCollection;
-import org.fourz.RVNKLore.lore.item.cosmetic.CollectionTheme;
 import org.fourz.RVNKLore.data.ItemRepository;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -42,7 +41,7 @@ public class CollectionManager {
     private void createDefaultThemes() {
         for (CollectionTheme theme : CollectionTheme.values()) {
             themes.put(theme.name().toLowerCase(), theme);
-            logger.info("Registered collection theme: " + theme.getDisplayName());
+            logger.debug("Registered collection theme: " + theme.getDisplayName());
         }
     }
 
