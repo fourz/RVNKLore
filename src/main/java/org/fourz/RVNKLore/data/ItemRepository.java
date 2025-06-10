@@ -1,11 +1,9 @@
 package org.fourz.RVNKLore.data;
 
 import org.bukkit.Material;
-import org.bukkit.inventory.ItemStack;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.exception.LoreException;
-import org.fourz.RVNKLore.exception.LoreException.LoreExceptionType;
 import org.fourz.RVNKLore.lore.item.ItemProperties;
 import org.fourz.RVNKLore.lore.item.ItemType;
 import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
@@ -28,7 +26,7 @@ import java.util.Map;
  * Provides methods to create, read, update, and delete item records.
  * 
  * This class handles:
- * - Basic item CRUD operations
+ * - Basic item CRUD operations for lore items
  * - Collection management
  * - Item metadata storage and retrieval
  * - JSON property serialization/deserialization

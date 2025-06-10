@@ -116,7 +116,9 @@ public class LoreApproveSubCommand implements SubCommand {
     @Override
     public boolean hasPermission(CommandSender sender) {
         return sender.hasPermission("rvnklore.admin") || sender.isOp();
-    }    @Override
+    }   
+    
+    @Override
     public List<String> getTabCompletions(CommandSender sender, String[] args) {
         List<String> completions = new ArrayList<>();
 
@@ -129,17 +131,23 @@ public class LoreApproveSubCommand implements SubCommand {
                         String uuid = entry.getId().toString();
                         String shortId = uuid.substring(0, 8);
 
-                        // Stage 1: If they're typing and it matches short ID
+                        // If typing and it matches short ID
                         if (shortId.startsWith(partial)) {
                             completions.add(shortId);
                         }
-                        // Stage 2: If they've entered exact short ID, show full details (no dash, just spaces)
-                        else if (shortId.equalsIgnoreCase(partial)) {
-                            String submitter = entry.getSubmittedBy() != null ? entry.getSubmittedBy() : "Unknown";
-                            String description = entry.getDescription() != null ? entry.getDescription() : "No description";
-                            completions.add(shortId + " " + entry.getName() + " " +
-                                    description.replaceAll("\\n", " ") + " - " + submitter);
-                        }
+                        //
+
+                    }
+                }
+            }
+        } else if (args.length > 1) {
+            // if a short uuid is prodided, show details
+            String shortUuidPart = args[0].trim();  
+            for (LoreEntry entry : plugin.getLoreManager().findLoreEntries(shortUuidPart)) {
+                if (!entry.isApproved()) {
+                    String entryShortId = entry.getId().toString().substring(0, 8);
+                    if (entryShortId.equalsIgnoreCase(shortUuidPart)) {                        // Stage 2: If they typed a short ID, show details
+                        completions.add(entry.getName() + " " + entry.getDescription() + " " + entry.getSubmittedBy() + " " + entry.getType());
                     }
                 }
             }
