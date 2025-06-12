@@ -2,6 +2,12 @@
 
 The `ItemManager` is the central orchestrator for all item-related functionality in the RVNKLore plugin. It manages sub-managers for enchantments, cosmetics, collections, and model data, providing a unified interface for item creation and management.
 
+## Recent Edits
+- Implemented asynchronous cache refresh for improved performance.
+- Enhanced integration with Cosmetic and Collection managers.
+- Added fallback mechanisms for item lookup from both database and memory.
+- Refined logging to align with the new LogManager standards.
+
 ## Responsibilities
 - Initialize and manage sub-managers:
   - `EnchantManager` (enchantments)

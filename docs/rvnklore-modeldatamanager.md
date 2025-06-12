@@ -2,6 +2,11 @@
 
 The `CustomModelDataManager` handles custom model data allocation and tracking for resource pack integration in RVNKLore. It ensures organized, conflict-free model ID assignment across item categories.
 
+## Recent Edits
+- Improved fallback handling when custom model data is unavailable.
+- Enhanced logging using the centralized LogManager.
+- Integrated more tightly with the ItemManager for consistent item creation.
+
 ## Responsibilities
 - Allocate and track custom model data IDs for items
 - Enforce category-based model ID ranges (system, weapons, armor, etc.)

@@ -16,6 +16,11 @@ The `LoreManager` is the central registry and orchestrator for all lore content 
 - `addLoreEntry(LoreEntry)`, `approveLoreEntry(int)`: Manage entries
 - `cleanup()`: Resource management
 
+## Recent Edits
+- Updated lore approval and listing commands with enhanced UUID matching.
+- Improved filtering of entries with respect to admin permissions.
+- Enhanced in-memory caching and database synchronization for lore entries.
+
 ## Example Usage
 ```java
 LoreManager loreManager = plugin.getLoreManager();

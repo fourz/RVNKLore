@@ -2,6 +2,12 @@
 
 The `CollectionManager` is responsible for managing item collections in the RVNKLore plugin. It organizes items into thematic groups, tracks player progress, and handles collection rewards.
 
+## Recent Edits
+- Added enhanced validation for new collection creation.
+- Integrated a mechanism to reload collections from the database.
+- Improved logging and error handling for collection persistence.
+- Updated progress tracking and reward handling for collections.
+
 ## Responsibilities
 - Define and manage item collections (`ItemCollection`)
 - Track player progress and completion
