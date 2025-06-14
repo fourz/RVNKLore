@@ -3,8 +3,6 @@ package org.fourz.RVNKLore.handler;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.SkullMeta;
 import org.fourz.RVNKLore.RVNKLore;
@@ -16,7 +14,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Handler for player character lore entries
+ * Handler for player character lore entries.
+ * <p>
+ * <b>Note:</b> This class does <u>not</u> register for or handle any player events.
+ * All player join and name change event handling is performed by {@link PlayerJoinLoreHandler},
+ * which delegates to PlayerManager for all player lore operations.
+ * <p>
+ * This handler is only used for lore entry display, validation, and item creation.
  */
 public class PlayerLoreHandler implements LoreHandler {
     private final RVNKLore plugin;
@@ -26,99 +30,37 @@ public class PlayerLoreHandler implements LoreHandler {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "PlayerLoreHandler");
     }
-    
-    @Override
+      @Override
     public void initialize() {
-        logger.info("Initializing player lore handler with event listener");
+        logger.info("Initializing player lore handler");
     }
-    
-    /**
-     * Handle player join events to create/update player lore
+      /**
+     * This method is deprecated and will be removed in a future version.
+     * Use PlayerManager's processPlayerJoin method directly.
+     * 
+     * @deprecated Use {@link org.fourz.RVNKLore.lore.player.PlayerManager#processPlayerJoin(Player)} instead
      */    
-    @EventHandler
-    public void onPlayerJoin(PlayerJoinEvent event) {
-        Player player = event.getPlayer();
-        
-        try {
-            // Use the centralized PlayerManager instead of duplicate logic
-            plugin.getPlayerManager().processPlayerJoin(player);
-        } catch (Exception e) {
-            logger.error("Error in player join handler", e);
-        }
-    }/**
+    public void processPlayerJoin(Player player) {
+        logger.warning("PlayerLoreHandler.processPlayerJoin is deprecated. Use PlayerManager directly.");
+        // No-op - do not process player join events in this handler
+    }    /**
      * Handles lore creation when a player changes their name.
-     *
+     * 
+     * @deprecated This method is deprecated in favor of using {@link org.fourz.RVNKLore.lore.player.PlayerManager#createNameChangeLoreEntry(Player, String)}
      * @param player The player who changed their name
      * @param oldName The previous name stored in the lore entry
      */
     private void handlePlayerNameChangeLore(Player player, String oldName) {
-        logger.info("Detected player name change: " + oldName + " -> " + player.getName());
-        
-        try {
-            // Create a name change lore entry
-            String uniqueName = "NameChange_" + player.getUniqueId().toString().substring(0, 8) + "_" + System.currentTimeMillis();
-            
-            LoreEntry entry = new LoreEntry();
-            entry.setType(LoreType.PLAYER);
-            entry.setName(uniqueName);
-            entry.setDescription(oldName + " is now known as " + player.getName() + ".\nName changed on " + 
-                                java.time.LocalDate.now().toString());
-            entry.setLocation(player.getLocation());
-            entry.setSubmittedBy("Server");
-            
-            // Add metadata
-            entry.addMetadata("player_uuid", player.getUniqueId().toString());
-            entry.addMetadata("player_name", player.getName());
-            entry.addMetadata("previous_name", oldName);
-            entry.addMetadata("name_change_date", System.currentTimeMillis() + "");
-            
-            // Save to database - automatically approved since this is server-generated
-            entry.setApproved(true);
-            boolean success = plugin.getLoreManager().addLoreEntry(entry);
-            
-            if (success) {
-                logger.info("Player name change lore entry created for: " + player.getName());
-                player.sendMessage(ChatColor.GOLD + "Your name change has been recorded in the annals of history!");
-            } else {
-                logger.warning("Failed to create player name change lore entry for: " + player.getName());
-            }
-        } catch (Exception e) {
-            logger.error("Error creating player name change lore entry", e);
-        }
-    }/**
+        logger.warning("PlayerLoreHandler.handlePlayerNameChangeLore is deprecated. Use PlayerManager directly.");
+        // No-op - delegate to PlayerManager instead
+    }    /**
      * Create a new lore entry for a player
+     * 
+     * @deprecated This method is deprecated in favor of using {@link org.fourz.RVNKLore.lore.player.PlayerManager#createPlayerLoreEntry(Player)}
      */
     private void createPlayerLoreEntry(Player player) {
-        logger.info("Creating new player lore entry for: " + player.getName());
-        
-        try {
-            String uniqueName = player.getName() + "_" + player.getUniqueId().toString().substring(0, 8);
-            
-            LoreEntry entry = new LoreEntry();
-            entry.setType(LoreType.PLAYER);
-            entry.setName(uniqueName);
-            entry.setDescription("A player who joined the realm on " + 
-                                java.time.LocalDate.now().toString());
-            entry.setLocation(player.getLocation());
-            entry.setSubmittedBy("Server");
-            
-            // Add metadata
-            entry.addMetadata("player_uuid", player.getUniqueId().toString());
-            entry.addMetadata("player_name", player.getName());
-            entry.addMetadata("first_join_date", System.currentTimeMillis() + "");
-            
-            // Save to database - automatically approved since this is server-generated
-            entry.setApproved(true);
-            boolean success = plugin.getLoreManager().addLoreEntry(entry);
-            
-            if (success) {
-                logger.info("Player lore entry created for: " + player.getName());
-            } else {
-                logger.warning("Failed to create player lore entry for: " + player.getName());
-            }
-        } catch (Exception e) {
-            logger.error("Error creating player lore entry", e);
-        }
+        logger.warning("PlayerLoreHandler.createPlayerLoreEntry is deprecated. Use PlayerManager directly.");
+        // No-op - delegate to PlayerManager instead
     }
 
     @Override
@@ -143,8 +85,6 @@ public class PlayerLoreHandler implements LoreHandler {
         
         if (meta != null) {
             meta.setDisplayName(ChatColor.GOLD + entry.getName());
-            
-            // Remove deprecated setOwner(String) and any duplicate logic
             
             List<String> lore = new ArrayList<>();
             lore.add(ChatColor.GRAY + "Type: " + ChatColor.GREEN + "Player Character");
@@ -178,5 +118,10 @@ public class PlayerLoreHandler implements LoreHandler {
         
         player.sendMessage("");
         player.sendMessage(ChatColor.GRAY + "Biography by: " + ChatColor.YELLOW + entry.getSubmittedBy());
+    }
+    
+    @Override
+    public LoreType getHandlerType() {
+        return LoreType.PLAYER;
     }
 }

@@ -1,4 +1,4 @@
-package org.fourz.RVNKLore.lore.player;
+package org.fourz.RVNKLore.data;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -9,10 +9,9 @@ import java.util.List;
 import java.util.UUID;
 
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.data.DatabaseConnection;
 import org.fourz.RVNKLore.debug.LogManager;
-import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
+import org.fourz.RVNKLore.lore.player.NameChangeRecord;
 
 /**
  * Repository for player-related database operations
@@ -30,14 +29,24 @@ public class PlayerRepository {
         this.dbConnection = dbConnection;
         this.logger = LogManager.getInstance(plugin, "PlayerRepository");
     }
-    
-    /**
+      /**
      * Check if a player already has a lore entry in the database
      * 
      * @param playerUuid The UUID of the player to check
      * @return true if the player has a lore entry, false otherwise
      */
     public boolean playerExists(UUID playerUuid) {
+        // Check both by UUID in content and by entry name pattern
+        return playerExistsByContent(playerUuid) || playerExistsByName(playerUuid);
+    }
+    
+    /**
+     * Check if a player exists by UUID in the submission content
+     * 
+     * @param playerUuid The UUID of the player to check
+     * @return true if the player has a lore entry, false otherwise
+     */
+    private boolean playerExistsByContent(UUID playerUuid) {
         String sql = "SELECT COUNT(*) FROM lore_submission s " +
                      "JOIN lore_entry e ON e.id = s.entry_id " +
                      "WHERE e.entry_type = ? " +
@@ -56,7 +65,38 @@ public class PlayerRepository {
                 }
             }
         } catch (SQLException e) {
-            logger.error("Error checking if player exists: " + playerUuid, e);
+            logger.error("Error checking if player exists by content: " + playerUuid, e);
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Check if a player exists by entry name patterns (FirstJoin_, Player_, NameChange_)
+     * 
+     * @param playerUuid The UUID of the player to check
+     * @return true if the player has a lore entry, false otherwise
+     */
+    private boolean playerExistsByName(UUID playerUuid) {
+        String sql = "SELECT COUNT(*) FROM lore_entry e " +
+                     "WHERE e.entry_type = ? " +
+                     "AND (e.name LIKE ? OR e.name LIKE ? OR e.name LIKE ?)";
+        
+        try (Connection conn = dbConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            
+            stmt.setString(1, LoreType.PLAYER.name());
+            stmt.setString(2, "FirstJoin_" + playerUuid.toString() + "%");
+            stmt.setString(3, "Player_" + playerUuid.toString() + "%");
+            stmt.setString(4, "NameChange_" + playerUuid.toString() + "%");
+            
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1) > 0;
+                }
+            }
+        } catch (SQLException e) {
+            logger.error("Error checking if player exists by name: " + playerUuid, e);
         }
         
         return false;

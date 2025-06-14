@@ -5,7 +5,11 @@ import org.bukkit.plugin.PluginManager;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.debug.Debug;
 import org.fourz.RVNKLore.handler.event.PlayerDeathLoreHandler;
+import org.fourz.RVNKLore.handler.PlayerLoreHandler;
+
+
 import org.fourz.RVNKLore.handler.event.PlayerJoinLoreHandler;
+
 import org.fourz.RVNKLore.lore.LoreType;
 import org.fourz.RVNKLore.lore.QuestLoreHandler;
 
@@ -91,6 +95,10 @@ public class HandlerFactory {
         }
         
         try {
+            // Event-specific handlers - register these first to ensure they take precedence
+            handlerClasses.put("PLAYER_JOIN", PlayerJoinLoreHandler.class);
+            handlerClasses.put("PLAYER_DEATH", PlayerDeathLoreHandler.class);
+            
             // Core handlers - only register the ones we have actual implementations for
             handlerClasses.put("GENERIC", DefaultLoreHandler.class);
             handlerClasses.put("PLAYER", PlayerLoreHandler.class);
@@ -99,14 +107,10 @@ public class HandlerFactory {
             handlerClasses.put("PATH", PathLoreHandler.class);
             handlerClasses.put("FACTION", FactionLoreHandler.class);
             handlerClasses.put("ITEM", ItemLoreHandler.class);
+            handlerClasses.put("ENCHANTED_ITEM", EnchantedItemLoreHandler.class);
             
             // Replace individual head handlers with the unified CommonHeadHandler
             handlerClasses.put("HEAD", CommonHeadHandler.class);
-            
-            // Event-specific handlers
-            handlerClasses.put("PLAYER_JOIN", PlayerJoinLoreHandler.class);
-            handlerClasses.put("PLAYER_DEATH", PlayerDeathLoreHandler.class);
-            handlerClasses.put("ENCHANTED_ITEM", EnchantedItemLoreHandler.class);
             
             // Sign handlers
             handlerClasses.put("SIGN_LANDMARK", org.fourz.RVNKLore.handler.sign.HandlerSignLandmark.class);
@@ -123,15 +127,33 @@ public class HandlerFactory {
             debug.error("Failed to register handlers", e);
         }
     }
-    
-    /**
+      /**
      * Pre-create essential handlers without triggering initialization chains
      */
     private void preCreateCoreHandlers() {
         debug.debug("Pre-creating core handlers");
+        
+        // First create and register PlayerJoinLoreHandler to ensure it gets priority
+        try {
+            // Ensure the PlayerJoinLoreHandler is created and registered first
+            if (!handlerCache.containsKey(LoreType.PLAYER)) {
+                PlayerJoinLoreHandler joinHandler = new PlayerJoinLoreHandler(plugin);
+                handlerCache.put(LoreType.PLAYER, joinHandler);
+                
+                // Register the event handler explicitly
+                PluginManager pm = plugin.getServer().getPluginManager();
+                pm.registerEvents(joinHandler, plugin);
+                registeredListeners.add(joinHandler);
+                debug.info("Pre-registered PlayerJoinLoreHandler for player join events");
+            }
+        } catch (Exception e) {
+            debug.error("Failed to pre-create PlayerJoinLoreHandler", e);
+        }
+        
+        // Then create other core handlers
         LoreType[] coreTypes = {
-            LoreType.GENERIC, LoreType.PLAYER, LoreType.CITY, 
-            LoreType.LANDMARK, LoreType.FACTION
+            LoreType.GENERIC, LoreType.CITY, 
+            LoreType.LANDMARK, LoreType.FACTION, LoreType.EVENT
         };
         
         for (LoreType type : coreTypes) {
