@@ -29,7 +29,7 @@ public class LoreCollectionSubCommand implements SubCommand {
 
     public LoreCollectionSubCommand(RVNKLore plugin) {        
         this.plugin = plugin;
-        this.cosmeticItem = plugin.getItemManager().getCosmeticItem();
+        this.cosmeticItem = plugin.getLoreManager().getItemManager().getCosmeticItem();
         
         // Register sub-commands
         subCommands.put("add", new LoreCollectionAddSubCommand(plugin));
@@ -306,7 +306,7 @@ public class LoreCollectionSubCommand implements SubCommand {
         player.sendMessage("");
 
         // Use CollectionManager from ItemManager for progress tracking
-        CollectionManager collectionManager = plugin.getItemManager().getCollectionManager();
+        CollectionManager collectionManager = plugin.getLoreManager().getItemManager().getCollectionManager();
         Map<String, ItemCollection> allCollections = collectionManager.getAllCollections();
 
         if (allCollections.isEmpty()) {

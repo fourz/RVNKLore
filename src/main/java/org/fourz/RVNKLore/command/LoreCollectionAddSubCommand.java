@@ -26,7 +26,7 @@ public class LoreCollectionAddSubCommand implements SubCommand {
     public LoreCollectionAddSubCommand(RVNKLore plugin) {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "LoreCollectionAddSubCommand");
-        this.collectionManager = plugin.getItemManager().getCollectionManager();
+        this.collectionManager = plugin.getLoreManager().getItemManager().getCollectionManager();
     }
 
     @Override

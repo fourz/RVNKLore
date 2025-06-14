@@ -25,8 +25,8 @@ public class LoreItemSubCommand implements SubCommand {
         this.subCommands = new HashMap<>();
         
         // Register child commands with correct constructor
-        subCommands.put("give", new LoreItemGiveSubCommand(plugin, plugin.getItemManager()));
-        subCommands.put("info", new LoreItemInfoSubCommand(plugin, plugin.getItemManager()));
+        subCommands.put("give", new LoreItemGiveSubCommand(plugin, plugin.getLoreManager().getItemManager()));
+        subCommands.put("info", new LoreItemInfoSubCommand(plugin, plugin.getLoreManager().getItemManager()));
         subCommands.put("list", new LoreItemListSubCommand(plugin));
     }
 
@@ -44,7 +44,7 @@ public class LoreItemSubCommand implements SubCommand {
         // Special handling for /lore item info list
         if ("info".equals(subCommandName) && args.length > 1 && "list".equalsIgnoreCase(args[1])) {
             // Delegate to LoreItemInfoSubCommand for /lore item info list
-            return new LoreItemInfoSubCommand(plugin, plugin.getItemManager())
+            return new LoreItemInfoSubCommand(plugin, plugin.getLoreManager().getItemManager())
                 .execute(sender, Arrays.copyOfRange(args, 1, args.length));
         }
 
@@ -68,7 +68,7 @@ public class LoreItemSubCommand implements SubCommand {
         // Special handling for /lore item info <short uuid>|<full uuid>
         if ("info".equals(subCommandName) && args.length == 2) {
             // Extracted logic: delegate to LoreItemInfoSubCommand for info lookup
-            return new LoreItemInfoSubCommand(plugin, plugin.getItemManager())
+            return new LoreItemInfoSubCommand(plugin, plugin.getLoreManager().getItemManager())
                 .execute(sender, Arrays.copyOfRange(args, 1, args.length));
         }
 

@@ -34,43 +34,16 @@ public class PlayerLoreHandler implements LoreHandler {
     
     /**
      * Handle player join events to create/update player lore
-     */    @EventHandler
+     */    
+    @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
-        String playerUuid = player.getUniqueId().toString();
-        String playerName = player.getName();
-
+        
         try {
-            // Get all player lore entries
-            List<LoreEntry> playerEntries = plugin.getLoreManager().getLoreEntriesByType(LoreType.PLAYER);
-            LoreEntry existingEntry = null;
-            String storedPlayerName = null;
-            
-            // Check if this player already has a lore entry by UUID
-            for (LoreEntry entry : playerEntries) {
-                if (playerUuid.equals(entry.getMetadata("player_uuid"))) {
-                    existingEntry = entry;
-                    storedPlayerName = entry.getMetadata("player_name");
-                    // If we found a match, stop searching
-                    break;
-                }
-            }
-
-            if (existingEntry == null) {
-                // No existing entry found, create a new one
-                createPlayerLoreEntry(player);
-            } else if (storedPlayerName != null && !playerName.equals(storedPlayerName)) {
-                // UUID matches but name has changed
-                handlePlayerNameChangeLore(player, storedPlayerName);
-                
-                // No need to update the existing entry as we create a separate name change entry
-                logger.info("Created name change record for: " + playerName + " (formerly " + storedPlayerName + ")");
-            } else {
-                // Player exists with the same name, no action needed
-                logger.debug("Player already has a lore entry: " + playerName);
-            }
+            // Use the centralized PlayerManager instead of duplicate logic
+            plugin.getPlayerManager().processPlayerJoin(player);
         } catch (Exception e) {
-            logger.error("Error processing player join event for: " + playerName, e);
+            logger.error("Error in player join handler", e);
         }
     }/**
      * Handles lore creation when a player changes their name.

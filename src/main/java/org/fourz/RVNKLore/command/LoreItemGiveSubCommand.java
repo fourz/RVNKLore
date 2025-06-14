@@ -24,7 +24,7 @@ public class LoreItemGiveSubCommand implements SubCommand {
     public LoreItemGiveSubCommand(RVNKLore plugin) {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "LoreItemGiveSubCommand");
-        this.itemManager = plugin.getItemManager();
+        this.itemManager = plugin.getLoreManager().getItemManager();
     }
 
     /**

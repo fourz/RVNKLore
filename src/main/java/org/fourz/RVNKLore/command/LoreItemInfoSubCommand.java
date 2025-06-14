@@ -23,7 +23,7 @@ public class LoreItemInfoSubCommand implements SubCommand {
     public LoreItemInfoSubCommand(RVNKLore plugin) {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "LoreItemInfoSubCommand");
-        this.itemManager = plugin.getItemManager();
+        this.itemManager = plugin.getLoreManager().getItemManager();
     }
 
     public LoreItemInfoSubCommand(RVNKLore plugin, ItemManager itemManager) {
