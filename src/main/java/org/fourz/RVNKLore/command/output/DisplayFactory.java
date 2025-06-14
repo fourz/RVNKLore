@@ -219,35 +219,33 @@ public class DisplayFactory {
      * @param <T> The type of items in the list
      * @return true if the display was successful
      */
-    public static <T> boolean displayPaginatedList(
-            CommandSender sender, 
-            String title, 
-            List<T> items, 
-            int page, 
-            int itemsPerPage,
-            Function<T, String> formatter) {
-        
-        // Calculate pagination
+    public static <T> boolean displayPaginatedList(CommandSender sender, String title, List<T> items, int page, int itemsPerPage, Function<T, String> formatter) {
         int totalItems = items.size();
         int totalPages = (int) Math.ceil((double) totalItems / itemsPerPage);
-        page = Math.max(1, Math.min(page, totalPages)); // Ensure page is in valid range
-        
+
+        // Validate page number and provide feedback if needed
+        if (page < 1) {
+            sender.sendMessage(org.bukkit.ChatColor.YELLOW + "⚠ Page number must be positive. Showing first page.");
+            page = 1;
+        } else if (page > totalPages && totalPages > 0) {
+            sender.sendMessage(org.bukkit.ChatColor.YELLOW + "⚠ Page number exceeds max pages. Showing last page.");
+            page = totalPages;
+        }
+
         int startIndex = (page - 1) * itemsPerPage;
         int endIndex = Math.min(startIndex + itemsPerPage, totalItems);
-        
-        // Display header
-        sender.sendMessage(ChatColor.GOLD + "===== " + title + " (Page " + page + "/" + Math.max(1, totalPages) + ") =====");
-        
+
+        sender.sendMessage(org.bukkit.ChatColor.GOLD + "===== " + title + " (Page " + page + "/" + Math.max(1, totalPages) + ") =====");
         if (items.isEmpty()) {
-            sender.sendMessage(ChatColor.YELLOW + "⚠ No items found");
+            sender.sendMessage(org.bukkit.ChatColor.YELLOW + "⚠ No items found");
             return true;
         }
-        
-        // Display items for current page
         for (int i = startIndex; i < endIndex; i++) {
             sender.sendMessage(formatter.apply(items.get(i)));
         }
-        
+        if (totalPages > 1) {
+            sender.sendMessage(org.bukkit.ChatColor.GRAY + "Use /lore item list <page> to navigate pages");
+        }
         return true;
     }
 }

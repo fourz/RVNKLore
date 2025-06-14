@@ -1,7 +1,6 @@
 package org.fourz.RVNKLore.command;
 
 import org.bukkit.command.CommandSender;
-import org.bukkit.ChatColor;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.command.output.DisplayFactory;
 import org.fourz.RVNKLore.debug.LogManager;
@@ -45,12 +44,8 @@ public class LoreItemListSubCommand implements SubCommand {
         if (args.length > 0) {
             try {
                 page = Integer.parseInt(args[0]);
-                if (page < 1) {
-                    page = 1;
-                    sender.sendMessage(org.bukkit.ChatColor.YELLOW + "⚠ Page number must be positive. Showing first page.");
-                }
             } catch (NumberFormatException ignored) {
-                sender.sendMessage(org.bukkit.ChatColor.RED + "✖ Invalid page number. Showing first page.");
+                // Page validation and warning now handled by DisplayFactory
             }
         }
 
@@ -58,8 +53,8 @@ public class LoreItemListSubCommand implements SubCommand {
         List<ItemProperties> items = itemManager.getAllItemsWithProperties();
         items.sort(Comparator.comparing(ItemProperties::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())).reversed());
 
-        // Use DisplayFactory for paginated output
-        return org.fourz.RVNKLore.command.output.DisplayFactory.displayPaginatedList(
+        // All pagination logic is now handled by DisplayFactory
+        return DisplayFactory.displayPaginatedList(
             sender,
             "Lore Items",
             items,
