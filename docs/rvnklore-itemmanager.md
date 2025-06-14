@@ -7,6 +7,7 @@ The `ItemManager` is the central orchestrator for all item-related functionality
 - Enhanced integration with Cosmetic and Collection managers.
 - Added fallback mechanisms for item lookup from both database and memory.
 - Refined logging to align with the new LogManager standards.
+- **Design Change:** Item descriptions are no longer stored in the `lore_item` table. Descriptions are now managed exclusively at the `lore_entry` and `lore_submission` level for versioning and content management. All item-related description logic should reference these tables.
 
 ## Responsibilities
 - Initialize and manage sub-managers:
@@ -44,3 +45,4 @@ List<String> allItems = itemManager.getAllItemNames();
 - CosmeticsManager is now managed exclusively through ItemManager
 - Supports async cache initialization and refresh for performance
 - Provides sorted, paginated item lists for command output via DisplayFactory
+- **Descriptions:** Item descriptions are not stored in `lore_item`. For all description needs, use the `lore_entry` or `lore_submission` tables, which support versioning and content history.

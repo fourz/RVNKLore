@@ -57,16 +57,13 @@ public class ItemRepository {
     
     /**
      * Initialize required database tables
-     */
-    private void initializeTables() {
+     */    private void initializeTables() {
         try {
             Connection conn = dbConnection.getConnection();
-            
-            // Create lore_item table if it doesn't exist
+              // Create lore_item table if it doesn't exist
             String createItemTable = "CREATE TABLE IF NOT EXISTS lore_item (" +
                     "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                    "name VARCHAR(64) NOT NULL UNIQUE, " +
-                    "description TEXT, " +
+                    "name VARCHAR(64) NOT NULL, " +
                     "item_type VARCHAR(32) NOT NULL, " +
                     "rarity VARCHAR(32) NOT NULL, " +
                     "material VARCHAR(64) NOT NULL, " +
@@ -74,12 +71,16 @@ public class ItemRepository {
                     "custom_model_data INTEGER, " +
                     "item_properties TEXT, " +
                     "created_by VARCHAR(64), " +
+                    "nbt_data TEXT, " +
+                    "lore_entry_id CHAR(36) NOT NULL, " +
                     "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
-                    "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
+                    "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                    "CONSTRAINT uq_lore_item_entry UNIQUE (lore_entry_id), " +
+                    "FOREIGN KEY (lore_entry_id) REFERENCES lore_entry(id) ON DELETE CASCADE" +
                     ")";
             
             // Create collection table if it doesn't exist
-            String createCollectionTable = "CREATE TABLE IF NOT EXISTS collection (" +
+            String createCollectionTable = "CREATE TABLE IF NOT EXISTS collection ("+
                     "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
                     "name VARCHAR(64) NOT NULL UNIQUE, " +
                     "description TEXT, " +
@@ -146,15 +147,15 @@ public class ItemRepository {
             return null;
         }
     }
-    
-    /**
+      /**
      * Get an item by its name
+     * Note: If multiple items have the same name, this will return the first one found
      * 
      * @param name The name of the item to retrieve
      * @return The item properties, or null if not found
      */
     public ItemProperties getItemByName(String name) {
-        String sql = "SELECT * FROM lore_item WHERE name = ?";
+        String sql = "SELECT * FROM lore_item WHERE name = ? LIMIT 1";
         
         try {
             return dbHelper.executeQuery(sql, 
@@ -168,6 +169,34 @@ public class ItemRepository {
         } catch (LoreException e) {
             logger.error("Failed to get item by name: " + name, e);
             return null;
+        }
+    }
+    
+    /**
+     * Get all items with a specific name
+     * 
+     * @param name The name of the items to retrieve
+     * @return A list of all items with the given name
+     */
+    public List<ItemProperties> getAllItemsByName(String name) {
+        String sql = "SELECT * FROM lore_item WHERE name = ?";
+        
+        try {
+            return dbHelper.executeQuery(sql, 
+                stmt -> stmt.setString(1, name),
+                rs -> {
+                    List<ItemProperties> items = new ArrayList<>();
+                    while (rs.next()) {
+                        ItemProperties item = resultSetToItemProperties(rs);
+                        if (item != null) {
+                            items.add(item);
+                        }
+                    }
+                    return items;
+                });
+        } catch (LoreException e) {
+            logger.error("Failed to get all items by name: " + name, e);
+            return new ArrayList<>();
         }
     }
     
@@ -333,33 +362,30 @@ public class ItemRepository {
             return new HashMap<>();
         }
     }
-    
-    /**
+      /**
      * Insert a new item into the database
      * 
      * @param properties The item properties to save
      * @return The ID of the new item, or -1 if insert failed
      */
+    @SuppressWarnings({"rawtypes", "unchecked"})
     public int insertItem(ItemProperties properties) {
-        String sql = "INSERT INTO lore_item (name, description, item_type, rarity, material, " +
-                    "is_obtainable, custom_model_data, item_properties, created_by) " +
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id";
-        
+        String sql = "INSERT INTO lore_item (name, item_type, rarity, material, " +
+                    "is_obtainable, custom_model_data, item_properties, created_by, nbt_data, lore_entry_id) " +
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id";
         try {
             return dbHelper.executeQuery(sql, 
                 stmt -> {
                     stmt.setString(1, properties.getDisplayName());
-                    stmt.setString(2, properties.getDescription());
-                    stmt.setString(3, properties.getItemType() != null ? properties.getItemType().name() : "STANDARD");
-                    stmt.setString(4, properties.getRarity() != null ? properties.getRarity() : "COMMON");
-                    stmt.setString(5, properties.getMaterial().name());
-                    stmt.setBoolean(6, properties.isObtainable());
+                    stmt.setString(2, properties.getItemType() != null ? properties.getItemType().name() : "STANDARD");
+                    stmt.setString(3, properties.getRarity() != null ? properties.getRarity() : "COMMON");
+                    stmt.setString(4, properties.getMaterial().name());
+                    stmt.setBoolean(5, properties.isObtainable());
                     if (properties.getCustomModelData() > 0) {
-                        stmt.setInt(7, properties.getCustomModelData());
+                        stmt.setInt(6, properties.getCustomModelData());
                     } else {
-                        stmt.setNull(7, java.sql.Types.INTEGER);
+                        stmt.setNull(6, java.sql.Types.INTEGER);
                     }
-                    
                     // Convert custom properties to JSON
                     JSONObject jsonProps = new JSONObject();
                     if (properties.hasCustomProperties()) {
@@ -374,9 +400,14 @@ public class ItemRepository {
                     if (properties.getSkullTexture() != null) {
                         jsonProps.put("skull_texture", properties.getSkullTexture());
                     }
-                    
-                    stmt.setString(8, jsonProps.toJSONString());
-                    stmt.setString(9, properties.getCreatedBy());
+                    stmt.setString(7, jsonProps.toJSONString());
+                    stmt.setString(8, properties.getCreatedBy());
+                    stmt.setString(9, properties.getNbtData());
+                    if (properties.getLoreEntryId() != null && !properties.getLoreEntryId().isEmpty()) {
+                        stmt.setString(10, properties.getLoreEntryId());
+                    } else {
+                        stmt.setNull(10, java.sql.Types.VARCHAR);
+                    }
                 },
                 rs -> {
                     if (rs.next()) {
@@ -389,36 +420,35 @@ public class ItemRepository {
             return -1;
         }
     }
-    
-    /**
+      /**
      * Update an existing item in the database
      * 
      * @param itemId The ID of the item to update
      * @param properties The updated item properties
      * @return True if the update was successful
      */
+    @SuppressWarnings({"rawtypes", "unchecked"})
     public boolean updateItem(int itemId, ItemProperties properties) {
         String sql = "UPDATE lore_item SET " +
-                    "name = ?, description = ?, item_type = ?, rarity = ?, " +
+                    "name = ?, item_type = ?, rarity = ?, " +
                     "material = ?, is_obtainable = ?, custom_model_data = ?, " +
-                    "item_properties = ?, updated_at = CURRENT_TIMESTAMP " +
+                    "item_properties = ?, updated_at = CURRENT_TIMESTAMP, " +
+                    "nbt_data = ?, lore_entry_id = ? " +
                     "WHERE id = ?";
         
         try {
             int rowsAffected = dbHelper.executeUpdate(sql, 
                 stmt -> {
                     stmt.setString(1, properties.getDisplayName());
-                    stmt.setString(2, properties.getDescription());
-                    stmt.setString(3, properties.getItemType() != null ? properties.getItemType().name() : "STANDARD");
-                    stmt.setString(4, properties.getRarity() != null ? properties.getRarity() : "COMMON");
-                    stmt.setString(5, properties.getMaterial().name());
-                    stmt.setBoolean(6, properties.isObtainable());
+                    stmt.setString(2, properties.getItemType() != null ? properties.getItemType().name() : "STANDARD");
+                    stmt.setString(3, properties.getRarity() != null ? properties.getRarity() : "COMMON");
+                    stmt.setString(4, properties.getMaterial().name());
+                    stmt.setBoolean(5, properties.isObtainable());
                     if (properties.getCustomModelData() > 0) {
-                        stmt.setInt(7, properties.getCustomModelData());
+                        stmt.setInt(6, properties.getCustomModelData());
                     } else {
-                        stmt.setNull(7, java.sql.Types.INTEGER);
+                        stmt.setNull(6, java.sql.Types.INTEGER);
                     }
-                    
                     // Convert custom properties to JSON
                     JSONObject jsonProps = new JSONObject();
                     if (properties.hasCustomProperties()) {
@@ -433,9 +463,16 @@ public class ItemRepository {
                     if (properties.getSkullTexture() != null) {
                         jsonProps.put("skull_texture", properties.getSkullTexture());
                     }
-                    
-                    stmt.setString(8, jsonProps.toJSONString());
-                    stmt.setInt(9, itemId);
+                    stmt.setString(7, jsonProps.toJSONString());
+                    // Set NBT data
+                    stmt.setString(8, properties.getNbtData());
+                    // Set lore entry ID if available, otherwise null
+                    if (properties.getLoreEntryId() != null && !properties.getLoreEntryId().isEmpty()) {
+                        stmt.setString(9, properties.getLoreEntryId());
+                    } else {
+                        stmt.setNull(9, java.sql.Types.VARCHAR);
+                    }
+                    stmt.setInt(10, itemId);
                 });
             
             return rowsAffected > 0;
@@ -466,13 +503,15 @@ public class ItemRepository {
     }
     
     /**
-     * Get an item's database ID by its unique name
+     * Get the current database ID for an item by name
+     * Note: If multiple items have the same name, this will return the first one found
+     * For uniquely identifying items, use the UUID-based methods instead
      * 
      * @param name The name of the item
-     * @return The item ID, or -1 if not found
+     * @return The database ID, or -1 if not found
      */
     public int getCurrentItemId(String name) {
-        String sql = "SELECT id FROM lore_item WHERE name = ?";
+        String sql = "SELECT id FROM lore_item WHERE name = ? LIMIT 1";
         
         try {
             return dbHelper.executeQuery(sql, 
@@ -488,7 +527,32 @@ public class ItemRepository {
             return -1;
         }
     }
-
+    
+    /**
+     * Get the current database IDs for all items with a specific name
+     * 
+     * @param name The name of the items to find
+     * @return List of database IDs, or empty list if none found
+     */
+    public List<Integer> getAllItemIdsByName(String name) {
+        String sql = "SELECT id FROM lore_item WHERE name = ?";
+        
+        try {
+            return dbHelper.executeQuery(sql, 
+                stmt -> stmt.setString(1, name),
+                rs -> {
+                    List<Integer> ids = new ArrayList<>();
+                    while (rs.next()) {
+                        ids.add(rs.getInt("id"));
+                    }
+                    return ids;
+                });
+        } catch (LoreException e) {
+            logger.error("Failed to get item IDs for name: " + name, e);
+            return new ArrayList<>();
+        }
+    }
+    
     /**
      * Delete an item by its unique name
      * 
@@ -770,6 +834,7 @@ public class ItemRepository {
      * @param rs The result set to convert
      * @return The item properties, or null if conversion failed
      */
+    @SuppressWarnings("unchecked")
     private ItemProperties resultSetToItemProperties(ResultSet rs) {
         try {
             String materialStr = rs.getString("material");
@@ -781,8 +846,10 @@ public class ItemRepository {
                 material = Material.STONE;
             }
             
-            ItemProperties props = new ItemProperties(material, rs.getString("name"));
-            props.setDescription(rs.getString("description"));
+            // Use display_name since legacy 'name' column may not exist
+            String name = rs.getString("name");
+            
+            ItemProperties props = new ItemProperties(material, name);
             
             // Set item type if it exists
             String itemTypeStr = rs.getString("item_type");
@@ -809,6 +876,26 @@ public class ItemRepository {
             
             // Set database ID
             props.setDatabaseId(rs.getInt("id"));
+            
+            // Set NBT data if present
+            try {
+                String nbtData = rs.getString("nbt_data");
+                if (nbtData != null) {
+                    props.setNbtData(nbtData);
+                }
+            } catch (SQLException e) {
+                // Column might not exist in older schema, ignore
+            }
+            
+            // Set lore entry ID if present
+            try {
+                String loreEntryId = rs.getString("lore_entry_id");
+                if (loreEntryId != null) {
+                    props.setLoreEntryId(loreEntryId);
+                }
+            } catch (SQLException e) {
+                // Column might not exist in older schema, ignore
+            }
             
             // Process JSON properties
             String jsonData = rs.getString("item_properties");
@@ -1063,7 +1150,29 @@ public class ItemRepository {
             return new ArrayList<>();
         }
     }
-    
-   
 
+    
+    /**
+     * Get an item by its lore entry UUID
+     * 
+     * @param loreEntryId The UUID of the lore entry
+     * @return The item properties, or null if not found
+     */
+    public ItemProperties getItemByLoreEntryId(String loreEntryId) {
+        String sql = "SELECT * FROM lore_item WHERE lore_entry_id = ?";
+        
+        try {
+            return dbHelper.executeQuery(sql, 
+                stmt -> stmt.setString(1, loreEntryId),
+                rs -> {
+                    if (rs.next()) {
+                        return resultSetToItemProperties(rs);
+                    }
+                    return null;
+                });
+        } catch (LoreException e) {
+            logger.error("Failed to get item by lore entry ID: " + loreEntryId, e);
+            return null;
+        }
+    }
 }

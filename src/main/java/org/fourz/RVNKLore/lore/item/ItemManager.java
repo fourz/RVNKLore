@@ -29,9 +29,9 @@ public class ItemManager {
     private CollectionManager collectionManager;
     private CustomModelDataManager modelDataManager;
     private ItemRepository itemRepository;
-    
-    // Caches for better performance
-    private final Map<String, ItemProperties> itemCache = new ConcurrentHashMap<>();
+      // Caches for better performance
+    private final Map<String, List<ItemProperties>> itemNameCache = new ConcurrentHashMap<>();
+    private final Map<String, ItemProperties> loreEntryIdCache = new ConcurrentHashMap<>();
     private final Map<Integer, List<ItemProperties>> collectionCache = new ConcurrentHashMap<>();
     private boolean cacheInitialized = false;
     
@@ -245,9 +245,7 @@ public class ItemManager {
                     if (properties.getLore() != null && !properties.getLore().isEmpty()) {
                         fallbackMeta.setLore(properties.getLore());
                     }
-                    if (properties.getCustomModelData() != null) {
-                        fallbackMeta.setCustomModelData(properties.getCustomModelData());
-                    }
+                    fallbackMeta.setCustomModelData(properties.getCustomModelData());
                     fallback.setItemMeta(fallbackMeta);
                 }
                 return fallback;
@@ -262,9 +260,7 @@ public class ItemManager {
                     if (properties.getLore() != null && !properties.getLore().isEmpty()) {
                         meta.setLore(properties.getLore());
                     }
-                    if (properties.getCustomModelData() != null) {
-                        meta.setCustomModelData(properties.getCustomModelData());
-                    }
+                    meta.setCustomModelData(properties.getCustomModelData());
                     item.setItemMeta(meta);
                 }
                 return item;
@@ -277,12 +273,9 @@ public class ItemManager {
     public List<String> getAllItemNames() {
         List<String> names = new ArrayList<>();
         
-        // Add items from database if available
         if (itemRepository != null && cacheInitialized) {
-            // Use the cached items
-            names.addAll(itemCache.keySet());
+            names.addAll(itemNameCache.keySet());
         } else {
-            // Fallback to memory-based items
             if (cosmeticItem != null) {
                 for (var collection : cosmeticItem.getAllCollections()) {
                     collection.getAllHeads().forEach(head -> names.add(head.getId()));
@@ -297,33 +290,27 @@ public class ItemManager {
     }
 
     /**
-     * Create a lore item by name.
+     * Create a lore item by name. If multiple items exist with the same name, returns the first found.
      */
     public ItemStack createLoreItem(String itemName) {
-        // First try to get from database cache
-        if (itemRepository != null && cacheInitialized && itemCache.containsKey(itemName)) {
-            ItemProperties props = itemCache.get(itemName);
+        String key = itemName.toLowerCase();
+        if (itemRepository != null && cacheInitialized && itemNameCache.containsKey(key)) {
+            ItemProperties props = itemNameCache.get(key).get(0);
             return createLoreItem(props.getItemType(), itemName, props);
         }
-        
-        // If not in cache, try to load directly from database
         if (itemRepository != null) {
-            ItemProperties props = itemRepository.getItemByName(itemName);
-            if (props != null) {
-                // Add to cache for future lookups
-                itemCache.put(itemName, props);
-                return createLoreItem(props.getItemType(), itemName, props);
+            List<ItemProperties> propsList = itemRepository.getAllItemsByName(itemName);
+            if (!propsList.isEmpty()) {
+                itemNameCache.put(key, propsList);
+                return createLoreItem(propsList.get(0).getItemType(), itemName, propsList.get(0));
             }
         }
-        
-        // Fallback to memory-based items
         if (cosmeticItem != null) {
             var variant = cosmeticItem.getHeadVariant(itemName);
             if (variant != null) {
                 return cosmeticItem.createHeadItem(variant);
             }
         }
-        
         if (collectionManager != null) {
             var collection = collectionManager.getCollection(itemName);
             if (collection != null) {
@@ -332,7 +319,6 @@ public class ItemManager {
                 return collectionManager.createCollectionItem(props);
             }
         }
-        
         return null;
     }
     
@@ -348,14 +334,17 @@ public class ItemManager {
         try {
             logger.info("Initializing item cache from database...");
             
-            // Clear existing caches
-            itemCache.clear();
+            itemNameCache.clear();
             collectionCache.clear();
             
             // Load all items
             List<ItemProperties> allItems = itemRepository.getAllItems();
             for (ItemProperties item : allItems) {
-                itemCache.put(item.getDisplayName(), item);
+                String key = item.getDisplayName().toLowerCase();
+                itemNameCache.computeIfAbsent(key, k -> new ArrayList<>()).add(item);
+                if (item.getLoreEntryId() != null) {
+                    loreEntryIdCache.put(item.getLoreEntryId(), item);
+                }
             }
             
             // Load all collections
@@ -365,8 +354,7 @@ public class ItemManager {
             }
             
             cacheInitialized = true;
-            logger.info("Item cache initialized with " + itemCache.size() + " items and " + 
-                        collectionCache.size() + " collections");
+            logger.info("Item cache initialized with " + itemNameCache.size() + " item names and " + collectionCache.size() + " collections");
         } catch (Exception e) {
             logger.error("Error initializing item cache", e);
         }
@@ -431,24 +419,23 @@ public class ItemManager {
 
     /**
      * Get all items with their properties, including creation timestamp for sorting
-     * 
+     *
      * @return A list of ItemProperties for all items
      */
     public List<ItemProperties> getAllItemsWithProperties() {
         List<ItemProperties> result = new ArrayList<>();
         
-        // Add items from database if available
         if (itemRepository != null && cacheInitialized) {
-            // Use the cached items
-            result.addAll(itemCache.values());
+            for (List<ItemProperties> list : itemNameCache.values()) {
+                result.addAll(list);
+            }
         } else {
-            // Fallback to memory-based items
             if (cosmeticItem != null) {
                 for (var collection : cosmeticItem.getAllCollections()) {
                     collection.getAllHeads().forEach(head -> {
                         ItemProperties props = new ItemProperties(org.bukkit.Material.PLAYER_HEAD, head.getName());
                         props.setItemType(ItemType.COSMETIC);
-                        props.setCreatedAt(System.currentTimeMillis() - (long)(Math.random() * 10000000)); // Placeholder timestamp
+                        props.setCreatedAt(System.currentTimeMillis() - (long)(Math.random() * 10000000));
                         result.add(props);
                     });
                 }
@@ -465,5 +452,50 @@ public class ItemManager {
         }
         
         return result;
+    }
+    
+    /**
+     * Register a lore item with a reference to its lore entry ID.
+     * This method should be called by LoreManager when a lore entry of type ITEM is created.
+     *
+     * @param loreEntryId The UUID of the lore entry in the lore_entry table
+     * @param properties The properties of the item to register
+     * @return true if the item was registered successfully, false otherwise
+     */
+    public boolean registerLoreItem(java.util.UUID loreEntryId, ItemProperties properties) {
+        if (loreEntryId == null || properties == null) {
+            logger.warning("Cannot register lore item with null ID or properties");
+            return false;
+        }
+        logger.info("Registering lore item: " + properties.getDisplayName() + " with lore entry ID: " + loreEntryId);
+        // Add lore entry ID reference to item properties
+        properties.setLoreEntryId(loreEntryId.toString());
+        // Store in database
+        if (itemRepository != null) {
+            try {
+                int itemId = itemRepository.insertItem(properties);
+                if (itemId > 0) {
+                    // Add to name cache
+                    String key = properties.getDisplayName().toLowerCase();
+                    itemNameCache.computeIfAbsent(key, k -> new ArrayList<>()).add(properties);
+                    // Add to loreEntryId cache
+                    loreEntryIdCache.put(loreEntryId.toString(), properties);
+                    logger.info("Registered item in database with ID: " + itemId);
+                    return true;
+                } else {
+                    logger.warning("Failed to insert item into database");
+                }
+            } catch (Exception e) {
+                logger.error("Error registering lore item", e);
+            }
+        } else {
+            logger.warning("ItemRepository is not available, item will not be persisted");
+            // Add to cache anyway
+            String key = properties.getDisplayName().toLowerCase();
+            itemNameCache.computeIfAbsent(key, k -> new ArrayList<>()).add(properties);
+            loreEntryIdCache.put(loreEntryId.toString(), properties);
+            return true;
+        }
+        return false;
     }
 }
