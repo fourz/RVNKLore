@@ -1,35 +1,29 @@
 package org.fourz.RVNKLore.data;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.Debug;
 import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.RVNKLore.exception.LoreException;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
-import org.json.simple.JSONObject;
 
-import java.io.File;
-import java.io.FileWriter;
 import java.sql.Connection;
-import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 import java.util.UUID;
-import java.util.logging.Level;
 
 /**
- * Manages database connections and operations for the lore system.
- * Acts as a facade for the various database components.
+ * Top-level manager for database operations.
+ * Coordinates the interaction between connection, factories, helpers and repositories.
  */
 public class DatabaseManager {
     private final RVNKLore plugin;
     private final LogManager logger;
     private final DatabaseConnectionFactory connectionFactory;
     private DatabaseConnection connection;
-    private LoreEntryRepository loreRepository;
-    private DatabaseBackupService backupService;
     private DatabaseHelper databaseHelper;
+    private LoreEntryRepository loreRepository;
+    private PlayerRepository playerRepository;
+    private ItemRepository itemRepository;
+    private DatabaseBackupService backupService;
     private volatile boolean connectionValid = false;
     private int reconnectAttempts = 0;
     private static final int MAX_RECONNECT_ATTEMPTS = 5;
@@ -38,32 +32,41 @@ public class DatabaseManager {
      * Create a new DatabaseManager instance
      * 
      * @param plugin The RVNKLore plugin instance
-     */    public DatabaseManager(RVNKLore plugin) {
+     */
+    public DatabaseManager(RVNKLore plugin) {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "DatabaseManager");
         
         // Initialize components
         this.connectionFactory = new DatabaseConnectionFactory(plugin);
         initializeDatabase();
-        this.databaseHelper = new DatabaseHelper(plugin);
     }
     
     /**
      * Initialize the database connection and related components
-     */    private void initializeDatabase() {
-        logger.debug("Initializing database...");
+     */
+    private void initializeDatabase() {
+        logger.info("Initializing database...");
         try {
             // Create and initialize the connection
             connection = connectionFactory.createConnection();
             connection.initialize();
             connection.createTables();
             
-            // Initialize repositories and services using the connection
-            loreRepository = new LoreEntryRepository(plugin, connection);
+            // Create helper
+            databaseHelper = new DatabaseHelper(plugin);
+            
+            // Initialize repositories using the connection factory and helper
+            loreRepository = new LoreEntryRepository(plugin, connectionFactory, databaseHelper);
+            playerRepository = new PlayerRepository(plugin, connectionFactory, databaseHelper);
+            itemRepository = new ItemRepository(plugin, connectionFactory, databaseHelper);
+            
+            // Initialize backup service
             backupService = new DatabaseBackupService(plugin, connection);
-              connectionValid = true;
+            
+            connectionValid = true;
             reconnectAttempts = 0;
-            logger.debug("Database initialized successfully");
+            logger.info("Database initialized successfully");
         } catch (Exception e) {
             connectionValid = false;
             logger.error("Failed to initialize database", e);
@@ -75,12 +78,14 @@ public class DatabaseManager {
      * 
      * @param entry The lore entry to add
      * @return true if successful, false otherwise
-     */    public boolean addLoreEntry(LoreEntry entry) {
-        if (!validateConnection()) {
-            logger.warning("Database connection invalid, cannot add lore entry");
+     */
+    public boolean addLoreEntry(LoreEntry entry) {
+        try {
+            return loreRepository.addLoreEntry(entry);
+        } catch (LoreException e) {
+            logger.error("Failed to add lore entry", e);
             return false;
         }
-        return loreRepository.addLoreEntry(entry);
     }
     
     /**
@@ -88,12 +93,14 @@ public class DatabaseManager {
      * 
      * @param entry The lore entry to update
      * @return true if successful, false otherwise
-     */    public boolean updateLoreEntry(LoreEntry entry) {
-        if (!validateConnection()) {
-            logger.warning("Database connection invalid, cannot update lore entry");
+     */
+    public boolean updateLoreEntry(LoreEntry entry) {
+        try {
+            return loreRepository.updateLoreEntry(entry);
+        } catch (LoreException e) {
+            logger.error("Failed to update lore entry", e);
             return false;
         }
-        return loreRepository.updateLoreEntry(entry);
     }
     
     /**
@@ -102,7 +109,12 @@ public class DatabaseManager {
      * @return A list of all lore entries
      */
     public List<LoreEntry> getAllLoreEntries() {
-        return loreRepository.getAllLoreEntries();
+        try {
+            return loreRepository.getAllLoreEntries();
+        } catch (LoreException e) {
+            logger.error("Failed to get all lore entries", e);
+            return List.of();
+        }
     }
     
     /**
@@ -112,7 +124,12 @@ public class DatabaseManager {
      * @return A list of matching lore entries
      */
     public List<LoreEntry> getLoreEntriesByType(LoreType type) {
-        return loreRepository.getLoreEntriesByType(type);
+        try {
+            return loreRepository.getLoreEntriesByType(type);
+        } catch (LoreException e) {
+            logger.error("Failed to get lore entries by type: " + type, e);
+            return List.of();
+        }
     }
     
     /**
@@ -120,12 +137,14 @@ public class DatabaseManager {
      * 
      * @param id The UUID of the entry to delete
      * @return true if successful, false otherwise
-     */    public boolean deleteLoreEntry(UUID id) {
-        if (!validateConnection()) {
-            logger.warning("Database connection invalid, cannot delete lore entry");
+     */
+    public boolean deleteLoreEntry(UUID id) {
+        try {
+            return loreRepository.deleteLoreEntry(id);
+        } catch (LoreException e) {
+            logger.error("Failed to delete lore entry", e);
             return false;
         }
-        return loreRepository.deleteLoreEntry(id);
     }
     
     /**
@@ -135,7 +154,12 @@ public class DatabaseManager {
      * @return A list of matching lore entries
      */
     public List<LoreEntry> searchLoreEntries(String keyword) {
-        return loreRepository.searchLoreEntries(keyword);
+        try {
+            return loreRepository.searchLoreEntries(keyword);
+        } catch (LoreException e) {
+            logger.error("Failed to search lore entries", e);
+            return List.of();
+        }
     }
     
     /**
@@ -144,63 +168,11 @@ public class DatabaseManager {
      * @return The total number of lore entries
      */
     public int getEntryCount() {
-        return loreRepository.getEntryCount();
-    }
-    
-    /**
-     * Export all lore entries to JSON format
-     * 
-     * @return JSON string containing all lore entries
-     */
-    public String exportLoreEntriesToJson() {
-        List<LoreEntry> entries = getAllLoreEntries();
-        List<JSONObject> jsonEntries = new ArrayList<>();
-        
-        for (LoreEntry entry : entries) {
-            jsonEntries.add(entry.toJson());
-        }
-        
-        JSONObject result = new JSONObject();
-        result.put("lore_entries", jsonEntries);
-        
-        Gson gson = new GsonBuilder().setPrettyPrinting().create();
-        return gson.toJson(result);
-    }
-    
-    /**
-     * Export lore entries to a file
-     * 
-     * @param entries The lore entries to export
-     * @param filePath The file to export to
-     * @return true if successful, false otherwise
-     */    public boolean exportLoreEntriesToFile(List<LoreEntry> entries, String filePath) {
         try {
-            logger.debug("Exporting " + entries.size() + " lore entries to file: " + filePath);
-            
-            File file = new File(filePath);
-            file.getParentFile().mkdirs();
-            
-            List<JSONObject> jsonEntries = new ArrayList<>();
-            for (LoreEntry entry : entries) {
-                jsonEntries.add(entry.toJson());
-            }
-            
-            JSONObject result = new JSONObject();
-            result.put("lore_entries", jsonEntries);
-            result.put("exported_at", new Date().toString());
-            result.put("entry_count", entries.size());
-            
-            Gson gson = new GsonBuilder().setPrettyPrinting().create();
-            String jsonContent = gson.toJson(result);
-              try (FileWriter writer = new FileWriter(file)) {
-                writer.write(jsonContent);
-            }
-            
-            logger.info("Exported " + entries.size() + " lore entries to " + filePath);
-            return true;
-        } catch (Exception e) {
-            logger.error("Failed to export lore entries to file", e);
-            return false;
+            return loreRepository.getEntryCount();
+        } catch (LoreException e) {
+            logger.error("Failed to get entry count", e);
+            return 0;
         }
     }
     
@@ -230,7 +202,12 @@ public class DatabaseManager {
      */
     public boolean reconnect() {
         if (connection != null) {
-            return connection.reconnect();
+            boolean success = connection.reconnect();
+            if (success) {
+                connectionValid = true;
+                reconnectAttempts = 0;
+            }
+            return success;
         }
         initializeDatabase();
         return isConnected();
@@ -300,27 +277,38 @@ public class DatabaseManager {
     }
     
     /**
-     * Validates and attempts to fix database connection if needed
+     * Get the database connection factory
+     * 
+     * @return The DatabaseConnectionFactory instance
      */
-    private boolean validateConnection() {
-        if (connectionValid && isConnected()) {
-            return true;
-        }
-          if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-            logger.error("Maximum reconnection attempts reached. Database operations disabled.", null);
-            return false;
-        }
-        
-        logger.warning("Database connection invalid, attempting reconnect");
-        boolean reconnected = reconnect();
-        if (reconnected) {
-            connectionValid = true;
-            reconnectAttempts = 0;
-            return true;
-        } else {
-            reconnectAttempts++;
-            connectionValid = false;
-            return false;
-        }
+    public DatabaseConnectionFactory getConnectionFactory() {
+        return connectionFactory;
+    }
+    
+    /**
+     * Get the lore entry repository
+     * 
+     * @return The LoreEntryRepository instance
+     */
+    public LoreEntryRepository getLoreRepository() {
+        return loreRepository;
+    }
+    
+    /**
+     * Get the player repository
+     * 
+     * @return The PlayerRepository instance
+     */
+    public PlayerRepository getPlayerRepository() {
+        return playerRepository;
+    }
+    
+    /**
+     * Get the item repository
+     * 
+     * @return The ItemRepository instance
+     */
+    public ItemRepository getItemRepository() {
+        return itemRepository;
     }
 }

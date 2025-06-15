@@ -5,6 +5,7 @@ import org.bukkit.Location;
 import org.bukkit.World;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.RVNKLore.exception.LoreException;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
 import org.json.simple.JSONObject;
@@ -27,7 +28,7 @@ public class LoreEntryRepository {
     private final DatabaseConnection dbConnection;
     private final JSONParser jsonParser;
     
-    public LoreEntryRepository(RVNKLore plugin, DatabaseConnection dbConnection) {
+    public LoreEntryRepository(RVNKLore plugin, DatabaseConnectionFactory sqlFactory, DatabaseHelper dbHelper) {
         this.plugin = plugin;
         this.dbConnection = dbConnection;
         this.logger = LogManager.getInstance(plugin, "LoreEntryRepository");
@@ -44,47 +45,40 @@ public class LoreEntryRepository {
      *
      * @param entry The lore entry to add
      * @return true if successful, false otherwise
+     * @throws LoreException If a database error occurs
      */
-    public boolean addLoreEntry(LoreEntry entry) {
+    public boolean addLoreEntry(LoreEntry entry) throws LoreException {
+        Connection conn = null;
         try {
-            Connection conn = dbConnection.getConnection();
-            conn.setAutoCommit(false);
+            conn = dbHelper.beginTransaction();
             
-            try {
-                // Step 1: Insert base lore_entry record
-                String entryId = insertLoreEntry(entry, conn);
-                if (entryId == null) {
-                    throw new SQLException("Failed to insert base lore entry record");
-                }
-                
-                // Step 2: Insert specialized type-specific record if applicable
-                if (entry.getType() == LoreType.ITEM) {
-                    boolean itemInserted = insertLoreItem(entryId, entry, conn);
-                    if (!itemInserted) {
-                        throw new SQLException("Failed to insert lore item record");
-                    }
-                }
-                // TODO: Add other specialized type handlers here
-                
-                // Step 3: Create initial submission version
-                boolean submissionCreated = insertLoreSubmission(entryId, entry, conn);
-                if (!submissionCreated) {
-                    throw new SQLException("Failed to create initial submission record");
-                }
-                
-                // All operations succeeded, commit transaction
-                conn.commit();
-                return true;
-            } catch (SQLException e) {
-                conn.rollback();
-                logger.error("Failed to add lore entry to database", e);
-                return false;
-            } finally {
-                conn.setAutoCommit(true);
+            // Step 1: Insert base lore_entry record
+            String entryId = insertLoreEntry(entry, conn);
+            if (entryId == null) {
+                throw new LoreException("Failed to insert base lore entry record");
             }
+            
+            // Step 2: Insert specialized type-specific record if applicable
+            if (entry.getType() == LoreType.ITEM) {
+                boolean itemInserted = insertLoreItem(entryId, entry, conn);
+                if (!itemInserted) {
+                    throw new LoreException("Failed to insert lore item record");
+                }
+            }
+            // TODO: Add other specialized type handlers here
+            
+            // Step 3: Create initial submission version
+            boolean submissionCreated = insertLoreSubmission(entryId, entry, conn);
+            if (!submissionCreated) {
+                throw new LoreException("Failed to create initial submission record");
+            }
+            
+            // All operations succeeded, commit transaction
+            dbHelper.commitTransaction(conn);
+            return true;
         } catch (SQLException e) {
-            logger.error("Transaction error when adding lore entry", e);
-            return false;
+            dbHelper.rollbackTransaction(conn);
+            throw new LoreException("Failed to add lore entry to database", e);
         }
     }
     
@@ -205,8 +199,7 @@ public class LoreEntryRepository {
      */
     public boolean updateLoreEntry(LoreEntry entry) {
         try {
-            Connection conn = dbConnection.getConnection();
-            conn.setAutoCommit(false);
+            Connection conn = dbHelper.beginTransaction();
             
             try {
                 // Step 1: Update base lore_entry record
@@ -247,14 +240,12 @@ public class LoreEntryRepository {
                 }
                 
                 // All operations succeeded, commit transaction
-                conn.commit();
+                dbHelper.commitTransaction(conn);
                 return true;
             } catch (SQLException e) {
-                conn.rollback();
+                dbHelper.rollbackTransaction(conn);
                 logger.error("Failed to update lore entry in database", e);
                 return false;
-            } finally {
-                conn.setAutoCommit(true);
             }
         } catch (SQLException e) {
             logger.error("Transaction error when updating lore entry", e);
@@ -305,7 +296,7 @@ public class LoreEntryRepository {
                      "JOIN lore_submission s ON e.id = s.entry_id " +
                      "WHERE e.entry_type = ? AND s.is_current_version = TRUE";
         
-        try (Connection conn = dbConnection.getConnection();
+        try (Connection conn = dbHelper.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             
             stmt.setString(1, type.name());
@@ -400,8 +391,7 @@ public class LoreEntryRepository {
      */
     public boolean deleteLoreEntry(UUID id) {
         try {
-            Connection conn = dbConnection.getConnection();
-            conn.setAutoCommit(false);
+            Connection conn = dbHelper.beginTransaction();
             
             try {
                 // Delete from lore_entry will cascade to lore_submission and lore_item
@@ -414,19 +404,17 @@ public class LoreEntryRepository {
                     
                     if (rowsAffected == 0) {
                         logger.warning("No lore entry found with ID: " + id);
-                        conn.rollback();
+                        dbHelper.rollbackTransaction(conn);
                         return false;
                     }
                     
-                    conn.commit();
+                    dbHelper.commitTransaction(conn);
                     return true;
                 }
             } catch (SQLException e) {
-                conn.rollback();
+                dbHelper.rollbackTransaction(conn);
                 logger.error("Failed to delete lore entry: " + id, e);
                 return false;
-            } finally {
-                conn.setAutoCommit(true);
             }
         } catch (SQLException e) {
             logger.error("Transaction error when deleting lore entry: " + id, e);
@@ -455,7 +443,7 @@ public class LoreEntryRepository {
                      "WHERE s.is_current_version = TRUE " +
                      "AND (e.name LIKE ? OR s.content LIKE ?)";
         
-        try (Connection conn = dbConnection.getConnection();
+        try (Connection conn = dbHelper.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             
             stmt.setString(1, searchPattern);
@@ -477,7 +465,7 @@ public class LoreEntryRepository {
         int count = 0;
         String sql = "SELECT COUNT(*) FROM lore_entry";
         
-        try (Connection conn = dbConnection.getConnection();
+        try (Connection conn = dbHelper.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql);
              ResultSet rs = stmt.executeQuery()) {
             
@@ -504,7 +492,7 @@ public class LoreEntryRepository {
                      "JOIN lore_submission s ON e.id = s.entry_id " +
                      "WHERE e.id = ? AND s.is_current_version = TRUE";
         
-        try (Connection conn = dbConnection.getConnection();
+        try (Connection conn = dbHelper.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             
             stmt.setString(1, id);
@@ -536,7 +524,7 @@ public class LoreEntryRepository {
                      "WHERE entry_id = ? " +
                      "ORDER BY content_version DESC";
         
-        try (Connection conn = dbConnection.getConnection();
+        try (Connection conn = dbHelper.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             
             stmt.setString(1, entryId);
@@ -570,8 +558,7 @@ public class LoreEntryRepository {
      */
     public boolean approveLoreEntry(String entryId, String approvedBy) {
         try {
-            Connection conn = dbConnection.getConnection();
-            conn.setAutoCommit(false);
+            Connection conn = dbHelper.beginTransaction();
             
             try {
                 String sql = "UPDATE lore_submission " +
@@ -587,15 +574,13 @@ public class LoreEntryRepository {
                         throw new SQLException("No current submission found for entry: " + entryId);
                     }
                     
-                    conn.commit();
+                    dbHelper.commitTransaction(conn);
                     return true;
                 }
             } catch (SQLException e) {
-                conn.rollback();
+                dbHelper.rollbackTransaction(conn);
                 logger.error("Failed to approve lore entry: " + entryId, e);
                 return false;
-            } finally {
-                conn.setAutoCommit(true);
             }
         } catch (SQLException e) {
             logger.error("Transaction error when approving lore entry: " + entryId, e);
