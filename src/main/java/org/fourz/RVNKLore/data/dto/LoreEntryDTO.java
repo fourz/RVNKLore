@@ -2,6 +2,7 @@ package org.fourz.RVNKLore.data.dto;
 
 import java.sql.Timestamp;
 import org.fourz.RVNKLore.lore.LoreEntry;
+import org.fourz.RVNKLore.lore.LoreType;
 
 /**
  * Data Transfer Object for LoreEntry.
@@ -41,20 +42,55 @@ public class LoreEntryDTO {
      */
     public static LoreEntryDTO fromLoreEntry(LoreEntry entry) {
         if (entry == null) return null;
-        return new LoreEntryDTO(
-            entry.getId(),
-            entry.getEntryType(),
-            entry.getName(),
-            entry.getDescription(),
-            entry.getCreatedAt(),
-            entry.getUpdatedAt()
-        );
+        
+        LoreEntryDTO dto = new LoreEntryDTO();
+        
+        // Use String.valueOf to convert UUID to string, then parse to int where possible
+        try {
+            dto.setId(Integer.parseInt(entry.getId()));
+        } catch (NumberFormatException e) {
+            // If the ID is not a number (UUID), we'll need another way to handle this
+            // For now, just set a placeholder ID
+            dto.setId(-1);
+        }
+        
+        dto.setEntryType(entry.getType() != null ? entry.getType().name() : null);
+        dto.setName(entry.getName());
+        dto.setDescription(entry.getDescription());
+        dto.setCreatedAt(entry.getCreatedAt());
+        // Note: LoreEntry doesn't have updatedAt field yet, setting to createdAt for now
+        dto.setUpdatedAt(entry.getCreatedAt());
+        
+        return dto;
     }
 
     /**
      * Converts this DTO to a LoreEntry domain object.
+     * Note: This is a partial conversion as LoreEntry has more fields than this DTO.
      */
     public LoreEntry toLoreEntry() {
-        return new LoreEntry(this);
+        // Convert the entryType string to a LoreType enum
+        LoreType type = null;
+        try {
+            if (entryType != null) {
+                type = LoreType.valueOf(entryType);
+            }
+        } catch (IllegalArgumentException e) {
+            // Handle invalid type strings
+            type = LoreType.GENERIC;
+        }
+        
+        // Use the string version of the ID for now
+        String idStr = String.valueOf(id);
+        
+        // Create a new LoreEntry with the basic fields
+        LoreEntry entry = new LoreEntry(idStr, name, description, type);
+        
+        // Set other fields if needed
+        if (createdAt != null) {
+            entry.setCreatedAt(createdAt);
+        }
+        
+        return entry;
     }
 }

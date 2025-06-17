@@ -1,6 +1,7 @@
 package org.fourz.RVNKLore.data.dto;
 
 import java.sql.Timestamp;
+import org.fourz.RVNKLore.lore.LoreSubmission;
 
 /**
  * Data Transfer Object for LoreSubmission.

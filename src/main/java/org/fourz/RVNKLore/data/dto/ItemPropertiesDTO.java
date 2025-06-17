@@ -6,6 +6,7 @@ import org.bukkit.Material;
 import org.fourz.RVNKLore.lore.item.ItemProperties;
 import org.fourz.RVNKLore.lore.item.ItemType;
 import org.fourz.RVNKLore.lore.item.cosmetic.HeadVariant;
+import org.fourz.RVNKLore.lore.item.cosmetic.HeadRarity;
 
 
 /**
@@ -203,11 +204,17 @@ public class ItemPropertiesDTO {
             for (Map.Entry<String, String> entry : metadata.entrySet()) {
                 properties.setMetadata(entry.getKey(), entry.getValue());
             }
-        }
-
-        // Set head variant properties if exists
+        }        // Set head variant properties if exists
         if (textureData != null || ownerName != null) {
-            HeadVariant headVariant = new HeadVariant();
+            // Create a basic head variant with default values since we can't create one with no params
+            HeadVariant headVariant = new HeadVariant(
+                "generated-" + System.currentTimeMillis(),
+                "Generated Head",
+                "Automatically generated head variant",
+                ownerName != null ? ownerName : "",
+                HeadRarity.COMMON
+            );
+            
             if (textureData != null) properties.setTextureData(textureData);
             if (ownerName != null) properties.setOwnerName(ownerName);
             properties.setHeadVariant(headVariant);
