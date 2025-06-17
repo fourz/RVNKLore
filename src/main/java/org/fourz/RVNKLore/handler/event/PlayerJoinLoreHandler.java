@@ -33,7 +33,7 @@ public class PlayerJoinLoreHandler extends DefaultLoreHandler {
     public void initialize() {
         logger.debug("Initializing player join lore handler");
     }
-
+    
     /**
      * Handle player join events
      */
@@ -41,47 +41,12 @@ public class PlayerJoinLoreHandler extends DefaultLoreHandler {
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
         
-        // Only create entry for first-time joins
-        if (!player.hasPlayedBefore()) {
-            createNewPlayerJoinLoreEntry(player);
+        try {
+            // Use the centralized PlayerManager instead of duplicate logic
+            plugin.getPlayerManager().processPlayerJoin(player);
+        } catch (Exception e) {
+            logger.error("Error processing player join event: " + player.getName(), e);
         }
-    }
-    
-    /**
-     * Create a lore entry for a new player
-     */
-    private void createNewPlayerJoinLoreEntry(Player player) {
-        logger.debug("Creating join lore entry for new player: " + player.getName());
-        
-        LoreEntry entry = new LoreEntry();
-        entry.setType(LoreType.PLAYER);
-        entry.setName(player.getName() + "'s First Arrival");
-        
-        // Format date using SimpleDateFormat for consistent display
-        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
-        String dateString = dateFormat.format(new Date());
-        
-        entry.setDescription(player.getName() + " first set foot in our world on " + dateString + ".");
-        entry.setLocation(player.getLocation());
-        entry.setSubmittedBy("Server");
-        
-        // Add essential metadata
-        entry.addMetadata("player_uuid", player.getUniqueId().toString());
-        entry.addMetadata("first_join_date", System.currentTimeMillis() + "");
-        
-        // Location coordinates as metadata
-        entry.addMetadata("join_location", String.format("%s,%d,%d,%d", 
-            player.getLocation().getWorld().getName(),
-            (int)player.getLocation().getX(),
-            (int)player.getLocation().getY(),
-            (int)player.getLocation().getZ()));
-        
-        // Auto-approve server-generated entries
-        entry.setApproved(true);
-        plugin.getLoreManager().addLoreEntry(entry);
-        
-        // Notify the player
-        player.sendMessage(ChatColor.GOLD + "Your arrival has been recorded in the annals of history!");
     }
 
     @Override
@@ -95,9 +60,11 @@ public class PlayerJoinLoreHandler extends DefaultLoreHandler {
             List<String> lore = new ArrayList<>();
             lore.add(ChatColor.GRAY + "Type: " + ChatColor.AQUA + "First Arrival");
             
-            // Get player name from entry name
-            String playerName = entry.getName().replace("'s First Arrival", "");
-            lore.add(ChatColor.GRAY + "Player: " + ChatColor.WHITE + playerName);
+            // Get player name from metadata instead of entry name
+            String playerName = entry.getMetadata("player_name");
+            if (playerName != null) {
+                lore.add(ChatColor.GRAY + "Player: " + ChatColor.WHITE + playerName);
+            }
             
             // Format join date if available
             String joinDate = formatJoinDate(entry);

@@ -10,6 +10,7 @@ import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.command.CommandManager;
 import org.fourz.RVNKLore.util.UtilityManager;
 import org.fourz.RVNKLore.lore.item.ItemManager;
+import org.fourz.RVNKLore.lore.player.PlayerManager;
 
 public class RVNKLore extends JavaPlugin {
     private LoreManager loreManager;
@@ -20,6 +21,7 @@ public class RVNKLore extends JavaPlugin {
     private HandlerFactory handlerFactory;
     private UtilityManager utilityManager;
     private ItemManager itemManager;
+    private PlayerManager playerManager;
     private int healthCheckTaskId = -1;
     private Thread shutdownHook;
     private boolean shuttingDown = false;
@@ -58,8 +60,16 @@ public class RVNKLore extends JavaPlugin {
               // Now initialize LoreManager after HandlerFactory is fully initialized
             loreManager = LoreManager.getInstance(this);
             loreManager.initializeLore();
+
+            // Initialize PlayerManager for player-related lore operations
+            this.playerManager = new PlayerManager(this);
+            this.playerManager.initialize();
+
             // Initialize ItemManager through LoreManager
             this.itemManager = loreManager.getItemManager();
+            
+
+            
             // Remove direct CosmeticManager initialization (now handled by ItemManager)
             // cosmeticManager = new CosmeticManager(this);
             // cosmeticManager.initialize();
@@ -225,10 +235,16 @@ public class RVNKLore extends JavaPlugin {
     }
     
     /**
-     * Get the item manager for all item-related systems.
-     * @return The ItemManager instance
+     * Get the player manager for player lore operations
+     * 
+     * @return The player manager
      */
-    public ItemManager getItemManager() {
-        return itemManager;
+    public PlayerManager getPlayerManager() {
+        if (playerManager == null) {
+            logger.warning("Player manager requested but was null. Creating new instance.");
+            playerManager = new PlayerManager(this);
+            playerManager.initialize();
+        }
+        return playerManager;
     }
 }

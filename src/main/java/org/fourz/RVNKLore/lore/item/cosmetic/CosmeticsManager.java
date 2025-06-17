@@ -9,7 +9,6 @@ import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.lore.item.ItemProperties;
 import org.fourz.RVNKLore.lore.item.collection.CollectionRewards;
 import org.fourz.RVNKLore.lore.item.collection.CollectionTheme;
-import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
 import org.fourz.RVNKLore.util.HeadUtil;
 
 import java.util.*;
@@ -57,10 +56,9 @@ public class CosmeticsManager {
      *
      * @param properties Item properties containing cosmetic specifications
      * @return ItemStack representing the cosmetic item
-     */
-    public ItemStack createCosmeticItem(ItemProperties properties) {
+     */    public ItemStack createCosmeticItem(ItemProperties properties) {
         String cosmeticType = properties.getMetadata("cosmetic_type");
-        
+
         if ("head".equals(cosmeticType)) {
             String variantId = properties.getMetadata("head_variant");
             if (variantId != null) {
@@ -70,18 +68,22 @@ public class CosmeticsManager {
                 }
             }
         }
-        
+
         // Check if we have a direct head variant
         if (properties.getHeadVariant() != null) {
             return createHeadItem(properties.getHeadVariant());
         }
-        
+
         // Fallback: create basic cosmetic item
         ItemStack item = new ItemStack(Material.LEATHER_HELMET);
         if (properties.getDisplayName() != null) {
-            item.getItemMeta().setDisplayName(properties.getDisplayName());
+            if (item.getItemMeta() != null) {
+                var meta = item.getItemMeta();
+                meta.setDisplayName(properties.getDisplayName());
+                item.setItemMeta(meta);
+            }
         }
-        
+
         return item;
     }
     
@@ -211,12 +213,20 @@ public class CosmeticsManager {
             lore.add("§e⚡ Animated (" + variant.getAnimationFrameCount() + " frames)");
         }
         
-        meta.setLore(lore);
-          // Apply texture based on head type
-        switch (variant.getType()) {            case PLAYER:
+        meta.setLore(lore);      // Apply texture based on head type
+        switch (variant.getType()) {            
+            case PLAYER:
                 if (variant.getOwnerName() != null) {
-                    // Use meta.setOwner for player heads (deprecated but functional)
-                    meta.setOwner(variant.getOwnerName());
+                    // Use modern API for setting player head owner if available
+                    try {
+                        java.util.UUID uuid = java.util.UUID.nameUUIDFromBytes(("OfflinePlayer:" + variant.getOwnerName()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                        org.bukkit.OfflinePlayer offlinePlayer = org.bukkit.Bukkit.getOfflinePlayer(uuid);
+                        meta.setOwningPlayer(offlinePlayer);
+                    } catch (Exception e) {
+                        // Fallback to deprecated method for legacy support
+                        meta.setOwner(variant.getOwnerName());
+                        logger.warning("Fallback to deprecated setOwner for player head: " + variant.getOwnerName());
+                    }
                 }
                 break;
                 

@@ -1,18 +1,19 @@
 package org.fourz.RVNKLore.command;
 
-import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.lore.item.ItemManager;
+import org.fourz.RVNKLore.lore.LoreEntry;
+import org.fourz.RVNKLore.command.output.DisplayFactory;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Handles the /lore item info <item_name> command.
- * Displays detailed information about a registered lore item including
- * material, display name, lore, and metadata.
+ * Displays detailed information about a registered lore item using DisplayFactory.
+ * Also supports lookup by UUID or short UUID.
  */
 public class LoreItemInfoSubCommand implements SubCommand {
     private final RVNKLore plugin;
@@ -22,7 +23,7 @@ public class LoreItemInfoSubCommand implements SubCommand {
     public LoreItemInfoSubCommand(RVNKLore plugin) {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "LoreItemInfoSubCommand");
-        this.itemManager = plugin.getItemManager();
+        this.itemManager = plugin.getLoreManager().getItemManager();
     }
 
     public LoreItemInfoSubCommand(RVNKLore plugin, ItemManager itemManager) {
@@ -40,77 +41,42 @@ public class LoreItemInfoSubCommand implements SubCommand {
     public boolean execute(CommandSender sender, String[] args) {
         if (args.length == 0) {
             if (itemManager == null) {
-                sender.sendMessage(ChatColor.RED + "✖ Item system is not available. Please try again later.");
+                sender.sendMessage(org.bukkit.ChatColor.RED + "✖ Item system is not available. Please try again later.");
                 logger.error("ItemManager is null when trying to list items", null);
                 return true;
             }
-            // Delegate to ItemManager for item list, but output here
             List<String> allItems = itemManager.getAllItemNames();
-            sender.sendMessage(ChatColor.GOLD + "Available Items:");
-            if (allItems.isEmpty()) {
-                sender.sendMessage(ChatColor.GRAY + "   No items available.");
-            } else {
-                for (String name : allItems) {
-                    sender.sendMessage(ChatColor.YELLOW + " - " + name);
-                }
-            }
+            DisplayFactory.displayPaginatedList(sender, "Available Items", allItems, 1, 50, s -> org.bukkit.ChatColor.YELLOW + " - " + s);
             return true;
         }
         if (args.length > 1) {
-            sender.sendMessage(ChatColor.RED + "▶ Usage: /lore item info <item_name>");
-            sender.sendMessage(ChatColor.GRAY + "   Display information about a registered item");
+            sender.sendMessage(org.bukkit.ChatColor.RED + "▶ Usage: /lore item info <item_name>");
+            sender.sendMessage(org.bukkit.ChatColor.GRAY + "   Display information about a registered item");
             return true;
         }
-        String itemName = args[0];
+        String itemNameOrId = args[0];
         if (itemManager == null) {
-            sender.sendMessage(ChatColor.RED + "✖ Item system is not available. Please try again later.");
-            logger.error("ItemManager is null when trying to get item info: " + itemName, null);
+            sender.sendMessage(org.bukkit.ChatColor.RED + "✖ Item system is not available. Please try again later.");
+            logger.error("ItemManager is null when trying to get item info: " + itemNameOrId, null);
             return true;
         }
-        // Delegate to ItemManager for info, but output here
-        org.bukkit.inventory.ItemStack item = itemManager.createLoreItem(itemName);
-        if (item == null) {
-            sender.sendMessage(ChatColor.RED + "✖ Item not found: " + itemName);
-            return true;
-        }
-        org.bukkit.inventory.meta.ItemMeta meta = item.getItemMeta();
-        sender.sendMessage(ChatColor.GOLD + "===== Item Info: " + itemName + " =====");
-        sender.sendMessage(ChatColor.YELLOW + "Material: " + item.getType());
-        if (meta != null) {
-            if (meta.hasDisplayName()) {
-                sender.sendMessage(ChatColor.YELLOW + "Display Name: " + meta.getDisplayName());
-            }
-            if (meta.hasLore()) {
-                sender.sendMessage(ChatColor.YELLOW + "Lore:");
-                for (String line : meta.getLore()) {
-                    sender.sendMessage(ChatColor.GRAY + "  " + line);
-                }
-            }
-            if (meta.hasCustomModelData()) {
-                sender.sendMessage(ChatColor.YELLOW + "Custom Model Data: " + meta.getCustomModelData());
-            }
-            if (meta.hasEnchants()) {
-                sender.sendMessage(ChatColor.YELLOW + "Enchantments:");
-                for (java.util.Map.Entry<org.bukkit.enchantments.Enchantment, Integer> entry : meta.getEnchants().entrySet()) {
-                    String enchantName = entry.getKey().toString().replace("Enchantment[", "").replace("]", "");
-                    sender.sendMessage(ChatColor.GRAY + "  " + formatEnchantmentName(enchantName) + " " + entry.getValue());
-                }
-            }
-        }
-        return true;
-    }
 
-    private String formatEnchantmentName(String enchantName) {
-        String[] parts = enchantName.split("_");
-        StringBuilder formatted = new StringBuilder();
-        for (String part : parts) {
-            if (part.length() > 0) {
-                formatted.append(part.substring(0, 1).toUpperCase())
-                         .append(part.substring(1).toLowerCase())
-                         .append(" ");
+        // Try to match by UUID or short UUID for LoreEntry
+       LoreEntry matched = null;
+        for (LoreEntry entry : plugin.getLoreManager().getAllLoreEntries()) {
+            String uuid = entry.getId().toString();
+            if (uuid.equalsIgnoreCase(itemNameOrId) || uuid.substring(0, 8).equalsIgnoreCase(itemNameOrId)) {
+                matched = entry;
+                break;
             }
         }
-        return formatted.toString().trim();
+        if (matched != null) {
+            return DisplayFactory.displayLoreEntry(sender, matched);
+        }
+
+        // Fallback: try to display as item by name
+        org.bukkit.inventory.ItemStack item = itemManager.createLoreItem(itemNameOrId);
+        return DisplayFactory.displayItem(sender, item, itemNameOrId);
     }
 
     @Override

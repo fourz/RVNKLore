@@ -173,10 +173,8 @@ public class CollectionManager {
             if (properties.getRarityLevel() != null) {
                 lore.add("§7Rarity: §e" + properties.getRarityLevel());
             }
-            meta.setLore(lore);
-            if (properties.getCustomModelData() != null) {
-                meta.setCustomModelData(properties.getCustomModelData());
-            }
+            meta.setLore(lore);            
+            meta.setCustomModelData(properties.getCustomModelData());            
             item.setItemMeta(meta);
         }
         logger.debug("Created collection item: " + properties.getDisplayName());

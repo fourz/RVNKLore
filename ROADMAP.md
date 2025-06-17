@@ -302,3 +302,9 @@ We prioritize features based on:
 | Date | Version | Notes |
 |------|---------|-------|
 | April 12, 2025 | 1.0 | Initial roadmap draft |
+
+## Recent Updates
+- Unified item command system with improved permission checks and refined UUID matching.
+- Enhanced database caching and fallback mechanisms in the ItemManager.
+- Updated lore approval and info commands with asynchronous cache updates.
+- Logging improvements implemented across core systems via LogManager.

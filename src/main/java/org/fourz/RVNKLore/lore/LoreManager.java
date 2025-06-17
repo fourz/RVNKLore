@@ -83,9 +83,7 @@ public class LoreManager {
             loreByType.get(entry.getType()).add(entry);
         }
         logger.info("Loaded " + cachedEntries.size() + " lore entries");
-    }
-
-    /**
+    }    /**
      * Add a new lore entry
      * 
      * @param entry The lore entry to add
@@ -111,12 +109,40 @@ public class LoreManager {
             logger.warning("Lore entry validation failed for: " + entry.getName());
             return false;
         }
+        
         // Add to database
         boolean success = plugin.getDatabaseManager().addLoreEntry(entry);
+        
         if (success) {
             cachedEntries.add(entry);
             loreByType.get(entry.getType()).add(entry);
             logger.info("Lore entry added successfully: " + entry.getId());
+              // For ITEM type entries, register the item in the ItemManager
+            if (entry.getType() == LoreType.ITEM && itemManager != null) {
+                try {
+                    // Create basic item properties
+                    org.fourz.RVNKLore.lore.item.ItemProperties itemProps = 
+                        new org.fourz.RVNKLore.lore.item.ItemProperties(
+                            org.bukkit.Material.valueOf("DIAMOND_SWORD"), // Default, should be extracted from entry
+                            entry.getName()
+                        );
+                    
+                    // Set additional properties
+                    itemProps.setLoreEntryId(entry.getId()); // Important: Link to lore entry ID
+                    if (entry.getNbtData() != null) {
+                        itemProps.setNbtData(entry.getNbtData());
+                    }
+                      // Register the item with reference to lore_entry.id
+                    // Use the entry ID to link items to lore entries
+                    java.util.UUID entryUUID = java.util.UUID.fromString(entry.getId());
+                    itemManager.registerLoreItem(entryUUID, itemProps);
+                    
+                    logger.info("Registered item in ItemManager: " + entry.getName() + " with lore entry ID: " + entry.getId());
+                } catch (Exception e) {
+                    logger.warning("Failed to register item in ItemManager: " + e.getMessage());
+                    // Continue even if item registration fails
+                }
+            }
         } else {
             logger.warning("Failed to add lore entry to database: " + entry.getName());
         }
@@ -385,5 +411,23 @@ public class LoreManager {
      */
     public List<LoreEntry> getAllLoreEntries() {
         return new ArrayList<>(cachedEntries);
+    }
+
+    /**
+     * Find lore entries whose name or UUID starts with the given fragment (case-insensitive).
+     *
+     * @param startsWith The string fragment to match at the start of name or UUID
+     * @return A list of matching lore entries
+     */
+    public List<LoreEntry> findLoreEntries(String startsWith) {
+        String fragment = startsWith.toLowerCase();
+        List<LoreEntry> result = new ArrayList<>();
+        for (LoreEntry entry : cachedEntries) {
+            if (entry.getId().toLowerCase().startsWith(fragment) ||
+                entry.getName().toLowerCase().startsWith(fragment)) {
+                result.add(entry);
+            }
+        }
+        return result;
     }
 }

@@ -69,6 +69,11 @@ public class LoreListSubCommand implements SubCommand {
             entries = type != null ? 
                     plugin.getLoreManager().getLoreEntriesByType(type) : 
                     new ArrayList<>(plugin.getDatabaseManager().getAllLoreEntries());
+        } else {
+            // Filter out unapproved entries for non-admins            
+            entries = entries.stream()
+                    .filter(LoreEntry::isApproved)
+                    .collect(Collectors.toList());
         }
 
         // Calculate pagination
@@ -92,7 +97,9 @@ public class LoreListSubCommand implements SubCommand {
                         ChatColor.RED + "[✗]";
                 
                 // Get shortened UUID (first 8 characters)
-                String shortId = entry.getId().substring(0, 8);
+                String uuid = entry.getId().toString();
+                // Fix: Only take substring if long enough
+                String shortId = uuid.length() >= 8 ? uuid.substring(0, 8) : uuid;
                         
                 if (sender.hasPermission("rvnklore.admin")) {
                     sender.sendMessage(approvalStatus + " " + 

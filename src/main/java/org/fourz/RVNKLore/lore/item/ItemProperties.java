@@ -25,10 +25,13 @@ public class ItemProperties {
     private String createdBy;
     private boolean obtainable = true;
     private String rarity = "COMMON";
-    private String description;
     private Map<String, Object> customProperties;
     private Map<String, String> metadata;
     private int databaseId;
+    
+    // Link to lore entry
+    private String loreEntryId;
+    private String nbtData;
     
     // Enchantment properties
     private Map<Enchantment, Integer> enchantments;
@@ -83,8 +86,14 @@ public class ItemProperties {
         return this;
     }
     
-    public Integer getCustomModelData() {
-        return customModelData;
+    /**
+     * Gets the custom model data for this item.
+     * Returns 0 if not set (null).
+     *
+     * @return The custom model data, or 0 if not set
+     */
+    public int getCustomModelData() {
+        return customModelData != null ? customModelData : 0;
     }
     
     public ItemProperties setCustomModelData(Integer customModelData) {
@@ -164,41 +173,23 @@ public class ItemProperties {
         return this;
     }
     
-    public Map<String, String> getMetadata() {
-        return metadata;
+    public String getLoreEntryId() {
+        return loreEntryId;
     }
     
-    public ItemProperties setMetadata(Map<String, String> metadata) {
-        this.metadata = metadata;
+    public ItemProperties setLoreEntryId(String loreEntryId) {
+        this.loreEntryId = loreEntryId;
         return this;
     }
     
-    /**
-     * Add a metadata entry.
-     * 
-     * @param key The metadata key
-     * @param value The metadata value
-     * @return This ItemProperties instance for chaining
-     */
-    public ItemProperties addMetadata(String key, String value) {
-        if (this.metadata == null) {
-            this.metadata = new java.util.HashMap<>();
-        }
-        this.metadata.put(key, value);
+    public String getNbtData() {
+        return nbtData;
+    }
+    
+    public ItemProperties setNbtData(String nbtData) {
+        this.nbtData = nbtData;
         return this;
     }
-    
-    /**
-     * Get a metadata value by key.
-     * 
-     * @param key The metadata key
-     * @return The metadata value, or null if not found
-     */
-    public String getMetadata(String key) {
-        return metadata != null ? metadata.get(key) : null;
-    }
-    
-
     
     public boolean isGlow() {
         return isGlow;
@@ -245,15 +236,6 @@ public class ItemProperties {
         return this;
     }
     
-    public String getDescription() {
-        return description;
-    }
-    
-    public ItemProperties setDescription(String description) {
-        this.description = description;
-        return this;
-    }
-    
     public int getDatabaseId() {
         return databaseId;
     }
@@ -288,6 +270,31 @@ public class ItemProperties {
      */
     public Map<String, String> getAllMetadata() {
         return metadata != null ? metadata : new HashMap<>();
+    }
+    
+    /**
+     * Get a metadata value by key
+     * 
+     * @param key The metadata key
+     * @return The metadata value, or null if not found
+     */
+    public String getMetadata(String key) {
+        return metadata != null ? metadata.get(key) : null;
+    }
+    
+    /**
+     * Set a metadata value
+     * 
+     * @param key The metadata key
+     * @param value The metadata value
+     * @return This ItemProperties instance for chaining
+     */
+    public ItemProperties setMetadata(String key, String value) {
+        if (metadata == null) {
+            metadata = new HashMap<>();
+        }
+        metadata.put(key, value);
+        return this;
     }
     
     /**

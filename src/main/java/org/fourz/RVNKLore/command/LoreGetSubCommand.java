@@ -25,7 +25,7 @@ public class LoreGetSubCommand implements SubCommand {
     @Override
     public boolean execute(CommandSender sender, String[] args) {
         if (args.length < 1) {
-            sender.sendMessage(ChatColor.RED + "Usage: /lore get <id>");
+            sender.sendMessage(ChatColor.RED + "&c▶ Usage: /lore get <id>");
             return true;
         }
 
@@ -35,20 +35,20 @@ public class LoreGetSubCommand implements SubCommand {
         try {
             id = UUID.fromString(idStr);
         } catch (IllegalArgumentException e) {
-            sender.sendMessage(ChatColor.RED + "Invalid UUID format: " + idStr);
+            sender.sendMessage(ChatColor.RED + "&c✖ Invalid UUID format: " + idStr);
             return true;
         }
         
         LoreEntry entry = plugin.getLoreManager().getLoreEntry(id);
         
         if (entry == null) {
-            sender.sendMessage(ChatColor.RED + "No lore entry found with ID: " + idStr);
+            sender.sendMessage(ChatColor.RED + "&c✖ No lore entry found with ID: " + idStr);
             return true;
         }
         
         // If the entry is not approved and the sender is not an admin, deny access
         if (!entry.isApproved() && !sender.hasPermission("rvnklore.admin")) {
-            sender.sendMessage(ChatColor.RED + "That lore entry has not been approved yet.");
+            sender.sendMessage(ChatColor.YELLOW + "&e⚠ That lore entry has not been approved yet.");
             return true;
         }
         
@@ -62,7 +62,7 @@ public class LoreGetSubCommand implements SubCommand {
             } else {
                 // Fallback display if no handler exists
                 player.sendMessage(ChatColor.GOLD + "=== " + entry.getName() + " ===");
-                player.sendMessage(ChatColor.GRAY + "Type: " + ChatColor.YELLOW + entry.getType());
+                player.sendMessage(ChatColor.GRAY + "&7   Type: " + ChatColor.YELLOW + entry.getType());
                 player.sendMessage(ChatColor.WHITE + entry.getDescription());
             }
             
@@ -72,9 +72,9 @@ public class LoreGetSubCommand implements SubCommand {
                 
                 if (handler != null) {
                     player.getInventory().addItem(handler.createLoreItem(entry));
-                    player.sendMessage(ChatColor.GREEN + "Added lore item to your inventory.");
+                    player.sendMessage(ChatColor.GREEN + "&a✓ Added lore item to your inventory.");
                 } else {
-                    player.sendMessage(ChatColor.RED + "Cannot create item for this lore type.");
+                    player.sendMessage(ChatColor.RED + "&c✖ Cannot create item for this lore type.");
                 }
             }
         } else {

@@ -60,13 +60,13 @@ public class EnchantManager {
             }
         }
         
-        if (properties.getCustomModelData() != null) {
-            ItemMeta meta = item.getItemMeta();
-            if (meta != null) {
-                meta.setCustomModelData(properties.getCustomModelData());
-                item.setItemMeta(meta);
-            }
+        
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setCustomModelData(properties.getCustomModelData());
+            item.setItemMeta(meta);
         }
+        
         
         logger.debug("Created enchanted item through EnchantManager: " + displayName);
         return item;

@@ -45,6 +45,7 @@ public class LoreEntry {
         this.type = type;
         this.approved = false;
         this.createdAt = new Timestamp(System.currentTimeMillis());
+        this.submittedBy = "Server"; // Ensure submittedBy is always set
     }
     /**
      * Constructor for creating a new lore entry
@@ -55,7 +56,7 @@ public class LoreEntry {
         this.name = name;
         this.description = description;
         this.nbtData = ""; // Initialize with empty string instead of using undefined variable
-        this.submittedBy = contributor.getName(); // Uncomment this line to set the submitter's name
+        this.submittedBy = contributor != null ? contributor.getName() : "Server";
         this.type = type;
         this.approved = false;
         this.createdAt = new Timestamp(System.currentTimeMillis());
@@ -72,6 +73,7 @@ public class LoreEntry {
         this.type = type;
         this.approved = false;
         this.createdAt = new Timestamp(System.currentTimeMillis());
+        this.submittedBy = "Server"; // Ensure submittedBy is always set
     }
     
     /**
@@ -85,7 +87,7 @@ public class LoreEntry {
         this.description = description;
         this.nbtData = nbtData;
         this.location = location;
-        this.submittedBy = submittedBy;
+        this.submittedBy = submittedBy != null ? submittedBy : "Server";
         this.approved = approved;
         this.createdAt = createdAt;
     }
@@ -101,7 +103,7 @@ public class LoreEntry {
         this.description = description;
         this.nbtData = nbtData;
         this.location = location;
-        this.submittedBy = submittedBy;
+        this.submittedBy = submittedBy != null ? submittedBy : "Server";
         this.approved = approved;
         
         try {
