@@ -19,8 +19,10 @@ import org.fourz.RVNKLore.data.query.SQLiteQueryBuilder;
 import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
+import org.bukkit.Location;
 
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.util.HashMap;
@@ -28,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -38,17 +41,13 @@ import java.util.stream.Collectors;
  * This class handles connection management, query execution, and transaction management.
  */
 public class DatabaseManager {
-    @SuppressWarnings("unused")
     private final RVNKLore plugin;
     private final LogManager logger;
-    @SuppressWarnings("unused")
-    private final ConfigManager configManager; 
     private final ConnectionProvider connectionProvider;
-    private final QueryExecutor queryExecutor;
-    private final QueryBuilder queryBuilder;
     private final DatabaseType databaseType;
-    private final ScheduledExecutorService healthCheckExecutor;
-    private boolean connectionValid = false;
+    private final QueryBuilder queryBuilder;
+    private final DefaultQueryExecutor queryExecutor;
+    private boolean isConnected = false;
     private String lastConnectionError;
     private int reconnectAttempts = 0;
     private static final int MAX_RECONNECT_ATTEMPTS = 5;
@@ -90,8 +89,8 @@ public class DatabaseManager {
         this.queryExecutor = new DefaultQueryExecutor(plugin, connectionProvider);
         
         // Start the connection health check service
-        this.healthCheckExecutor = Executors.newSingleThreadScheduledExecutor();
-        this.healthCheckExecutor.scheduleAtFixedRate(
+        ScheduledExecutorService healthCheckExecutor = Executors.newSingleThreadScheduledExecutor();
+        healthCheckExecutor.scheduleAtFixedRate(
             this::performHealthCheck, 
             30, // Initial delay
             30, // Period
@@ -117,11 +116,11 @@ public class DatabaseManager {
                 createLoreLocationTable(conn);
                 
                 logger.info("Database schema created successfully");
-                connectionValid = true;
+                isConnected = true;
                 reconnectAttempts = 0;
                 
             } catch (SQLException e) {
-                connectionValid = false;
+                isConnected = false;
                 lastConnectionError = e.getMessage();
                 logger.error("Failed to create database schema", e);
             }
@@ -346,6 +345,7 @@ public class DatabaseManager {
         String sql;
         
         if (databaseType == DatabaseType.MYSQL) {
+            // Add spatial columns and index
             sql = "CREATE TABLE IF NOT EXISTS lore_location (" +
                   "id INT AUTO_INCREMENT PRIMARY KEY," +
                   "lore_entry_id INT NOT NULL," +
@@ -361,11 +361,14 @@ public class DatabaseManager {
                   "discovery_radius DOUBLE NOT NULL DEFAULT 10.0," +
                   "created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP," +
                   "updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP," +
+                  "point POINT NOT NULL SRID 0," +
+                  "SPATIAL INDEX idx_location_point (point)," +
                   "FOREIGN KEY (lore_entry_id) REFERENCES lore_entry(id) ON DELETE CASCADE," +
                   "INDEX idx_lore_location_entry_id (lore_entry_id)," +
                   "INDEX idx_lore_location_world (world)" +
                   ") ENGINE=InnoDB";
         } else {
+            // For SQLite, we use R*Tree virtual table for spatial indexing
             sql = "CREATE TABLE IF NOT EXISTS lore_location (" +
                   "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                   "lore_entry_id INTEGER NOT NULL," +
@@ -383,13 +386,25 @@ public class DatabaseManager {
                   "updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP," +
                   "FOREIGN KEY (lore_entry_id) REFERENCES lore_entry(id) ON DELETE CASCADE" +
                   ")";
-            
-            // Create indices in separate statements for SQLite
+
+            String rtreeSql = "CREATE VIRTUAL TABLE IF NOT EXISTS lore_location_rtree USING rtree(" +
+                            "id," +      // Primary key from main table
+                            "minX, maxX," + // X coordinate bounds
+                            "minY, maxY," + // Y coordinate bounds
+                            "minZ, maxZ" +  // Z coordinate bounds
+                            ")";
+
             String[] indexSqls = {
                 "CREATE INDEX IF NOT EXISTS idx_location_lore_entry_id ON lore_location (lore_entry_id)",
                 "CREATE INDEX IF NOT EXISTS idx_location_world ON lore_location (world)"
             };
+
+            // Create R*Tree index
+            try (var stmt = conn.createStatement()) {
+                stmt.execute(rtreeSql);
+            }
             
+            // Create regular indices
             for (String indexSql : indexSqls) {
                 try (var stmt = conn.createStatement()) {
                     stmt.execute(indexSql);
@@ -981,13 +996,13 @@ public class DatabaseManager {
             boolean isHealthy = connectionProvider.isHealthy();
             
             if (isHealthy) {
-                if (!connectionValid) {
+                if (!isConnected) {
                     logger.info("Database connection restored");
                 }
-                connectionValid = true;
+                isConnected = true;
                 reconnectAttempts = 0;
             } else {
-                connectionValid = false;
+                isConnected = false;
                 
                 if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
                     reconnectAttempts++;
@@ -998,7 +1013,7 @@ public class DatabaseManager {
                 }
             }
         } catch (Exception e) {
-            connectionValid = false;
+            isConnected = false;
             logger.error("Error during database health check", e);
         }
     }
@@ -1009,7 +1024,7 @@ public class DatabaseManager {
      * @return True if the connection is valid, false otherwise
      */
     private boolean validateConnection() {
-        return connectionValid || reconnectAttempts < MAX_RECONNECT_ATTEMPTS;
+        return isConnected || reconnectAttempts < MAX_RECONNECT_ATTEMPTS;
     }
     
     /**
@@ -1054,7 +1069,7 @@ public class DatabaseManager {
      * @return True if the connection is valid, false otherwise
      */
     public boolean isConnectionValid() {
-        return connectionValid;
+        return isConnected;
     }
     
     /**
@@ -1070,18 +1085,6 @@ public class DatabaseManager {
      * Close the database connection and clean up resources.
      */
     public void close() {
-        if (healthCheckExecutor != null) {
-            healthCheckExecutor.shutdown();
-            try {
-                if (!healthCheckExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
-                    healthCheckExecutor.shutdownNow();
-                }
-            } catch (InterruptedException e) {
-                healthCheckExecutor.shutdownNow();
-                Thread.currentThread().interrupt();
-            }
-        }
-        
         if (connectionProvider != null) {
             try {
                 connectionProvider.close();
@@ -1102,5 +1105,223 @@ public class DatabaseManager {
         return legacyEntries.stream()
                           .map(LoreEntryDTO::fromLoreEntry)
                           .collect(Collectors.toList());
+    }
+
+    /**
+     * Find lore entries near a location using spatial index.
+     * Uses different optimized queries for MySQL (POINT type + spatial index) vs SQLite (R*Tree index)
+     *
+     * @param world World name
+     * @param x Center X coordinate
+     * @param y Center Y coordinate
+     * @param z Center Z coordinate
+     * @param radius Search radius in blocks
+     * @return A future containing a list of nearby lore entry DTOs
+     */
+    public CompletableFuture<List<LoreEntryDTO>> findNearbyLoreEntries(String world, double x, double y, double z, double radius) {
+        if (!validateConnection()) {
+            return CompletableFuture.failedFuture(
+                new SQLException("Database connection is not valid")
+            );
+        }
+
+        QueryBuilder query;
+        try {
+            if (databaseType == DatabaseType.MYSQL) {
+                // Use MySQL spatial index with ST_Distance_Sphere
+                query = queryBuilder.select("e.*")
+                    .from("lore_entry e")
+                    .join("lore_location l ON l.lore_entry_id = e.id")
+                    .where("l.world = ?", world)
+                    .and("ST_Distance_Sphere(l.point, POINT(?, ?))", x, z)
+                    .and("ABS(l.y - ?) <= ?", y, radius)
+                    .orderBy("ST_Distance_Sphere(l.point, POINT(?, ?))", false);
+            } else {
+                // Use SQLite R*Tree index
+                query = queryBuilder.select("e.*")
+                    .from("lore_entry e")
+                    .join("lore_location l ON l.lore_entry_id = e.id")
+                    .join("lore_location_rtree r ON r.id = l.id")
+                    .where("l.world = ?", world)
+                    .and("r.minX >= ?", x - radius)
+                    .and("r.maxX <= ?", x + radius)
+                    .and("r.minY >= ?", y - radius)
+                    .and("r.maxY <= ?", y + radius)
+                    .and("r.minZ >= ?", z - radius)
+                    .and("r.maxZ <= ?", z + radius);
+            }
+            
+            return queryExecutor.executeQueryList(query, LoreEntryDTO.class);
+        } catch (Exception e) {
+            return CompletableFuture.failedFuture(e);
+        }
+    }
+    
+    /**
+     * Update a lore location's coordinates in an efficient batched way
+     * 
+     * @param locationUpdates Map of location IDs to their new coordinates (x,y,z)
+     * @return A future completing when the batch update is done
+     */
+    public CompletableFuture<Void> batchUpdateLocations(Map<Integer, Location> locationUpdates) {
+        if (!validateConnection()) {
+            return CompletableFuture.failedFuture(
+                new SQLException("Database connection is not valid")
+            );
+        }
+
+        return CompletableFuture.runAsync(() -> {
+            String sql;
+            if (databaseType == DatabaseType.MYSQL) {
+                sql = "UPDATE lore_location SET x = ?, y = ?, z = ?, point = POINT(?, ?) WHERE id = ?";
+            } else {
+                sql = "UPDATE lore_location SET x = ?, y = ?, z = ? WHERE id = ?";
+            }
+
+            try {
+                Connection conn = getDatabaseConnection();
+                conn.setAutoCommit(false);
+                try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                    for (Map.Entry<Integer, Location> update : locationUpdates.entrySet()) {
+                        Location loc = update.getValue();
+                        stmt.setDouble(1, loc.getX());
+                        stmt.setDouble(2, loc.getY());
+                        stmt.setDouble(3, loc.getZ());
+                        if (databaseType == DatabaseType.MYSQL) {
+                            stmt.setDouble(4, loc.getX());
+                            stmt.setDouble(5, loc.getZ());
+                            stmt.setInt(6, update.getKey());
+                        } else {
+                            stmt.setInt(4, update.getKey());
+                        }
+                        stmt.addBatch();
+                    }
+                    stmt.executeBatch();
+                }
+
+                // For SQLite, update the R*Tree index
+                if (databaseType == DatabaseType.SQLITE) {
+                    sql = "INSERT OR REPLACE INTO lore_location_rtree (id, minX, maxX, minY, maxY, minZ, maxZ) " +
+                          "SELECT id, x, x, y, y, z, z FROM lore_location WHERE id = ?";
+                    try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                        for (int id : locationUpdates.keySet()) {
+                            stmt.setInt(1, id);
+                            stmt.addBatch();
+                        }
+                        stmt.executeBatch();
+                    }
+                }
+
+                conn.commit();
+            } catch (SQLException e) {
+                logger.error("Failed to batch update locations", e);
+                try {
+                    Connection conn = getDatabaseConnection();
+                    conn.rollback();
+                } catch (SQLException rollbackEx) {
+                    logger.error("Failed to rollback transaction", rollbackEx);
+                }
+                throw new CompletionException(e);
+            }
+        });
+    }
+    
+    /**
+     * Begin a new database transaction
+     * 
+     * @return A future containing the transaction object
+     */
+    public CompletableFuture<DatabaseTransaction> beginTransaction() {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                Connection conn = getDatabaseConnection();
+                conn.setAutoCommit(false);
+                return new DatabaseTransaction(conn);
+            } catch (SQLException e) {
+                logger.error("Failed to begin transaction", e);
+                throw new CompletionException(e);
+            }
+        });
+    }
+    
+    /**
+     * Commit a transaction
+     * 
+     * @param transaction The transaction to commit
+     * @return A future that completes when the commit is done
+     */
+    public CompletableFuture<Void> commitTransaction(DatabaseTransaction transaction) {
+        return CompletableFuture.runAsync(() -> {
+            try {
+                transaction.getConnection().commit();
+            } catch (SQLException e) {
+                logger.error("Failed to commit transaction", e);
+                throw new CompletionException(e);
+            }
+        });
+    }
+    
+    /**
+     * Rollback a transaction
+     * 
+     * @param transaction The transaction to rollback
+     * @return A future that completes when the rollback is done
+     */
+    public CompletableFuture<Void> rollbackTransaction(DatabaseTransaction transaction) {
+        return CompletableFuture.runAsync(() -> {
+            try {
+                transaction.getConnection().rollback();
+            } catch (SQLException e) {
+                logger.error("Failed to rollback transaction", e);
+                throw new CompletionException(e);
+            }
+        });
+    }
+    
+    /**
+     * Clear all lore submissions
+     * 
+     * @return A future that completes when clearing is done
+     */
+    public CompletableFuture<Void> clearAllSubmissions() {
+        if (!validateConnection()) {
+            return CompletableFuture.failedFuture(
+                new SQLException("Database connection is not valid")
+            );
+        }
+        
+        QueryBuilder query = queryBuilder.deleteFrom("lore_submission");
+        return queryExecutor.executeUpdate(query).thenApply(v -> null);
+    }
+    
+    /**
+     * Clear all lore entries
+     * 
+     * @return A future that completes when clearing is done
+     */
+    public CompletableFuture<Void> clearAllEntries() {
+        if (!validateConnection()) {
+            return CompletableFuture.failedFuture(
+                new SQLException("Database connection is not valid")
+            );
+        }
+        
+        QueryBuilder query = queryBuilder.deleteFrom("lore_entry");
+        return queryExecutor.executeUpdate(query).thenApply(v -> null);
+    }
+
+    /**
+     * Simple wrapper class for database transactions
+     */
+    public static class DatabaseTransaction {
+        private final Connection connection;
+        
+        public DatabaseTransaction(Connection connection) {
+            this.connection = connection;
+        }
+        
+        public Connection getConnection() {
+            return connection;
+        }
     }
 }

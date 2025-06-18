@@ -1,16 +1,20 @@
 package org.fourz.RVNKLore.lore;
 
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.lore.item.ItemManager;
+import org.fourz.RVNKLore.lore.item.ItemProperties;
 import org.fourz.RVNKLore.data.DatabaseManager;
 import org.fourz.RVNKLore.data.dto.LoreEntryDTO;
 import org.fourz.RVNKLore.data.dto.LoreSubmissionDTO;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.stream.Collectors;
+import java.sql.SQLException;
 import java.sql.Timestamp;
 
 /**
@@ -66,8 +70,6 @@ public class LoreManager {
             
             // First load entries from database (doesn't require handlers)
             loadLoreEntries();
-            // Then create the LoreFinder (should be after entries are loaded)
-            this.loreFinder = new LoreFinder(plugin, this);
             logger.info("Lore system initialized successfully");
         } catch (Exception e) {
             logger.error("Error initializing lore system", e);
@@ -160,21 +162,77 @@ public class LoreManager {
                 submissionDto.setContentVersion(1);
                 submissionDto.setCurrentVersion(true);
                 submissionDto.setContent(entry.getDescription());
-                
+
                 return databaseManager.saveLoreSubmission(submissionDto)
-                    .thenApply(submissionId -> {
-                        // Add to cache
-                        entry.setNumericId(entryId);
-                        cachedEntries.add(entry);
-                        loreByType.get(entry.getType()).add(entry);
-                        
-                        // For ITEM type entries, register with ItemManager
+                    .thenCompose(submissionId -> {
+                        // Handle ITEM type entries with ItemManager
                         if (entry.getType() == LoreType.ITEM && itemManager != null) {
-                            // TODO: Create item properties and register with ItemManager
+                            try {
+                                Map<String, String> metadata = entry.getMetadata();
+                                Material material = Material.valueOf(metadata.getOrDefault("material", "BOOK"));
+                                String displayName = entry.getName();
+                                
+                                // Create ItemProperties with required base properties
+                                ItemProperties itemProps = new ItemProperties(material, displayName);
+                                
+                                // Set additional properties
+                                itemProps.setLoreEntryId(String.valueOf(entryId));
+                                itemProps.setCustomModelData(Integer.parseInt(metadata.getOrDefault("custom_model_data", "0")));
+                                itemProps.setRarity(metadata.getOrDefault("rarity", "COMMON"));
+                                itemProps.setNbtData(entry.getNbtData());
+                                itemProps.setCreatedBy(entry.getSubmittedBy());
+                                itemProps.setCreatedAt(entry.getSubmissionDate().getTime());
+                                
+                                // Add lore description
+                                List<String> lore = Arrays.asList(entry.getDescription().split("\n"));
+                                itemProps.setLore(lore);
+                                
+                                // Add metadata
+                                for (Map.Entry<String, String> meta : metadata.entrySet()) {
+                                    itemProps.setMetadata(meta.getKey(), meta.getValue());
+                                }
+
+                                // Special handling for head items
+                                if (material == Material.PLAYER_HEAD) {
+                                    String headType = metadata.getOrDefault("head_type", "");
+                                    if (headType.equals("player")) {
+                                        itemProps.setOwnerName(metadata.get("player_name"));
+                                    } else if (headType.equals("custom")) {
+                                        itemProps.setTextureData(metadata.get("texture_data"));
+                                    }
+                                }
+
+                                // Register the item with the ItemManager
+                                return itemManager.registerLoreItem(UUID.fromString(entry.getId()), itemProps)
+                                    .thenApply(itemSuccess -> {
+                                        if (itemSuccess) {
+                                            // Add to cache only after item registration succeeds
+                                            entry.setNumericId(entryId);
+                                            cachedEntries.add(entry);
+                                            loreByType.get(entry.getType()).add(entry);
+                                            logger.info("Lore item registered successfully: " + entry.getName());
+                                            return true;
+                                        } else {
+                                            logger.error("Failed to register lore item: " + entry.getName());
+                                            return false;
+                                        }
+                                    })
+                                    .exceptionally(e -> {
+                                        logger.error("Error registering lore item: " + entry.getName(), e);
+                                        return false;
+                                    });
+                            } catch (Exception e) {
+                                logger.error("Error creating item properties for: " + entry.getName(), e);
+                                return CompletableFuture.completedFuture(false);
+                            }
+                        } else {
+                            // For non-item entries, just add to cache
+                            entry.setNumericId(entryId);
+                            cachedEntries.add(entry);
+                            loreByType.get(entry.getType()).add(entry);
+                            logger.info("Lore entry added successfully: " + entry.getName());
+                            return CompletableFuture.completedFuture(true);
                         }
-                        
-                        logger.info("Lore entry added successfully: " + entry.getName());
-                        return true;
                     });
             })
             .exceptionally(e -> {
@@ -290,87 +348,77 @@ public class LoreManager {
     }
 
     /**
-     * Find lore entries near a location
+     * Find lore entries near a location, using database spatial indexing for efficiency
      * 
      * @param location The location to search near
      * @param radius The search radius in blocks
-     * @return A list of nearby lore entries
+     * @return A future containing a list of nearby lore entries
      */
-    public List<LoreEntry> findNearbyLoreEntries(Location location, double radius) {
-        if (location == null) {
-            return new ArrayList<>();
+    public CompletableFuture<List<LoreEntry>> findNearbyLoreEntries(Location location, double radius) {
+        if (location == null || location.getWorld() == null) {
+            return CompletableFuture.completedFuture(new ArrayList<>());
         }
 
-        // For now, filter the cache. In the future, this could be a database query with spatial index
-        return cachedEntries.stream()
-            .filter(entry -> entry.getLocation() != null && 
-                           entry.getLocation().getWorld().equals(location.getWorld()) &&
-                           entry.getLocation().distance(location) <= radius)
-            .collect(Collectors.toList());
+        return databaseManager.findNearbyLoreEntries(
+                location.getWorld().getName(),
+                location.getX(), 
+                location.getY(), 
+                location.getZ(),
+                radius
+            )
+            .thenApply(dtos -> dtos.stream()
+                .map(dto -> {
+                    try {
+                        return databaseManager.getCurrentSubmission(dto.getId())
+                            .thenApply(submissionDto -> {
+                                if (submissionDto != null) {
+                                    return convertDTOsToLoreEntry(dto, submissionDto);
+                                }
+                                return null;
+                            })
+                            .get();  // Block on individual entry conversion
+                    } catch (Exception e) {
+                        logger.error("Error fetching submission for lore entry " + dto.getId(), e);
+                        return null;
+                    }
+                })
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList())
+            );
     }
-
+    
     /**
-     * Create a new version of a lore entry
+     * Update locations for multiple lore entries efficiently in a batch
      * 
-     * @param entryId The ID of the entry to version
-     * @param content The new content
-     * @param submitter The UUID of the submitter
-     * @return A CompletableFuture that will complete with true if successful
+     * @param locationUpdates Map of lore entry IDs to their new locations
+     * @return A future that completes when the batch update is done
      */
-    public CompletableFuture<Boolean> createNewVersion(int entryId, String content, String submitter) {
-        return databaseManager.getCurrentSubmission(entryId)
-            .thenCompose(currentSubmission -> {
-                if (currentSubmission == null) {
-                    logger.warning("No current submission found for entry: " + entryId);
-                    return CompletableFuture.completedFuture(false);
-                }
-
-                // Set current version to false
-                currentSubmission.setCurrentVersion(false);
-                
-                // Create new version
-                LoreSubmissionDTO newSubmission = new LoreSubmissionDTO();
-                newSubmission.setEntryId(entryId);
-                newSubmission.setSlug("lore-" + entryId + "-" + System.currentTimeMillis());
-                newSubmission.setVisibility(currentSubmission.getVisibility());
-                newSubmission.setStatus("ACTIVE");
-                newSubmission.setSubmitterUuid(submitter);
-                newSubmission.setCreatedBy(submitter);
-                newSubmission.setSubmissionDate(new Timestamp(System.currentTimeMillis()));
-                newSubmission.setApprovalStatus("PENDING");
-                newSubmission.setContentVersion(currentSubmission.getContentVersion() + 1);
-                newSubmission.setCurrentVersion(true);
-                newSubmission.setContent(content);
-                
-                // Save both changes in order
-                return databaseManager.saveLoreSubmission(currentSubmission)
-                    .thenCompose(oldId -> databaseManager.saveLoreSubmission(newSubmission))
-                    .thenApply(newId -> {
-                        // Update cache
-                        Optional<LoreEntry> entry = cachedEntries.stream()
-                            .filter(e -> e.getNumericId() == entryId)
-                            .findFirst();
-                            
-                        entry.ifPresent(e -> {
-                            e.setDescription(content);
-                            e.setApproved(false);
-                        });
-                        
-                        logger.info("Created new version for lore entry: " + entryId);
-                        return true;
-                    });
-            })
+    public CompletableFuture<Void> batchUpdateLocations(Map<Integer, Location> locationUpdates) {
+        // Update both cache and database
+        locationUpdates.forEach((id, location) -> {
+            cachedEntries.stream()
+                .filter(entry -> entry.getNumericId() == id)
+                .forEach(entry -> entry.setLocation(location));
+        });
+        
+        return databaseManager.batchUpdateLocations(locationUpdates)
             .exceptionally(e -> {
-                logger.error("Error creating new version for entry: " + entryId, e);
-                return false;
+                logger.error("Failed to batch update locations", e);
+                // Revert cache updates on failure
+                locationUpdates.forEach((id, location) -> {
+                    cachedEntries.stream()
+                        .filter(entry -> entry.getNumericId() == id)
+                        .forEach(entry -> entry.setLocation(null));
+                });
+                throw new CompletionException(e);
             });
     }
-
+    
     /**
-     * Clear all lore entries from cache and optionally the database
+     * Clear all lore entries from database and cache
      * 
-     * @param clearDatabase If true, also clears entries from the database
-     * @return A CompletableFuture that will complete when the operation is done
+     * @param clearDatabase Whether to clear entries from the database as well
+     * @return A future that completes when clearing is done
      */
     public CompletableFuture<Void> clearAllLore(boolean clearDatabase) {
         cachedEntries.clear();
@@ -379,26 +427,83 @@ public class LoreManager {
         }
         
         if (clearDatabase) {
-            // This would require implementing a clearAll method in DatabaseManager
-            return CompletableFuture.runAsync(() -> {
-                logger.warning("Database clearing not implemented yet");
-            });
+            // Clear database in a transaction
+            return databaseManager.beginTransaction()
+                .thenCompose(tx -> {
+                    // First clear submissions to maintain referential integrity
+                    return databaseManager.clearAllSubmissions()
+                        .thenCompose(v -> {
+                            // Then clear entries
+                            return databaseManager.clearAllEntries()
+                                .thenCompose(v2 -> {
+                                    // Commit transaction
+                                    return databaseManager.commitTransaction(tx);
+                                })
+                                .exceptionally(e -> {
+                                    logger.error("Failed to clear lore entries", e);
+                                    databaseManager.rollbackTransaction(tx);
+                                    throw new CompletionException(e);
+                                });
+                        });
+                });
         }
         
         return CompletableFuture.completedFuture(null);
     }
 
     /**
-     * Get a lore entry by name
+     * Remove a specific lore entry
      * 
-     * @param name The name to search for
-     * @return The matching entry, or null if not found
+     * @param id The numeric ID of the entry to remove
+     * @return A CompletableFuture that will complete with true if successful
      */
-    public LoreEntry getLoreEntryByName(String name) {
-        if (name == null) return null;
-        return cachedEntries.stream()
-            .filter(entry -> name.equals(entry.getName()))
-            .findFirst()
-            .orElse(null);
+    public CompletableFuture<Boolean> removeLoreEntry(int id) {
+        return databaseManager.getLoreEntry(id)
+            .thenCompose(entryDto -> {
+                if (entryDto == null) {
+                    logger.warning("Attempted to remove non-existent lore entry: " + id);
+                    return CompletableFuture.completedFuture(false);
+                }
+                
+                return databaseManager.getCurrentSubmission(id)
+                    .thenCompose(submissionDto -> {
+                        if (submissionDto == null) {
+                            logger.warning("No submission found for lore entry: " + id);
+                            return CompletableFuture.completedFuture(false);
+                        }
+
+                        // Handle ITEM type entries - remove from ItemManager first
+                        if (entryDto.getEntryType().equals(LoreType.ITEM.name()) && itemManager != null) {
+                            LoreEntry entry = convertDTOsToLoreEntry(entryDto, submissionDto);
+                            return itemManager.unregisterLoreItem(UUID.fromString(entry.getId()))
+                                .thenCompose(itemSuccess -> {
+                                    if (!itemSuccess) {
+                                        logger.warning("Failed to unregister lore item: " + id);
+                                    }
+                                    // Continue with database removal even if item unregister fails
+                                    return databaseManager.deleteLoreEntry(id);
+                                });
+                        } else {
+                            // For non-item entries, just remove from database
+                            return databaseManager.deleteLoreEntry(id);
+                        }
+                    })
+                    .thenApply(success -> {
+                        if (success) {
+                            // Remove from cache
+                            cachedEntries.removeIf(entry -> entry.getNumericId() == id);
+                            for (List<LoreEntry> entries : loreByType.values()) {
+                                entries.removeIf(entry -> entry.getNumericId() == id);
+                            }
+                            logger.info("Lore entry removed successfully: " + id);
+                            return true;
+                        }
+                        return false;
+                    });
+            })
+            .exceptionally(e -> {
+                logger.error("Error removing lore entry: " + id, e);
+                return false;
+            });
     }
 }
