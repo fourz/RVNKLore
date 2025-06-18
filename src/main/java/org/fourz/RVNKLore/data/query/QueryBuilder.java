@@ -171,4 +171,14 @@ public interface QueryBuilder {
      * @return Array of parameter values
      */
     Object[] getParameters();
+    
+    /**
+     * Create a QueryBuilder with a custom SQL query.
+     * Useful for complex queries or statements that don't fit the builder pattern.
+     * 
+     * @param sql The raw SQL query
+     * @param params Optional parameters for the query
+     * @return This QueryBuilder with the custom SQL
+     */
+    QueryBuilder custom(String sql, Object... params);
 }

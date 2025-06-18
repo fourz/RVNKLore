@@ -14,8 +14,7 @@ public class MySQLQueryBuilder implements QueryBuilder {
     private enum QueryType {
         SELECT, INSERT, UPDATE, DELETE
     }
-    
-    private QueryType queryType;
+      private QueryType queryType;
     private String table;
     private List<String> columns = new ArrayList<>();
     private List<Object> parameters = new ArrayList<>();
@@ -29,6 +28,7 @@ public class MySQLQueryBuilder implements QueryBuilder {
     private Integer limitValue;
     private Integer offsetValue;
     private boolean hasWhere = false;
+    private String customSql = null;
 
     public MySQLQueryBuilder() {
         // Default constructor
@@ -170,10 +170,12 @@ public class MySQLQueryBuilder implements QueryBuilder {
     public QueryBuilder leftJoin(String table, String condition) {
         joinClause.append(" LEFT JOIN ").append(table).append(" ON ").append(condition);
         return this;
-    }
-
-    @Override
+    }    @Override
     public String build() {
+        if (customSql != null) {
+            return customSql;
+        }
+        
         StringBuilder query = new StringBuilder();
         
         switch (queryType) {
@@ -293,9 +295,7 @@ public class MySQLQueryBuilder implements QueryBuilder {
     @Override
     public Object[] getParameters() {
         return parameters.toArray();
-    }
-
-    /**
+    }    /**
      * Creates an upsert query for MySQL (INSERT ... ON DUPLICATE KEY UPDATE).
      * This is MySQL-specific functionality.
      * 
@@ -330,6 +330,27 @@ public class MySQLQueryBuilder implements QueryBuilder {
             @Override
             public Object[] getParameters() {
                 return MySQLQueryBuilder.this.getParameters();
+            }
+        };
+    }
+    
+    @Override
+    public QueryBuilder custom(String sql, Object... params) {
+        final String customSql = sql;
+        final List<Object> customParams = new ArrayList<>();
+        if (params != null) {
+            customParams.addAll(Arrays.asList(params));
+        }
+        
+        return new MySQLQueryBuilder() {
+            @Override
+            public String build() {
+                return customSql;
+            }
+            
+            @Override
+            public Object[] getParameters() {
+                return customParams.toArray();
             }
         };
     }

@@ -340,4 +340,25 @@ public class SQLiteQueryBuilder implements QueryBuilder {
             }
         };
     }
+
+    @Override
+    public QueryBuilder custom(String sql, Object... params) {
+        final String customSql = sql;
+        final List<Object> customParams = new ArrayList<>();
+        if (params != null) {
+            customParams.addAll(Arrays.asList(params));
+        }
+        
+        return new SQLiteQueryBuilder() {
+            @Override
+            public String build() {
+                return customSql;
+            }
+            
+            @Override
+            public Object[] getParameters() {
+                return customParams.toArray();
+            }
+        };
+    }
 }

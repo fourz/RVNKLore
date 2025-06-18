@@ -1,18 +1,63 @@
 package org.fourz.RVNKLore.config.dto;
 
 /**
- * DTO for SQLite configuration settings.
- * Used to transfer SQLite config data from configuration to consumers.
+ * DTO for SQLite database connection settings.
+ * Contains configuration specific to SQLite connections.
  */
 public class SQLiteSettingsDTO {
-    private final String filePath;
-    private final String tablePrefix;
+    private final String database;
+    private final boolean walMode;
+    private final int busyTimeout;
+    private final int cacheSize;
 
-    public SQLiteSettingsDTO(String filePath, String tablePrefix) {
-        this.filePath = filePath;
-        this.tablePrefix = tablePrefix;
+    /**
+     * Create a new SQLite settings DTO.
+     *
+     * @param database The database filename
+     * @param walMode Whether to use WAL journal mode
+     * @param busyTimeout The busy timeout in milliseconds
+     * @param cacheSize The cache size in pages (-4000 means 4MB)
+     */
+    public SQLiteSettingsDTO(String database, boolean walMode, int busyTimeout, int cacheSize) {
+        this.database = database;
+        this.walMode = walMode;
+        this.busyTimeout = busyTimeout;
+        this.cacheSize = cacheSize;
     }
 
-    public String getFilePath() { return filePath; }
-    public String getTablePrefix() { return tablePrefix; }
+    /**
+     * Get the database filename.
+     *
+     * @return The database filename
+     */
+    public String getDatabase() {
+        return database;
+    }
+
+    /**
+     * Check if WAL journal mode should be used.
+     *
+     * @return True if WAL journal mode should be used
+     */
+    public boolean isWalMode() {
+        return walMode;
+    }
+
+    /**
+     * Get the busy timeout in milliseconds.
+     *
+     * @return The busy timeout
+     */
+    public int getBusyTimeout() {
+        return busyTimeout;
+    }
+
+    /**
+     * Get the cache size in pages.
+     *
+     * @return The cache size
+     */
+    public int getCacheSize() {
+        return cacheSize;
+    }
 }
