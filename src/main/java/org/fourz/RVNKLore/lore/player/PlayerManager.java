@@ -4,14 +4,15 @@ import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.data.dto.NameChangeRecordDTO;
+import org.fourz.RVNKLore.data.dto.PlayerDTO;
 import org.fourz.RVNKLore.debug.LogManager;
-import org.fourz.RVNKLore.lore.LoreEntry;
-import org.fourz.RVNKLore.lore.LoreType;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Manager for player-related lore operations
@@ -22,14 +23,12 @@ import java.util.UUID;
  * - Player lore entry lookup and retrieval
  */
 public class PlayerManager {
-    private final RVNKLore plugin;
     private final LogManager logger;
     private final PlayerRepository playerRepository;
     
     public PlayerManager(RVNKLore plugin) {
-        this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "PlayerManager");
-        this.playerRepository = new PlayerRepository(plugin, plugin.getDatabaseManager().getDatabaseConnection());
+        this.playerRepository = new PlayerRepository(plugin, plugin.getDatabaseManager());
     }
     
     /**
@@ -43,9 +42,9 @@ public class PlayerManager {
      * Check if a player already has a lore entry
      * 
      * @param playerUuid The UUID of the player to check
-     * @return true if the player has a lore entry, false otherwise
+     * @return CompletableFuture that completes with true if the player has a lore entry
      */
-    public boolean playerExists(UUID playerUuid) {
+    public CompletableFuture<Boolean> playerExists(UUID playerUuid) {
         return playerRepository.playerExists(playerUuid);
     }
     
@@ -53,9 +52,9 @@ public class PlayerManager {
      * Get the player's current name stored in the lore system
      * 
      * @param playerUuid The UUID of the player
-     * @return The player's name, or null if not found
+     * @return CompletableFuture containing the player's name, or null if not found
      */
-    public String getStoredPlayerName(UUID playerUuid) {
+    public CompletableFuture<String> getStoredPlayerName(UUID playerUuid) {
         return playerRepository.getStoredPlayerName(playerUuid);
     }
     
@@ -65,87 +64,89 @@ public class PlayerManager {
      * - Checks for and records name changes if the player exists
      * 
      * @param player The player who joined
-     * @return true if any action was taken, false otherwise
+     * @return CompletableFuture that completes with true if any action was taken
      */
-    public boolean processPlayerJoin(Player player) {
+    public CompletableFuture<Boolean> processPlayerJoin(Player player) {
         UUID playerUuid = player.getUniqueId();
         String currentName = player.getName();
         
-        try {
-            if (!playerExists(playerUuid)) {
-                // New player, create first join entry
-                return createPlayerLoreEntry(player);
-            } else {
-                // Existing player, check for name change
-                String storedName = getStoredPlayerName(playerUuid);
-                if (storedName != null && !storedName.equals(currentName)) {
-                    return createNameChangeLoreEntry(player, storedName);
+        return playerExists(playerUuid)
+            .thenCompose(exists -> {
+                if (!exists) {
+                    // New player, create first join entry
+                    return createPlayerLoreEntry(player);
+                } else {
+                    // Existing player, check for name change
+                    return getStoredPlayerName(playerUuid)
+                        .thenCompose(storedName -> {
+                            if (storedName != null && !storedName.equals(currentName)) {
+                                return createNameChangeLoreEntry(player, storedName);
+                            }
+                            return CompletableFuture.completedFuture(false);
+                        });
                 }
-            }
-        } catch (Exception e) {
-            logger.error("Error processing player join: " + player.getName(), e);
-        }
-        
-        return false;
+            })
+            .exceptionally(e -> {
+                logger.error("Error processing player join: " + player.getName(), e);
+                return false;
+            });
     }
     
     /**
      * Process a new player joining for the first time
      * 
      * @param player The player who joined
-     * @return true if the entry was created, false otherwise
+     * @return CompletableFuture that completes with true if the entry was created
      */
-    public boolean processFirstTimeJoin(Player player) {
+    public CompletableFuture<Boolean> processFirstTimeJoin(Player player) {
         UUID playerUuid = player.getUniqueId();
         
-        if (!playerExists(playerUuid)) {
-            return createFirstJoinLoreEntry(player);
-        }
-        
-        return false;
+        return playerExists(playerUuid)
+            .thenCompose(exists -> {
+                if (!exists) {
+                    return createFirstJoinLoreEntry(player);
+                }
+                return CompletableFuture.completedFuture(false);
+            });
     }
     
     /**
      * Create a lore entry for a player's character
      * 
      * @param player The player to create an entry for
-     * @return true if the entry was created successfully, false otherwise
+     * @return CompletableFuture that completes with true if successful
      */
-    public boolean createPlayerLoreEntry(Player player) {
+    public CompletableFuture<Boolean> createPlayerLoreEntry(Player player) {
         logger.info("Creating player lore entry for: " + player.getName());
         
         try {
-            // Create a guaranteed unique entry name with UUID
-            String uniqueName = "Player_" + player.getUniqueId().toString();
+            PlayerDTO dto = new PlayerDTO();
+            dto.setPlayerUuid(player.getUniqueId());
+            dto.setPlayerName(player.getName());
+            dto.setFirstJoinDate(new Date());
+            dto.setLocation(formatLocation(player.getLocation()));
+            dto.getMetadata().put("entry_type", "player_character");
+            dto.getMetadata().put("description", "A player who joined the realm on " + 
+                                java.time.LocalDate.now().toString());
+            dto.setApproved(true);
             
-            LoreEntry entry = new LoreEntry();
-            entry.setType(LoreType.PLAYER);
-            entry.setName(uniqueName);
-            entry.setDescription("A player who joined the realm on " + 
-                               java.time.LocalDate.now().toString());
-            entry.setLocation(player.getLocation());
-            entry.setSubmittedBy("Server");
-            
-            // Add metadata
-            entry.addMetadata("player_uuid", player.getUniqueId().toString());
-            entry.addMetadata("player_name", player.getName());
-            entry.addMetadata("first_join_date", System.currentTimeMillis() + "");
-            entry.addMetadata("entry_type", "player_character");
-            
-            // Save to database - automatically approved since this is server-generated
-            entry.setApproved(true);
-            boolean success = plugin.getLoreManager().addLoreEntry(entry);
-            
-            if (success) {
-                logger.info("Player lore entry created for: " + player.getName());
-            } else {
-                logger.warning("Failed to create player lore entry for: " + player.getName());
-            }
-            
-            return success;
+            return playerRepository.savePlayer(dto)
+                .thenApply(id -> {
+                    if (id != null) {
+                        logger.info("Player lore entry created for: " + player.getName());
+                        return true;
+                    } else {
+                        logger.warning("Failed to create player lore entry for: " + player.getName());
+                        return false;
+                    }
+                })
+                .exceptionally(e -> {
+                    logger.error("Error creating player lore entry", e);
+                    return false;
+                });
         } catch (Exception e) {
             logger.error("Error creating player lore entry", e);
-            return false;
+            return CompletableFuture.completedFuture(false);
         }
     }
     
@@ -153,53 +154,44 @@ public class PlayerManager {
      * Create a lore entry for a player's first join
      * 
      * @param player The player who joined for the first time
-     * @return true if the entry was created successfully, false otherwise
+     * @return CompletableFuture that completes with true if successful
      */
-    public boolean createFirstJoinLoreEntry(Player player) {
+    public CompletableFuture<Boolean> createFirstJoinLoreEntry(Player player) {
         logger.info("Creating first join lore entry for: " + player.getName());
         
         try {
-            // Create a guaranteed unique entry name with UUID
-            String uniqueName = "FirstJoin_" + player.getUniqueId().toString();
-            
-            LoreEntry entry = new LoreEntry();
-            entry.setType(LoreType.PLAYER);
-            entry.setName(uniqueName);
-            
-            // Format date using SimpleDateFormat for consistent display
             SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
             String dateString = dateFormat.format(new Date());
             
-            entry.setDescription(player.getName() + " first set foot in our world on " + dateString + ".\n" +
-                               "Welcome to a new adventurer in our realm!");
-            entry.setLocation(player.getLocation());
-            entry.setSubmittedBy("Server");
+            PlayerDTO dto = new PlayerDTO();
+            dto.setPlayerUuid(player.getUniqueId());
+            dto.setPlayerName(player.getName());
+            dto.setFirstJoinDate(new Date());
+            dto.setLocation(formatLocation(player.getLocation()));
+            dto.getMetadata().put("entry_type", "first_join");
+            dto.getMetadata().put("description", player.getName() + " first set foot in our world on " + dateString + ".\n" +
+                                              "Welcome to a new adventurer in our realm!");
+            dto.getMetadata().put("join_location", formatLocation(player.getLocation()));
+            dto.setApproved(true);
             
-            // Add essential metadata
-            entry.addMetadata("player_uuid", player.getUniqueId().toString());
-            entry.addMetadata("player_name", player.getName());
-            entry.addMetadata("first_join_date", System.currentTimeMillis() + "");
-            entry.addMetadata("entry_type", "first_join");
-            
-            // Location coordinates as metadata
-            entry.addMetadata("join_location", formatLocation(player.getLocation()));
-            
-            // Auto-approve server-generated entries
-            entry.setApproved(true);
-            boolean success = plugin.getLoreManager().addLoreEntry(entry);
-            
-            if (success) {
-                // Notify the player
-                player.sendMessage(ChatColor.GOLD + "Your arrival has been recorded in the annals of history!");
-                logger.info("First join lore entry created for: " + player.getName());
-            } else {
-                logger.warning("Failed to create first join lore entry for: " + player.getName());
-            }
-            
-            return success;
+            return playerRepository.savePlayer(dto)
+                .thenApply(id -> {
+                    if (id != null) {
+                        player.sendMessage(ChatColor.GOLD + "Your arrival has been recorded in the annals of history!");
+                        logger.info("First join lore entry created for: " + player.getName());
+                        return true;
+                    } else {
+                        logger.warning("Failed to create first join lore entry for: " + player.getName());
+                        return false;
+                    }
+                })
+                .exceptionally(e -> {
+                    logger.error("Error creating first join lore entry", e);
+                    return false;
+                });
         } catch (Exception e) {
             logger.error("Error creating first join lore entry", e);
-            return false;
+            return CompletableFuture.completedFuture(false);
         }
     }
     
@@ -208,64 +200,50 @@ public class PlayerManager {
      * 
      * @param player The player who changed their name
      * @param oldName The previous name of the player
-     * @return true if the entry was created successfully, false otherwise
+     * @return CompletableFuture that completes with true if successful
      */
-    public boolean createNameChangeLoreEntry(Player player, String oldName) {
-        logger.info("Creating name change lore entry: " + oldName + " → " + player.getName());
-        
-        try {
-            // Create a guaranteed unique entry name with UUID and timestamp
-            String uniqueName = "NameChange_" + player.getUniqueId().toString() + "_" + System.currentTimeMillis();
-            
-            LoreEntry entry = new LoreEntry();
-            entry.setType(LoreType.PLAYER);
-            entry.setName(uniqueName);
-            
-            // Format date using SimpleDateFormat for consistent display
-            SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm");
-            String dateString = dateFormat.format(new Date());
-            
-            entry.setDescription("The adventurer known as " + oldName + " shall henceforth be known as " + 
-                               player.getName() + ".\nName changed on " + dateString + ".");
-            entry.setLocation(player.getLocation());
-            entry.setSubmittedBy("Server");
-            
-            // Add essential metadata
-            entry.addMetadata("player_uuid", player.getUniqueId().toString());
-            entry.addMetadata("player_name", player.getName());
-            entry.addMetadata("previous_name", oldName);
-            entry.addMetadata("name_change_date", System.currentTimeMillis() + "");
-            entry.addMetadata("entry_type", "name_change");
-            
-            // Auto-approve server-generated entries
-            entry.setApproved(true);
-            boolean success = plugin.getLoreManager().addLoreEntry(entry);
-            
-            if (success) {
-                // Notify the player
-                player.sendMessage(ChatColor.GOLD + "Your name change has been recorded in the annals of history!");
-                logger.info("Name change lore entry created: " + oldName + " → " + player.getName());
-            } else {
-                logger.warning("Failed to create name change lore entry: " + oldName + " → " + player.getName());
-            }
-            
-            return success;
-        } catch (Exception e) {
-            logger.error("Error creating name change lore entry", e);
-            return false;
+    public CompletableFuture<Boolean> createNameChangeLoreEntry(Player player, String oldName) {
+        if (oldName == null || oldName.equals(player.getName())) {
+            return CompletableFuture.completedFuture(false);
         }
+
+        PlayerDTO dto = new PlayerDTO();
+        dto.setPlayerUuid(player.getUniqueId());
+        dto.setPlayerName(player.getName());
+        dto.setLocation(formatLocation(player.getLocation()));
+        dto.getMetadata().put("entry_type", "name_change");
+        dto.getMetadata().put("old_name", oldName);
+        dto.getMetadata().put("new_name", player.getName());
+        dto.getMetadata().put("description", "The adventurer known as " + oldName + 
+                                          " shall henceforth be known as " + player.getName());
+        dto.setApproved(true);
+        
+        return playerRepository.savePlayer(dto)
+            .thenApply(id -> {
+                if (id != null) {
+                    logger.info("Name change lore entry created for " + oldName + " -> " + player.getName());
+                    return true;
+                } else {
+                    logger.warning("Failed to create name change lore entry for " + oldName + " -> " + player.getName());
+                    return false;
+                }
+            })
+            .exceptionally(e -> {
+                logger.error("Error creating name change lore entry", e);
+                return false;
+            });
     }
     
     /**
      * Get the list of name changes for a player
      * 
      * @param playerUuid The UUID of the player
-     * @return List of name change records, empty if none found
+     * @return CompletableFuture containing list of name change records
      */
-    public List<NameChangeRecord> getNameChangeHistory(UUID playerUuid) {
+    public CompletableFuture<List<NameChangeRecordDTO>> getNameChangeHistory(UUID playerUuid) {
         return playerRepository.getNameChangeHistory(playerUuid);
     }
-    
+
     /**
      * Format a location as a string
      * 

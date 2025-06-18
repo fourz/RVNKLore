@@ -1,148 +1,214 @@
 package org.fourz.RVNKLore.data;
 
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.Debug;
+import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.exception.LoreException;
 import org.fourz.RVNKLore.exception.LoreException.LoreExceptionType;
+import org.fourz.RVNKLore.data.query.QueryBuilder;
+import org.fourz.RVNKLore.config.dto.DatabaseSettingsDTO;
+import org.fourz.RVNKLore.config.ConfigManager;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.logging.Level;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
- * Helper class for database operations with improved error handling
+ * Enhanced database helper class providing async operations and connection pooling.
+ * Implements HikariCP for efficient connection management.
  */
 public class DatabaseHelper {
     private final RVNKLore plugin;
-    private final Debug debug;
-    private final DatabaseManager databaseManager;
-    
+    private final LogManager logger;
+    private final ConfigManager configManager;
+    private HikariDataSource dataSource;
+    private final ExecutorService executorService;
+
     public DatabaseHelper(RVNKLore plugin) {
         this.plugin = plugin;
-        this.databaseManager = plugin.getDatabaseManager();
-        this.debug = Debug.createDebugger(plugin, "DatabaseHelper", Level.FINE);
+        this.logger = LogManager.getInstance(plugin, "EnhancedDatabaseHelper");
+        this.configManager = plugin.getConfigManager();
+        this.executorService = Executors.newFixedThreadPool(10);
+        initializeConnectionPool();
     }
-    
-    /**
-     * Execute a database operation with automatic error handling and retry
-     * 
-     * @param operation The database operation to execute
-     * @return The result of the operation
-     * @throws LoreException If the operation fails
-     */
-    public <T> T executeWithRetry(DatabaseOperation<T> operation) throws LoreException {
-        int maxRetries = 3;
-        int retryCount = 0;
-        
-        while (retryCount < maxRetries) {
-            try {
-                // Check if connection is valid
-                if (!databaseManager.isConnected()) {
-                    debug.warning("Database connection lost, attempting to reconnect...");
-                    boolean reconnected = databaseManager.reconnect();
-                    if (!reconnected) {
-                        throw new SQLException("Failed to reconnect to database");
-                    }
-                }
-                
-                // Execute the operation
-                return operation.execute();
-                
-            } catch (SQLException e) {
-                retryCount++;
-                debug.warning("Database operation failed (attempt " + retryCount + "/" + maxRetries + "): " + e.getMessage());
-                
-                // If we've reached max retries, throw an exception
-                if (retryCount >= maxRetries) {
-                    throw new LoreException("Database operation failed after " + maxRetries + " attempts", e, LoreExceptionType.DATABASE_ERROR);
-                }
-                
-                // Wait before retrying
-                try {
-                    Thread.sleep(1000 * retryCount);
-                } catch (InterruptedException ie) {
-                    Thread.currentThread().interrupt();
-                    throw new LoreException("Operation interrupted", ie, LoreExceptionType.UNKNOWN_ERROR);
-                }
-            }
+
+    private void initializeConnectionPool() {
+        DatabaseSettingsDTO settings = configManager.getDatabaseSettings();
+        HikariConfig config = new HikariConfig();
+
+        if (settings.getType() == DatabaseSettingsDTO.DatabaseType.MYSQL) {
+            config.setDriverClassName("com.mysql.jdbc.Driver");
+            config.setJdbcUrl(String.format("jdbc:mysql://%s:%d/%s",
+                settings.getMysqlSettings().getHost(),
+                settings.getMysqlSettings().getPort(),
+                settings.getMysqlSettings().getDatabase()));
+            config.setUsername(settings.getMysqlSettings().getUsername());
+            config.setPassword(settings.getMysqlSettings().getPassword());
+        } else {
+            config.setDriverClassName("org.sqlite.JDBC");
+            config.setJdbcUrl("jdbc:sqlite:" + settings.getSqliteSettings().getDatabase());
         }
-        
-        // This should never be reached, but just in case
-        throw new LoreException("Failed to execute database operation", LoreExceptionType.DATABASE_ERROR);
+
+        // Common HikariCP settings
+        config.setMaximumPoolSize(10);
+        config.setMinimumIdle(5);
+        config.setIdleTimeout(300000); // 5 minutes
+        config.setConnectionTimeout(settings.getConnectionTimeout());
+        config.setLeakDetectionThreshold(60000); // 1 minute
+        config.addDataSourceProperty("cachePrepStmts", "true");
+        config.addDataSourceProperty("prepStmtCacheSize", "250");
+        config.addDataSourceProperty("prepStmtCacheSqlLimit", "2048");
+
+        try {
+            dataSource = new HikariDataSource(config);
+            logger.info("Connection pool initialized successfully");
+        } catch (Exception e) {
+            logger.error("Failed to initialize connection pool", e);
+            throw new LoreException("Failed to initialize database connection pool", e, LoreExceptionType.DATABASE_ERROR);
+        }
     }
-    
+
     /**
-     * Functional interface for database operations
-     */
-    @FunctionalInterface
-    public interface DatabaseOperation<T> {
-        T execute() throws SQLException;
-    }
-    
-    /**
-     * Execute a query with proper resource management and error handling
-     * 
+     * Execute a query asynchronously with proper resource management and error handling.
+     *
      * @param sql The SQL query
      * @param paramSetter A consumer that sets parameters on the prepared statement
      * @param resultHandler A function that processes the result set
-     * @return The result of processing the query
-     * @throws LoreException If the query fails
+     * @return A future containing the result of processing the query
      */
-    public <T> T executeQuery(String sql, PreparedStatementSetter paramSetter, ResultSetHandler<T> resultHandler) throws LoreException {
-        return executeWithRetry(() -> {
-            Connection conn = databaseManager.getConnection();
-            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-                // Set parameters if provided
+    public <T> CompletableFuture<T> executeQueryAsync(String sql, PreparedStatementSetter paramSetter, ResultSetHandler<T> resultHandler) {
+        return CompletableFuture.supplyAsync(() -> {
+            try (Connection conn = dataSource.getConnection();
+                 PreparedStatement stmt = conn.prepareStatement(sql)) {
+                
                 if (paramSetter != null) {
                     paramSetter.setParameters(stmt);
                 }
-                
-                // Execute query and process results
+
                 try (ResultSet rs = stmt.executeQuery()) {
                     return resultHandler.handleResultSet(rs);
                 }
+            } catch (SQLException e) {
+                throw new CompletionException(new LoreException("Database query failed", e, LoreExceptionType.DATABASE_ERROR));
             }
-        });
+        }, executorService);
     }
-    
+
     /**
-     * Execute an update with proper resource management and error handling
-     * 
+     * Execute an update asynchronously with proper resource management and error handling.
+     *
      * @param sql The SQL update statement
      * @param paramSetter A consumer that sets parameters on the prepared statement
-     * @return The number of rows affected
-     * @throws LoreException If the update fails
+     * @return A future containing the number of rows affected
      */
-    public int executeUpdate(String sql, PreparedStatementSetter paramSetter) throws LoreException {
-        return executeWithRetry(() -> {
-            Connection conn = databaseManager.getConnection();
-            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-                // Set parameters if provided
+    public CompletableFuture<Integer> executeUpdateAsync(String sql, PreparedStatementSetter paramSetter) {
+        return CompletableFuture.supplyAsync(() -> {
+            try (Connection conn = dataSource.getConnection();
+                 PreparedStatement stmt = conn.prepareStatement(sql)) {
+                
                 if (paramSetter != null) {
                     paramSetter.setParameters(stmt);
                 }
-                
-                // Execute update
                 return stmt.executeUpdate();
+            } catch (SQLException e) {
+                throw new CompletionException(new LoreException("Database update failed", e, LoreExceptionType.DATABASE_ERROR));
             }
-        });
+        }, executorService);
     }
-    
+
     /**
-     * Functional interface for setting parameters on prepared statements
+     * Execute a transaction asynchronously with proper resource management.
+     *
+     * @param transaction The transaction to execute
+     * @return A future that completes when the transaction is done
      */
+    public <T> CompletableFuture<T> executeTransactionAsync(Transaction<T> transaction) {
+        return CompletableFuture.supplyAsync(() -> {
+            Connection conn = null;
+            try {
+                conn = dataSource.getConnection();
+                conn.setAutoCommit(false);
+                
+                T result = transaction.execute(conn);
+                
+                conn.commit();
+                return result;
+            } catch (Exception e) {
+                if (conn != null) {
+                    try {
+                        conn.rollback();
+                    } catch (SQLException rollbackEx) {
+                        logger.error("Failed to rollback transaction", rollbackEx);
+                    }
+                }
+                throw new CompletionException(new LoreException("Transaction failed", e, LoreExceptionType.DATABASE_ERROR));
+            } finally {
+                if (conn != null) {
+                    try {
+                        conn.setAutoCommit(true);
+                        conn.close();
+                    } catch (SQLException e) {
+                        logger.error("Failed to cleanup transaction resources", e);
+                    }
+                }
+            }
+        }, executorService);
+    }
+
+    /**
+     * Check connection pool health.
+     * @return True if the connection pool is healthy
+     */
+    public boolean isHealthy() {
+        try (Connection conn = dataSource.getConnection()) {
+            return true;
+        } catch (SQLException e) {
+            logger.error("Connection pool health check failed", e);
+            return false;
+        }
+    }
+
+    /**
+     * Get stats about the connection pool.
+     * @return A string containing pool statistics
+     */
+    public String getPoolStats() {
+        return String.format("Pool Stats: Active=%d, Idle=%d, Total=%d, Waiting=%d",
+            dataSource.getHikariPoolMXBean().getActiveConnections(),
+            dataSource.getHikariPoolMXBean().getIdleConnections(),
+            dataSource.getHikariPoolMXBean().getTotalConnections(),
+            dataSource.getHikariPoolMXBean().getThreadsAwaitingConnection()
+        );
+    }
+
+    /**
+     * Clean up resources when shutting down.
+     */
+    public void shutdown() {
+        executorService.shutdown();
+        if (dataSource != null && !dataSource.isClosed()) {
+            dataSource.close();
+        }
+    }
+
     @FunctionalInterface
     public interface PreparedStatementSetter {
         void setParameters(PreparedStatement stmt) throws SQLException;
     }
-    
-    /**
-     * Functional interface for handling result sets
-     */
+
     @FunctionalInterface
     public interface ResultSetHandler<T> {
         T handleResultSet(ResultSet rs) throws SQLException;
+    }
+
+    @FunctionalInterface
+    public interface Transaction<T> {
+        T execute(Connection connection) throws SQLException;
     }
 }

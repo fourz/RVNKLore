@@ -26,6 +26,15 @@ public class SQLiteSettingsDTO {
     }
 
     /**
+     * Create a new SQLite settings DTO with default values.
+     *
+     * @param database The database filename
+     */
+    public SQLiteSettingsDTO(String database) {
+        this(database, true, 30000, -4000);
+    }
+
+    /**
      * Get the database filename.
      *
      * @return The database filename

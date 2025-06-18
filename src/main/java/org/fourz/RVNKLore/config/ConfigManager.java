@@ -9,6 +9,9 @@ import org.fourz.RVNKLore.handler.HandlerFactory;
 import org.fourz.RVNKLore.handler.LoreHandler;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
+import org.fourz.RVNKLore.config.dto.DatabaseSettingsDTO;
+import org.fourz.RVNKLore.config.dto.MySQLSettingsDTO;
+import org.fourz.RVNKLore.config.dto.SQLiteSettingsDTO;
 
 import java.util.HashMap;
 import java.util.List;
@@ -159,16 +162,11 @@ public class ConfigManager {
      * @param entries The entries to export
      * @param filePath The file path to export to
      * @return True if successful, false otherwise
-     */
-    public boolean exportLoreEntriesToFile(List<LoreEntry> entries, String filePath) {
+     */    public boolean exportLoreEntriesToFile(List<LoreEntry> entries, String filePath) {
         logger.info("Exporting " + entries.size() + " lore entries to file: " + filePath);
-        try {
-            // Use the database manager to handle the export
-            return plugin.getDatabaseManager().exportLoreEntriesToFile(entries, filePath);
-        } catch (Exception e) {
-            logger.warning("Failed to export lore entries: " + e.getMessage());
-            return false;
-        }
+        // Export functionality is not yet implemented in the new database API
+        logger.warning("Export functionality not yet implemented");
+        return false;
     }
 
     public String getStorageType() {
@@ -265,5 +263,45 @@ public class ConfigManager {
      */
     public boolean isTestMode() {
         return "yes".equalsIgnoreCase(config.getString("storage.test-mode", "no"));
+    }
+
+    /**
+     * Get database settings for the plugin.
+     * @return A DatabaseSettingsDTO containing all database configuration
+     */
+    public DatabaseSettingsDTO getDatabaseSettings() {
+        DatabaseSettingsDTO.DatabaseType type = "mysql".equalsIgnoreCase(getStorageType()) 
+            ? DatabaseSettingsDTO.DatabaseType.MYSQL 
+            : DatabaseSettingsDTO.DatabaseType.SQLITE;
+
+        // Get MySQL settings if needed
+        MySQLSettingsDTO mysqlSettings = null;
+        if (type == DatabaseSettingsDTO.DatabaseType.MYSQL) {
+            Map<String, Object> settings = getMySQLSettings();
+            mysqlSettings = new MySQLSettingsDTO(
+                (String) settings.get("host"),
+                (Integer) settings.get("port"),
+                (String) settings.get("database"),
+                (String) settings.get("username"),
+                (String) settings.get("password"),
+                (Boolean) settings.get("useSSL"),
+                (String) settings.get("tablePrefix")
+            );
+        }
+
+        // Get SQLite settings if needed
+        SQLiteSettingsDTO sqliteSettings = null;
+        if (type == DatabaseSettingsDTO.DatabaseType.SQLITE) {
+            String dbPath = plugin.getDataFolder().getAbsolutePath() + "/database.db";
+            sqliteSettings = new SQLiteSettingsDTO(dbPath);
+        }
+
+        return new DatabaseSettingsDTO(
+            type,
+            mysqlSettings,
+            sqliteSettings,
+            config.getInt("storage.connectionTimeout", 30000),
+            config.getInt("storage.maxRetries", 3)
+        );
     }
 }

@@ -7,6 +7,8 @@ import org.fourz.RVNKLore.config.ConfigManager;
 import org.fourz.RVNKLore.data.DatabaseManager;
 import org.fourz.RVNKLore.debug.Debug;
 import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.RVNKLore.exception.LoreException;
+import org.fourz.RVNKLore.exception.LoreException.LoreExceptionType;
 import org.fourz.RVNKLore.command.CommandManager;
 import org.fourz.RVNKLore.util.UtilityManager;
 import org.fourz.RVNKLore.lore.item.ItemManager;
@@ -39,48 +41,55 @@ public class RVNKLore extends JavaPlugin {
         registerShutdownHook();
         
         logger.info("Initializing RVNKLore...");
-        
-        try {
-            // First try to initialize the database
-            databaseManager = new DatabaseManager(this);
+          try {
+            // First try to initialize the database with settings from config
+            logger.info("Initializing database...");
+            databaseManager = new DatabaseManager(this, configManager);
             
-            // Check database connection
-            if (!databaseManager.isConnected()) {
-                throw new Exception("Database connection failed. Plugin cannot function without storage.");
-            }
-            
-            // Create handler factory but don't initialize it yet
+            // Create required utility systems
+            logger.info("Initializing utility systems...");
+            utilityManager = UtilityManager.getInstance(this);
             handlerFactory = new HandlerFactory(this);
             
-            // Initialize utility manager for diagnostics
-            utilityManager = UtilityManager.getInstance(this);
-              // First initialize the handler factory completely before LoreManager needs it
-            logger.info("Initializing core systems...");
-            handlerFactory.initialize();
-              // Now initialize LoreManager after HandlerFactory is fully initialized
-            loreManager = LoreManager.getInstance(this);
-            loreManager.initializeLore();
-
-            // Initialize PlayerManager for player-related lore operations
-            this.playerManager = new PlayerManager(this);
-            this.playerManager.initialize();
-
-            // Initialize ItemManager through LoreManager
-            this.itemManager = loreManager.getItemManager();
-            
-
-            
-            // Remove direct CosmeticManager initialization (now handled by ItemManager)
-            // cosmeticManager = new CosmeticManager(this);
-            // cosmeticManager.initialize();
-            
-            // Finally initialize command system
-            commandManager = new CommandManager(this);
-              // Start periodic health check
-            startHealthCheck();
-            
-            logger.info("RVNKLore has been enabled!");
-        } catch (Exception e) {
+            // Initialize database schema and then start core systems
+            logger.info("Loading database schema...");
+            databaseManager.executeAsync(conn -> {
+                // Schema is loaded by DatabaseManager constructor
+                logger.info("Schema loaded successfully");
+                return null;
+            }).thenRun(() -> {
+                try {
+                    // Now initialize core systems in order
+                    logger.info("Initializing core systems...");
+                    handlerFactory.initialize();
+                    
+                    loreManager = LoreManager.getInstance(this);
+                    loreManager.initializeLore();
+                    
+                    // Initialize managers
+                    playerManager = new PlayerManager(this);
+                    playerManager.initialize();
+                    
+                    // Get item manager from LoreManager
+                    itemManager = loreManager.getItemManager();
+                    
+                    // Finally initialize command system
+                    commandManager = new CommandManager(this);
+                    
+                    // Start health monitoring
+                    startHealthCheck();
+                    
+                    logger.info("RVNKLore has been enabled!");
+                } catch (Exception e) {
+                    logger.error("Failed to initialize core systems", e);
+                    getServer().getPluginManager().disablePlugin(this);
+                }
+            }).exceptionally(ex -> {
+                logger.error("Failed to initialize database schema", ex);
+                getServer().getPluginManager().disablePlugin(this);
+                return null;
+            });
+        }catch (Exception e) {
             logger.error("Failed to initialize plugin", e);
             getServer().getPluginManager().disablePlugin(this);
         }
@@ -97,20 +106,13 @@ public class RVNKLore extends JavaPlugin {
         });
         Runtime.getRuntime().addShutdownHook(shutdownHook);
     }
-    
-    private void startHealthCheck() {        healthCheckTaskId = getServer().getScheduler().scheduleSyncRepeatingTask(this, () -> {
-            // Check database connection
-            if (databaseManager != null && !databaseManager.isConnected()) {
-                logger.warning("Database connection lost, attempting reconnect");
-                databaseManager.reconnect();
+      private void startHealthCheck() {
+        // Health checks are scheduled by individual systems.
+        // We just schedule a periodic task to check their status.
+        healthCheckTaskId = getServer().getScheduler().scheduleSyncRepeatingTask(this, () -> {
+            if (databaseManager != null) {
+                logger.info("Database status: " + databaseManager.getDatabaseInfo());
             }
-            
-            // Log any accumulated errors
-            // int errorCount = Debug.getErrorCount();
-            // if (errorCount > 0) {
-            //     logger.warning("There have been " + errorCount + " errors since last health check");
-            //     Debug.resetErrorCount();
-            // }
         }, 1200L, 1200L); // Check every minute (20 ticks/sec * 60 sec)
     }
 
@@ -142,8 +144,7 @@ public class RVNKLore extends JavaPlugin {
             } catch (IllegalStateException e) {
                 // JVM is already shutting down, ignore
             }
-            
-            cleanupManagers();
+              cleanupManagers();
         } catch (Exception e) {
             logger.error("Failed to cleanup managers", e);
         } finally {
@@ -153,41 +154,51 @@ public class RVNKLore extends JavaPlugin {
     }
 
     private void cleanupManagers() {
-        if (utilityManager != null) {
-            utilityManager.cleanup();
-            utilityManager = null;
+        // Cancel any pending tasks
+        if (healthCheckTaskId != -1) {
+            getServer().getScheduler().cancelTask(healthCheckTaskId);
+            healthCheckTaskId = -1;
         }
         
-        if (handlerFactory != null) {
-            handlerFactory.unregisterAllHandlers();
-            handlerFactory = null;
+        // Clean up in reverse order of initialization
+        if (commandManager != null) {
+            commandManager = null;
         }
-          if (loreManager != null) {
-            loreManager.cleanup();
-            loreManager = null;
-        }
-        // Remove direct CosmeticManager shutdown (now handled by ItemManager)
-        // if (cosmeticManager != null) {
-        //     cosmeticManager.shutdown();
-        //     cosmeticManager = null;
-        // }
+
         if (itemManager != null) {
             itemManager.shutdown();
             itemManager = null;
         }
 
-        if (commandManager != null) {
-            commandManager = null;
+        if (playerManager != null) {
+            playerManager = null;
         }
 
-        if (configManager != null) {
-            configManager = null;
+        if (loreManager != null) {
+            loreManager.cleanup();
+            loreManager = null;
         }
-        
+
+        if (handlerFactory != null) {
+            handlerFactory.unregisterAllHandlers();
+            handlerFactory = null;
+        }
+
+        if (utilityManager != null) {
+            utilityManager.cleanup();
+            utilityManager = null;
+        }
+
         if (databaseManager != null) {
-            databaseManager.close();
+            try {
+                databaseManager.close(); // This should be called last since other systems might need DB access during cleanup
+            } catch (Exception e) {
+                logger.error("Error closing database connection", e);
+            }
             databaseManager = null;
         }
+        
+        configManager = null; // ConfigManager doesn't need cleanup
     }
 
     public LoreManager getLoreManager() {

@@ -1,18 +1,16 @@
 package org.fourz.RVNKLore.lore.player;
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.data.DatabaseConnection;
+import org.fourz.RVNKLore.data.DatabaseManager;
+import org.fourz.RVNKLore.data.dto.NameChangeRecordDTO;
+import org.fourz.RVNKLore.data.dto.PlayerDTO;
+import org.fourz.RVNKLore.data.query.QueryBuilder;
 import org.fourz.RVNKLore.debug.LogManager;
-import org.fourz.RVNKLore.lore.LoreEntry;
-import org.fourz.RVNKLore.lore.LoreType;
 
 /**
  * Repository for player-related database operations
@@ -23,118 +21,87 @@ import org.fourz.RVNKLore.lore.LoreType;
 public class PlayerRepository {
     private final RVNKLore plugin;
     private final LogManager logger;
-    private final DatabaseConnection dbConnection;
+    private final DatabaseManager databaseManager;
     
-    public PlayerRepository(RVNKLore plugin, DatabaseConnection dbConnection) {
+    public PlayerRepository(RVNKLore plugin, DatabaseManager databaseManager) {
         this.plugin = plugin;
-        this.dbConnection = dbConnection;
+        this.databaseManager = databaseManager;
         this.logger = LogManager.getInstance(plugin, "PlayerRepository");
     }
-    
+
     /**
      * Check if a player already has a lore entry in the database
      * 
      * @param playerUuid The UUID of the player to check
-     * @return true if the player has a lore entry, false otherwise
+     * @return Future containing true if the player exists, false otherwise
      */
-    public boolean playerExists(UUID playerUuid) {
-        String sql = "SELECT COUNT(*) FROM lore_submission s " +
-                     "JOIN lore_entry e ON e.id = s.entry_id " +
-                     "WHERE e.entry_type = ? " +
-                     "AND s.is_current_version = TRUE " +
-                     "AND s.content LIKE ?";
-        
-        try (Connection conn = dbConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
+    public CompletableFuture<Boolean> playerExists(UUID playerUuid) {
+        QueryBuilder query = databaseManager.getQueryBuilder()
+            .select("COUNT(*)")
+            .from("lore_submission s")
+            .join("lore_entry e", "e.id = s.entry_id")
+            .where("e.entry_type = ?", "PLAYER")
+            .and("s.is_current_version = TRUE")
+            .and("s.content LIKE ?", "%\"player_uuid\":\"" + playerUuid.toString() + "\"%");
             
-            stmt.setString(1, LoreType.PLAYER.name());
-            stmt.setString(2, "%\"player_uuid\":\"" + playerUuid.toString() + "\"%");
-            
-            try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) {
-                    return rs.getInt(1) > 0;
-                }
-            }
-        } catch (SQLException e) {
-            logger.error("Error checking if player exists: " + playerUuid, e);
-        }
-        
-        return false;
+        return databaseManager.getQueryExecutor()
+            .executeQuery(query, Long.class)
+            .thenApply(count -> count != null && count > 0)
+            .exceptionally(e -> {
+                logger.error("Error checking if player exists: " + playerUuid, e);
+                return false;
+            });
     }
     
     /**
      * Get the current player name stored in the database for a given player UUID
      * 
      * @param playerUuid The UUID of the player
-     * @return The stored player name, or null if not found
+     * @return Future containing the stored name, or null if not found
      */
-    public String getStoredPlayerName(UUID playerUuid) {
-        String sql = "SELECT s.content FROM lore_submission s " +
-                     "JOIN lore_entry e ON e.id = s.entry_id " +
-                     "WHERE e.entry_type = ? " +
-                     "AND s.is_current_version = TRUE " +
-                     "AND s.content LIKE ?";
-        
-        try (Connection conn = dbConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
+    public CompletableFuture<String> getStoredPlayerName(UUID playerUuid) {
+        QueryBuilder query = databaseManager.getQueryBuilder()
+            .select("s.content", "s.created_at", "s.entry_id")
+            .from("lore_submission s")
+            .join("lore_entry e", "e.id = s.entry_id")
+            .where("e.entry_type = ?", "PLAYER")
+            .and("s.is_current_version = TRUE")
+            .and("s.content LIKE ?", "%\"player_uuid\":\"" + playerUuid.toString() + "\"%")
+            .and("s.content LIKE ?", "%\"entry_type\":\"player_character\"%")
+            .orderBy("s.created_at", false)
+            .limit(1);
             
-            stmt.setString(1, LoreType.PLAYER.name());
-            stmt.setString(2, "%\"player_uuid\":\"" + playerUuid.toString() + "\"%");
-            
-            try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) {
-                    String content = rs.getString("content");
-                    
-                    // Extract player_name from the JSON content
-                    // This is a simple extraction method for demonstration
-                    // In a real implementation, use a JSON parser
-                    int nameIndex = content.indexOf("\"player_name\":\"");
-                    if (nameIndex != -1) {
-                        nameIndex += 15; // Length of "player_name":"
-                        int endIndex = content.indexOf("\"", nameIndex);
-                        if (endIndex != -1) {
-                            return content.substring(nameIndex, endIndex);
-                        }
-                    }
-                }
-            }
-        } catch (SQLException e) {
-            logger.error("Error getting stored player name: " + playerUuid, e);
-        }
-        
-        return null;
+        return databaseManager.getQueryExecutor()
+            .executeQuery(query, PlayerDTO.class)
+            .thenApply(dto -> dto != null ? dto.getPlayerName() : null)
+            .exceptionally(e -> {
+                logger.error("Error getting stored player name: " + playerUuid, e);
+                return null;
+            });
     }
     
     /**
      * Get all lore entries associated with a player
      * 
      * @param playerUuid The UUID of the player
-     * @return List of lore entry IDs
+     * @return Future containing list of player DTOs
      */
-    public List<String> getPlayerLoreEntryIds(UUID playerUuid) {
-        List<String> entryIds = new ArrayList<>();
-        String sql = "SELECT e.id FROM lore_entry e " +
-                     "JOIN lore_submission s ON e.id = s.entry_id " +
-                     "WHERE e.entry_type = ? " +
-                     "AND s.is_current_version = TRUE " +
-                     "AND s.content LIKE ?";
-        
-        try (Connection conn = dbConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
+    public CompletableFuture<List<PlayerDTO>> getPlayerLoreEntries(UUID playerUuid) {
+        QueryBuilder query = databaseManager.getQueryBuilder()
+            .select("s.content", "s.created_at", "s.entry_id")
+            .from("lore_entry e")
+            .join("lore_submission s", "e.id = s.entry_id")
+            .where("e.entry_type = ?", "PLAYER")
+            .and("s.is_current_version = TRUE")
+            .and("s.content LIKE ?", "%\"player_uuid\":\"" + playerUuid.toString() + "\"%")
+            .orderBy("s.created_at", false);
             
-            stmt.setString(1, LoreType.PLAYER.name());
-            stmt.setString(2, "%\"player_uuid\":\"" + playerUuid.toString() + "\"%");
-            
-            try (ResultSet rs = stmt.executeQuery()) {
-                while (rs.next()) {
-                    entryIds.add(rs.getString("id"));
-                }
-            }
-        } catch (SQLException e) {
-            logger.error("Error getting player lore entries: " + playerUuid, e);
-        }
-        
-        return entryIds;
+        return databaseManager.getQueryExecutor()
+            .executeQueryList(query, PlayerDTO.class)
+            .exceptionally(e -> {
+                logger.error("Error getting player lore entries: " + playerUuid, e);
+                return new ArrayList<>();
+            });
     }
     
     /**
@@ -142,104 +109,108 @@ public class PlayerRepository {
      * 
      * @param playerUuid The UUID of the player
      * @param entryType The type of entry to filter by
-     * @return List of entry IDs matching the type
+     * @return Future containing list of player DTOs
      */
-    public List<String> getPlayerLoreEntriesByType(UUID playerUuid, String entryType) {
-        List<String> entryIds = new ArrayList<>();
-        String sql = "SELECT e.id FROM lore_entry e " +
-                     "JOIN lore_submission s ON e.id = s.entry_id " +
-                     "WHERE e.entry_type = ? " +
-                     "AND s.is_current_version = TRUE " +
-                     "AND s.content LIKE ? " +
-                     "AND s.content LIKE ?";
-        
-        try (Connection conn = dbConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
+    public CompletableFuture<List<PlayerDTO>> getPlayerLoreEntriesByType(UUID playerUuid, String entryType) {
+        QueryBuilder query = databaseManager.getQueryBuilder()
+            .select("s.content", "s.created_at", "s.entry_id")
+            .from("lore_entry e")
+            .join("lore_submission s", "e.id = s.entry_id")
+            .where("e.entry_type = ?", "PLAYER")
+            .and("s.is_current_version = TRUE")
+            .and("s.content LIKE ?", "%\"player_uuid\":\"" + playerUuid.toString() + "\"%")
+            .and("s.content LIKE ?", "%\"entry_type\":\"" + entryType + "\"%")
+            .orderBy("s.created_at", false);
             
-            stmt.setString(1, LoreType.PLAYER.name());
-            stmt.setString(2, "%\"player_uuid\":\"" + playerUuid.toString() + "\"%");
-            stmt.setString(3, "%\"entry_type\":\"" + entryType + "\"%");
-            
-            try (ResultSet rs = stmt.executeQuery()) {
-                while (rs.next()) {
-                    entryIds.add(rs.getString("id"));
-                }
-            }
-        } catch (SQLException e) {
-            logger.error("Error getting player lore entries by type: " + playerUuid + ", " + entryType, e);
-        }
-        
-        return entryIds;
+        return databaseManager.getQueryExecutor()
+            .executeQueryList(query, PlayerDTO.class)
+            .exceptionally(e -> {
+                logger.error("Error getting player lore entries by type: " + playerUuid + ", " + entryType, e);
+                return new ArrayList<>();
+            });
     }
     
     /**
-     * Check if a player has had a name change recorded
+     * Save a player entry
      * 
-     * @param playerUuid The UUID of the player
-     * @return true if the player has a name change entry, false otherwise
+     * @param dto The player DTO to save
+     * @return Future containing saved player ID
      */
-    public boolean hasNameChangeRecords(UUID playerUuid) {
-        return !getPlayerLoreEntriesByType(playerUuid, "name_change").isEmpty();
+    public CompletableFuture<String> savePlayer(PlayerDTO dto) {
+        if (dto.getEntryId() != null) {
+            // Update existing entry
+            QueryBuilder query = databaseManager.getQueryBuilder()
+                .update("lore_submission")
+                .set("content", dto.getMetadata().toString()) // Convert metadata map to JSON
+                .where("entry_id = ?", dto.getEntryId())
+                .and("is_current_version = TRUE");
+                
+            return databaseManager.getQueryExecutor()
+                .executeUpdate(query)
+                .thenApply(rowsAffected -> dto.getEntryId())
+                .exceptionally(e -> {
+                    logger.error("Error updating player: " + dto.getPlayerUuid(), e);
+                    return null;
+                });
+        } else {
+            // Insert new entry using transaction
+            return databaseManager.getQueryExecutor()
+                .executeTransaction(conn -> {
+                    // First create the lore entry
+                    QueryBuilder entryQuery = databaseManager.getQueryBuilder()
+                        .insertInto("lore_entry")
+                        .columns("entry_type", "name", "description")
+                        .values("PLAYER", 
+                               "Player_" + dto.getPlayerUuid().toString(),
+                               dto.getMetadata().get("description"));
+                
+                    String entryId = databaseManager.getQueryExecutor()
+                        .executeInsert(entryQuery)
+                        .thenApply(String::valueOf)
+                        .join();
+                        
+                    // Then create the submission
+                    QueryBuilder submissionQuery = databaseManager.getQueryBuilder()
+                        .insertInto("lore_submission")
+                        .columns("entry_id", "content", "is_current_version")
+                        .values(entryId, 
+                               dto.getMetadata().toString(), 
+                               true);
+                               
+                    return databaseManager.getQueryExecutor()
+                        .executeInsert(submissionQuery)
+                        .thenApply(id -> entryId)
+                        .join();
+                })
+                .exceptionally(e -> {
+                    logger.error("Error creating new player entry: " + dto.getPlayerUuid(), e);
+                    return null;
+                });
+        }
     }
     
     /**
      * Get the history of name changes for a player
      * 
      * @param playerUuid The UUID of the player
-     * @return List of previous names, from oldest to newest
+     * @return Future containing list of name change records
      */
-    public List<NameChangeRecord> getNameChangeHistory(UUID playerUuid) {
-        List<NameChangeRecord> nameChanges = new ArrayList<>();
-        String sql = "SELECT s.content, s.created_at FROM lore_submission s " +
-                     "JOIN lore_entry e ON e.id = s.entry_id " +
-                     "WHERE e.entry_type = ? " +
-                     "AND s.is_current_version = TRUE " +
-                     "AND s.content LIKE ? " +
-                     "AND s.content LIKE ? " +
-                     "ORDER BY s.created_at ASC";
-        
-        try (Connection conn = dbConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
+    public CompletableFuture<List<NameChangeRecordDTO>> getNameChangeHistory(UUID playerUuid) {
+        QueryBuilder query = databaseManager.getQueryBuilder()
+            .select("s.content", "s.created_at", "s.entry_id")
+            .from("lore_submission s")
+            .join("lore_entry e", "e.id = s.entry_id")
+            .where("e.entry_type = ?", "PLAYER")
+            .and("s.is_current_version = TRUE")
+            .and("s.content LIKE ?", "%\"player_uuid\":\"" + playerUuid.toString() + "\"%")
+            .and("s.content LIKE ?", "%\"entry_type\":\"name_change\"%")
+            .orderBy("s.created_at", false);
             
-            stmt.setString(1, LoreType.PLAYER.name());
-            stmt.setString(2, "%\"player_uuid\":\"" + playerUuid.toString() + "\"%");
-            stmt.setString(3, "%\"entry_type\":\"name_change\"%");
-            
-            try (ResultSet rs = stmt.executeQuery()) {
-                while (rs.next()) {
-                    String content = rs.getString("content");
-                    
-                    // Extract previous_name and player_name from the JSON content
-                    // In a real implementation, use a JSON parser
-                    String previousName = extractJsonValue(content, "previous_name");
-                    String newName = extractJsonValue(content, "player_name");
-                    long timestamp = rs.getTimestamp("created_at").getTime();
-                    
-                    if (previousName != null && newName != null) {
-                        nameChanges.add(new NameChangeRecord(previousName, newName, timestamp));
-                    }
-                }
-            }
-        } catch (SQLException e) {
-            logger.error("Error getting name change history: " + playerUuid, e);
-        }
-        
-        return nameChanges;
-    }
-    
-    /**
-     * Simple helper to extract a value from a JSON string
-     * In a real implementation, use a proper JSON parser
-     */
-    private String extractJsonValue(String json, String key) {
-        int keyIndex = json.indexOf("\"" + key + "\":\"");
-        if (keyIndex != -1) {
-            keyIndex += key.length() + 4; // Length of "key":"
-            int endIndex = json.indexOf("\"", keyIndex);
-            if (endIndex != -1) {
-                return json.substring(keyIndex, endIndex);
-            }
-        }
-        return null;
+        return databaseManager.getQueryExecutor()
+            .executeQueryList(query, NameChangeRecordDTO.class)
+            .exceptionally(e -> {
+                logger.error("Error getting name change history: " + playerUuid, e);
+                return new ArrayList<>();
+            });
     }
 }
