@@ -181,4 +181,14 @@ public interface QueryBuilder {
      * @return This QueryBuilder with the custom SQL
      */
     QueryBuilder custom(String sql, Object... params);
+
+    /**
+     * Start building an INSERT statement (legacy synonym for insertInto).
+     *
+     * @param table The table to insert into
+     * @return This QueryBuilder for chaining
+     */
+    default QueryBuilder insert(String table) {
+        return insertInto(table);
+    }
 }

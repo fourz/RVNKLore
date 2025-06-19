@@ -38,7 +38,7 @@ public class LoreCollectionListSubCommand implements SubCommand {
     @Override
     public boolean execute(CommandSender sender, String[] args) {
         if (!(sender instanceof Player)) {
-            sender.sendMessage(ChatColor.RED + "▶ This command can only be used by players");
+            sender.sendMessage(ChatColor.RED + "&c▶ This command can only be used by players");
             return true;
         }
         Player player = (Player) sender;
@@ -47,30 +47,34 @@ public class LoreCollectionListSubCommand implements SubCommand {
         if (args.length > 0) {
             themeFilter = args[0];
         }
-
-        List<ItemCollection> collectionsToShow = new ArrayList<>();
-        if (themeFilter != null) {
-            CollectionTheme theme = CollectionTheme.fromDisplayName(themeFilter);
-            if (theme == null || theme == CollectionTheme.CUSTOM) {
-                player.sendMessage(ChatColor.RED + "✖ Unknown theme: " + themeFilter);
-                listThemes(player);
-                return true;
-            }
-            for (ItemCollection collection : collectionManager.getAllCollections().values()) {
-                if (theme.name().equalsIgnoreCase(collection.getThemeId())) {
-                    collectionsToShow.add(collection);
+        final String filter = themeFilter;
+        // Async reload from DB, then filter and display
+        collectionManager.reloadCollectionsFromDatabase().thenAccept(count -> {
+            List<ItemCollection> collectionsToShow = new ArrayList<>();
+            if (filter != null) {
+                CollectionTheme theme = CollectionTheme.fromDisplayName(filter);
+                if (theme == null || theme == CollectionTheme.CUSTOM) {
+                    player.sendMessage(ChatColor.RED + "&c✖ Unknown theme: " + filter);
+                    listThemes(player);
+                    return;
                 }
+                for (ItemCollection collection : collectionManager.getAllCollections().values()) {
+                    if (theme.name().equalsIgnoreCase(collection.getThemeId())) {
+                        collectionsToShow.add(collection);
+                    }
+                }
+            } else {
+                collectionsToShow.addAll(collectionManager.getAllCollections().values());
             }
-        } else {
-            collectionsToShow.addAll(collectionManager.getAllCollections().values());
-        }
-
-        // Sort newest to oldest
-        collectionsToShow.sort(Comparator.comparingLong(ItemCollection::getCreatedAt).reversed());
-
-        // Output via DisplayFactory
-        DisplayFactory.displayCollectionList(player, collectionsToShow);
-
+            // Sort newest to oldest
+            collectionsToShow.sort(Comparator.comparingLong(ItemCollection::getCreatedAt).reversed());
+            // Output via DisplayFactory
+            DisplayFactory.displayCollectionList(player, collectionsToShow);
+        }).exceptionally(e -> {
+            logger.error("Error loading collections for list command", e);
+            player.sendMessage(ChatColor.RED + "&c✖ Failed to load collections from database.");
+            return null;
+        });
         return true;
     }
 

@@ -213,6 +213,24 @@ public class DefaultQueryExecutor implements QueryExecutor {
     }
 
     /**
+     * Execute a query and map the ResultSet using a custom function (for scalar or custom results).
+     */
+    public <T> CompletableFuture<T> executeQueryCustom(QueryBuilder builder, Function<ResultSet, T> mapper) {
+        return CompletableFuture.supplyAsync(() -> {
+            String sql = builder.build();
+            Object[] params = builder.getParameters();
+            try (Connection conn = connectionProvider.getConnection();
+                 PreparedStatement stmt = prepareStatement(conn, sql, params);
+                 ResultSet rs = stmt.executeQuery()) {
+                return mapper.apply(rs);
+            } catch (SQLException e) {
+                logger.error("Error executing custom query: " + sql, e);
+                throw new RuntimeException("Database query error", e);
+            }
+        }, databaseExecutor);
+    }
+
+    /**
      * Prepare a statement with the given parameters.
      *
      * @param conn The database connection

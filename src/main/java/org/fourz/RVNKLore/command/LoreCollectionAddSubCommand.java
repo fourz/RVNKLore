@@ -79,26 +79,28 @@ public class LoreCollectionAddSubCommand implements SubCommand {
             // Create and validate the collection
             ItemCollection collection = collectionManager.createCollection(collectionId, name, description);
             if (collection == null) {
-                sender.sendMessage(ChatColor.RED + "✖ Failed to create collection: validation error");
+                sender.sendMessage(ChatColor.RED + "&c✖ Failed to create collection: validation error");
                 return true;
             }
-            
-            // Set theme and save to database
+            // Set theme and save to database (async)
             collection.setThemeId(theme.name().toLowerCase());
-            boolean saved = collectionManager.saveCollection(collection);
-            
-            if (saved) {
-                sender.sendMessage(ChatColor.GREEN + "✓ Created collection: " + name + " (" + collectionId + ")");
-                sender.sendMessage(ChatColor.GRAY + "   Theme: " + theme.getDisplayName());
-                sender.sendMessage(ChatColor.GRAY + "   Use '/lore collection view " + collectionId + "' to see details.");
-            } else {
-                sender.sendMessage(ChatColor.RED + "✖ Failed to save collection to database.");
-            }
-            
+            collectionManager.saveCollection(collection).thenAccept(saved -> {
+                if (saved) {
+                    sender.sendMessage(ChatColor.GREEN + "&a✓ Created collection: " + name + " (" + collectionId + ")");
+                    sender.sendMessage(ChatColor.GRAY + "&7   Theme: " + theme.getDisplayName());
+                    sender.sendMessage(ChatColor.GRAY + "&7   Use '/lore collection view " + collectionId + "' to see details.");
+                } else {
+                    sender.sendMessage(ChatColor.RED + "&c✖ Failed to save collection to database.");
+                }
+            }).exceptionally(e -> {
+                logger.error("Error saving collection to database: " + collectionId, e);
+                sender.sendMessage(ChatColor.RED + "&c✖ An error occurred while saving the collection.");
+                return null;
+            });
             return true;
         } catch (Exception e) {
             logger.error("Error creating collection: " + collectionId, e);
-            sender.sendMessage(ChatColor.RED + "✖ An error occurred while creating the collection.");
+            sender.sendMessage(ChatColor.RED + "&c✖ An error occurred while creating the collection.");
             return true;
         }
     }

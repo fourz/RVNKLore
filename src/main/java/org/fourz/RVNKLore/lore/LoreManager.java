@@ -330,11 +330,15 @@ public class LoreManager {
     }
 
     /**
-     * Find lore entries near a location, using database spatial indexing for efficiency
-     * 
-     * @param location The location to search near
-     * @param radius The search radius in blocks
-     * @return A future containing a list of nearby lore entries
+     * Find lore entries near a location using spatial index.
+     * Uses different optimized queries for MySQL (POINT type + spatial index) vs SQLite (R*Tree index)
+     *
+     * @param world World name
+     * @param x Center X coordinate
+     * @param y Center Y coordinate
+     * @param z Center Z coordinate
+     * @param radius Search radius in blocks
+     * @return A future containing a list of nearby lore entry DTOs
      */
     public CompletableFuture<List<LoreEntry>> findNearbyLoreEntries(Location location, double radius) {
         if (location == null || location.getWorld() == null) {
@@ -471,5 +475,12 @@ public class LoreManager {
                 logger.error("Error removing lore entry: " + id, e);
                 return false;
             });
+    }
+
+    /**
+     * Get the item manager for lore items and collections
+     */
+    public ItemManager getItemManager() {
+        return itemManager;
     }
 }

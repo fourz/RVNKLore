@@ -75,61 +75,52 @@ public class LoreCollectionSubCommand implements SubCommand {
         
         // Original switch case handling remains the same
         String sub = args[0].toLowerCase();
+        CollectionManager collectionManager = plugin.getLoreManager().getItemManager().getCollectionManager();
         switch (sub) {
             case "view":
                 if (args.length < 2) {
-                    sender.sendMessage(ChatColor.RED + "▶ Usage: /lore collection view <collection_id>");
+                    sender.sendMessage(ChatColor.RED + "&c▶ Usage: /lore collection view <collection_id>");
                     return true;
                 }
                 String collectionId = args[1];
-                HeadCollection collection = cosmeticItem.getCollection(collectionId);
-                if (collection == null) {
-                    sender.sendMessage(ChatColor.RED + "✖ Collection not found: " + collectionId);
+                ItemCollection itemCollection = collectionManager.getCollection(collectionId);
+                if (itemCollection == null) {
+                    sender.sendMessage(ChatColor.RED + "&c✖ Collection not found: " + collectionId);
                     return true;
                 }
-                sender.sendMessage(ChatColor.GREEN + "✓ Collection: " + ChatColor.YELLOW + collection.getName());
-                sender.sendMessage(ChatColor.GRAY + "Description: " + ChatColor.WHITE + collection.getDescription());
-                //sender.sendMessage(ChatColor.GRAY + "Items: " + ChatColor.WHITE + collection.getItemCount());
+                sender.sendMessage(ChatColor.GREEN + "&a✓ Collection: " + ChatColor.YELLOW + itemCollection.getName());
+                sender.sendMessage(ChatColor.GRAY + "&7   Description: " + ChatColor.WHITE + itemCollection.getDescription());
+                sender.sendMessage(ChatColor.GRAY + "&7   Items: " + itemCollection.getItemCount());
                 break;
             case "claim":
                 if (args.length < 2) {
-                    sender.sendMessage(ChatColor.RED + "▶ Usage: /lore collection claim <collection_id>");
+                    sender.sendMessage(ChatColor.RED + "&c▶ Usage: /lore collection claim <collection_id>");
                     return true;
                 }
                 collectionId = args[1];
-                collection = cosmeticItem.getCollection(collectionId);
-                if (collection == null) {
-                    sender.sendMessage(ChatColor.RED + "✖ Collection not found: " + collectionId);
+                itemCollection = collectionManager.getCollection(collectionId);
+                if (itemCollection == null) {
+                    sender.sendMessage(ChatColor.RED + "&c✖ Collection not found: " + collectionId);
                     return true;
                 }
-                Map<String, Double> progress = cosmeticItem.getPlayerCollectionProgress(player);
-                double completionPercent = progress.getOrDefault(collection.getId(), 0.0) * 100;
-                if (completionPercent < 100.0) {
-                    player.sendMessage(ChatColor.YELLOW + "⚠ You must complete the collection to claim rewards.");
-                    return true;
-                }
-                if (!collection.getRewards().hasRewards()) {
-                    player.sendMessage(ChatColor.YELLOW + "⚠ No rewards available for this collection.");
-                    return true;
-                }
-                // Award rewards (delegates to CosmeticItem)
-                cosmeticItem.awardCollectionRewards(player, collection, collection.getRewards());
-                sender.sendMessage(ChatColor.GREEN + "✓ Claimed rewards for collection: " + ChatColor.YELLOW + collectionId);
+                collectionManager.grantCollectionReward(player.getUniqueId(), collectionId).thenAccept(granted -> {
+                    if (granted) {
+                        player.sendMessage(ChatColor.GREEN + "&a✓ Claimed rewards for collection: " + ChatColor.YELLOW + collectionId);
+                    } else {
+                        player.sendMessage(ChatColor.RED + "&c✖ Failed to grant rewards for collection: " + collectionId);
+                    }
+                }).exceptionally(e -> {
+                    player.sendMessage(ChatColor.RED + "&c✖ Error checking collection progress.");
+                    return null;
+                });
                 break;
             case "list":
-                List<HeadCollection> collections = cosmeticItem.getAvailableCollections();
-                if (collections.isEmpty()) {
-                    sender.sendMessage(ChatColor.YELLOW + "⚠ No collections available");
-                    return true;
-                }
-                sender.sendMessage(ChatColor.GREEN + "✓ Available Collections:");
-                for (HeadCollection coll : collections) {
-                    sender.sendMessage(ChatColor.GRAY + "• " + ChatColor.YELLOW + coll.getId());
-                }
+                // Use async reload and display logic from LoreCollectionListSubCommand
+                new LoreCollectionListSubCommand(plugin).execute(sender, Arrays.copyOfRange(args, 1, args.length));
                 break;
             default:
-                sender.sendMessage(ChatColor.RED + "✖ Unknown subcommand: " + sub);
-                sender.sendMessage(ChatColor.GRAY + "   Use /lore collection <view|claim|list>");
+                sender.sendMessage(ChatColor.RED + "&c✖ Unknown subcommand: " + sub);
+                sender.sendMessage(ChatColor.GRAY + "&7   Use /lore collection <view|claim|list>");
                 break;
         }
         return true;

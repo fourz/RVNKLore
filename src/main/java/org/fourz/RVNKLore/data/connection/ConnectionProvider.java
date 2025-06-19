@@ -11,4 +11,9 @@ public interface ConnectionProvider {
     Connection getConnection() throws SQLException;
     void close() throws SQLException;
     boolean isHealthy();
+    /**
+     * Validates the current database connection.
+     * @return true if the connection is valid, false otherwise
+     */
+    boolean validateConnection();
 }

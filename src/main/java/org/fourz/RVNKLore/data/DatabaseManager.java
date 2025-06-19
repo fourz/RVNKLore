@@ -11,6 +11,7 @@ import org.fourz.RVNKLore.data.connection.SQLiteConnectionProvider;
 import org.fourz.RVNKLore.data.dto.ItemPropertiesDTO;
 import org.fourz.RVNKLore.data.dto.LoreEntryDTO;
 import org.fourz.RVNKLore.data.dto.LoreSubmissionDTO;
+import org.fourz.RVNKLore.data.dto.ItemCollectionDTO;
 import org.fourz.RVNKLore.data.query.DefaultQueryExecutor;
 import org.fourz.RVNKLore.data.query.MySQLQueryBuilder;
 import org.fourz.RVNKLore.data.query.QueryBuilder;
@@ -51,6 +52,7 @@ public class DatabaseManager {
     private String lastConnectionError;
     private int reconnectAttempts = 0;
     private static final int MAX_RECONNECT_ATTEMPTS = 5;
+    private final ConfigManager configManager;
     
     /**
      * Database types supported by the plugin.
@@ -70,17 +72,16 @@ public class DatabaseManager {
         this.configManager = configManager;
         
         // Load database settings from config
-        Map<String, Object> dbSettings = configManager.getDatabaseSettings();
-        String dbTypeStr = (String)dbSettings.get("type");
-        this.databaseType = "mysql".equalsIgnoreCase(dbTypeStr) ? DatabaseType.MYSQL : DatabaseType.SQLITE;
+        DatabaseSettingsDTO dbSettings = configManager.getDatabaseSettings();
+        this.databaseType = dbSettings.getType() == DatabaseSettingsDTO.DatabaseType.MYSQL ? DatabaseType.MYSQL : DatabaseType.SQLITE;
         
         // Create the appropriate connection provider
         if (databaseType == DatabaseType.MYSQL) {
-            MySQLSettingsDTO mysqlSettings = configManager.getMySQLSettings();
+            MySQLSettingsDTO mysqlSettings = dbSettings.getMysqlSettings();
             this.connectionProvider = new MySQLConnectionProvider(plugin, mysqlSettings);
             this.queryBuilder = new MySQLQueryBuilder();
         } else {
-            SQLiteSettingsDTO sqliteSettings = configManager.getSQLiteSettings();
+            SQLiteSettingsDTO sqliteSettings = dbSettings.getSqliteSettings();
             this.connectionProvider = new SQLiteConnectionProvider(plugin, sqliteSettings);
             this.queryBuilder = new SQLiteQueryBuilder();
         }
@@ -723,7 +724,9 @@ public class DatabaseManager {
 
             int rowsAffected = queryExecutor.executeUpdate(updateQuery).join();
             if (rowsAffected != 1) {
-                throw new SQLException("Failed to update submission " + submissionId);
+                logger.error("Failed to approve submission, rows affected: " + rowsAffected, 
+                    new SQLException("Update failed for submission ID: " + submissionId));
+                return false;
             }
 
             return true;
@@ -794,10 +797,10 @@ public class DatabaseManager {
     }
     
     /**
-     * Save an item.
+     * Save an item with robust error handling and logging.
      *
      * @param dto The item properties DTO to save
-     * @return A future containing the saved item ID
+     * @return A future containing the saved item ID, or failed future on error
      */
     public CompletableFuture<Integer> saveItem(ItemPropertiesDTO dto) {
         if (!validateConnection()) {
@@ -805,523 +808,94 @@ public class DatabaseManager {
                 new SQLException("Database connection is not valid")
             );
         }
-        
+
         // Use transaction to ensure consistency
-        return queryExecutor.executeTransaction(conn -> {
-            int itemId;
-            
-            if (dto.getId() > 0) {
-                // Update existing item
-                QueryBuilder query = queryBuilder.update("lore_item")
-                                                .set("lore_entry_id", dto.getLoreEntryId())
-                                                .set("item_type", dto.getItemType() != null ? dto.getItemType().name() : null)
-                                                .set("material", dto.getMaterial())
-                                                .set("display_name", dto.getDisplayName())
-                                                .set("lore", dto.getLore() != null ? String.join("\n", dto.getLore()) : null)
-                                                .set("custom_model_data", dto.getCustomModelData())
-                                                .set("rarity", dto.getRarity())
-                                                .set("is_obtainable", dto.isObtainable())
-                                                .set("glow", dto.isGlow())
-                                                .set("skull_texture", dto.getSkullTexture())
-                                                .set("texture_data", dto.getTextureData())
-                                                .set("owner_name", dto.getOwnerName())
-                                                .set("collection_id", dto.getCollectionId())
-                                                .set("theme_id", dto.getThemeId())
-                                                .set("rarity_level", dto.getRarityLevel())
-                                                .set("collection_sequence", dto.getCollectionSequence())
-                                                .set("nbt_data", dto.getNbtData())
-                                                .set("created_by", dto.getCreatedBy())
-                                                .where("id = ?", dto.getId());
-                
-                int rowsAffected = 0;
-                try (var stmt = conn.prepareStatement(query.build())) {
-                    for (int i = 0; i < query.getParameters().length; i++) {
-                        stmt.setObject(i + 1, query.getParameters()[i]);
-                    }
-                    rowsAffected = stmt.executeUpdate();
-                }
-                
-                if (rowsAffected <= 0) {
-                    throw new SQLException("Failed to update item");
-                }
-                
-                itemId = dto.getId();
-            } else {
-                // Insert new item
-                QueryBuilder query = queryBuilder.insertInto("lore_item")
-                                                .columns("lore_entry_id", "item_type", "material", "display_name", "lore", "custom_model_data", "rarity", "is_obtainable", "glow", "skull_texture", "texture_data", "owner_name", "collection_id", "theme_id", "rarity_level", "collection_sequence", "nbt_data", "created_by")
-                                                .values(dto.getLoreEntryId(), dto.getItemType() != null ? dto.getItemType().name() : null, dto.getMaterial(), dto.getDisplayName(), dto.getLore() != null ? String.join("\n", dto.getLore()) : null, dto.getCustomModelData(), dto.getRarity(), dto.isObtainable(), dto.isGlow(), dto.getSkullTexture(), dto.getTextureData(), dto.getOwnerName(), dto.getCollectionId(), dto.getThemeId(), dto.getRarityLevel(), dto.getCollectionSequence(), dto.getNbtData(), dto.getCreatedBy());
-                
-                try (var stmt = conn.prepareStatement(query.build(), java.sql.Statement.RETURN_GENERATED_KEYS)) {
-                    for (int i = 0; i < query.getParameters().length; i++) {
-                        stmt.setObject(i + 1, query.getParameters()[i]);
-                    }
-                    stmt.executeUpdate();
-                    
-                    try (var rs = stmt.getGeneratedKeys()) {
-                        if (rs.next()) {
-                            itemId = rs.getInt(1);
-                        } else {
-                            throw new SQLException("Failed to get generated item ID");
-                        }
-                    }
-                }
-            }
-            
-            return itemId;
-        });
-    }
-    
-    /**
-     * Delete an item (async).
-     */
-    public CompletableFuture<Boolean> deleteItem(int id) {
-        QueryBuilder query = queryBuilder.deleteFrom("lore_item")
-            .where("id = ?", id);
-        return queryExecutor.executeUpdate(query)
-            .thenApply(rowsAffected -> rowsAffected > 0);
-    }
-    
-    // UTILITY METHODS
-    
-    /**
-     * Convert a legacy LoreEntry to a new DTO-based entry with submission.
-     *
-     * @param legacyEntry The legacy LoreEntry to convert
-     * @return A future containing true if the conversion was successful, false otherwise
-     */
-    public CompletableFuture<Boolean> convertLegacyEntry(LoreEntry legacyEntry) {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
-        }
-        
-        return queryExecutor.executeTransaction(conn -> {
-            // 1. Create the lore entry
-            LoreEntryDTO entryDto = new LoreEntryDTO();
-            entryDto.setEntryType(legacyEntry.getType().name());
-            entryDto.setName(legacyEntry.getName());
-            entryDto.setDescription(legacyEntry.getDescription());
-            entryDto.setCreatedAt(legacyEntry.getCreatedAt());
-            entryDto.setUpdatedAt(legacyEntry.getCreatedAt());
-            
-            // Insert the entry
-            QueryBuilder entryQuery = queryBuilder.insertInto("lore_entry")
-                                                .columns("entry_type", "name", "description", "created_at")
-                                                .values(entryDto.getEntryType(), entryDto.getName(), 
-                                                       entryDto.getDescription(), entryDto.getCreatedAt());
-            
-            int entryId;
-            try (var stmt = conn.prepareStatement(entryQuery.build(), java.sql.Statement.RETURN_GENERATED_KEYS)) {
-                for (int i = 0; i < entryQuery.getParameters().length; i++) {
-                    stmt.setObject(i + 1, entryQuery.getParameters()[i]);
-                }
-                stmt.executeUpdate();
-                
-                try (var rs = stmt.getGeneratedKeys()) {
-                    if (rs.next()) {
-                        entryId = rs.getInt(1);
-                    } else {
-                        throw new SQLException("Failed to get generated entry ID");
-                    }
-                }
-            }
-            
-            // 2. Create the submission
-            LoreSubmissionDTO submissionDto = new LoreSubmissionDTO();
-            submissionDto.setEntryId(entryId);
-            submissionDto.setSlug("lore-" + entryId + "-" + System.currentTimeMillis());
-            submissionDto.setVisibility("PUBLIC");
-            submissionDto.setStatus("ACTIVE");
-            submissionDto.setSubmitterUuid(legacyEntry.getSubmittedBy());
-            submissionDto.setCreatedBy(legacyEntry.getSubmittedBy());
-            submissionDto.setSubmissionDate(legacyEntry.getCreatedAt());
-            submissionDto.setApprovalStatus(legacyEntry.isApproved() ? "APPROVED" : "PENDING");
-            if (legacyEntry.isApproved()) {
-                submissionDto.setApprovedAt(legacyEntry.getCreatedAt());
-                submissionDto.setApprovedBy("SYSTEM");
-            }
-            submissionDto.setCreatedAt(legacyEntry.getCreatedAt());
-            submissionDto.setUpdatedAt(legacyEntry.getCreatedAt());
-            submissionDto.setContentVersion(1);
-            submissionDto.setCurrentVersion(true);
-            submissionDto.setContent(legacyEntry.getDescription());
-            
-            // Insert the submission
-            QueryBuilder submissionQuery = queryBuilder.insertInto("lore_submission")
-                                                    .columns("entry_id", "slug", "visibility", "status", 
-                                                           "submitter_uuid", "created_by", "submission_date", 
-                                                           "approval_status", "approved_by", "approved_at", 
-                                                           "created_at", "updated_at", "content_version", 
-                                                           "is_current_version", "content")
-                                                    .values(submissionDto.getEntryId(), submissionDto.getSlug(), 
-                                                          submissionDto.getVisibility(), submissionDto.getStatus(), 
-                                                          submissionDto.getSubmitterUuid(), submissionDto.getCreatedBy(), 
-                                                          submissionDto.getSubmissionDate(), submissionDto.getApprovalStatus(), 
-                                                          submissionDto.getApprovedBy(), submissionDto.getApprovedAt(), 
-                                                          submissionDto.getCreatedAt(), submissionDto.getUpdatedAt(), 
-                                                          submissionDto.getContentVersion(), submissionDto.isCurrentVersion(), 
-                                                          submissionDto.getContent());
-            
-            try (var stmt = conn.prepareStatement(submissionQuery.build())) {
-                for (int i = 0; i < submissionQuery.getParameters().length; i++) {
-                    stmt.setObject(i + 1, submissionQuery.getParameters()[i]);
-                }
-                stmt.executeUpdate();
-            }
-            
-            // 3. If this is an ITEM type, create the item record
-            if (legacyEntry.getType() == LoreType.ITEM) {
-                // In a real implementation, we would extract the item properties from the legacy entry
-                // and create an ItemPropertiesDTO
-                
-                // This is just a stub, as we don't have full item data in the legacy entry
-                ItemPropertiesDTO itemDto = new ItemPropertiesDTO();
-                itemDto.setLoreEntryId(String.valueOf(entryId));
-                // Set other properties...
-                
-                // Insert the item record would go here
-            }
-            
-            return true;
-        });
-    }
-    
-    /**
-     * Check database health and reconnect if necessary.
-     */
-    private void performHealthCheck() {
-        try {
-            boolean isHealthy = connectionProvider.isHealthy();
-            
-            if (isHealthy) {
-                if (!isConnected) {
-                    logger.info("Database connection restored");
-                }
-                isConnected = true;
-                reconnectAttempts = 0;
-            } else {
-                isConnected = false;
-                
-                if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-                    reconnectAttempts++;
-                    logger.warning("Database connection unhealthy, attempting reconnect (attempt " + reconnectAttempts + " of " + MAX_RECONNECT_ATTEMPTS + ")");
-                    // The next health check will determine if reconnection was successful
-                } else {
-                    logger.error("Maximum reconnection attempts reached. Database operations disabled.", null);
-                }
-            }
-        } catch (Exception e) {
-            isConnected = false;
-            logger.error("Error during database health check", e);
-        }
-    }
-    
-    /**
-     * Validate the database connection.
-     *
-     * @return True if the connection is valid, false otherwise
-     */
-    private boolean validateConnection() {
-        return isConnected || reconnectAttempts < MAX_RECONNECT_ATTEMPTS;
-    }
-    
-    /**
-     * Get the database type.
-     *
-     * @return The database type
-     */
-    public DatabaseType getDatabaseType() {
-        return databaseType;
-    }
-    
-    /**
-     * Get the database connection provider.
-     *
-     * @return The connection provider
-     */
-    public ConnectionProvider getConnectionProvider() {
-        return connectionProvider;
-    }
-    
-    /**
-     * Get the query executor.
-     *
-     * @return The query executor
-     */
-    public QueryExecutor getQueryExecutor() {
-        return queryExecutor;
-    }
-    
-    /**
-     * Get the query builder.
-     *
-     * @return The query builder
-     */
-    public QueryBuilder getQueryBuilder() {
-        return queryBuilder;
-    }
-    
-    /**
-     * Check if the database connection is valid.
-     *
-     * @return True if the connection is valid, false otherwise
-     */
-    public boolean isConnectionValid() {
-        return isConnected;
-    }
-    
-    /**
-     * Get the last connection error.
-     *
-     * @return The last connection error
-     */
-    public String getLastConnectionError() {
-        return lastConnectionError;
-    }
-    
-    /**
-     * Close the database connection and clean up resources.
-     */
-    public void close() {
-        if (connectionProvider != null) {
-            try {
-                connectionProvider.close();
-                logger.info("Database connection closed");
-            } catch (SQLException e) {
-                logger.error("Error closing database connection", e);
-            }
-        }
-    }
-    
-    /**
-     * Convert legacy LoreEntry objects to DTOs.
-     *
-     * @param legacyEntries The legacy LoreEntry objects
-     * @return A list of LoreEntryDTO objects
-     */
-    public List<LoreEntryDTO> convertLegacyEntries(List<LoreEntry> legacyEntries) {
-        return legacyEntries.stream()
-                          .map(LoreEntryDTO::fromLoreEntry)
-                          .collect(Collectors.toList());
-    }
-
-    /**
-     * Find lore entries near a location using spatial index.
-     * Uses different optimized queries for MySQL (POINT type + spatial index) vs SQLite (R*Tree index)
-     *
-     * @param world World name
-     * @param x Center X coordinate
-     * @param y Center Y coordinate
-     * @param z Center Z coordinate
-     * @param radius Search radius in blocks
-     * @return A future containing a list of nearby lore entry DTOs
-     */
-    public CompletableFuture<List<LoreEntryDTO>> findNearbyLoreEntries(String world, double x, double y, double z, double radius) {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
-        }
-
-        QueryBuilder query;
-        try {
-            if (databaseType == DatabaseType.MYSQL) {
-                // Use MySQL spatial index with ST_Distance_Sphere
-                query = queryBuilder.select("e.*")
-                    .from("lore_entry e")
-                    .join("lore_location l ON l.lore_entry_id = e.id")
-                    .where("l.world = ?", world)
-                    .and("ST_Distance_Sphere(l.point, POINT(?, ?))", x, z)
-                    .and("ABS(l.y - ?) <= ?", y, radius)
-                    .orderBy("ST_Distance_Sphere(l.point, POINT(?, ?))", false);
-            } else {
-                // Use SQLite R*Tree index
-                query = queryBuilder.select("e.*")
-                    .from("lore_entry e")
-                    .join("lore_location l ON l.lore_entry_id = e.id")
-                    .join("lore_location_rtree r ON r.id = l.id")
-                    .where("l.world = ?", world)
-                    .and("r.minX >= ?", x - radius)
-                    .and("r.maxX <= ?", x + radius)
-                    .and("r.minY >= ?", y - radius)
-                    .and("r.maxY <= ?", y + radius)
-                    .and("r.minZ >= ?", z - radius)
-                    .and("r.maxZ <= ?", z + radius);
-            }
-            
-            return queryExecutor.executeQueryList(query, LoreEntryDTO.class);
-        } catch (Exception e) {
-            return CompletableFuture.failedFuture(e);
-        }
-    }
-    
-    /**
-     * Update a lore location's coordinates in an efficient batched way
-     * 
-     * @param locationUpdates Map of location IDs to their new coordinates (x,y,z)
-     * @return A future completing when the batch update is done
-     */
-    public CompletableFuture<Void> batchUpdateLocations(Map<Integer, Location> locationUpdates) {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
-        }
-
-        return CompletableFuture.runAsync(() -> {
-            String sql;
-            if (databaseType == DatabaseType.MYSQL) {
-                sql = "UPDATE lore_location SET x = ?, y = ?, z = ?, point = POINT(?, ?) WHERE id = ?";
-            } else {
-                sql = "UPDATE lore_location SET x = ?, y = ?, z = ? WHERE id = ?";
-            }
-
-            try {
-                Connection conn = getDatabaseConnection();
-                conn.setAutoCommit(false);
-                try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-                    for (Map.Entry<Integer, Location> update : locationUpdates.entrySet()) {
-                        Location loc = update.getValue();
-                        stmt.setDouble(1, loc.getX());
-                        stmt.setDouble(2, loc.getY());
-                        stmt.setDouble(3, loc.getZ());
-                        if (databaseType == DatabaseType.MYSQL) {
-                            stmt.setDouble(4, loc.getX());
-                            stmt.setDouble(5, loc.getZ());
-                            stmt.setInt(6, update.getKey());
-                        } else {
-                            stmt.setInt(4, update.getKey());
-                        }
-                        stmt.addBatch();
-                    }
-                    stmt.executeBatch();
-                }
-
-                // For SQLite, update the R*Tree index
-                if (databaseType == DatabaseType.SQLITE) {
-                    sql = "INSERT OR REPLACE INTO lore_location_rtree (id, minX, maxX, minY, maxY, minZ, maxZ) " +
-                          "SELECT id, x, x, y, y, z, z FROM lore_location WHERE id = ?";
-                    try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-                        for (int id : locationUpdates.keySet()) {
-                            stmt.setInt(1, id);
-                            stmt.addBatch();
-                        }
-                        stmt.executeBatch();
-                    }
-                }
-
-                conn.commit();
-            } catch (SQLException e) {
-                logger.error("Failed to batch update locations", e);
-                try {
-                    Connection conn = getDatabaseConnection();
-                    conn.rollback();
-                } catch (SQLException rollbackEx) {
-                    logger.error("Failed to rollback transaction", rollbackEx);
-                }
-                throw new CompletionException(e);
-            }
-        });
-    }
-    
-    /**
-     * Begin a new database transaction
-     * 
-     * @return A future containing the transaction object
-     */
-    public CompletableFuture<DatabaseTransaction> beginTransaction() {
         return CompletableFuture.supplyAsync(() -> {
             try {
-                Connection conn = getDatabaseConnection();
-                conn.setAutoCommit(false);
-                return new DatabaseTransaction(conn);
-            } catch (SQLException e) {
-                logger.error("Failed to begin transaction", e);
-                throw new CompletionException(e);
-            }
-        });
-    }
-    
-    /**
-     * Commit a transaction
-     * 
-     * @param transaction The transaction to commit
-     * @return A future that completes when the commit is done
-     */
-    public CompletableFuture<Void> commitTransaction(DatabaseTransaction transaction) {
-        return CompletableFuture.runAsync(() -> {
-            try {
-                transaction.getConnection().commit();
-            } catch (SQLException e) {
-                logger.error("Failed to commit transaction", e);
-                throw new CompletionException(e);
-            }
-        });
-    }
-    
-    /**
-     * Rollback a transaction
-     * 
-     * @param transaction The transaction to rollback
-     * @return A future that completes when the rollback is done
-     */
-    public CompletableFuture<Void> rollbackTransaction(DatabaseTransaction transaction) {
-        return CompletableFuture.runAsync(() -> {
-            try {
-                transaction.getConnection().rollback();
-            } catch (SQLException e) {
-                logger.error("Failed to rollback transaction", e);
-                throw new CompletionException(e);
-            }
-        });
-    }
-    
-    /**
-     * Clear all lore submissions
-     * 
-     * @return A future that completes when clearing is done
-     */
-    public CompletableFuture<Void> clearAllSubmissions() {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
-        }
-        
-        QueryBuilder query = queryBuilder.deleteFrom("lore_submission");
-        return queryExecutor.executeUpdate(query).thenApply(v -> null);
-    }
-    
-    /**
-     * Clear all lore entries
-     * 
-     * @return A future that completes when clearing is done
-     */
-    public CompletableFuture<Void> clearAllEntries() {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
-        }
-        
-        QueryBuilder query = queryBuilder.deleteFrom("lore_entry");
-        return queryExecutor.executeUpdate(query).thenApply(v -> null);
-    }
+                return queryExecutor.executeTransaction(conn -> {
+                    int itemId;
+                    try {
+                        if (dto.getId() > 0) {
+                            // Update existing item
+                            QueryBuilder query = queryBuilder.update("lore_item")
+                                .set("lore_entry_id", dto.getLoreEntryId())
+                                .set("item_type", dto.getItemType() != null ? dto.getItemType().name() : null)
+                                .set("material", dto.getMaterial())
+                                .set("display_name", dto.getDisplayName())
+                                .set("lore", dto.getLore() != null ? String.join("\n", dto.getLore()) : null)
+                                .set("custom_model_data", dto.getCustomModelData())
+                                .set("rarity", dto.getRarity())
+                                .set("is_obtainable", dto.isObtainable())
+                                .set("glow", dto.isGlow())
+                                .set("skull_texture", dto.getSkullTexture())
+                                .set("texture_data", dto.getTextureData())
+                                .set("owner_name", dto.getOwnerName())
+                                .set("collection_id", dto.getCollectionId())
+                                .set("theme_id", dto.getThemeId())
+                                .set("rarity_level", dto.getRarityLevel())
+                                .set("collection_sequence", dto.getCollectionSequence())
+                                .set("nbt_data", dto.getNbtData())
+                                .set("created_by", dto.getCreatedBy())
+                                .where("id = ?", dto.getId());
 
+                            int rowsAffected = 0;
+                            try (var stmt = conn.prepareStatement(query.build())) {
+                                for (int i = 0; i < query.getParameters().length; i++) {
+                                    stmt.setObject(i + 1, query.getParameters()[i]);
+                                }
+                                rowsAffected = stmt.executeUpdate();
+                            }
+
+                            if (rowsAffected <= 0) {
+                                logger.error("Failed to update item with ID: " + dto.getId(), new SQLException("Failed to update item"));
+                                throw new SQLException("Failed to update item with ID: " + dto.getId());
+                            }
+
+                            itemId = dto.getId();
+                        } else {
+                            // Insert new item
+                            QueryBuilder query = queryBuilder.insertInto("lore_item")
+                                .columns("lore_entry_id", "item_type", "material", "display_name", "lore", "custom_model_data", "rarity", "is_obtainable", "glow", "skull_texture", "texture_data", "owner_name", "collection_id", "theme_id", "rarity_level", "collection_sequence", "nbt_data", "created_by")
+                                .values(dto.getLoreEntryId(), dto.getItemType() != null ? dto.getItemType().name() : null, dto.getMaterial(), dto.getDisplayName(), dto.getLore() != null ? String.join("\n", dto.getLore()) : null, dto.getCustomModelData(), dto.getRarity(), dto.isObtainable(), dto.isGlow(), dto.getSkullTexture(), dto.getTextureData(), dto.getOwnerName(), dto.getCollectionId(), dto.getThemeId(), dto.getRarityLevel(), dto.getCollectionSequence(), dto.getNbtData(), dto.getCreatedBy());
+
+                            try (var stmt = conn.prepareStatement(query.build(), java.sql.Statement.RETURN_GENERATED_KEYS)) {
+                                for (int i = 0; i < query.getParameters().length; i++) {
+                                    stmt.setObject(i + 1, query.getParameters()[i]);
+                                }
+                                int rows = stmt.executeUpdate();
+                                if (rows == 0) {
+                                    logger.error("Failed to insert new item (no rows affected)", null);
+                                    throw new SQLException("Failed to insert new item (no rows affected)");
+                                }
+                                try (var rs = stmt.getGeneratedKeys()) {
+                                    if (rs.next()) {
+                                        itemId = rs.getInt(1);
+                                    } else {
+                                        logger.error("Failed to get generated item ID after insert", null);
+                                        throw new SQLException("Failed to get generated item ID after insert");
+                                    }
+                                }
+                            }
+                        }
+                        return itemId;
+                    } catch (SQLException e) {
+                        logger.error("Error saving item (transaction)", e);
+                        throw new RuntimeException(e);
+                    }
+                }).join();
+            } catch (Exception ex) {
+                logger.error("Error saving item (outer)", ex);
+                throw new CompletionException(ex);
+            }
+        });
+    }
+    
     /**
-     * Simple wrapper class for database transactions
+     * Validates the current database connection using the provider.
+     *
+     * @return true if the connection is valid, false otherwise
      */
-    public static class DatabaseTransaction {
-        private final Connection connection;
-        
-        public DatabaseTransaction(Connection connection) {
-            this.connection = connection;
-        }
-        
-        public Connection getConnection() {
-            return connection;
-        }
+    private boolean validateConnection() {
+        return connectionProvider != null && connectionProvider.validateConnection();
     }
 }

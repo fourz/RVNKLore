@@ -6,9 +6,11 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.lore.item.ItemProperties;
-import org.fourz.RVNKLore.lore.item.cosmetic.HeadCollection;
-import org.fourz.RVNKLore.data.ItemRepository;
+import org.fourz.RVNKLore.data.CollectionRepository;
+import org.fourz.RVNKLore.data.dto.ItemCollectionDTO;
+
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -22,10 +24,15 @@ public class CollectionManager {
     private final LogManager logger;
     private final Map<String, ItemCollection> collections = new ConcurrentHashMap<>();
     private final Map<String, CollectionTheme> themes = new ConcurrentHashMap<>();
+    private final CollectionRepository collectionRepository;
 
     public CollectionManager(RVNKLore plugin) {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "CollectionManager");
+        
+        // Initialize repository with the DatabaseManager
+        this.collectionRepository = new CollectionRepository(plugin, plugin.getDatabaseManager());
+        
         initializeCollections();
         logger.info("CollectionManager initialized");
     }
@@ -235,124 +242,117 @@ public class CollectionManager {
     }
 
     /**
-     * Initialize collections from database on startup
+     * Initialize collections from database on startup (async)
      */
     private void loadCollectionsFromDatabase() {
-        if (plugin.getDatabaseManager() == null || !plugin.getDatabaseManager().isConnected()) {
-            logger.warning("Database not available - using default collections only");
-            return;
-        }
-        ItemRepository repository = new ItemRepository(plugin, plugin.getDatabaseManager().getDatabaseConnection());
-        List<ItemCollection> loadedCollections = repository.loadAllCollections();
-        for (ItemCollection collection : loadedCollections) {
-            collections.put(collection.getId(), collection);
-            logger.info("Loaded collection from database: " + collection.getName());
-        }
-        logger.info("Loaded " + loadedCollections.size() + " collections from database");
+        logger.info("Loading collections from database asynchronously...");
+        collectionRepository.getAllCollections()
+            .thenAccept(dtos -> {
+                for (ItemCollectionDTO dto : dtos) {
+                    ItemCollection collection = dto.toCollection();
+                    collections.put(collection.getId(), collection);
+                    logger.info("Loaded collection from database: " + collection.getName());
+                }
+                logger.info("Loaded " + dtos.size() + " collections from database");
+            })
+            .exceptionally(e -> {
+                logger.error("Error loading collections from database", e);
+                return null;
+            });
     }
 
     /**
-     * Save a collection to the database with enhanced error handling
+     * Save a collection to the database with enhanced error handling (async)
      *
      * @param collection The collection to persist
-     * @return True if successfully saved
+     * @return CompletableFuture<Boolean> that resolves to true if successfully saved
      */
-    public boolean saveCollection(ItemCollection collection) {
+    public CompletableFuture<Boolean> saveCollection(ItemCollection collection) {
         if (!validateCollection(collection)) {
             logger.warning("Cannot save invalid collection");
-            return false;
+            return CompletableFuture.completedFuture(false);
         }
         
-        if (plugin.getDatabaseManager() == null || !plugin.getDatabaseManager().isConnected()) {
-            logger.warning("Database not available - collection will not be persisted");
-            return false;
-        }
-        
-        try {
-            ItemRepository repository = new ItemRepository(plugin, plugin.getDatabaseManager().getDatabaseConnection());
-            boolean saved = repository.saveCollection(collection);
-            
-            if (saved) {
-                logger.info("Successfully saved collection: " + collection.getId());
-                // Update the in-memory collection
-                collections.put(collection.getId(), collection);
-            } else {
-                logger.warning("Failed to save collection: " + collection.getId());
-            }
-            
-            return saved;
-        } catch (Exception e) {
-            logger.error("Error saving collection: " + collection.getId(), e);
-            return false;
-        }
+        return collectionRepository.saveCollection(collection)
+            .thenApply(saved -> {
+                if (saved) {
+                    logger.info("Successfully saved collection: " + collection.getId());
+                    // Update the in-memory collection
+                    collections.put(collection.getId(), collection);
+                } else {
+                    logger.warning("Failed to save collection: " + collection.getId());
+                }
+                return saved;
+            })
+            .exceptionally(e -> {
+                logger.error("Error saving collection: " + collection.getId(), e);
+                return false;
+            });
     }
 
     /**
-     * Get a player's progress for a specific collection
+     * Get a player's progress for a specific collection (async)
      * 
      * @param playerId The player's UUID
      * @param collectionId The collection identifier
-     * @return Progress value between 0.0 and 1.0
+     * @return CompletableFuture<Double> with progress value between 0.0 and 1.0
      */
-    public double getPlayerProgress(UUID playerId, String collectionId) {
+    public CompletableFuture<Double> getPlayerProgress(UUID playerId, String collectionId) {
         if (playerId == null || collectionId == null) {
-            return 0.0;
+            return CompletableFuture.completedFuture(0.0);
         }
         
-        if (plugin.getDatabaseManager() == null || !plugin.getDatabaseManager().isConnected()) {
-            logger.warning("Database not available - cannot retrieve player progress");
-            return 0.0;
-        }
-        
-        ItemRepository repository = new ItemRepository(plugin, plugin.getDatabaseManager().getDatabaseConnection());
-        return repository.getPlayerCollectionProgress(playerId.toString(), collectionId);
+        return collectionRepository.getPlayerCollectionProgress(playerId.toString(), collectionId)
+            .exceptionally(e -> {
+                logger.error("Error getting player progress", e);
+                return 0.0;
+            });
     }
 
     /**
-     * Update a player's progress for a collection
+     * Update a player's progress for a collection (async)
      * 
      * @param playerId The player's UUID
      * @param collectionId The collection identifier
      * @param progress Progress value between 0.0 and 1.0
-     * @return True if successfully updated
+     * @return CompletableFuture<Boolean> that resolves to true if successfully updated
      */
-    public boolean updatePlayerProgress(UUID playerId, String collectionId, double progress) {
+    public CompletableFuture<Boolean> updatePlayerProgress(UUID playerId, String collectionId, double progress) {
         if (playerId == null || collectionId == null || progress < 0.0 || progress > 1.0) {
             logger.warning("Invalid parameters for progress update");
-            return false;
+            return CompletableFuture.completedFuture(false);
         }
         
-        if (plugin.getDatabaseManager() == null || !plugin.getDatabaseManager().isConnected()) {
-            logger.warning("Database not available - cannot update player progress");
-            return false;
-        }
-        
-        ItemRepository repository = new ItemRepository(plugin, plugin.getDatabaseManager().getDatabaseConnection());
-        boolean updated = repository.updatePlayerCollectionProgress(playerId.toString(), collectionId, progress);
-        
-        if (updated) {
-            logger.info("Updated progress for player " + playerId + " in collection " + collectionId + ": " + String.format("%.1f%%", progress * 100));
-            
-            // Check for completion and trigger rewards
-            if (progress >= 1.0) {
-                handleCollectionCompletion(playerId, collectionId);
-            }
-        }
-        
-        return updated;
+        return collectionRepository.updatePlayerCollectionProgress(playerId.toString(), collectionId, progress)
+            .thenCompose(updated -> {
+                if (updated) {
+                    logger.info("Updated progress for player " + playerId + " in collection " + collectionId + ": " + String.format("%.1f%%", progress * 100));
+                    
+                    // Check for completion and trigger rewards
+                    if (progress >= 1.0) {
+                        return handleCollectionCompletionAsync(playerId, collectionId);
+                    }
+                }
+                return CompletableFuture.completedFuture(updated);
+            })
+            .exceptionally(e -> {
+                logger.error("Error updating player progress", e);
+                return false;
+            });
     }
     
     /**
-     * Handle collection completion events and rewards
+     * Handle collection completion events and rewards (async)
      * 
      * @param playerId The player who completed the collection
      * @param collectionId The completed collection
+     * @return CompletableFuture<Boolean> that resolves to true if handling was successful
      */
-    private void handleCollectionCompletion(UUID playerId, String collectionId) {
+    private CompletableFuture<Boolean> handleCollectionCompletionAsync(UUID playerId, String collectionId) {
         ItemCollection collection = getCollection(collectionId);
         if (collection == null) {
             logger.warning("Cannot handle completion for unknown collection: " + collectionId);
-            return;
+            return CompletableFuture.completedFuture(false);
         }
 
         logger.info("Player " + playerId + " completed collection: " + collection.getName());
@@ -361,53 +361,11 @@ public class CollectionManager {
         // TODO: Fire CollectionChangeEvent with ChangeType.COMPLETED for event-driven handling
 
         // Mark completion timestamp in the database
-        ItemRepository repository = new ItemRepository(plugin, plugin.getDatabaseManager().getDatabaseConnection());
-        repository.markCollectionCompleted(playerId.toString(), collectionId, System.currentTimeMillis());
-    }
-
-    /**
-     * Grant collection rewards to a player
-     * 
-     * @param playerId The player's UUID
-     * @param collectionId The collection identifier
-     * @return True if rewards were successfully granted
-     */
-    public boolean grantCollectionReward(UUID playerId, String collectionId) {
-        if (getPlayerProgress(playerId, collectionId) < 1.0) {
-            logger.warning("Cannot grant rewards - collection not completed by player " + playerId);
-            return false;
-        }
-        
-        ItemCollection collection = getCollection(collectionId);
-        if (collection == null) {
-            logger.warning("Cannot grant rewards for unknown collection: " + collectionId);
-            return false;
-        }
-
-        // TODO: Integrate with the reward system to actually distribute rewards.
-        // This may involve firing an event or directly awarding items.
-
-        logger.info("Granted collection rewards to player " + playerId + " for collection: " + collectionId);
-        return true;
-    }
-
-    /**
-     * Emit collection change events for other systems to listen to
-     * TODO: Implement when event system is available
-     *
-     * @param collection The collection that changed
-     * @param changeType The type of change
-     */
-    private void fireCollectionChangeEvent(ItemCollection collection, ChangeType changeType) {
-        // Placeholder for event system integration
-        logger.debug("Collection change event: " + changeType + " for " + collection.getId());
-    }
-
-    /**
-     * Types of collection changes for event system
-     */
-    public enum ChangeType {
-        CREATED, UPDATED, DELETED, COMPLETED
+        return collectionRepository.markCollectionCompleted(playerId.toString(), collectionId, System.currentTimeMillis())
+            .exceptionally(e -> {
+                logger.error("Error marking collection as completed", e);
+                return false;
+            });
     }
 
     /**
@@ -430,20 +388,52 @@ public class CollectionManager {
     }
 
     /**
-     * Reload all collections from the database.
+     * Reload all collections from the database (async).
      * This will replace the in-memory map with the latest from storage.
+     * 
+     * @return CompletableFuture<Integer> that resolves to the number of loaded collections
      */
-    public void reloadCollectionsFromDatabase() {
-        if (plugin.getDatabaseManager() == null || !plugin.getDatabaseManager().isConnected()) {
-            logger.warning("Database not available - cannot reload collections");
-            return;
-        }
-        ItemRepository repository = new ItemRepository(plugin, plugin.getDatabaseManager().getDatabaseConnection());
-        List<ItemCollection> loadedCollections = repository.loadAllCollections();
+    public CompletableFuture<Integer> reloadCollectionsFromDatabase() {
+        logger.info("Reloading collections from database asynchronously...");
         collections.clear();
-        for (ItemCollection collection : loadedCollections) {
-            collections.put(collection.getId(), collection);
-        }
-        logger.info("Reloaded " + loadedCollections.size() + " collections from database");
+        
+        return collectionRepository.getAllCollections()
+            .thenApply(loadedCollections -> {
+                for (ItemCollectionDTO dto : loadedCollections) {
+                    ItemCollection collection = dto.toCollection();
+                    collections.put(collection.getId(), collection);
+                }
+                logger.info("Reloaded " + loadedCollections.size() + " collections from database");
+                return loadedCollections.size();
+            })
+            .exceptionally(e -> {
+                logger.error("Error reloading collections from database", e);
+                return 0;
+            });
+    }
+
+    /**
+     * Grant collection rewards to a player (async)
+     *
+     * @param playerId The player's UUID
+     * @param collectionId The collection identifier
+     * @return CompletableFuture<Boolean> that resolves to true if rewards were successfully granted
+     */
+    public CompletableFuture<Boolean> grantCollectionReward(UUID playerId, String collectionId) {
+        return getPlayerProgress(playerId, collectionId).thenApply(progress -> {
+            if (progress < 1.0) {
+                logger.warning("Cannot grant rewards - collection not completed by player " + playerId);
+                return false;
+            }
+            ItemCollection collection = getCollection(collectionId);
+            if (collection == null) {
+                logger.warning("Cannot grant rewards for unknown collection: " + collectionId);
+                return false;
+            }
+            // TODO: Integrate with the reward system to actually distribute rewards.
+            // This may involve firing an event or directly awarding items.
+            logger.info("Granted collection rewards to player " + playerId + " for collection: " + collectionId);
+            return true;
+        });
     }
 }

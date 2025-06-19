@@ -116,6 +116,11 @@ public class MySQLConnectionProvider implements ConnectionProvider {
         }
     }
 
+    @Override
+    public boolean validateConnection() {
+        return isHealthy();
+    }
+
     /**
      * Get the last connection error message.
      *

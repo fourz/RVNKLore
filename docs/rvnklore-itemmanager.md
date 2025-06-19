@@ -3,7 +3,10 @@
 The `ItemManager` is the central orchestrator for all item-related functionality in the RVNKLore plugin. It manages sub-managers for enchantments, cosmetics, collections, and model data, providing a unified interface for item creation and management.
 
 ## Recent Edits
-- Implemented asynchronous cache refresh for improved performance.
+- **Refactored to use async, DTO-based repository/service architecture for all database operations.**
+- All item persistence and queries now use `ItemPropertiesDTO`, `LoreEntryDTO`, and related DTOs.
+- Integrated with the new `DatabaseManager` as the single entry point for all data access.
+- All cache and batch logic now operate on DTOs and async flows.
 - Enhanced integration with Cosmetic and Collection managers.
 - Added fallback mechanisms for item lookup from both database and memory.
 - Refined logging to align with the new LogManager standards.
@@ -19,6 +22,7 @@ The `ItemManager` is the central orchestrator for all item-related functionality
 - Handle resource cleanup and shutdown for all sub-managers
 - Maintain in-memory and database-backed caches for item properties and collections
 - Support paginated, sorted item listing for commands
+- **All database operations are asynchronous and use DTOs for data transfer.**
 
 ## Key Methods
 - `getEnchantManager()`: Access the enchantment manager
@@ -29,20 +33,26 @@ The `ItemManager` is the central orchestrator for all item-related functionality
 - `createLoreItem(String)`: Lookup and create item by name
 - `getAllItemNames()`: List all registered item names
 - `getAllItemsWithProperties()`: List all items with metadata for sorting and display
+- `reloadItemsFromDatabase()`: Async reload of all items from the database
+- `saveItemAsync(ItemPropertiesDTO)`: Async save of item properties
 - `shutdown()`, `cleanup()`: Resource management
 
 ## Example Usage
 ```java
 ItemManager itemManager = plugin.getItemManager();
-ItemStack enchantedSword = itemManager.createLoreItem(ItemType.ENCHANTED, "Frost Edge", properties);
-List<String> allItems = itemManager.getAllItemNames();
+CompletableFuture<ItemStack> itemFuture = itemManager.createLoreItemAsync(ItemType.ENCHANTED, "Frost Edge", properties);
+itemFuture.thenAccept(enchantedSword -> {
+    // Use the enchanted sword
+});
+CompletableFuture<List<String>> allItemsFuture = itemManager.getAllItemNamesAsync();
 ```
 
 ## Design Notes
 - Follows the manager pattern for modularity and separation of concerns
 - Integrates with the plugin's logging system via `LogManager`
 - Sub-managers are initialized in a fail-safe manner
-- CosmeticsManager is now managed exclusively through ItemManager
-- Supports async cache initialization and refresh for performance
+- CosmeticsManager and CollectionManager are managed exclusively through ItemManager
+- **All database and cache operations are asynchronous and use DTOs for data transfer.**
 - Provides sorted, paginated item lists for command output via DisplayFactory
 - **Descriptions:** Item descriptions are not stored in `lore_item`. For all description needs, use the `lore_entry` or `lore_submission` tables, which support versioning and content history.
+- **Migration Note:** All legacy direct SQL/config/database connection usage has been removed from ItemManager. All persistence is now handled via async repository/service methods and DTOs.
