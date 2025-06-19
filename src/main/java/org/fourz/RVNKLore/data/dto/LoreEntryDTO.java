@@ -1,96 +1,115 @@
 package org.fourz.RVNKLore.data.dto;
 
 import java.sql.Timestamp;
+import java.util.HashMap;
+import java.util.Map;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
 
 /**
  * Data Transfer Object for LoreEntry.
  * Used to transfer lore entry data between database and domain layers.
+ * Includes all fields from the lore_entry table and related metadata.
  */
 public class LoreEntryDTO {
-    private int id;
+    // Core DB fields
+    private int id; // DB primary key
+    private String uuid; // Domain UUID (CHAR(36))
     private String entryType;
     private String name;
     private String description;
+    private boolean isApproved;
+    private String submittedBy;
+    private Timestamp submissionDate;
+    private String nbtData;
     private Timestamp createdAt;
     private Timestamp updatedAt;
+    private Map<String, String> metadata = new HashMap<>();
 
     public LoreEntryDTO() {}
 
-    public LoreEntryDTO(int id, String entryType, String name, String description, 
-                       Timestamp createdAt, Timestamp updatedAt) {
+    public LoreEntryDTO(int id, String uuid, String entryType, String name, String description, boolean isApproved, String submittedBy, Timestamp submissionDate, String nbtData, Timestamp createdAt, Timestamp updatedAt, Map<String, String> metadata) {
         this.id = id;
+        this.uuid = uuid;
         this.entryType = entryType;
         this.name = name;
         this.description = description;
+        this.isApproved = isApproved;
+        this.submittedBy = submittedBy;
+        this.submissionDate = submissionDate;
+        this.nbtData = nbtData;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
-    }    public int getId() { return id; }
+        this.metadata = metadata != null ? metadata : new HashMap<>();
+    }
+
+    // Getters and setters for all fields
+    public int getId() { return id; }
     public void setId(int id) { this.id = id; }
+    public String getUuid() { return uuid; }
+    public void setUuid(String uuid) { this.uuid = uuid; }
     public String getEntryType() { return entryType; }
     public void setEntryType(String entryType) { this.entryType = entryType; }
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
+    public boolean isApproved() { return isApproved; }
+    public void setApproved(boolean approved) { isApproved = approved; }
+    public String getSubmittedBy() { return submittedBy; }
+    public void setSubmittedBy(String submittedBy) { this.submittedBy = submittedBy; }
+    public Timestamp getSubmissionDate() { return submissionDate; }
+    public void setSubmissionDate(Timestamp submissionDate) { this.submissionDate = submissionDate; }
+    public String getNbtData() { return nbtData; }
+    public void setNbtData(String nbtData) { this.nbtData = nbtData; }
     public Timestamp getCreatedAt() { return createdAt; }
     public void setCreatedAt(Timestamp createdAt) { this.createdAt = createdAt; }
     public Timestamp getUpdatedAt() { return updatedAt; }
-    public void setUpdatedAt(Timestamp updatedAt) { this.updatedAt = updatedAt; }    /**
+    public void setUpdatedAt(Timestamp updatedAt) { this.updatedAt = updatedAt; }
+    public Map<String, String> getMetadata() { return metadata; }
+    public void setMetadata(Map<String, String> metadata) { this.metadata = metadata != null ? metadata : new HashMap<>(); }
+
+    /**
      * Converts a LoreEntry domain object to a DTO.
+     * @param entry The domain object
+     * @return LoreEntryDTO with all fields mapped
      */
     public static LoreEntryDTO fromLoreEntry(LoreEntry entry) {
         if (entry == null) return null;
-        
         LoreEntryDTO dto = new LoreEntryDTO();
-        
-        // Use String.valueOf to convert UUID to string, then parse to int where possible
-        try {
-            dto.setId(Integer.parseInt(entry.getId()));
-        } catch (NumberFormatException e) {
-            // If the ID is not a number (UUID), we'll need another way to handle this
-            // For now, just set a placeholder ID
-            dto.setId(-1);
-        }
-        
+        dto.setId(entry.getNumericId());
+        dto.setUuid(entry.getId());
         dto.setEntryType(entry.getType() != null ? entry.getType().name() : null);
         dto.setName(entry.getName());
         dto.setDescription(entry.getDescription());
+        dto.setApproved(entry.isApproved());
+        dto.setSubmittedBy(entry.getSubmittedBy());
+        dto.setSubmissionDate(entry.getSubmissionDate());
+        dto.setNbtData(entry.getNbtData());
         dto.setCreatedAt(entry.getCreatedAt());
-        // Note: LoreEntry doesn't have updatedAt field yet, setting to createdAt for now
-        dto.setUpdatedAt(entry.getCreatedAt());
-        
+        dto.setUpdatedAt(entry.getUpdatedAt());
+        dto.setMetadata(entry.getMetadata());
         return dto;
     }
 
     /**
      * Converts this DTO to a LoreEntry domain object.
-     * Note: This is a partial conversion as LoreEntry has more fields than this DTO.
+     * @return LoreEntry with all fields mapped
      */
     public LoreEntry toLoreEntry() {
-        // Convert the entryType string to a LoreType enum
-        LoreType type = null;
-        try {
-            if (entryType != null) {
-                type = LoreType.valueOf(entryType);
-            }
-        } catch (IllegalArgumentException e) {
-            // Handle invalid type strings
-            type = LoreType.GENERIC;
-        }
-        
-        // Use the string version of the ID for now
-        String idStr = String.valueOf(id);
-        
-        // Create a new LoreEntry with the basic fields
-        LoreEntry entry = new LoreEntry(idStr, name, description, type);
-        
-        // Set other fields if needed
-        if (createdAt != null) {
-            entry.setCreatedAt(createdAt);
-        }
-        
+        LoreEntry entry = new LoreEntry();
+        entry.setNumericId(this.id);
+        entry.setId(this.uuid);
+        entry.setType(this.entryType != null ? LoreType.valueOf(this.entryType) : LoreType.GENERIC);
+        entry.setName(this.name);
+        entry.setDescription(this.description);
+        entry.setApproved(this.isApproved);
+        entry.setSubmittedBy(this.submittedBy);
+        entry.setSubmissionDate(this.submissionDate);
+        entry.setNbtData(this.nbtData);
+        entry.setCreatedAt(this.createdAt);
+        entry.setUpdatedAt(this.updatedAt);
+        entry.setMetadata(this.metadata != null ? new HashMap<>(this.metadata) : new HashMap<>());
         return entry;
     }
 }

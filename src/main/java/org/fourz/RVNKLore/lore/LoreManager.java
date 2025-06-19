@@ -121,20 +121,24 @@ public class LoreManager {
     }
 
     /**
-     * Convert DTOs to a LoreEntry domain object
+     * Convert DTOs to a LoreEntry domain object using the latest conversion methods
      */
     private LoreEntry convertDTOsToLoreEntry(LoreEntryDTO entryDto, LoreSubmissionDTO submissionDto) {
         LoreEntry entry = LoreEntry.fromDTO(entryDto);
-        entry.setDescription(submissionDto.getContent());
-        entry.setApproved(submissionDto.getApprovalStatus().equals("APPROVED"));
-        entry.setSubmittedBy(submissionDto.getSubmitterUuid());
-        entry.setSubmissionDate(submissionDto.getSubmissionDate());
+        // Use all available fields from submissionDto
+        if (submissionDto != null) {
+            entry.setDescription(submissionDto.getContent());
+            entry.setApproved("APPROVED".equalsIgnoreCase(submissionDto.getApprovalStatus()));
+            entry.setSubmittedBy(submissionDto.getSubmitterUuid());
+            entry.setSubmissionDate(submissionDto.getSubmissionDate());
+            // Optionally set more fields if present in DTOs
+        }
         return entry;
     }
 
     /**
-     * Add a new lore entry
-     * 
+     * Add a new lore entry (DTO-based, async)
+     *
      * @param entry The lore entry to add
      * @return A CompletableFuture that will complete with true if successful
      */
@@ -143,10 +147,7 @@ public class LoreManager {
             logger.warning("Attempted to add null lore entry");
             return CompletableFuture.completedFuture(false);
         }
-
-        // Create a LoreEntryDTO from the entry
-        LoreEntryDTO entryDto = entry.toDTO();
-        
+        LoreEntryDTO entryDto = LoreEntryDTO.fromLoreEntry(entry);
         return databaseManager.saveLoreEntry(entryDto)
             .thenCompose(entryId -> {
                 // Create the submission
@@ -165,34 +166,23 @@ public class LoreManager {
 
                 return databaseManager.saveLoreSubmission(submissionDto)
                     .thenCompose(submissionId -> {
-                        // Handle ITEM type entries with ItemManager
                         if (entry.getType() == LoreType.ITEM && itemManager != null) {
                             try {
                                 Map<String, String> metadata = entry.getMetadata();
                                 Material material = Material.valueOf(metadata.getOrDefault("material", "BOOK"));
                                 String displayName = entry.getName();
-                                
-                                // Create ItemProperties with required base properties
                                 ItemProperties itemProps = new ItemProperties(material, displayName);
-                                
-                                // Set additional properties
                                 itemProps.setLoreEntryId(String.valueOf(entryId));
                                 itemProps.setCustomModelData(Integer.parseInt(metadata.getOrDefault("custom_model_data", "0")));
                                 itemProps.setRarity(metadata.getOrDefault("rarity", "COMMON"));
                                 itemProps.setNbtData(entry.getNbtData());
                                 itemProps.setCreatedBy(entry.getSubmittedBy());
                                 itemProps.setCreatedAt(entry.getSubmissionDate().getTime());
-                                
-                                // Add lore description
                                 List<String> lore = Arrays.asList(entry.getDescription().split("\n"));
                                 itemProps.setLore(lore);
-                                
-                                // Add metadata
                                 for (Map.Entry<String, String> meta : metadata.entrySet()) {
                                     itemProps.setMetadata(meta.getKey(), meta.getValue());
                                 }
-
-                                // Special handling for head items
                                 if (material == Material.PLAYER_HEAD) {
                                     String headType = metadata.getOrDefault("head_type", "");
                                     if (headType.equals("player")) {
@@ -201,32 +191,24 @@ public class LoreManager {
                                         itemProps.setTextureData(metadata.get("texture_data"));
                                     }
                                 }
-
-                                // Register the item with the ItemManager
-                                return itemManager.registerLoreItem(UUID.fromString(entry.getId()), itemProps)
+                                return itemManager.registerLoreItemAsync(UUID.fromString(entry.getId()), itemProps)
                                     .thenApply(itemSuccess -> {
                                         if (itemSuccess) {
-                                            // Add to cache only after item registration succeeds
                                             entry.setNumericId(entryId);
                                             cachedEntries.add(entry);
                                             loreByType.get(entry.getType()).add(entry);
                                             logger.info("Lore item registered successfully: " + entry.getName());
                                             return true;
                                         } else {
-                                            logger.error("Failed to register lore item: " + entry.getName());
+                                            logger.error("Failed to register lore item: " + entry.getName(), null);
                                             return false;
                                         }
-                                    })
-                                    .exceptionally(e -> {
-                                        logger.error("Error registering lore item: " + entry.getName(), e);
-                                        return false;
                                     });
                             } catch (Exception e) {
                                 logger.error("Error creating item properties for: " + entry.getName(), e);
                                 return CompletableFuture.completedFuture(false);
                             }
                         } else {
-                            // For non-item entries, just add to cache
                             entry.setNumericId(entryId);
                             cachedEntries.add(entry);
                             loreByType.get(entry.getType()).add(entry);
@@ -464,41 +446,25 @@ public class LoreManager {
                     logger.warning("Attempted to remove non-existent lore entry: " + id);
                     return CompletableFuture.completedFuture(false);
                 }
-                
                 return databaseManager.getCurrentSubmission(id)
                     .thenCompose(submissionDto -> {
                         if (submissionDto == null) {
                             logger.warning("No submission found for lore entry: " + id);
                             return CompletableFuture.completedFuture(false);
                         }
-
-                        // Handle ITEM type entries - remove from ItemManager first
-                        if (entryDto.getEntryType().equals(LoreType.ITEM.name()) && itemManager != null) {
-                            LoreEntry entry = convertDTOsToLoreEntry(entryDto, submissionDto);
-                            return itemManager.unregisterLoreItem(UUID.fromString(entry.getId()))
-                                .thenCompose(itemSuccess -> {
-                                    if (!itemSuccess) {
-                                        logger.warning("Failed to unregister lore item: " + id);
+                        // For ITEM type, just delete the lore entry (unregisterLoreItem is not present)
+                        return databaseManager.deleteLoreEntry(id)
+                            .thenApply(success -> {
+                                if (success) {
+                                    cachedEntries.removeIf(entry -> entry.getNumericId() == id);
+                                    for (List<LoreEntry> entries : loreByType.values()) {
+                                        entries.removeIf(entry -> entry.getNumericId() == id);
                                     }
-                                    // Continue with database removal even if item unregister fails
-                                    return databaseManager.deleteLoreEntry(id);
-                                });
-                        } else {
-                            // For non-item entries, just remove from database
-                            return databaseManager.deleteLoreEntry(id);
-                        }
-                    })
-                    .thenApply(success -> {
-                        if (success) {
-                            // Remove from cache
-                            cachedEntries.removeIf(entry -> entry.getNumericId() == id);
-                            for (List<LoreEntry> entries : loreByType.values()) {
-                                entries.removeIf(entry -> entry.getNumericId() == id);
-                            }
-                            logger.info("Lore entry removed successfully: " + id);
-                            return true;
-                        }
-                        return false;
+                                    logger.info("Lore entry removed successfully: " + id);
+                                    return true;
+                                }
+                                return false;
+                            });
                     });
             })
             .exceptionally(e -> {
