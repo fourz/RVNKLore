@@ -26,6 +26,13 @@ public class LoreEntryDTO {
     private Timestamp updatedAt;
     private Map<String, String> metadata = new HashMap<>();
 
+    // Location fields
+    private double x;
+    private double y;
+    private double z;
+    private String world;
+    private String content;
+
     public LoreEntryDTO() {}
 
     public LoreEntryDTO(int id, String uuid, String entryType, String name, String description, boolean isApproved, String submittedBy, Timestamp submissionDate, String nbtData, Timestamp createdAt, Timestamp updatedAt, Map<String, String> metadata) {
@@ -68,6 +75,34 @@ public class LoreEntryDTO {
     public void setUpdatedAt(Timestamp updatedAt) { this.updatedAt = updatedAt; }
     public Map<String, String> getMetadata() { return metadata; }
     public void setMetadata(Map<String, String> metadata) { this.metadata = metadata != null ? metadata : new HashMap<>(); }
+
+    // Location getters and setters
+    public double getX() { return x; }
+    public void setX(double x) { this.x = x; }
+    public double getY() { return y; }
+    public void setY(double y) { this.y = y; }
+    public double getZ() { return z; }
+    public void setZ(double z) { this.z = z; }
+    public String getWorld() { return world; }
+    public void setWorld(String world) { this.world = world; }
+    public String getContent() { return content; }
+    public void setContent(String content) { this.content = content; }
+
+    public void setLocation(org.bukkit.Location location) {
+        if (location != null) {
+            this.x = location.getX();
+            this.y = location.getY();
+            this.z = location.getZ();
+            this.world = location.getWorld() != null ? location.getWorld().getName() : null;
+        }
+    }
+
+    public org.bukkit.Location getLocation() {
+        if (world == null) return null;
+        org.bukkit.World bukkitWorld = org.bukkit.Bukkit.getWorld(world);
+        if (bukkitWorld == null) return null;
+        return new org.bukkit.Location(bukkitWorld, x, y, z);
+    }
 
     /**
      * Converts a LoreEntry domain object to a DTO.

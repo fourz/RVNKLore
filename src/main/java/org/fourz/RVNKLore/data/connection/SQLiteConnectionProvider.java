@@ -1,6 +1,7 @@
 package org.fourz.RVNKLore.data.connection;
 
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.config.ConfigManager;
 import org.fourz.RVNKLore.config.dto.SQLiteSettingsDTO;
 import org.fourz.RVNKLore.debug.LogManager;
 
@@ -9,6 +10,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -23,26 +25,30 @@ public class SQLiteConnectionProvider implements ConnectionProvider {
     private Connection connection;
     private String lastConnectionError;
     private final ReentrantLock connectionLock = new ReentrantLock();
-    private final File databaseFile;
-
-    /**
+    private final File databaseFile;    /**
      * Create a new SQLite connection provider.
      *
      * @param plugin The RVNKLore plugin instance
-     * @param settings The SQLite connection settings
      */
-    public SQLiteConnectionProvider(RVNKLore plugin, SQLiteSettingsDTO settings) {
+    public SQLiteConnectionProvider(RVNKLore plugin) {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "SQLiteConnectionProvider");
-        this.settings = settings;
         
-        // Ensure the database directory exists
+        // Get SQLite settings directly from ConfigManager
+        ConfigManager configManager = plugin.getConfigManager();
+        Map<String, Object> settingsMap = configManager.getSQLiteSettings();
+        String dbName = (String) settingsMap.getOrDefault("database", "data.db");
+        
+        // Create SQLiteSettingsDTO with file path
         File dataFolder = new File(plugin.getDataFolder(), "database");
         if (!dataFolder.exists()) {
             dataFolder.mkdirs();
         }
         
-        this.databaseFile = new File(dataFolder, settings.getDatabase());
+        String dbPath = new File(dataFolder, dbName).getAbsolutePath();
+        this.settings = new SQLiteSettingsDTO(dbPath);
+        
+        this.databaseFile = new File(dataFolder, dbName);
         
         initializeConnection();
     }
@@ -50,7 +56,7 @@ public class SQLiteConnectionProvider implements ConnectionProvider {
     /**
      * Initialize the SQLite connection.
      */
-    private void initializeConnection() {
+    public void initializeConnection() {
         try {
             // Load the SQLite JDBC driver
             Class.forName("org.sqlite.JDBC");

@@ -1,6 +1,7 @@
 package org.fourz.RVNKLore.data.connection;
 
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.config.ConfigManager;
 import org.fourz.RVNKLore.config.dto.MySQLSettingsDTO;
 import org.fourz.RVNKLore.debug.LogManager;
 import com.zaxxer.hikari.HikariConfig;
@@ -8,6 +9,7 @@ import com.zaxxer.hikari.HikariDataSource;
 
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.util.Map;
 
 /**
  * MySQL implementation of the ConnectionProvider interface.
@@ -18,18 +20,28 @@ public class MySQLConnectionProvider implements ConnectionProvider {
     private final LogManager logger;
     private HikariDataSource dataSource;
     private final MySQLSettingsDTO settings;
-    private String lastConnectionError;
-
-    /**
+    private String lastConnectionError;    /**
      * Create a new MySQL connection provider.
      *
      * @param plugin The RVNKLore plugin instance
-     * @param settings The MySQL connection settings
      */
-    public MySQLConnectionProvider(RVNKLore plugin, MySQLSettingsDTO settings) {
+    public MySQLConnectionProvider(RVNKLore plugin) {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "MySQLConnectionProvider");
-        this.settings = settings;
+        
+        // Get MySQL settings directly from ConfigManager
+        ConfigManager configManager = plugin.getConfigManager();
+        Map<String, Object> settingsMap = configManager.getMySQLSettings();
+        
+        this.settings = new MySQLSettingsDTO(
+            (String) settingsMap.get("host"),
+            (Integer) settingsMap.get("port"),
+            (String) settingsMap.get("database"),
+            (String) settingsMap.get("username"),
+            (String) settingsMap.get("password"),
+            (Boolean) settingsMap.get("useSSL"),
+            (String) settingsMap.get("tablePrefix")
+        );
         
         initializeConnectionPool();
     }
@@ -37,7 +49,7 @@ public class MySQLConnectionProvider implements ConnectionProvider {
     /**
      * Initialize the connection pool with the provided settings.
      */
-    private void initializeConnectionPool() {
+    public void initializeConnectionPool() {
         try {
             logger.info("Initializing MySQL connection pool...");
             

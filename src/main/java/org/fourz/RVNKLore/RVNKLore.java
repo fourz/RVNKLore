@@ -24,7 +24,6 @@ public class RVNKLore extends JavaPlugin {
     private UtilityManager utilityManager;
     private ItemManager itemManager;
     private PlayerManager playerManager;
-    private int healthCheckTaskId = -1;
     private Thread shutdownHook;
     private boolean shuttingDown = false;
     private final Object shutdownLock = new Object();@Override
@@ -45,51 +44,25 @@ public class RVNKLore extends JavaPlugin {
             // First try to initialize the database with settings from config
             logger.info("Initializing database...");
             databaseManager = new DatabaseManager(this, configManager);
-            
+            // Start database health service
+            databaseManager.startHealthService();
+
             // Create required utility systems
             logger.info("Initializing utility systems...");
             utilityManager = UtilityManager.getInstance(this);
             handlerFactory = new HandlerFactory(this);
-            
-            // Initialize database schema and then start core systems
-            logger.info("Loading database schema...");
-            databaseManager.executeAsync(conn -> {
-                // Schema is loaded by DatabaseManager constructor
-                logger.info("Schema loaded successfully");
-                return null;
-            }).thenRun(() -> {
-                try {
-                    // Now initialize core systems in order
-                    logger.info("Initializing core systems...");
-                    handlerFactory.initialize();
-                    
-                    loreManager = LoreManager.getInstance(this);
-                    loreManager.initializeLore();
-                    
-                    // Initialize managers
-                    playerManager = new PlayerManager(this);
-                    playerManager.initialize();
-                    
-                    // Get item manager from LoreManager
-                    itemManager = loreManager.getItemManager();
-                    
-                    // Finally initialize command system
-                    commandManager = new CommandManager(this);
-                    
-                    // Start health monitoring
-                    startHealthCheck();
-                    
-                    logger.info("RVNKLore has been enabled!");
-                } catch (Exception e) {
-                    logger.error("Failed to initialize core systems", e);
-                    getServer().getPluginManager().disablePlugin(this);
-                }
-            }).exceptionally(ex -> {
-                logger.error("Failed to initialize database schema", ex);
-                getServer().getPluginManager().disablePlugin(this);
-                return null;
-            });
-        }catch (Exception e) {
+
+            // Database schema is loaded by DatabaseManager constructor
+            logger.info("Database schema loaded. Initializing core systems...");
+            handlerFactory.initialize();
+            loreManager = LoreManager.getInstance(this);
+            loreManager.initializeLore();
+            playerManager = new PlayerManager(this);
+            playerManager.initialize();
+            itemManager = loreManager.getItemManager();
+            commandManager = new CommandManager(this);
+            logger.info("RVNKLore has been enabled!");
+        } catch (Exception e) {
             logger.error("Failed to initialize plugin", e);
             getServer().getPluginManager().disablePlugin(this);
         }
@@ -106,23 +79,19 @@ public class RVNKLore extends JavaPlugin {
         });
         Runtime.getRuntime().addShutdownHook(shutdownHook);
     }
-      private void startHealthCheck() {
-        // Health checks are scheduled by individual systems.
-        // We just schedule a periodic task to check their status.
-        healthCheckTaskId = getServer().getScheduler().scheduleSyncRepeatingTask(this, () -> {
-            if (databaseManager != null) {
-                logger.info("Database status: " + databaseManager.getDatabaseInfo());
-            }
-        }, 1200L, 1200L); // Check every minute (20 ticks/sec * 60 sec)
-    }
 
     @Override
     public void onDisable() {
         synchronized(shutdownLock) {
-            if (shuttingDown) {
-                return; // Already shutting down from shutdown hook
+            if (!shuttingDown) {
+                shuttingDown = true;
+                logger.info("Plugin disable detected - cleaning up resources");
+                if (databaseManager != null) {
+                    databaseManager.stopHealthService();
+                    databaseManager.close();
+                }
+                cleanupManagers();
             }
-            shuttingDown = true;
         }
           if (logger == null) {
             getLogger().warning("Logger was null during shutdown");
@@ -132,12 +101,6 @@ public class RVNKLore extends JavaPlugin {
         logger.info("RVNKLore is shutting down...");
         
         try {
-            // Cancel health check task if running
-            if (healthCheckTaskId != -1) {
-                getServer().getScheduler().cancelTask(healthCheckTaskId);
-                healthCheckTaskId = -1;
-            }
-            
             // Remove shutdown hook to prevent duplicate cleanup
             try {
                 Runtime.getRuntime().removeShutdownHook(shutdownHook);
@@ -154,12 +117,6 @@ public class RVNKLore extends JavaPlugin {
     }
 
     private void cleanupManagers() {
-        // Cancel any pending tasks
-        if (healthCheckTaskId != -1) {
-            getServer().getScheduler().cancelTask(healthCheckTaskId);
-            healthCheckTaskId = -1;
-        }
-        
         // Clean up in reverse order of initialization
         if (commandManager != null) {
             commandManager = null;
