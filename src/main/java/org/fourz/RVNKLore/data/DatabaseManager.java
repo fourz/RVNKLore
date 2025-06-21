@@ -22,6 +22,7 @@ import org.fourz.RVNKLore.data.service.DatabaseHealthService;
 import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.data.dto.PlayerDTO;
 import org.fourz.RVNKLore.data.dto.NameChangeRecordDTO;
+import org.fourz.RVNKLore.data.dto.ItemCollectionDTO;
 
 import java.sql.*;
 import java.util.ArrayList;
@@ -1183,35 +1184,14 @@ public class DatabaseManager {
     private void initializeConnectionProvider() {        // Get storage type from configuration
         storageType = plugin.getConfigManager().getConfig().getString("storage.type", "sqlite").toLowerCase();
         
-        if (storageType.equalsIgnoreCase("mysql")) {
-            // Get MySQL settings from configuration
+        if (storageType.equalsIgnoreCase("mysql")) {            // Get MySQL settings from configuration
             ConfigManager configManager = plugin.getConfigManager();
-            Map<String, Object> mysqlSettings = configManager.getMySQLSettings();
-            
-            MySQLSettingsDTO settings = new MySQLSettingsDTO(
-                (String) mysqlSettings.get("host"),
-                (Integer) mysqlSettings.get("port"),
-                (String) mysqlSettings.get("database"),
-                (String) mysqlSettings.get("username"),
-                (String) mysqlSettings.get("password"),
-                (Boolean) mysqlSettings.get("useSSL"),
-                (String) mysqlSettings.get("tablePrefix")
-            );
+            // Note: MySQLConnectionProvider gets settings directly from ConfigManager
             
             // Create MySQL connection provider
             connectionProvider = new MySQLConnectionProvider(plugin);
-        } else {
-            // Default to SQLite
-            ConfigManager configManager = plugin.getConfigManager();
-            Map<String, Object> sqliteSettings = configManager.getSQLiteSettings();
-            
-            String dbName = (String) sqliteSettings.getOrDefault("database", "data.db");
-            boolean walMode = (Boolean) sqliteSettings.getOrDefault("walMode", true);
-            int busyTimeout = (Integer) sqliteSettings.getOrDefault("busyTimeout", 30000);
-            int cacheSize = (Integer) sqliteSettings.getOrDefault("cacheSize", 4000);
-            
-            // Create SQLite settings DTO
-            SQLiteSettingsDTO settings = new SQLiteSettingsDTO(dbName, walMode, busyTimeout, cacheSize);
+        } else {            // Default to SQLite
+            // Note: SQLiteConnectionProvider gets settings directly from ConfigManager
             
             // Create SQLite connection provider
             connectionProvider = new SQLiteConnectionProvider(plugin);
@@ -1279,5 +1259,428 @@ public class DatabaseManager {
                 return tables.next();
             }
         }
+    }
+
+    public ConnectionProvider getConnectionProvider() {
+        return this.connectionProvider;
+    }
+    
+    // COLLECTION OPERATIONS
+
+    /**
+     * Gets all collections from the database.
+     *
+     * @return A future containing a list of item collection DTOs
+     */
+    public CompletableFuture<List<ItemCollectionDTO>> getAllCollections() {
+        if (!validateConnection()) {
+            return CompletableFuture.failedFuture(
+                new SQLException("Database connection is not valid")
+            );
+        }
+        
+        QueryBuilder query = queryBuilder.select("*")
+                                       .from("item_collection")
+                                       .orderBy("created_at", false);
+        
+        return queryExecutor.executeQueryList(query, ItemCollectionDTO.class);
+    }
+
+    /**
+     * Gets a collection by ID.
+     *
+     * @param id The collection ID
+     * @return A future containing the item collection DTO, or null if not found
+     */
+    public CompletableFuture<ItemCollectionDTO> getCollection(String id) {
+        if (!validateConnection()) {
+            return CompletableFuture.failedFuture(
+                new SQLException("Database connection is not valid")
+            );
+        }
+        
+        QueryBuilder query = queryBuilder.select("*")
+                                       .from("item_collection")
+                                       .where("id = ?", id);
+        
+        return queryExecutor.executeQuery(query, ItemCollectionDTO.class);
+    }
+
+    /**
+     * Saves a collection (insert or update).
+     *
+     * @param dto The item collection DTO to save
+     * @return A future containing true if successful
+     */
+    public CompletableFuture<Boolean> saveCollection(ItemCollectionDTO dto) {
+        if (!validateConnection()) {
+            return CompletableFuture.failedFuture(
+                new SQLException("Database connection is not valid")
+            );
+        }
+
+        return queryExecutor.executeTransaction(conn -> {
+            try {
+                // Check if collection exists
+                QueryBuilder checkQuery = queryBuilder.select("COUNT(*)")
+                                                   .from("item_collection")
+                                                   .where("id = ?", dto.getId());
+
+                try (var stmt = conn.prepareStatement(checkQuery.build())) {
+                    for (int i = 0; i < checkQuery.getParameters().length; i++) {
+                        stmt.setObject(i + 1, checkQuery.getParameters()[i]);
+                    }
+                    
+                    try (var rs = stmt.executeQuery()) {
+                        if (rs.next() && rs.getInt(1) > 0) {
+                            // Update existing collection
+                            QueryBuilder updateQuery = queryBuilder.update("item_collection")
+                                                          .set("name", dto.getName())
+                                                          .set("description", dto.getDescription())
+                                                          .set("theme_id", dto.getThemeId())
+                                                          .set("is_active", dto.isActive())
+                                                          .set("updated_at", new java.sql.Timestamp(System.currentTimeMillis()))
+                                                          .where("id = ?", dto.getId());
+                        
+                            try (var updateStmt = conn.prepareStatement(updateQuery.build())) {
+                                for (int i = 0; i < updateQuery.getParameters().length; i++) {
+                                    updateStmt.setObject(i + 1, updateQuery.getParameters()[i]);
+                                }
+                                updateStmt.executeUpdate();
+                            }
+                        } else {
+                            // Insert new collection
+                            QueryBuilder insertQuery = queryBuilder.insertInto("item_collection")
+                                                          .columns("id", "name", "description", "theme_id", 
+                                                                  "is_active", "created_at", "updated_at")
+                                                          .values(dto.getId(), dto.getName(), dto.getDescription(), 
+                                                                  dto.getThemeId(), dto.isActive(), 
+                                                                  new java.sql.Timestamp(dto.getCreatedAt()), 
+                                                                  new java.sql.Timestamp(System.currentTimeMillis()));
+                        
+                            try (var insertStmt = conn.prepareStatement(insertQuery.build())) {
+                                for (int i = 0; i < insertQuery.getParameters().length; i++) {
+                                    insertStmt.setObject(i + 1, insertQuery.getParameters()[i]);
+                                }
+                                insertStmt.executeUpdate();
+                            }
+                        }
+                    }
+                }
+                
+                // Handle serialized items if present
+                if (dto.getSerializedItems() != null && !dto.getSerializedItems().isEmpty()) {
+                    // Delete existing items first
+                    QueryBuilder deleteItemsQuery = queryBuilder.deleteFrom("collection_item")
+                                                       .where("collection_id = ?", dto.getId());
+                
+                    try (var deleteStmt = conn.prepareStatement(deleteItemsQuery.build())) {
+                        for (int i = 0; i < deleteItemsQuery.getParameters().length; i++) {
+                            deleteStmt.setObject(i + 1, deleteItemsQuery.getParameters()[i]);
+                        }
+                        deleteStmt.executeUpdate();
+                    }
+                
+                    // Insert new items
+                    for (int i = 0; i < dto.getSerializedItems().size(); i++) {
+                        String serializedItem = dto.getSerializedItems().get(i);
+                        
+                        QueryBuilder insertItemQuery = queryBuilder.insertInto("collection_item")
+                                                         .columns("collection_id", "item_data", "sequence")
+                                                         .values(dto.getId(), serializedItem, i);
+                        
+                        try (var insertItemStmt = conn.prepareStatement(insertItemQuery.build())) {
+                            for (int j = 0; j < insertItemQuery.getParameters().length; j++) {
+                                insertItemStmt.setObject(j + 1, insertItemQuery.getParameters()[j]);
+                            }
+                            insertItemStmt.executeUpdate();
+                        }
+                    }
+                }
+                
+                return true;
+            } catch (SQLException e) {
+                logger.error("Error saving collection: " + dto.getId(), e);
+                throw new RuntimeException(e);
+            }
+        });
+    }
+
+    /**
+     * Deletes a collection.
+     *
+     * @param id The collection ID to delete
+     * @return A future containing true if successful
+     */
+    public CompletableFuture<Boolean> deleteCollection(String id) {
+        if (!validateConnection()) {
+            return CompletableFuture.failedFuture(
+                new SQLException("Database connection is not valid")
+            );
+        }
+        
+        return queryExecutor.executeTransaction(conn -> {
+            try {
+                // Delete collection items first
+                QueryBuilder deleteItemsQuery = queryBuilder.deleteFrom("collection_item")
+                                                   .where("collection_id = ?", id);
+            
+                try (var deleteItemsStmt = conn.prepareStatement(deleteItemsQuery.build())) {
+                    for (int i = 0; i < deleteItemsQuery.getParameters().length; i++) {
+                        deleteItemsStmt.setObject(i + 1, deleteItemsQuery.getParameters()[i]);
+                    }
+                    deleteItemsStmt.executeUpdate();
+                }
+                
+                // Delete collection
+                QueryBuilder deleteCollectionQuery = queryBuilder.deleteFrom("item_collection")
+                                                            .where("id = ?", id);
+            
+                try (var deleteCollectionStmt = conn.prepareStatement(deleteCollectionQuery.build())) {
+                    for (int i = 0; i < deleteCollectionQuery.getParameters().length; i++) {
+                        deleteCollectionStmt.setObject(i + 1, deleteCollectionQuery.getParameters()[i]);
+                    }
+                    int rowsAffected = deleteCollectionStmt.executeUpdate();
+                    
+                    return rowsAffected > 0;
+                }
+            } catch (SQLException e) {
+                logger.error("Error deleting collection: " + id, e);
+                throw new RuntimeException(e);
+            }
+        });
+    }
+
+    /**
+     * Gets collections by theme.
+     *
+     * @param themeId The theme ID
+     * @return A future containing a list of item collection DTOs
+     */
+    public CompletableFuture<List<ItemCollectionDTO>> getCollectionsByTheme(String themeId) {
+        if (!validateConnection()) {
+            return CompletableFuture.failedFuture(
+                new SQLException("Database connection is not valid")
+            );
+        }
+        
+        QueryBuilder query = queryBuilder.select("*")
+                                       .from("item_collection")
+                                       .where("theme_id = ?", themeId)
+                                       .orderBy("created_at", false);
+        
+        return queryExecutor.executeQueryList(query, ItemCollectionDTO.class);
+    }
+
+    /**
+     * Gets collections associated with a player.
+     *
+     * @param playerUuid The player UUID as a string
+     * @return A future containing a list of item collection DTOs
+     */
+    public CompletableFuture<List<ItemCollectionDTO>> getPlayerCollections(String playerUuid) {
+        if (!validateConnection()) {
+            return CompletableFuture.failedFuture(
+                new SQLException("Database connection is not valid")
+            );
+        }
+        
+        QueryBuilder query = queryBuilder.select("c.*")
+                                       .from("item_collection c")
+                                       .join("player_collection pc", "c.id = pc.collection_id")
+                                       .where("pc.player_uuid = ?", playerUuid)
+                                       .orderBy("c.created_at", false);
+        
+        return queryExecutor.executeQueryList(query, ItemCollectionDTO.class);
+    }
+
+    /**
+     * Gets a player's progress for a collection.
+     *
+     * @param playerUuid The player UUID as a string
+     * @param collectionId The collection ID
+     * @return A future containing the progress value (0.0-1.0)
+     */
+    public CompletableFuture<Double> getPlayerCollectionProgress(String playerUuid, String collectionId) {
+        if (!validateConnection()) {
+            return CompletableFuture.failedFuture(
+                new SQLException("Database connection is not valid")
+            );
+        }
+        
+        QueryBuilder query = queryBuilder.select("progress")
+                                       .from("player_collection")
+                                       .where("player_uuid = ? AND collection_id = ?", playerUuid, collectionId);
+        
+        return queryExecutor.executeQuery(query, Double.class)
+                          .thenApply(result -> result != null ? result : 0.0);
+    }
+
+    /**
+     * Updates a player's progress for a collection.
+     *
+     * @param playerUuid The player UUID as a string
+     * @param collectionId The collection ID
+     * @param progress The progress value (0.0-1.0)
+     * @return A future containing true if successful
+     */
+    public CompletableFuture<Boolean> updatePlayerCollectionProgress(String playerUuid, String collectionId, double progress) {
+        if (!validateConnection()) {
+            return CompletableFuture.failedFuture(
+                new SQLException("Database connection is not valid")
+            );
+        }
+        
+        return queryExecutor.executeTransaction(conn -> {
+            try {
+                // Check if record exists
+                QueryBuilder checkQuery = queryBuilder.select("COUNT(*)")
+                                                   .from("player_collection")
+                                                   .where("player_uuid = ? AND collection_id = ?", playerUuid, collectionId);
+                
+                boolean exists = false;
+                try (var checkStmt = conn.prepareStatement(checkQuery.build())) {
+                    for (int i = 0; i < checkQuery.getParameters().length; i++) {
+                        checkStmt.setObject(i + 1, checkQuery.getParameters()[i]);
+                    }
+                    
+                    try (var rs = checkStmt.executeQuery()) {
+                        if (rs.next()) {
+                            exists = rs.getInt(1) > 0;
+                        }
+                    }
+                }
+                
+                if (exists) {
+                    // Update existing record
+                    QueryBuilder updateQuery = queryBuilder.update("player_collection")
+                                                  .set("progress", progress)
+                                                  .set("updated_at", new java.sql.Timestamp(System.currentTimeMillis()))
+                                                  .where("player_uuid = ? AND collection_id = ?", playerUuid, collectionId);
+                
+                    try (var updateStmt = conn.prepareStatement(updateQuery.build())) {
+                        for (int i = 0; i < updateQuery.getParameters().length; i++) {
+                            updateStmt.setObject(i + 1, updateQuery.getParameters()[i]);
+                        }
+                        return updateStmt.executeUpdate() > 0;
+                    }
+                } else {
+                    // Insert new record
+                    QueryBuilder insertQuery = queryBuilder.insertInto("player_collection")
+                                                  .columns("player_uuid", "collection_id", "progress", 
+                                                          "created_at", "updated_at")
+                                                  .values(playerUuid, collectionId, progress, 
+                                                          new java.sql.Timestamp(System.currentTimeMillis()),
+                                                          new java.sql.Timestamp(System.currentTimeMillis()));
+                
+                    try (var insertStmt = conn.prepareStatement(insertQuery.build())) {
+                        for (int i = 0; i < insertQuery.getParameters().length; i++) {
+                            insertStmt.setObject(i + 1, insertQuery.getParameters()[i]);
+                        }
+                        return insertStmt.executeUpdate() > 0;
+                    }
+                }
+            } catch (SQLException e) {
+                logger.error("Error updating player collection progress", e);
+                throw new RuntimeException(e);
+            }
+        });
+    }
+
+    /**
+     * Marks a collection as completed by a player.
+     *
+     * @param playerUuid The player UUID as a string
+     * @param collectionId The collection ID
+     * @param timestamp The completion timestamp
+     * @return A future containing true if successful
+     */
+    public CompletableFuture<Boolean> markCollectionCompleted(String playerUuid, String collectionId, long timestamp) {
+        if (!validateConnection()) {
+            return CompletableFuture.failedFuture(
+                new SQLException("Database connection is not valid")
+            );
+        }
+        
+        return queryExecutor.executeTransaction(conn -> {
+            try {
+                // Check if record exists
+                QueryBuilder checkQuery = queryBuilder.select("COUNT(*)")
+                                                   .from("player_collection")
+                                                   .where("player_uuid = ? AND collection_id = ?", playerUuid, collectionId);
+                
+                boolean exists = false;
+                try (var checkStmt = conn.prepareStatement(checkQuery.build())) {
+                    for (int i = 0; i < checkQuery.getParameters().length; i++) {
+                        checkStmt.setObject(i + 1, checkQuery.getParameters()[i]);
+                    }
+                    
+                    try (var rs = checkStmt.executeQuery()) {
+                        if (rs.next()) {
+                            exists = rs.getInt(1) > 0;
+                        }
+                    }
+                }
+                
+                if (exists) {
+                    // Update existing record
+                    QueryBuilder updateQuery = queryBuilder.update("player_collection")
+                                                  .set("progress", 1.0)
+                                                  .set("completed_at", new java.sql.Timestamp(timestamp))
+                                                  .set("is_completed", true)
+                                                  .set("updated_at", new java.sql.Timestamp(System.currentTimeMillis()))
+                                                  .where("player_uuid = ? AND collection_id = ?", playerUuid, collectionId);
+                
+                    try (var updateStmt = conn.prepareStatement(updateQuery.build())) {
+                        for (int i = 0; i < updateQuery.getParameters().length; i++) {
+                            updateStmt.setObject(i + 1, updateQuery.getParameters()[i]);
+                        }
+                        return updateStmt.executeUpdate() > 0;
+                    }
+                } else {
+                    // Insert new record
+                    QueryBuilder insertQuery = queryBuilder.insertInto("player_collection")
+                                                  .columns("player_uuid", "collection_id", "progress", 
+                                                          "completed_at", "is_completed",
+                                                          "created_at", "updated_at")
+                                                  .values(playerUuid, collectionId, 1.0,
+                                                          new java.sql.Timestamp(timestamp), true,
+                                                          new java.sql.Timestamp(System.currentTimeMillis()),
+                                                          new java.sql.Timestamp(System.currentTimeMillis()));
+                
+                    try (var insertStmt = conn.prepareStatement(insertQuery.build())) {
+                        for (int i = 0; i < insertQuery.getParameters().length; i++) {
+                            insertStmt.setObject(i + 1, insertQuery.getParameters()[i]);
+                        }
+                        return insertStmt.executeUpdate() > 0;
+                    }
+                }
+            } catch (SQLException e) {
+                logger.error("Error marking collection as completed", e);
+                throw new RuntimeException(e);
+            }
+        });
+    }
+
+    /**
+     * Gets all completed collections for a player.
+     *
+     * @param playerUuid The player UUID as a string
+     * @return A future containing a list of completed collection DTOs
+     */
+    public CompletableFuture<List<ItemCollectionDTO>> getCompletedCollections(String playerUuid) {
+        if (!validateConnection()) {
+            return CompletableFuture.failedFuture(
+                new SQLException("Database connection is not valid")
+            );
+        }
+        
+        QueryBuilder query = queryBuilder.select("c.*")
+                                       .from("item_collection c")
+                                       .join("player_collection pc", "c.id = pc.collection_id")
+                                       .where("pc.player_uuid = ? AND pc.is_completed = TRUE", playerUuid)
+                                       .orderBy("pc.completed_at", false);
+        
+        return queryExecutor.executeQueryList(query, ItemCollectionDTO.class);
     }
 }

@@ -147,4 +147,30 @@ public class LoreEntryDTO {
         entry.setMetadata(this.metadata != null ? new HashMap<>(this.metadata) : new HashMap<>());
         return entry;
     }
+
+    /**
+     * Converts this DTO to a JSON object for export/backup.
+     * @return JSONObject representing this lore entry
+     */
+    public org.json.simple.JSONObject toJson() {
+        org.json.simple.JSONObject obj = new org.json.simple.JSONObject();
+        obj.put("id", id);
+        obj.put("uuid", uuid);
+        obj.put("entryType", entryType);
+        obj.put("name", name);
+        obj.put("description", description);
+        obj.put("isApproved", isApproved);
+        obj.put("submittedBy", submittedBy);
+        obj.put("submissionDate", submissionDate != null ? submissionDate.toString() : null);
+        obj.put("nbtData", nbtData);
+        obj.put("createdAt", createdAt != null ? createdAt.toString() : null);
+        obj.put("updatedAt", updatedAt != null ? updatedAt.toString() : null);
+        obj.put("metadata", metadata);
+        obj.put("x", x);
+        obj.put("y", y);
+        obj.put("z", z);
+        obj.put("world", world);
+        obj.put("content", content);
+        return obj;
+    }
 }
