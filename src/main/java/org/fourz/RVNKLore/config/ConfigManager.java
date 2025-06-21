@@ -88,6 +88,10 @@ public class ConfigManager {
      */
     public java.util.logging.Level getLogLevel() {
         String levelString = config.getString("general.logLevel", "INFO").toUpperCase();
+        // Map DEBUG to FINE for Java logging compatibility
+        if (levelString.equals("DEBUG")) {
+            levelString = "FINE";
+        }
         try {
             return java.util.logging.Level.parse(levelString);
         } catch (IllegalArgumentException e) {

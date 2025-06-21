@@ -90,8 +90,9 @@ public class DatabaseSetup {    private final RVNKLore plugin;
      *
      * @throws SQLException if an SQL error occurs
      */
-    private void createNameChangeRecordTable() throws SQLException {        String createTable = schemaQueryBuilder.createTable("name_change_record")
-                .column("id", "INT", "PRIMARY KEY " + schemaQueryBuilder.getAutoIncrementSyntax())
+    private void createNameChangeRecordTable() throws SQLException {
+        String createTable = schemaQueryBuilder.createTable("name_change_record")
+                .column("id", "INTEGER", "PRIMARY KEY " + schemaQueryBuilder.getAutoIncrementSyntax())
                 .column("player_id", "VARCHAR(36)", "NOT NULL")
                 .column("old_username", "VARCHAR(16)", "NOT NULL")
                 .column("new_username", "VARCHAR(16)", "NOT NULL")
@@ -107,8 +108,9 @@ public class DatabaseSetup {    private final RVNKLore plugin;
      *
      * @throws SQLException if an SQL error occurs
      */
-    private void createLoreEntryTable() throws SQLException {        String createTable = schemaQueryBuilder.createTable("lore_entry")
-                .column("id", "INT", "PRIMARY KEY " + schemaQueryBuilder.getAutoIncrementSyntax())
+    private void createLoreEntryTable() throws SQLException {
+        String createTable = schemaQueryBuilder.createTable("lore_entry")
+                .column("id", "INTEGER", "PRIMARY KEY " + schemaQueryBuilder.getAutoIncrementSyntax())
                 .column("title", "VARCHAR(100)", "NOT NULL")
                 .column("content", "TEXT", "NOT NULL")
                 .column("author_id", "VARCHAR(36)", "NOT NULL")
@@ -133,8 +135,9 @@ public class DatabaseSetup {    private final RVNKLore plugin;
      *
      * @throws SQLException if an SQL error occurs
      */
-    private void createLoreSubmissionTable() throws SQLException {        String createTable = schemaQueryBuilder.createTable("lore_submission")
-                .column("id", "INT", "PRIMARY KEY " + schemaQueryBuilder.getAutoIncrementSyntax())
+    private void createLoreSubmissionTable() throws SQLException {
+        String createTable = schemaQueryBuilder.createTable("lore_submission")
+                .column("id", "INTEGER", "PRIMARY KEY " + schemaQueryBuilder.getAutoIncrementSyntax())
                 .column("title", "VARCHAR(100)", "NOT NULL")
                 .column("content", "TEXT", "NOT NULL")
                 .column("submitter_id", "VARCHAR(36)", "NOT NULL")
@@ -157,8 +160,9 @@ public class DatabaseSetup {    private final RVNKLore plugin;
      *
      * @throws SQLException if an SQL error occurs
      */
-    private void createItemPropertiesTable() throws SQLException {        String createTable = schemaQueryBuilder.createTable("item_properties")
-                .column("id", "INT", "PRIMARY KEY " + schemaQueryBuilder.getAutoIncrementSyntax())
+    private void createItemPropertiesTable() throws SQLException {
+        String createTable = schemaQueryBuilder.createTable("item_properties")
+                .column("id", "INTEGER", "PRIMARY KEY " + schemaQueryBuilder.getAutoIncrementSyntax())
                 .column("item_key", "VARCHAR(100)", "UNIQUE NOT NULL")
                 .column("display_name", "VARCHAR(100)", "NOT NULL")
                 .column("material", "VARCHAR(50)", "NOT NULL")
@@ -180,8 +184,9 @@ public class DatabaseSetup {    private final RVNKLore plugin;
      *
      * @throws SQLException if an SQL error occurs
      */
-    private void createLoreCollectionTable() throws SQLException {        String createTable = schemaQueryBuilder.createTable("lore_collection")
-                .column("id", "INT", "PRIMARY KEY " + schemaQueryBuilder.getAutoIncrementSyntax())
+    private void createLoreCollectionTable() throws SQLException {
+        String createTable = schemaQueryBuilder.createTable("lore_collection")
+                .column("id", "INTEGER", "PRIMARY KEY " + schemaQueryBuilder.getAutoIncrementSyntax())
                 .column("name", "VARCHAR(100)", "UNIQUE NOT NULL")
                 .column("description", "TEXT", "NOT NULL")
                 .column("creator_id", "VARCHAR(36)", "NOT NULL")
@@ -220,11 +225,8 @@ public class DatabaseSetup {    private final RVNKLore plugin;
      * @throws SQLException if an SQL error occurs
      */
     private void createLoreItemTable() throws SQLException {
-        // Use schemaQueryBuilder for dialect-agnostic SQL
-        // If you need to support MySQL/SQLite differences, use schemaQueryBuilder or add logic here
-        // For now, use a generic definition
         String createTable = schemaQueryBuilder.createTable("lore_item")
-                .column("id", "INT", "PRIMARY KEY " + schemaQueryBuilder.getAutoIncrementSyntax())
+                .column("id", "INTEGER", "PRIMARY KEY " + schemaQueryBuilder.getAutoIncrementSyntax())
                 .column("lore_entry_id", "INT", "NOT NULL")
                 .column("item_type", "VARCHAR(50)", "NOT NULL")
                 .column("material", "VARCHAR(50)", "NOT NULL")
@@ -262,7 +264,7 @@ public class DatabaseSetup {    private final RVNKLore plugin;
      */
     private void createLoreLocationTable() throws SQLException {
         String createTable = schemaQueryBuilder.createTable("lore_location")
-                .column("id", "INT", "PRIMARY KEY " + schemaQueryBuilder.getAutoIncrementSyntax())
+                .column("id", "INTEGER", "PRIMARY KEY " + schemaQueryBuilder.getAutoIncrementSyntax())
                 .column("lore_entry_id", "INT", "NOT NULL")
                 .column("world", "VARCHAR(100)", "NOT NULL")
                 .column("x", "DOUBLE", "NOT NULL")

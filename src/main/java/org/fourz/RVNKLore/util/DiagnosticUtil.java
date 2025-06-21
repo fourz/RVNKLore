@@ -47,6 +47,38 @@ public class DiagnosticUtil {
         return results;
     }
 
+    /**
+     * Adds plugin dependency diagnostics to the results list.
+     * Checks for required and optional dependencies and reports their status.
+     *
+     * @param results The list to append diagnostic messages to
+     */
+    private void addDependencyDiagnostics(List<String> results) {
+        results.add("\n----- Dependency Status -----");
+        // Example: Check for Vault and PlaceholderAPI as common dependencies
+        checkDependency(results, "Vault", true);
+        checkDependency(results, "PlaceholderAPI", false);
+        // Add more dependencies as needed
+    }
+
+    /**
+     * Checks if a plugin dependency is present and enabled.
+     *
+     * @param results The list to append diagnostic messages to
+     * @param pluginName The name of the dependency plugin
+     * @param required Whether the dependency is required
+     */
+    private void checkDependency(List<String> results, String pluginName, boolean required) {
+        Plugin dep = Bukkit.getPluginManager().getPlugin(pluginName);
+        if (dep != null && dep.isEnabled()) {
+            results.add("Dependency found: " + pluginName + " (version " + dep.getDescription().getVersion() + ")");
+        } else if (required) {
+            results.add("ERROR: Required dependency missing or disabled: " + pluginName);
+        } else {
+            results.add("Optional dependency not found: " + pluginName);
+        }
+    }
+
     private void addMemoryDiagnostics(List<String> results) {
         results.add("\n----- Memory Usage -----");
         MemoryMXBean memoryBean = ManagementFactory.getMemoryMXBean();

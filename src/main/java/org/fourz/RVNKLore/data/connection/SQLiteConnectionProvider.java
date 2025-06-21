@@ -53,18 +53,24 @@ public class SQLiteConnectionProvider implements ConnectionProvider {
      * Initialize the SQLite connection.
      */
     public void initializeConnection() {
+        boolean firstInit = (connection == null);
         try {
             // Load the SQLite JDBC driver
             Class.forName("org.sqlite.JDBC");
-            
-            logger.info("Initializing SQLite connection...");
-            
+            if (firstInit) {
+                logger.info("Initializing SQLite connection...");
+            } else {
+                logger.debug("Re-initializing SQLite connection...");
+            }
             // Create the database file if it doesn't exist
             if (!databaseFile.exists()) {
-                logger.info("Creating new SQLite database file: " + databaseFile.getAbsolutePath());
+                if (firstInit) {
+                    logger.info("Creating new SQLite database file: " + databaseFile.getAbsolutePath());
+                } else {
+                    logger.debug("Creating new SQLite database file: " + databaseFile.getAbsolutePath());
+                }
                 databaseFile.createNewFile();
             }
-            
             // Configure connection properties
             Properties properties = new Properties();
             properties.setProperty("foreign_keys", "true");
@@ -73,14 +79,11 @@ public class SQLiteConnectionProvider implements ConnectionProvider {
                 properties.setProperty("journal_mode", "WAL");
             }
             properties.setProperty("synchronous", (String) settings.get("synchronous"));
-            
             // Get the connection
             String url = "jdbc:sqlite:" + databaseFile.getAbsolutePath();
             connection = DriverManager.getConnection(url, properties);
-            
             // Configure SQLite connection
             connection.setAutoCommit(false);
-            
             // Additional PRAGMA settings
             try (Statement statement = connection.createStatement()) {
                 statement.execute("PRAGMA foreign_keys = ON");
@@ -88,13 +91,15 @@ public class SQLiteConnectionProvider implements ConnectionProvider {
                 statement.execute("PRAGMA temp_store = MEMORY");
                 connection.commit();
             }
-            
             // Test connection
             try (Statement statement = connection.createStatement()) {
                 statement.execute("SELECT 1");
-                logger.info("SQLite connection established successfully to " + databaseFile.getAbsolutePath());
+                if (firstInit) {
+                    logger.info("SQLite connection established successfully to " + databaseFile.getAbsolutePath());
+                } else {
+                    logger.debug("SQLite connection established successfully to " + databaseFile.getAbsolutePath());
+                }
             }
-            
         } catch (ClassNotFoundException e) {
             lastConnectionError = "SQLite JDBC driver not found";
             logger.error("SQLite JDBC driver not found", e);
