@@ -12,12 +12,17 @@ import org.fourz.RVNKLore.data.dto.ItemCollectionDTO;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CompletionException;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 /**
  * Manages item collections and thematic groupings within the lore system.
  * Handles organization, tracking, and distribution of items across different collections.
- * This manager coordinates with the CosmeticItem for head collections while
- * also providing a unified interface for managing different types of items.
+ * Uses async operations and DTOs for database interactions through CollectionRepository.
+ * 
+ * This class follows the singleton pattern and uses a thread-safe cache for collections.
+ * All database operations are performed asynchronously and include retry logic for critical operations.
  */
 public class CollectionManager {
     private final RVNKLore plugin;
@@ -25,24 +30,62 @@ public class CollectionManager {
     private final Map<String, ItemCollection> collections = new ConcurrentHashMap<>();
     private final Map<String, CollectionTheme> themes = new ConcurrentHashMap<>();
     private final CollectionRepository collectionRepository;
+    private final Object collectionLock = new Object();
+    private static final int MAX_RETRIES = 3;
+    private static final long RETRY_DELAY_MS = 1000;
 
     public CollectionManager(RVNKLore plugin) {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "CollectionManager");
-        
-        // Initialize repository with the DatabaseManager
         this.collectionRepository = new CollectionRepository(plugin, plugin.getDatabaseManager());
         
-        initializeCollections();
-        logger.info("CollectionManager initialized");
+        initializeAsync();
     }
 
-    private void initializeCollections() {
+    /**
+     * Initialize the manager asynchronously, creating default themes and collections if needed.
+     * Uses retry logic for critical database operations.
+     */
+    private void initializeAsync() {
         createDefaultThemes();
-        createCollection("starter_items", "Starter Collection", "Basic items for new players");
-        createCollection("rare_finds", "Rare Discoveries", "Uncommon items found throughout the world");
-        createCollection("legendary_artifacts", "Legendary Artifacts", "Powerful items of great significance");
-        logger.info("Default collections initialized");
+        retryOperation(this::loadCollectionsFromDatabase)
+            .thenRun(() -> {
+                if (collections.isEmpty()) {
+                    createDefaultCollections();
+                }
+                logger.info("&a✓ CollectionManager initialized with " + collections.size() + " collections");
+            })
+            .exceptionally(e -> {
+                logger.error("&c✖ Fatal error during CollectionManager initialization", e);
+                return null;
+            });
+    }
+
+    /**
+     * Helper method to retry critical operations with exponential backoff.
+     * 
+     * @param operation The operation to retry
+     * @param <T> The return type of the operation
+     * @return A CompletableFuture that will complete with the operation result
+     */
+    private <T> CompletableFuture<T> retryOperation(Supplier<CompletableFuture<T>> operation) {
+        return retryOperation(operation, 1);
+    }
+
+    private <T> CompletableFuture<T> retryOperation(Supplier<CompletableFuture<T>> operation, int attempt) {
+        return operation.get().exceptionally(e -> {
+            if (attempt < MAX_RETRIES) {
+                logger.warning("&e⚠ Operation failed, attempt " + attempt + "/" + MAX_RETRIES + ", retrying...");
+                try {
+                    Thread.sleep(RETRY_DELAY_MS * attempt);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new CompletionException(ie);
+                }
+                return retryOperation(operation, attempt + 1).join();
+            }
+            throw new CompletionException(e);
+        });
     }
 
     private void createDefaultThemes() {
@@ -52,68 +95,72 @@ public class CollectionManager {
         }
     }
 
+    private void createDefaultCollections() {
+        CompletableFuture.allOf(
+            createCollectionAsync("starter_items", "Starter Collection", "Basic items for new players"),
+            createCollectionAsync("rare_finds", "Rare Discoveries", "Uncommon items found throughout the world"),
+            createCollectionAsync("legendary_artifacts", "Legendary Artifacts", "Powerful items of great significance")
+        ).thenRun(() -> logger.info("&a✓ Default collections initialized"));
+    }
+
     /**
-     * Creates a new collection with validation
+     * Creates a new collection and saves it to the database.
      * 
-     * @param id Collection identifier
-     * @param name Display name
-     * @param description Collection description
-     * @return The created collection, or null if validation failed
+     * @param id The unique identifier for the collection
+     * @param name The display name of the collection
+     * @param description A brief description of the collection
+     * @return A CompletableFuture that completes with the created ItemCollection, or null if creation fails
      */
-    public ItemCollection createCollection(String id, String name, String description) {
-        // Validate the collection before creation
+    public CompletableFuture<ItemCollection> createCollectionAsync(String id, String name, String description) {
         if (!validateNewCollection(id, name, description)) {
-            logger.warning("Failed to create collection due to validation errors: " + id);
-            return null;
+            return CompletableFuture.completedFuture(null);
         }
         
         ItemCollection collection = new ItemCollection(id, name, description);
-        collections.put(id, collection);
-        logger.info("Created collection: " + name + " (" + id + ")");
-        return collection;
+        return retryOperation(() -> collectionRepository.saveCollection(collection))
+            .thenApply(saved -> {
+                if (saved) {
+                    synchronized (collectionLock) {
+                        collections.put(id, collection);
+                    }
+                    logger.info("&a✓ Created collection: " + name + " (" + id + ")");
+                    return collection;
+                }
+                logger.warning("&c✖ Failed to save new collection to database: " + id);
+                return null;
+            })
+            .exceptionally(e -> {
+                logger.error("&c✖ Error creating collection: " + id, e);
+                return null;
+            });
     }
-    
-    /**
-     * Validate a new collection before creation
-     * 
-     * @param id Collection identifier
-     * @param name Display name
-     * @param description Collection description
-     * @return True if valid, false otherwise
-     */
+
     private boolean validateNewCollection(String id, String name, String description) {
         if (id == null || id.trim().isEmpty()) {
-            logger.warning("Collection validation failed: missing or empty ID");
+            logger.warning("&e⚠ Collection validation failed: missing or empty ID");
             return false;
         }
         
         if (name == null || name.trim().isEmpty()) {
-            logger.warning("Collection validation failed: missing or empty name");
+            logger.warning("&e⚠ Collection validation failed: missing or empty name");
             return false;
         }
         
-        // Check for duplicate IDs
-        if (collections.containsKey(id)) {
-            logger.warning("Collection validation failed: duplicate ID - " + id);
-            return false;
+        synchronized (collectionLock) {
+            if (collections.containsKey(id)) {
+                logger.warning("&e⚠ Collection validation failed: duplicate ID - " + id);
+                return false;
+            }
         }
         
-        // Validate ID format (lowercase alphanumeric + underscore)
         if (!id.matches("^[a-z0-9_]+$")) {
-            logger.warning("Collection validation failed: invalid ID format - " + id);
+            logger.warning("&e⚠ Collection validation failed: invalid ID format - " + id);
             return false;
         }
         
-        logger.debug("Collection validation passed: " + id);
         return true;
     }
-    
-    /**
-     * Validate an existing collection
-     * 
-     * @param collection The collection to validate
-     * @return True if valid, false otherwise
-     */
+
     private boolean validateCollection(ItemCollection collection) {
         if (collection == null) {
             logger.warning("Collection validation failed: null collection");
@@ -130,310 +177,334 @@ public class CollectionManager {
             return false;
         }
         
-        logger.debug("Collection validation passed: " + collection.getId());
         return true;
-    }
-    
-    public ItemCollection getCollection(String id) {
-        if (id == null || id.trim().isEmpty()) {
-            logger.warning("Cannot retrieve collection: null or empty ID provided");
-            return null;
-        }
-        
-        ItemCollection collection = collections.get(id);
-        if (collection == null) {
-            logger.debug("Collection not found: " + id);
-        }
-        
-        return collection;
-    }
-
-    public Map<String, ItemCollection> getAllCollections() {
-        return new HashMap<>(collections);
-    }
-
-    public ItemStack createCollectionItem(ItemProperties properties) {
-        if (properties == null) {
-            throw new IllegalArgumentException("ItemProperties cannot be null");
-        }
-        Material material = properties.getMaterial();
-        if (material == null) {
-            material = Material.PAPER;
-        }
-        ItemStack item = new ItemStack(material);
-        ItemMeta meta = item.getItemMeta();
-        if (meta != null) {
-            if (properties.getDisplayName() != null) {
-                meta.setDisplayName(properties.getDisplayName());
-            }
-            List<String> lore = properties.getLore();
-            if (lore == null) {
-                lore = new ArrayList<>();
-            }
-            String collectionId = properties.getCollectionId();
-            if (collectionId != null) {
-                ItemCollection collection = getCollection(collectionId);
-                if (collection != null) {
-                    lore.add("§7Collection: §a" + collection.getName());
-                }
-            }
-            if (properties.getRarityLevel() != null) {
-                lore.add("§7Rarity: §e" + properties.getRarityLevel());
-            }
-            meta.setLore(lore);            
-            meta.setCustomModelData(properties.getCustomModelData());            
-            item.setItemMeta(meta);
-        }
-        logger.debug("Created collection item: " + properties.getDisplayName());
-        return item;
-    }
-
-    public boolean addItemToCollection(String collectionId, ItemStack item) {
-        ItemCollection collection = getCollection(collectionId);
-        if (collection == null) {
-            logger.warning("Cannot add item to non-existent collection: " + collectionId);
-            return false;
-        }
-        collection.addItem(item);
-        logger.debug("Added item to collection: " + collectionId);
-        return true;
-    }
-
-    public boolean removeItemFromCollection(String collectionId, ItemStack item) {
-        ItemCollection collection = getCollection(collectionId);
-        if (collection == null) {
-            return false;
-        }
-        boolean removed = collection.removeItem(item);
-        if (removed) {
-            logger.debug("Removed item from collection: " + collectionId);
-        }
-        return removed;
-    }
-
-    public List<ItemStack> getCollectionItems(String collectionId) {
-        ItemCollection collection = getCollection(collectionId);
-        return collection != null ? collection.getItems() : new ArrayList<>();
-    }
-
-    public Integer getItemCount(String collectionId) {
-        ItemCollection collection = getCollection(collectionId);
-        return collection != null ? collection.getItemCount() : 0;
-    }
-
-    public void registerTheme(CollectionTheme theme) {
-        if (theme == null) return;
-        themes.put(theme.name().toLowerCase(), theme);
-        logger.info("Registered collection theme: " + theme.getDisplayName());
-    }
-
-    public CollectionTheme getTheme(String id) {
-        return themes.get(id);
-    }
-
-    public Map<String, CollectionTheme> getAllThemes() {
-        return new HashMap<>(themes);
-    }
-
-    public void shutdown() {
-        collections.clear();
-        themes.clear();
-        logger.info("CollectionManager shutdown");
     }
 
     /**
-     * Initialize collections from database on startup (async)
+     * Gets a collection by ID, loading from database if not cached.
+     * 
+     * @param id The unique identifier of the collection
+     * @return A CompletableFuture that completes with the requested ItemCollection, or null if not found
      */
-    private void loadCollectionsFromDatabase() {
-        logger.info("Loading collections from database asynchronously...");
-        collectionRepository.getAllCollections()
-            .thenAccept(dtos -> {
-                for (ItemCollectionDTO dto : dtos) {
+    public CompletableFuture<ItemCollection> getCollectionAsync(String id) {
+        if (id == null || id.trim().isEmpty()) {
+            logger.warning("&e⚠ Cannot get collection: ID is null or empty");
+            return CompletableFuture.completedFuture(null);
+        }
+
+        ItemCollection cached = collections.get(id);
+        if (cached != null) {
+            return CompletableFuture.completedFuture(cached);
+        }
+
+        return retryOperation(() -> collectionRepository.getCollectionById(id))
+            .thenApply(dto -> {
+                if (dto != null) {
                     ItemCollection collection = dto.toCollection();
-                    collections.put(collection.getId(), collection);
-                    logger.info("Loaded collection from database: " + collection.getName());
+                    synchronized (collectionLock) {
+                        collections.put(id, collection);
+                    }
+                    return collection;
                 }
-                logger.info("Loaded " + dtos.size() + " collections from database");
+                logger.warning("&e⚠ Collection not found: " + id);
+                return null;
             })
             .exceptionally(e -> {
-                logger.error("Error loading collections from database", e);
+                logger.error("&c✖ Error loading collection: " + id, e);
                 return null;
             });
     }
 
     /**
-     * Save a collection to the database with enhanced error handling (async)
-     *
-     * @param collection The collection to persist
-     * @return CompletableFuture<Boolean> that resolves to true if successfully saved
+     * Gets all collections, loading from database if needed.
+     * 
+     * @return A CompletableFuture that completes with a map of all collections
      */
-    public CompletableFuture<Boolean> saveCollection(ItemCollection collection) {
-        if (!validateCollection(collection)) {
-            logger.warning("Cannot save invalid collection");
-            return CompletableFuture.completedFuture(false);
-        }
-        
-        return collectionRepository.saveCollection(collection)
-            .thenApply(saved -> {
-                if (saved) {
-                    logger.info("Successfully saved collection: " + collection.getId());
-                    // Update the in-memory collection
-                    collections.put(collection.getId(), collection);
-                } else {
-                    logger.warning("Failed to save collection: " + collection.getId());
+    public CompletableFuture<Map<String, ItemCollection>> getAllCollectionsAsync() {
+        return retryOperation(() -> collectionRepository.getAllCollections())
+            .thenApply(dtos -> {
+                Map<String, ItemCollection> result = new HashMap<>();
+                synchronized (collectionLock) {
+                    for (ItemCollectionDTO dto : dtos) {
+                        ItemCollection collection = dto.toCollection();
+                        collections.put(collection.getId(), collection);
+                        result.put(collection.getId(), collection);
+                    }
                 }
-                return saved;
+                return result;
             })
             .exceptionally(e -> {
-                logger.error("Error saving collection: " + collection.getId(), e);
+                logger.error("&c✖ Error loading all collections", e);
+                return new HashMap<>(collections);
+            });
+    }
+
+    /**
+     * Creates an ItemStack for a collection item with the given properties.
+     * 
+     * @param properties The properties to apply to the item
+     * @return The created ItemStack
+     * @throws IllegalArgumentException if properties is null
+     */
+    public ItemStack createCollectionItem(ItemProperties properties) {
+        if (properties == null) {
+            logger.debug("&c✖ Cannot create collection item: properties is null");
+            throw new IllegalArgumentException("ItemProperties cannot be null");
+        }
+
+        Material material = properties.getMaterial() != null ? properties.getMaterial() : Material.PAPER;
+        ItemStack item = new ItemStack(material);
+        ItemMeta meta = item.getItemMeta();
+        
+        if (meta != null) {
+            if (properties.getDisplayName() != null) {
+                meta.setDisplayName(properties.getDisplayName());
+            }
+            
+            List<String> lore = properties.getLore() != null ? 
+                new ArrayList<>(properties.getLore()) : new ArrayList<>();
+
+            String collectionId = properties.getCollectionId();
+            if (collectionId != null) {
+                ItemCollection collection = collections.get(collectionId);
+                if (collection != null) {
+                    lore.add("§7Collection: §a" + collection.getName());
+                }
+            }
+            
+            if (properties.getRarityLevel() != null) {
+                lore.add("§7Rarity: §e" + properties.getRarityLevel());
+            }
+            
+            meta.setLore(lore);
+            meta.setCustomModelData(properties.getCustomModelData());
+            item.setItemMeta(meta);
+        }
+        
+        logger.debug("Created collection item: " + properties.getDisplayName());
+        return item;
+    }
+
+    /**
+     * Adds an item to a collection and saves to database.
+     * 
+     * @param collectionId The ID of the collection to add the item to
+     * @param item The item to add
+     * @return A CompletableFuture that completes with true if the item was added successfully
+     */
+    public CompletableFuture<Boolean> addItemToCollectionAsync(String collectionId, ItemStack item) {
+        return getCollectionAsync(collectionId)
+            .thenCompose(collection -> {
+                if (collection == null) {
+                    logger.warning("&e⚠ Cannot add item to non-existent collection: " + collectionId);
+                    return CompletableFuture.completedFuture(false);
+                }
+                
+                collection.addItem(item);
+                return retryOperation(() -> collectionRepository.saveCollection(collection));
+            })
+            .exceptionally(e -> {
+                logger.error("&c✖ Error adding item to collection: " + collectionId, e);
                 return false;
             });
     }
 
     /**
-     * Get a player's progress for a specific collection (async)
-     * 
-     * @param playerId The player's UUID
-     * @param collectionId The collection identifier
-     * @return CompletableFuture<Double> with progress value between 0.0 and 1.0
+     * Removes an item from a collection and updates database.
      */
-    public CompletableFuture<Double> getPlayerProgress(UUID playerId, String collectionId) {
+    public CompletableFuture<Boolean> removeItemFromCollectionAsync(String collectionId, ItemStack item) {
+        return getCollectionAsync(collectionId)
+            .thenCompose(collection -> {
+                if (collection == null) {
+                    return CompletableFuture.completedFuture(false);
+                }
+                
+                boolean removed = collection.removeItem(item);
+                if (removed) {
+                    return collectionRepository.saveCollection(collection);
+                }
+                return CompletableFuture.completedFuture(false);
+            })
+            .exceptionally(e -> {
+                logger.error("Error removing item from collection: " + collectionId, e);
+                return false;
+            });
+    }
+
+    /**
+     * Gets items from a collection, loading from database if needed.
+     */
+    public CompletableFuture<List<ItemStack>> getCollectionItemsAsync(String collectionId) {
+        return getCollectionAsync(collectionId)
+            .thenApply(collection -> 
+                collection != null ? collection.getItems() : new ArrayList<>()
+            );
+    }
+
+    public void registerTheme(CollectionTheme theme) {
+        if (theme != null) {
+            themes.put(theme.name().toLowerCase(), theme);
+            logger.info("Registered collection theme: " + theme.getDisplayName());
+        }
+    }
+
+    /**
+     * Gets the theme with the given ID.
+     * 
+     * @param id The ID of the theme
+     * @return The theme, or null if not found
+     */
+    public CollectionTheme getTheme(String id) {
+        if (id == null) {
+            logger.warning("&e⚠ Cannot get theme: ID is null");
+            return null;
+        }
+        return themes.get(id.toLowerCase());
+    }
+
+    /**
+     * Gets all registered themes.
+     * 
+     * @return A map of theme IDs to themes
+     */
+    public Map<String, CollectionTheme> getAllThemes() {
+        return new HashMap<>(themes);
+    }
+
+    /**
+     * Gets a player's collection progress.
+     * 
+     * @param playerId The UUID of the player
+     * @param collectionId The ID of the collection
+     * @return A CompletableFuture that completes with the player's progress (0.0 to 1.0)
+     */
+    public CompletableFuture<Double> getPlayerProgressAsync(UUID playerId, String collectionId) {
         if (playerId == null || collectionId == null) {
+            logger.warning("&e⚠ Cannot get progress: player ID or collection ID is null");
             return CompletableFuture.completedFuture(0.0);
         }
         
-        return collectionRepository.getPlayerCollectionProgress(playerId.toString(), collectionId)
+        return retryOperation(() -> collectionRepository.getPlayerCollectionProgress(playerId, collectionId))
             .exceptionally(e -> {
-                logger.error("Error getting player progress", e);
+                logger.error("&c✖ Error getting player progress", e);
                 return 0.0;
             });
     }
 
     /**
-     * Update a player's progress for a collection (async)
+     * Updates a player's collection progress and handles completion.
      * 
-     * @param playerId The player's UUID
-     * @param collectionId The collection identifier
-     * @param progress Progress value between 0.0 and 1.0
-     * @return CompletableFuture<Boolean> that resolves to true if successfully updated
+     * @param playerId The UUID of the player
+     * @param collectionId The ID of the collection
+     * @param progress The new progress value (0.0 to 1.0)
+     * @return A CompletableFuture that completes with true if the update was successful
      */
-    public CompletableFuture<Boolean> updatePlayerProgress(UUID playerId, String collectionId, double progress) {
-        if (playerId == null || collectionId == null || progress < 0.0 || progress > 1.0) {
-            logger.warning("Invalid parameters for progress update");
+    public CompletableFuture<Boolean> updatePlayerProgressAsync(UUID playerId, String collectionId, double progress) {
+        if (playerId == null || collectionId == null) {
+            logger.warning("&e⚠ Cannot update progress: player ID or collection ID is null");
             return CompletableFuture.completedFuture(false);
         }
         
-        return collectionRepository.updatePlayerCollectionProgress(playerId.toString(), collectionId, progress)
+        if (progress < 0.0 || progress > 1.0) {
+            logger.warning("&e⚠ Invalid progress value: " + progress);
+            return CompletableFuture.completedFuture(false);
+        }
+        
+        return retryOperation(() -> collectionRepository.updatePlayerCollectionProgress(playerId, collectionId, progress))
             .thenCompose(updated -> {
-                if (updated) {
-                    logger.info("Updated progress for player " + playerId + " in collection " + collectionId + ": " + String.format("%.1f%%", progress * 100));
-                    
-                    // Check for completion and trigger rewards
-                    if (progress >= 1.0) {
-                        return handleCollectionCompletionAsync(playerId, collectionId);
-                    }
+                if (updated && progress >= 1.0) {
+                    return handleCollectionCompletionAsync(playerId, collectionId);
                 }
                 return CompletableFuture.completedFuture(updated);
             })
             .exceptionally(e -> {
-                logger.error("Error updating player progress", e);
+                logger.error("&c✖ Error updating player progress", e);
                 return false;
             });
     }
-    
-    /**
-     * Handle collection completion events and rewards (async)
-     * 
-     * @param playerId The player who completed the collection
-     * @param collectionId The completed collection
-     * @return CompletableFuture<Boolean> that resolves to true if handling was successful
-     */
+
     private CompletableFuture<Boolean> handleCollectionCompletionAsync(UUID playerId, String collectionId) {
-        ItemCollection collection = getCollection(collectionId);
-        if (collection == null) {
-            logger.warning("Cannot handle completion for unknown collection: " + collectionId);
-            return CompletableFuture.completedFuture(false);
-        }
-
-        logger.info("Player " + playerId + " completed collection: " + collection.getName());
-
-        // Emit a collection completion event for external systems (to be integrated)
-        // TODO: Fire CollectionChangeEvent with ChangeType.COMPLETED for event-driven handling
-
-        // Mark completion timestamp in the database
-        return collectionRepository.markCollectionCompleted(playerId.toString(), collectionId, System.currentTimeMillis())
-            .exceptionally(e -> {
-                logger.error("Error marking collection as completed", e);
-                return false;
-            });
-    }
-
-    /**
-     * Get all collections, optionally filtered by theme.
-     * 
-     * @param themeId The theme ID to filter by, or null for all
-     * @return Map of collection IDs to ItemCollection
-     */
-    public Map<String, ItemCollection> getCollectionsByTheme(String themeId) {
-        if (themeId == null) {
-            return getAllCollections();
-        }
-        Map<String, ItemCollection> filtered = new HashMap<>();
-        for (Map.Entry<String, ItemCollection> entry : collections.entrySet()) {
-            if (themeId.equalsIgnoreCase(entry.getValue().getThemeId())) {
-                filtered.put(entry.getKey(), entry.getValue());
-            }
-        }
-        return filtered;
-    }
-
-    /**
-     * Reload all collections from the database (async).
-     * This will replace the in-memory map with the latest from storage.
-     * 
-     * @return CompletableFuture<Integer> that resolves to the number of loaded collections
-     */
-    public CompletableFuture<Integer> reloadCollectionsFromDatabase() {
-        logger.info("Reloading collections from database asynchronously...");
-        collections.clear();
-        
-        return collectionRepository.getAllCollections()
-            .thenApply(loadedCollections -> {
-                for (ItemCollectionDTO dto : loadedCollections) {
-                    ItemCollection collection = dto.toCollection();
-                    collections.put(collection.getId(), collection);
+        return getCollectionAsync(collectionId)
+            .thenCompose(collection -> {
+                if (collection == null) {
+                    logger.warning("&e⚠ Cannot handle completion for unknown collection: " + collectionId);
+                    return CompletableFuture.completedFuture(false);
                 }
-                logger.info("Reloaded " + loadedCollections.size() + " collections from database");
-                return loadedCollections.size();
+
+                logger.info("&a✓ Player " + playerId + " completed collection: " + collection.getName());
+                return retryOperation(() -> 
+                    collectionRepository.markCollectionCompleted(playerId, collectionId, System.currentTimeMillis())
+                );
             })
             .exceptionally(e -> {
-                logger.error("Error reloading collections from database", e);
-                return 0;
+                logger.error("&c✖ Error handling collection completion", e);
+                return false;
             });
     }
 
     /**
-     * Grant collection rewards to a player (async)
-     *
-     * @param playerId The player's UUID
-     * @param collectionId The collection identifier
-     * @return CompletableFuture<Boolean> that resolves to true if rewards were successfully granted
+     * Reloads all collections from the database.
+     * 
+     * @return A CompletableFuture that completes with the number of collections loaded
      */
-    public CompletableFuture<Boolean> grantCollectionReward(UUID playerId, String collectionId) {
-        return getPlayerProgress(playerId, collectionId).thenApply(progress -> {
-            if (progress < 1.0) {
-                logger.warning("Cannot grant rewards - collection not completed by player " + playerId);
-                return false;
-            }
-            ItemCollection collection = getCollection(collectionId);
-            if (collection == null) {
-                logger.warning("Cannot grant rewards for unknown collection: " + collectionId);
-                return false;
-            }
-            // TODO: Integrate with the reward system to actually distribute rewards.
-            // This may involve firing an event or directly awarding items.
-            logger.info("Granted collection rewards to player " + playerId + " for collection: " + collectionId);
-            return true;
-        });
+    public CompletableFuture<Integer> reloadCollectionsFromDatabase() {
+        logger.info("&6⚙ Reloading collections from database...");
+        synchronized (collectionLock) {
+            collections.clear();
+        }
+        
+        return loadCollectionsFromDatabase()
+            .thenApply(ignored -> collections.size());
+    }
+
+    /**
+     * Loads collections from the database into cache.
+     * Uses retry logic for reliability.
+     */
+    private CompletableFuture<Void> loadCollectionsFromDatabase() {
+        return retryOperation(() -> collectionRepository.getAllCollections())
+            .thenAccept(dtos -> {
+                synchronized (collectionLock) {
+                    for (ItemCollectionDTO dto : dtos) {
+                        ItemCollection collection = dto.toCollection();
+                        collections.put(collection.getId(), collection);
+                        logger.debug("Loaded collection: " + collection.getName());
+                    }
+                }
+                logger.info("&a✓ Loaded " + dtos.size() + " collections from database");
+            })
+            .exceptionally(e -> {
+                logger.error("&c✖ Error loading collections from database", e);
+                return null;
+            });
+    }
+
+    /**
+     * Cleans up resources and saves pending changes before shutdown.
+     * 
+     * @return A CompletableFuture that completes when shutdown is complete
+     */
+    public CompletableFuture<Void> shutdown() {
+        logger.info("&6⚙ Shutting down CollectionManager...");
+        List<CompletableFuture<Boolean>> saves = new ArrayList<>();
+        
+        synchronized (collectionLock) {
+            saves = collections.values().stream()
+                .map(collection -> retryOperation(() -> collectionRepository.saveCollection(collection)))
+                .collect(Collectors.toList());
+        }
+        
+        return CompletableFuture.allOf(saves.toArray(new CompletableFuture[0]))
+            .thenRun(() -> {
+                synchronized (collectionLock) {
+                    collections.clear();
+                    themes.clear();
+                }
+                logger.info("&a✓ CollectionManager shutdown complete");
+            })
+            .exceptionally(e -> {
+                logger.error("&c✖ Error during CollectionManager shutdown", e);
+                return null;
+            });
     }
 }
