@@ -25,20 +25,19 @@ public class RVNKLore extends JavaPlugin {
     private PlayerManager playerManager;
     private Thread shutdownHook;
     private boolean shuttingDown = false;
-    private final Object shutdownLock = new Object();@Override
-    public void onEnable() {
+    private final Object shutdownLock = new Object();@Override    public void onEnable() {
         // Initialize logging
         this.logger = LogManager.getInstance(this, "RVNKLore");
-        logger.info("&6⚙ Enabling RVNKLore plugin...");
+        logger.info("Enabling RVNKLore plugin...");
 
         // Load configuration (DTO-based, no explicit load() call)
         this.configManager = new ConfigManager(this);
-        logger.info("&a✓ Configuration manager initialized");
+        logger.info("Configuration manager initialized");
 
         // Initialize database manager (central hub for all DB operations)
         this.databaseManager = new DatabaseManager(this);
         databaseManager.initialize();
-        logger.info("&a✓ DatabaseManager initialized");
+        logger.info("DatabaseManager initialized");
 
         // Register commands, events, and managers as needed
         // ...existing code for command/event registration...
@@ -54,14 +53,12 @@ public class RVNKLore extends JavaPlugin {
             }
         });
         Runtime.getRuntime().addShutdownHook(shutdownHook);
-    }
-
-    @Override
+    }    @Override
     public void onDisable() {
-        logger.info("&6⚙ Disabling RVNKLore plugin...");
+        logger.info("Disabling RVNKLore plugin...");
         if (databaseManager != null) {
             databaseManager.close();
-            logger.info("&a✓ DatabaseManager closed");
+            logger.info("DatabaseManager closed");
         }
         synchronized(shutdownLock) {
             if (!shuttingDown) {

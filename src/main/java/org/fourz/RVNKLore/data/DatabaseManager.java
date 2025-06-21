@@ -138,11 +138,10 @@ public class DatabaseManager {    private final RVNKLore plugin;
         this.collectionRepository = new CollectionRepository(plugin, this);
         this.loreEntryRepository = new LoreEntryRepository(plugin, this);
         this.submissionRepository = new SubmissionRepository(plugin, this);
-        
-        // Initialize database schema
+          // Initialize database schema
         databaseSetup.initializeTables()
             .thenRun(() -> {
-                logger.info("Database schema initialized successfully");
+                logger.debug("Database schema initialized successfully");
                 validateTables();
             })
             .exceptionally(e -> {
@@ -618,9 +617,7 @@ public class DatabaseManager {    private final RVNKLore plugin;
             // Create SQLite connection provider
             connectionProvider = new SQLiteConnectionProvider(plugin);
         }
-    }
-
-    /**
+    }    /**
      * Validate that all required database tables exist.
      */
     private void validateTables() {
@@ -634,13 +631,13 @@ public class DatabaseManager {    private final RVNKLore plugin;
             boolean itemPropertiesTableExists = tableExists("item_properties");
             boolean loreCollectionTableExists = tableExists("lore_collection");
             
-            // Log validation results
-            logger.info("Table validation results:");
-            logger.info("- player: " + (playerTableExists ? "exists" : "missing"));
-            logger.info("- lore_entry: " + (loreEntryTableExists ? "exists" : "missing"));
-            logger.info("- lore_submission: " + (loreSubmissionTableExists ? "exists" : "missing"));
-            logger.info("- item_properties: " + (itemPropertiesTableExists ? "exists" : "missing"));
-            logger.info("- lore_collection: " + (loreCollectionTableExists ? "exists" : "missing"));
+            // Log validation results at DEBUG level only
+            logger.debug("Table validation results:");
+            logger.debug("- player: " + (playerTableExists ? "exists" : "missing"));
+            logger.debug("- lore_entry: " + (loreEntryTableExists ? "exists" : "missing"));
+            logger.debug("- lore_submission: " + (loreSubmissionTableExists ? "exists" : "missing"));
+            logger.debug("- item_properties: " + (itemPropertiesTableExists ? "exists" : "missing"));
+            logger.debug("- lore_collection: " + (loreCollectionTableExists ? "exists" : "missing"));
             
             // If any essential table is missing, initialize tables
             if (!playerTableExists || !loreEntryTableExists || !loreSubmissionTableExists || 
@@ -653,7 +650,7 @@ public class DatabaseManager {    private final RVNKLore plugin;
                         return null;
                     });
             } else {
-                logger.info("All essential database tables exist");
+                logger.info("Database validation complete - all tables exist");
             }
         } catch (SQLException e) {
             logger.error("Failed to validate database tables", e);

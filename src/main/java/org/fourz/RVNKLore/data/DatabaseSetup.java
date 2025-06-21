@@ -41,11 +41,10 @@ public class DatabaseSetup {    private final RVNKLore plugin;
      * Creates tables if they don't exist.
      *
      * @return A CompletableFuture that completes when all tables are created
-     */
-    public CompletableFuture<Void> initializeTables() {
+     */    public CompletableFuture<Void> initializeTables() {
         return CompletableFuture.runAsync(() -> {
             try {
-                logger.info("Initializing database tables...");
+                logger.debug("Initializing database tables...");
                 
                 createPlayerTable();
                 createNameChangeRecordTable();
@@ -57,7 +56,7 @@ public class DatabaseSetup {    private final RVNKLore plugin;
                 createLoreItemTable();
                 createLoreLocationTable();
                 
-                logger.info("Database tables initialized successfully");
+                logger.info("Database schema setup complete");
             } catch (SQLException e) {
                 logger.error("Failed to initialize database tables", e);
                 throw new RuntimeException("Failed to initialize database tables", e);
