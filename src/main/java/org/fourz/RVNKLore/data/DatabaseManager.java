@@ -36,8 +36,7 @@ import java.util.concurrent.*;
  * Database settings are accessed directly from ConfigManager, and the ConnectionProvider
  * implementations retrieve their configuration settings directly from ConfigManager.
  */
-public class DatabaseManager {
-    private final RVNKLore plugin;
+public class DatabaseManager {    private final RVNKLore plugin;
     private final LogManager logger;
     private ConnectionProvider connectionProvider;
     private final DatabaseType databaseType;
@@ -52,6 +51,7 @@ public class DatabaseManager {
     private ItemRepository itemRepository;
     private PlayerRepository playerRepository;
     private CollectionRepository collectionRepository;
+    private LoreEntryRepository loreEntryRepository;
     
     /**
      * Database types supported by the plugin.
@@ -127,11 +127,11 @@ public class DatabaseManager {
         
         // Initialize database setup
         databaseSetup = new DatabaseSetup(plugin, connectionProvider, schemaQueryBuilder, queryExecutor);
-        
-        // Initialize repositories
+          // Initialize repositories
         this.itemRepository = new ItemRepository(plugin, this);
         this.playerRepository = new PlayerRepository(plugin, this);
         this.collectionRepository = new CollectionRepository(plugin, this);
+        this.loreEntryRepository = new LoreEntryRepository(plugin, this);
         
         // Initialize database schema
         databaseSetup.initializeTables()
@@ -152,8 +152,7 @@ public class DatabaseManager {
     }
     
     // LORE ENTRY OPERATIONS
-    
-    /**
+      /**
      * Get a lore entry by ID.
      *
      * @param id The ID of the lore entry
@@ -166,14 +165,10 @@ public class DatabaseManager {
             );
         }
         
-        QueryBuilder query = queryBuilder.select("*")
-                                        .from("lore_entry")
-                                        .where("id = ?", id);
-        
-        return queryExecutor.executeQuery(query, LoreEntryDTO.class);
+        // Delegate to LoreEntryRepository
+        return loreEntryRepository.getLoreEntryById(id);
     }
-    
-    /**
+      /**
      * Get all lore entries.
      *
      * @return A future containing a list of lore entry DTOs
@@ -185,11 +180,8 @@ public class DatabaseManager {
             );
         }
         
-        QueryBuilder query = queryBuilder.select("*")
-                                        .from("lore_entry")
-                                        .orderBy("created_at", false);
-        
-        return queryExecutor.executeQueryList(query, LoreEntryDTO.class);
+        // Delegate to LoreEntryRepository
+        return loreEntryRepository.getAllLoreEntries();
     }
     
     /**
@@ -205,15 +197,10 @@ public class DatabaseManager {
             );
         }
         
-        QueryBuilder query = queryBuilder.select("*")
-                                        .from("lore_entry")
-                                        .where("entry_type = ?", type)
-                                        .orderBy("created_at", false);
-        
-        return queryExecutor.executeQueryList(query, LoreEntryDTO.class);
+        // Delegate to LoreEntryRepository
+        return loreEntryRepository.getLoreEntriesByType(type);
     }
-    
-    /**
+      /**
      * Save a lore entry.
      *
      * @param dto The lore entry DTO to save
@@ -226,27 +213,10 @@ public class DatabaseManager {
             );
         }
         
-        if (dto.getId() > 0) {
-            // Update existing entry
-            QueryBuilder query = queryBuilder.update("lore_entry")
-                                            .set("entry_type", dto.getEntryType())
-                                            .set("name", dto.getName())
-                                            .set("description", dto.getDescription())
-                                            .where("id = ?", dto.getId());
-            
-            return queryExecutor.executeUpdate(query)
-                              .thenApply(rowsAffected -> dto.getId());
-        } else {
-            // Insert new entry
-            QueryBuilder query = queryBuilder.insertInto("lore_entry")
-                                            .columns("entry_type", "name", "description")
-                                            .values(dto.getEntryType(), dto.getName(), dto.getDescription());
-            
-            return queryExecutor.executeInsert(query);
-        }
+        // Delegate to LoreEntryRepository
+        return loreEntryRepository.saveLoreEntry(dto);
     }
-    
-    /**
+      /**
      * Delete a lore entry.
      *
      * @param id The ID of the lore entry to delete
@@ -259,11 +229,8 @@ public class DatabaseManager {
             );
         }
         
-        QueryBuilder query = queryBuilder.deleteFrom("lore_entry")
-                                        .where("id = ?", id);
-        
-        return queryExecutor.executeUpdate(query)
-                          .thenApply(rowsAffected -> rowsAffected > 0);
+        // Delegate to LoreEntryRepository
+        return loreEntryRepository.deleteLoreEntry(id);
     }
     
     /**
@@ -271,8 +238,10 @@ public class DatabaseManager {
      *
      * @param keyword The keyword to search for
      * @return A future containing a list of matching lore entry DTOs
+     */    /**
+     * Search lore entries by their content in submissions.
      */
-    public CompletableFuture<List<LoreEntryDTO>> searchLoreEntries(String keyword) {
+    public CompletableFuture<List<LoreEntryDTO>> searchLoreSubmissions(String keyword) {
         if (!validateConnection()) {
             return CompletableFuture.failedFuture(
                 new SQLException("Database connection is not valid")
@@ -282,12 +251,18 @@ public class DatabaseManager {
         // Create a search term with wildcards
         String searchTerm = "%" + keyword + "%";
         
-        QueryBuilder query = queryBuilder.select("*")
-                                        .from("lore_entry")
-                                        .where("name LIKE ? OR description LIKE ?", searchTerm, searchTerm)
-                                        .orderBy("created_at", false);
+        QueryBuilder query = queryBuilder.select("e.*")
+                                        .from("lore_entry e")
+                                        .join("lore_submission s", "s.entry_id = e.id")
+                                        .where("s.is_current_version = TRUE AND (s.content LIKE ? OR e.entry_type LIKE ?)", 
+                                              searchTerm, searchTerm)
+                                        .orderBy("s.submitted_at", false);
         
-        return queryExecutor.executeQueryList(query, LoreEntryDTO.class);
+        return queryExecutor.executeQueryList(query, LoreEntryDTO.class)
+            .exceptionally(e -> {
+                logger.error("Error searching lore submissions", e);
+                return List.of();
+            });
     }
     
     // LORE SUBMISSION OPERATIONS
@@ -299,25 +274,21 @@ public class DatabaseManager {
      * @return A future containing the lore submission DTO, or null if not found
      */
     public CompletableFuture<LoreSubmissionDTO> getLoreSubmission(int id) {
-        String query = "SELECT * FROM lore_submissions WHERE id = ?";
+        if (!validateConnection()) {
+            return CompletableFuture.failedFuture(
+                new SQLException("Database connection is not valid")
+            );
+        }
 
-        return CompletableFuture.supplyAsync(() -> {
-            try (Connection conn = connectionProvider.getConnection();
-                 PreparedStatement stmt = conn.prepareStatement(query)) {
-                
-                stmt.setInt(1, id);
-                
-                try (ResultSet rs = stmt.executeQuery()) {
-                    if (rs.next()) {
-                        return extractLoreSubmissionFromResultSet(rs);
-                    }
-                }
-            } catch (SQLException e) {
+        QueryBuilder query = queryBuilder.select("*")
+                                        .from("lore_submission")
+                                        .where("id = ?", id);
+        
+        return queryExecutor.executeQuery(query, LoreSubmissionDTO.class)
+            .exceptionally(e -> {
                 logger.error("Error getting lore submission", e);
-                throw new RuntimeException(e);
-            }
-            return null;
-        }, executor);
+                throw new CompletionException(e);
+            });
     }
 
     /**
@@ -1102,274 +1073,160 @@ public class DatabaseManager {
     }
 
     /**
-     * Finds lore entries near a location within a specified radius.
+     * Find nearby lore entries within a radius of a location.
+     *
+     * @param location The base location to search from
+     * @param radius The radius in blocks to search within
+     * @return A future containing a list of nearby lore entry DTOs
      */
     public CompletableFuture<List<LoreEntryDTO>> findNearbyLoreEntries(Location location, double radius) {
-        String query = "SELECT * FROM lore_entries WHERE "
-            + "world = ? AND "
-            + "x BETWEEN ? AND ? AND "
-            + "y BETWEEN ? AND ? AND "
-            + "z BETWEEN ? AND ?";
-
-        double minX = location.getX() - radius;
-        double maxX = location.getX() + radius;
-        double minY = location.getY() - radius;
-        double maxY = location.getY() + radius;
-        double minZ = location.getZ() - radius;
-        double maxZ = location.getZ() + radius;
-        String world = location.getWorld().getName();
-
-        return CompletableFuture.supplyAsync(() -> {
-            List<LoreEntryDTO> results = new ArrayList<>();
-            try (Connection conn = connectionProvider.getConnection();
-                 PreparedStatement stmt = conn.prepareStatement(query)) {
-                
-                stmt.setString(1, world);
-                stmt.setDouble(2, minX);
-                stmt.setDouble(3, maxX);
-                stmt.setDouble(4, minY);
-                stmt.setDouble(5, maxY);
-                stmt.setDouble(6, minZ);
-                stmt.setDouble(7, maxZ);
-
-                try (ResultSet rs = stmt.executeQuery()) {
-                    while (rs.next()) {
-                        LoreEntryDTO dto = extractLoreEntryFromResultSet(rs);
-                        results.add(dto);
-                    }
-                }
-            } catch (SQLException e) {
-                logger.error("Error finding nearby lore entries", e);
-                throw new RuntimeException(e);
-            }
-            return results;
-        }, executor);
-    }
-
-    private LoreEntryDTO extractLoreEntryFromResultSet(ResultSet rs) throws SQLException {
-        LoreEntryDTO dto = new LoreEntryDTO();
-        dto.setId(rs.getInt("id"));
-        dto.setName(rs.getString("name"));
-        dto.setDescription(rs.getString("description"));
-        dto.setEntryType(rs.getString("entry_type"));
-        dto.setApproved(rs.getBoolean("is_approved"));
-        dto.setSubmittedBy(rs.getString("submitted_by"));
-        dto.setSubmissionDate(rs.getTimestamp("submission_date"));
-        dto.setNbtData(rs.getString("nbt_data"));
-        dto.setCreatedAt(rs.getTimestamp("created_at"));
-        dto.setUpdatedAt(rs.getTimestamp("updated_at"));
-        dto.setX(rs.getDouble("x"));
-        dto.setY(rs.getDouble("y"));
-        dto.setZ(rs.getDouble("z"));
-        dto.setWorld(rs.getString("world"));
-        dto.setContent(rs.getString("content"));
-        return dto;
-    }
-
-    public QueryBuilder getQueryBuilder() {
-        return queryBuilder;
-    }
-
-    public DefaultQueryExecutor getQueryExecutor() {
-        return queryExecutor;
-    }
-
-    private LoreSubmissionDTO extractLoreSubmissionFromResultSet(ResultSet rs) throws SQLException {
-        LoreSubmissionDTO dto = new LoreSubmissionDTO();
-        dto.setId(rs.getInt("id"));
-        dto.setContent(rs.getString("content"));
-        dto.setSubmitterUuid(rs.getString("submitter_uuid"));
-        dto.setSubmissionDate(rs.getTimestamp("submission_date"));
-        dto.setApprovalStatus(rs.getString("approval_status"));
-        dto.setApprovedBy(rs.getString("approved_by"));
-        dto.setApprovedAt(rs.getTimestamp("approved_at"));
-        dto.setCreatedAt(rs.getTimestamp("created_at"));
-        dto.setUpdatedAt(rs.getTimestamp("updated_at"));
-        return dto;
+        if (!validateConnection()) {
+            return CompletableFuture.failedFuture(new SQLException("Database connection is not valid"));
+        }
+        
+        QueryBuilder query = queryBuilder.select("*")
+            .from("lore_entry")
+            .where("world = ?", location.getWorld().getName())
+            .where("is_approved = ?", true)
+            .where(String.format("SQRT(POW(x - ?, 2) + POW(y - ?, 2) + POW(z - ?, 2)) <= ?",
+                location.getX(), location.getY(), location.getZ(), radius));
+        
+        return queryExecutor.executeQueryList(query, LoreEntryDTO.class);
     }
 
     /**
-     * Checks if a player exists in the lore system.
+     * Find lore entries in a specific world.
+     *
+     * @param worldName The name of the world
+     * @return A future containing a list of lore entry DTOs in the world
      */
-    public CompletableFuture<Boolean> playerExists(UUID playerUuid) {
-        return CompletableFuture.supplyAsync(() -> {
-            String query = "SELECT COUNT(*) FROM lore_submission s " +
-                "JOIN lore_entry e ON e.id = s.entry_id " +
-                "WHERE e.entry_type = ? AND s.is_current_version = TRUE AND s.content LIKE ?";
-            try (Connection conn = connectionProvider.getConnection();
-                 PreparedStatement stmt = conn.prepareStatement(query)) {
-                stmt.setString(1, "PLAYER");
-                stmt.setString(2, "%\"player_uuid\":\"" + playerUuid.toString() + "\"%");
-                try (ResultSet rs = stmt.executeQuery()) {
-                    if (rs.next()) {
-                        return rs.getLong(1) > 0;
-                    }
-                }
-            } catch (SQLException e) {
-                logger.error("Error checking if player exists: " + playerUuid, e);
-            }
-            return false;
-        }, executor);
+    public CompletableFuture<List<LoreEntryDTO>> findLoreEntriesInWorld(String worldName) {
+        if (!validateConnection()) {
+            return CompletableFuture.failedFuture(new SQLException("Database connection is not valid"));
+        }
+        
+        QueryBuilder query = queryBuilder.select("*")
+            .from("lore_entry")
+            .where("world = ?", worldName)
+            .where("is_approved = ?", true);
+        
+        return queryExecutor.executeQueryList(query, LoreEntryDTO.class);
     }
 
     /**
-     * Gets the current player name stored in the database for a given player UUID.
+     * Find lore entries by submitter name.
+     *
+     * @param submitter The name of the submitter
+     * @return A future containing a list of lore entry DTOs
      */
-    public CompletableFuture<String> getStoredPlayerName(UUID playerUuid) {
-        return CompletableFuture.supplyAsync(() -> {
-            String query = "SELECT s.content FROM lore_submission s " +
-                "JOIN lore_entry e ON e.id = s.entry_id " +
-                "WHERE e.entry_type = ? AND s.is_current_version = TRUE AND s.content LIKE ? AND s.content LIKE ? " +
-                "ORDER BY s.created_at DESC LIMIT 1";
-            try (Connection conn = connectionProvider.getConnection();
-                 PreparedStatement stmt = conn.prepareStatement(query)) {
-                stmt.setString(1, "PLAYER");
-                stmt.setString(2, "%\"player_uuid\":\"" + playerUuid.toString() + "\"%");
-                stmt.setString(3, "%\"entry_type\":\"player_character\"%");
-                try (ResultSet rs = stmt.executeQuery()) {
-                    if (rs.next()) {
-                        String content = rs.getString("content");
-                        // Extract player name from JSON content (assume JSON format)
-                        return PlayerDTO.extractPlayerNameFromContent(content);
-                    }
-                }
-            } catch (SQLException e) {
-                logger.error("Error getting stored player name: " + playerUuid, e);
-            }
-            return null;
-        }, executor);
+    public CompletableFuture<List<LoreEntryDTO>> findLoreEntriesBySubmitter(String submitter) {
+        if (!validateConnection()) {
+            return CompletableFuture.failedFuture(new SQLException("Database connection is not valid"));
+        }
+        
+        QueryBuilder query = queryBuilder.select("*")
+            .from("lore_entry")
+            .where("submitted_by = ?", submitter);
+        
+        return queryExecutor.executeQueryList(query, LoreEntryDTO.class);
     }
 
     /**
-     * Gets all lore entries associated with a player.
+     * Get a lore entry by UUID.
+     *
+     * @param uuid The UUID of the lore entry
+     * @return A future containing the lore entry DTO, or null if not found
      */
-    public CompletableFuture<List<PlayerDTO>> getPlayerLoreEntries(UUID playerUuid) {
-        return CompletableFuture.supplyAsync(() -> {
-            List<PlayerDTO> results = new java.util.ArrayList<>();
-            String query = "SELECT s.content, s.created_at, s.entry_id FROM lore_entry e " +
-                "JOIN lore_submission s ON e.id = s.entry_id " +
-                "WHERE e.entry_type = ? AND s.is_current_version = TRUE AND s.content LIKE ? " +
-                "ORDER BY s.created_at DESC";
-            try (Connection conn = connectionProvider.getConnection();
-                 PreparedStatement stmt = conn.prepareStatement(query)) {
-                stmt.setString(1, "PLAYER");
-                stmt.setString(2, "%\"player_uuid\":\"" + playerUuid.toString() + "\"%");
-                try (ResultSet rs = stmt.executeQuery()) {
-                    while (rs.next()) {
-                        PlayerDTO dto = PlayerDTO.fromResultSet(rs);
-                        results.add(dto);
-                    }
-                }
-            } catch (SQLException e) {
-                logger.error("Error getting player lore entries: " + playerUuid, e);
-            }
-            return results;
-        }, executor);
+    public CompletableFuture<LoreEntryDTO> getLoreEntryById(UUID uuid) {
+        if (!validateConnection()) {
+            return CompletableFuture.failedFuture(new SQLException("Database connection is not valid"));
+        }
+        
+        QueryBuilder query = queryBuilder.select("*")
+            .from("lore_entry")
+            .where("uuid = ?", uuid.toString());
+        
+        return queryExecutor.executeQuery(query, LoreEntryDTO.class);
     }
 
     /**
-     * Gets player lore entries by type (e.g., FIRST_JOIN, PLAYER_CHARACTER, NAME_CHANGE).
+     * Find pending (unapproved) lore entries.
+     *
+     * @return A future containing a list of pending lore entry DTOs
      */
-    public CompletableFuture<List<PlayerDTO>> getPlayerLoreEntriesByType(UUID playerUuid, String entryType) {
-        return CompletableFuture.supplyAsync(() -> {
-            List<PlayerDTO> results = new java.util.ArrayList<>();
-            String query = "SELECT s.content, s.created_at, s.entry_id FROM lore_entry e " +
-                "JOIN lore_submission s ON e.id = s.entry_id " +
-                "WHERE e.entry_type = ? AND s.is_current_version = TRUE AND s.content LIKE ? AND s.content LIKE ? " +
-                "ORDER BY s.created_at DESC";
-            try (Connection conn = connectionProvider.getConnection();
-                 PreparedStatement stmt = conn.prepareStatement(query)) {
-                stmt.setString(1, "PLAYER");
-                stmt.setString(2, "%\"player_uuid\":\"" + playerUuid.toString() + "\"%");
-                stmt.setString(3, "%\"entry_type\":\"" + entryType + "\"%");
-                try (ResultSet rs = stmt.executeQuery()) {
-                    while (rs.next()) {
-                        PlayerDTO dto = PlayerDTO.fromResultSet(rs);
-                        results.add(dto);
-                    }
-                }
-            } catch (SQLException e) {
-                logger.error("Error getting player lore entries by type: " + playerUuid + ", " + entryType, e);
-            }            return results;
-        }, executor);
+    public CompletableFuture<List<LoreEntryDTO>> findPendingLoreEntries() {
+        if (!validateConnection()) {
+            return CompletableFuture.failedFuture(new SQLException("Database connection is not valid"));
+        }
+        
+        QueryBuilder query = queryBuilder.select("*")
+            .from("lore_entry")
+            .where("is_approved = ?", false)
+            .orderBy("created_at", true);
+        
+        return queryExecutor.executeQueryList(query, LoreEntryDTO.class);
     }
 
     /**
-     * Internal implementation for saving player metadata to lore system.
-     * This is used by the PlayerRepository to save player metadata.
-     * 
-     * @param dto The player DTO with metadata
-     * @return A future containing the entry ID
+     * Find recent lore entries, sorted by creation date.
+     *
+     * @param count The maximum number of entries to return
+     * @return A future containing a list of recent lore entry DTOs
      */
-    public CompletableFuture<String> savePlayerMetadata(PlayerDTO dto) {
-        return CompletableFuture.supplyAsync(() -> {
-            try (Connection conn = connectionProvider.getConnection()) {
-                if (dto.getEntryId() != null) {
-                    // Update existing entry
-                    String query = "UPDATE lore_submission SET content = ? WHERE entry_id = ? AND is_current_version = TRUE";
-                    try (PreparedStatement stmt = conn.prepareStatement(query)) {
-                        stmt.setString(1, dto.getMetadataJson());
-                        stmt.setString(2, dto.getEntryId());
-                        int rows = stmt.executeUpdate();
-                        return rows > 0 ? dto.getEntryId() : null;
-                    }
-                } else {
-                    // Insert new entry
-                    String entryQuery = "INSERT INTO lore_entry (entry_type, name, description) VALUES (?, ?, ?)";
-                    try (PreparedStatement entryStmt = conn.prepareStatement(entryQuery, Statement.RETURN_GENERATED_KEYS)) {
-                        entryStmt.setString(1, "PLAYER");
-                        entryStmt.setString(2, "Player_" + dto.getPlayerUuid().toString());
-                        entryStmt.setString(3, dto.getMetadata().get("description"));
-                        entryStmt.executeUpdate();
-                        try (ResultSet keys = entryStmt.getGeneratedKeys()) {
-                            if (keys.next()) {
-                                String entryId = String.valueOf(keys.getInt(1));
-                                String submissionQuery = "INSERT INTO lore_submission (entry_id, content, is_current_version) VALUES (?, ?, TRUE)";
-                                try (PreparedStatement subStmt = conn.prepareStatement(submissionQuery)) {
-                                    subStmt.setString(1, entryId);
-                                    subStmt.setString(2, dto.getMetadataJson());
-                                    subStmt.executeUpdate();
-                                    return entryId;
-                                }
-                            }
-                        }
-                    }
-                }
-            } catch (SQLException e) {
-                logger.error("Error saving player: " + dto.getPlayerUuid(), e);
-            }
-            return null;
-        }, executor);
+    public CompletableFuture<List<LoreEntryDTO>> findRecentLoreEntries(int count) {
+        if (!validateConnection()) {
+            return CompletableFuture.failedFuture(new SQLException("Database connection is not valid"));
+        }
+        
+        QueryBuilder query = queryBuilder.select("*")
+            .from("lore_entry")
+            .where("is_approved = ?", true)
+            .orderBy("created_at", false)
+            .limit(count);
+        
+        return queryExecutor.executeQueryList(query, LoreEntryDTO.class);
     }
 
     /**
-     * Gets the history of name changes for a player.
+     * Search lore entries by text in their name or description.
+     *
+     * @param searchText The text to search for
+     * @return A future containing a list of matching lore entry DTOs
      */
-    public CompletableFuture<List<NameChangeRecordDTO>> getNameChangeHistory(UUID playerUuid) {
-        return CompletableFuture.supplyAsync(() -> {
-            List<NameChangeRecordDTO> results = new java.util.ArrayList<>();
-            String query = "SELECT s.content, s.created_at, s.entry_id FROM lore_submission s " +
-                "JOIN lore_entry e ON e.id = s.entry_id " +
-                "WHERE e.entry_type = ? AND s.is_current_version = TRUE AND s.content LIKE ? AND s.content LIKE ? " +
-                "ORDER BY s.created_at DESC";
-            try (Connection conn = connectionProvider.getConnection();
-                 PreparedStatement stmt = conn.prepareStatement(query)) {
-                stmt.setString(1, "PLAYER");
-                stmt.setString(2, "%\"player_uuid\":\"" + playerUuid.toString() + "\"%");
-                stmt.setString(3, "%\"entry_type\":\"name_change\"%");
-                try (ResultSet rs = stmt.executeQuery()) {
-                    while (rs.next()) {
-                        NameChangeRecordDTO dto = NameChangeRecordDTO.fromResultSet(rs);
-                        results.add(dto);
-                    }
-                }
-            } catch (SQLException e) {
-                logger.error("Error getting name change history: " + playerUuid, e);
-            }
-            return results;
-        }, executor);
+    public CompletableFuture<List<LoreEntryDTO>> searchLoreEntries(String searchText) {
+        if (!validateConnection()) {
+            return CompletableFuture.failedFuture(new SQLException("Database connection is not valid"));
+        }
+        
+        String pattern = "%" + searchText.toLowerCase() + "%";
+        QueryBuilder query = queryBuilder.select("*")
+            .from("lore_entry")
+            .where("LOWER(name) LIKE ? OR LOWER(description) LIKE ?", pattern, pattern)
+            .where("is_approved = ?", true)
+            .orderBy("created_at", false);
+        
+        return queryExecutor.executeQueryList(query, LoreEntryDTO.class);
     }
 
+    /**
+     * Find lore entries specific to a player by their UUID.
+     *
+     * @param playerUuid The player's UUID
+     * @return A future containing a list of player-specific lore entry DTOs
+     */
+    public CompletableFuture<List<LoreEntryDTO>> findPlayerSpecificLoreEntries(UUID playerUuid) {
+        if (!validateConnection()) {
+            return CompletableFuture.failedFuture(new SQLException("Database connection is not valid"));
+        }
+        
+        QueryBuilder query = queryBuilder.select("*")
+            .from("lore_entry")
+            .where("is_approved = ?", true)
+            .where("metadata @> ?", String.format("{\"player_uuid\": \"%s\"}", playerUuid.toString()));
+        
+        return queryExecutor.executeQueryList(query, LoreEntryDTO.class);
+    }
+    
     /**
      * Initialize the connection provider based on the storage type.
      */
@@ -1465,5 +1322,274 @@ public class DatabaseManager {
     
     public CollectionRepository getCollectionRepository() {
         return this.collectionRepository;
+    }
+
+    /**
+     * Gets the query builder instance.
+     */
+    public QueryBuilder getQueryBuilder() {
+        return queryBuilder;
+    }
+
+    /**
+     * Gets the query executor instance.
+     */
+    public DefaultQueryExecutor getQueryExecutor() {
+        return queryExecutor;
+    }
+
+    /**
+     * Executes a query with a custom result mapper.
+     */
+    private <T> CompletableFuture<T> executeQueryWithMapper(QueryBuilder query, ResultSetMapper<T> mapper) {
+        if (!validateConnection()) {
+            return CompletableFuture.failedFuture(
+                new SQLException("Database connection is not valid")
+            );
+        }
+
+        return CompletableFuture.supplyAsync(() -> {
+            try (var conn = connectionProvider.getConnection();
+                 var stmt = conn.prepareStatement(query.build())) {
+                
+                // Set parameters
+                Object[] params = query.getParameters();
+                for (int i = 0; i < params.length; i++) {
+                    stmt.setObject(i + 1, params[i]);
+                }
+
+                // Execute and map
+                try (var rs = stmt.executeQuery()) {
+                    return mapper.map(rs);
+                }
+            } catch (SQLException e) {
+                logger.error("Error executing query with mapper", e);
+                throw new CompletionException(e);
+            }
+        }, executor);
+    }
+
+    @FunctionalInterface
+    private interface ResultSetMapper<T> {
+        T map(ResultSet rs) throws SQLException;
+    }
+
+    /**
+     * Executes a query with a custom result mapper.
+     */
+    public <T> CompletableFuture<T> executeQuery(QueryBuilder query, ResultSetMapper<T> mapper) {
+        return executeQueryWithMapper(query, mapper);
+    }
+
+    /**
+     * Saves player metadata and returns success status.
+     */
+    public CompletableFuture<Boolean> savePlayerMetadata(PlayerDTO dto) {
+        if (!validateConnection()) {
+            return CompletableFuture.failedFuture(
+                new SQLException("Database connection is not valid")
+            );
+        }
+
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                boolean isUpdate = dto.getEntryId() != null;
+                
+                QueryBuilder query;
+                if (isUpdate) {
+                    query = queryBuilder.update("lore_submission")
+                        .set("content", dto.toJson())
+                        .where("entry_id = ? AND is_current_version = TRUE", dto.getEntryId());
+                } else {
+                    // First create the lore entry
+                    String entryType = "PLAYER";
+                    QueryBuilder entryQuery = queryBuilder.insertInto("lore_entry")
+                        .columns("entry_type", "created_at")
+                        .values(entryType, new Timestamp(System.currentTimeMillis()));
+                    
+                    int entryId = queryExecutor.executeInsert(entryQuery).join();
+                    dto.setEntryId(entryId);
+
+                    // Then create the submission
+                    query = queryBuilder.insertInto("lore_submission")
+                        .columns("entry_id", "content", "is_current_version", "submitted_at")
+                        .values(entryId, dto.toJson(), true, new Timestamp(System.currentTimeMillis()));
+                }
+
+                int result = queryExecutor.executeUpdate(query).join();
+                return result > 0;
+            } catch (Exception e) {
+                logger.error("Error saving player metadata", e);
+                return false;
+            }
+        }, executor);
+    }
+
+    /**
+     * Checks if a player exists in the database.
+     */
+    public CompletableFuture<Boolean> playerExists(UUID playerUuid) {
+        if (!validateConnection()) {
+            return CompletableFuture.failedFuture(
+                new SQLException("Database connection is not valid")
+            );
+        }
+
+        QueryBuilder query = queryBuilder.select("COUNT(*) as count")
+            .from("lore_submission s")
+            .join("lore_entry e", "e.id = s.entry_id")
+            .where("e.entry_type = ? AND s.is_current_version = TRUE AND s.content LIKE ?",
+                  "PLAYER", "%\"player_uuid\":\"" + playerUuid.toString() + "\"%");
+
+        return executeQueryWithMapper(query, rs -> rs.next() && rs.getInt("count") > 0)
+            .exceptionally(e -> {
+                logger.error("Error checking if player exists", e);
+                return false;
+            });
+    }
+
+    /**
+     * Gets the stored player name from the database.
+     */
+    public CompletableFuture<String> getStoredPlayerName(UUID playerUuid) {
+        if (!validateConnection()) {
+            return CompletableFuture.failedFuture(
+                new SQLException("Database connection is not valid")
+            );
+        }
+
+        QueryBuilder query = queryBuilder.select("s.content")
+            .from("lore_submission s")
+            .join("lore_entry e", "e.id = s.entry_id")
+            .where("e.entry_type = ? AND s.is_current_version = TRUE AND s.content LIKE ?",
+                  "PLAYER", "%\"player_uuid\":\"" + playerUuid.toString() + "\"%")
+            .limit(1);
+
+        return executeQueryWithMapper(query, rs -> {
+            if (rs.next()) {
+                String content = rs.getString("content");
+                return PlayerDTO.extractPlayerNameFromContent(content);
+            }
+            return null;
+        }).exceptionally(e -> {
+            logger.error("Error getting stored player name", e);
+            return null;
+        });
+    }
+
+    /**
+     * Gets all lore entries for a player.
+     */
+    public CompletableFuture<List<PlayerDTO>> getPlayerLoreEntries(UUID playerUuid) {
+        if (!validateConnection()) {
+            return CompletableFuture.failedFuture(
+                new SQLException("Database connection is not valid")
+            );
+        }
+
+        QueryBuilder query = queryBuilder.select("s.entry_id", "s.content")
+            .from("lore_submission s")
+            .join("lore_entry e", "e.id = s.entry_id")
+            .where("e.entry_type = ? AND s.content LIKE ?",
+                  "PLAYER", "%\"player_uuid\":\"" + playerUuid.toString() + "\"%")
+            .orderBy("s.submitted_at", false);
+
+        return executeQueryWithMapper(query, rs -> {
+            List<PlayerDTO> results = new ArrayList<>();
+            while (rs.next()) {
+                results.add(PlayerDTO.fromResultSet(rs));
+            }
+            return results;
+        }).exceptionally(e -> {
+            logger.error("Error getting player lore entries", e);
+            return List.of();
+        });
+    }
+
+    /**
+     * Gets player lore entries by type.
+     */
+    public CompletableFuture<List<PlayerDTO>> getPlayerLoreEntriesByType(UUID playerUuid, String entryType) {
+        if (!validateConnection()) {
+            return CompletableFuture.failedFuture(
+                new SQLException("Database connection is not valid")
+            );
+        }
+
+        QueryBuilder query = queryBuilder.select("s.entry_id", "s.content")
+            .from("lore_submission s")
+            .join("lore_entry e", "e.id = s.entry_id")
+            .where("e.entry_type = ? AND s.content LIKE ? AND s.content LIKE ?",
+                  "PLAYER", 
+                  "%\"player_uuid\":\"" + playerUuid.toString() + "\"%",
+                  "%\"entry_type\":\"" + entryType + "\"%")
+            .orderBy("s.submitted_at", false);
+
+        return executeQueryWithMapper(query, rs -> {
+            List<PlayerDTO> results = new ArrayList<>();
+            while (rs.next()) {
+                results.add(PlayerDTO.fromResultSet(rs));
+            }
+            return results;
+        }).exceptionally(e -> {
+            logger.error("Error getting player lore entries by type", e);
+            return List.of();
+        });
+    }
+
+    /**
+     * Gets the name change history for a player.
+     */
+    public CompletableFuture<List<NameChangeRecordDTO>> getNameChangeHistory(UUID playerUuid) {
+        if (!validateConnection()) {
+            return CompletableFuture.failedFuture(
+                new SQLException("Database connection is not valid")
+            );
+        }
+
+        QueryBuilder query = queryBuilder.select("s.submitted_at", "s.content")
+            .from("lore_submission s")
+            .join("lore_entry e", "e.id = s.entry_id")
+            .where("e.entry_type = ? AND s.content LIKE ? AND s.content LIKE ?",
+                  "PLAYER", 
+                  "%\"player_uuid\":\"" + playerUuid.toString() + "\"%",
+                  "%\"entry_type\":\"NAME_CHANGE\"%")
+            .orderBy("s.submitted_at", false);
+
+        return executeQueryWithMapper(query, rs -> {
+            List<NameChangeRecordDTO> results = new ArrayList<>();
+            while (rs.next()) {
+                results.add(new NameChangeRecordDTO(rs));
+            }
+            return results;
+        }).exceptionally(e -> {
+            logger.error("Error getting name change history", e);
+            return List.of();
+        });
+    }
+
+    private LoreSubmissionDTO extractLoreSubmissionFromResultSet(ResultSet rs) throws SQLException {
+        LoreSubmissionDTO dto = new LoreSubmissionDTO();
+        
+        dto.setId(rs.getInt("id"));
+        dto.setEntryId(rs.getInt("entry_id"));
+        dto.setSlug(rs.getString("slug"));
+        dto.setVisibility(rs.getString("visibility"));
+        dto.setStatus(rs.getString("status"));
+        dto.setSubmitterUuid(rs.getString("submitter_uuid"));
+        dto.setCreatedBy(rs.getString("created_by"));
+        dto.setSubmissionDate(rs.getTimestamp("submission_date"));
+        dto.setApprovalStatus(rs.getString("approval_status"));
+        dto.setApprovedBy(rs.getString("approved_by"));
+        dto.setApprovedAt(rs.getTimestamp("approved_at"));
+        dto.setViewCount(rs.getInt("view_count"));
+        dto.setLastViewedAt(rs.getTimestamp("last_viewed_at"));
+        dto.setCreatedAt(rs.getTimestamp("created_at"));
+        dto.setUpdatedAt(rs.getTimestamp("updated_at"));
+        dto.setContentVersion(rs.getInt("content_version"));
+        dto.setCurrentVersion(rs.getBoolean("is_current_version"));
+        dto.setContent(rs.getString("content"));
+        
+        return dto;
     }
 }

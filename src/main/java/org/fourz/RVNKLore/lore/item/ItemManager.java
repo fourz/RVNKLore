@@ -10,65 +10,141 @@ import org.fourz.RVNKLore.lore.item.cosmetic.CosmeticsManager;
 import org.fourz.RVNKLore.lore.item.custommodeldata.CustomModelDataManager;
 import org.fourz.RVNKLore.data.dto.ItemPropertiesDTO;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CompletionException;
+import java.util.function.Supplier;
 
 /**
  * Base manager class for all item-related functionality in the lore system.
  * Acts as a central orchestrator for enchantments, cosmetics, collections, and model data.
+ * Uses async operations and DTOs for database interactions through ItemRepository.
+ * 
+ * This class follows the singleton pattern and uses a thread-safe cache for items.
+ * All database operations are performed asynchronously and include retry logic for critical operations.
  */
 public class ItemManager {
     private final RVNKLore plugin;
     private final LogManager logger;
+    private final Object cacheLock = new Object();
+    private static final int MAX_RETRIES = 3;
+    private static final long RETRY_DELAY_MS = 1000;
     
     // Sub-managers for different item domains
-    private EnchantManager enchantManager;
-    private CosmeticsManager cosmeticItem;
-    private CollectionManager collectionManager;
-    private CustomModelDataManager modelDataManager;
-    private ItemRepository itemRepository;
-      // Caches for better performance
+    private final EnchantManager enchantManager;
+    private final CosmeticsManager cosmeticItem;
+    private final CollectionManager collectionManager;
+    private final CustomModelDataManager modelDataManager;
+    private final ItemRepository itemRepository;
+
+    // Thread-safe caches for better performance
     private final Map<String, List<ItemPropertiesDTO>> itemNameCache = new ConcurrentHashMap<>();
     private final Map<String, ItemPropertiesDTO> loreEntryIdCache = new ConcurrentHashMap<>();
     private final Map<Integer, List<ItemPropertiesDTO>> collectionCache = new ConcurrentHashMap<>();
-    private boolean cacheInitialized = false;
+    private volatile boolean cacheInitialized = false;
     
     public ItemManager(RVNKLore plugin) {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "ItemManager");
-        logger.info("Initializing ItemManager...");
+        logger.info("&6⚙ Initializing ItemManager...");
 
         // Initialize database repository
         if (plugin.getDatabaseManager() != null) {
             this.itemRepository = new ItemRepository(plugin, plugin.getDatabaseManager());
-            logger.info("ItemRepository initialized");
+            logger.info("&a✓ ItemRepository initialized");
         } else {
-            logger.warning("DatabaseManager not available - some item features may be limited");
+            logger.error("&c✖ DatabaseManager not available - some item features may be limited", null);
+            this.itemRepository = null;
         }
         
-        // Initialize cosmetic manager
+        // Initialize sub-managers
         this.cosmeticItem = new CosmeticsManager(plugin);
-        logger.info("CosmeticItem initialized");
+        logger.info("&a✓ CosmeticItem initialized");
         
-        // Initialize enchant manager
         this.enchantManager = new EnchantManager(plugin);
-        logger.info("EnchantManager initialized");
+        logger.info("&a✓ EnchantManager initialized");
         
-        // Initialize model data manager
         this.modelDataManager = new CustomModelDataManager(plugin);
-        logger.info("ModelDataManager initialized");
+        logger.info("&a✓ ModelDataManager initialized");
         
-        // Initialize collection manager after other managers
         this.collectionManager = new CollectionManager(plugin);
-        logger.info("CollectionManager initialized");
+        logger.info("&a✓ CollectionManager initialized");
         
-        // Initial cache load in async task to avoid blocking startup
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, this::initializeCache);
+        // Initial cache load in async task
+        initializeAsync();
     }
-    
+
+    /**
+     * Helper method to retry critical operations with exponential backoff.
+     * 
+     * @param operation The operation to retry
+     * @param <T> The return type of the operation
+     * @return A CompletableFuture that will complete with the operation result
+     */
+    private <T> CompletableFuture<T> retryOperation(Supplier<CompletableFuture<T>> operation) {
+        return retryOperation(operation, 1);
+    }
+
+    private <T> CompletableFuture<T> retryOperation(Supplier<CompletableFuture<T>> operation, int attempt) {
+        return operation.get().exceptionally(e -> {
+            if (attempt < MAX_RETRIES) {
+                logger.warning("&e⚠ Operation failed, attempt " + attempt + "/" + MAX_RETRIES + ", retrying...");
+                try {
+                    Thread.sleep(RETRY_DELAY_MS * attempt);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new CompletionException(ie);
+                }
+                return retryOperation(operation, attempt + 1).join();
+            }
+            throw new CompletionException(e);
+        });
+    }
+
+    /**
+     * Initialize the cache asynchronously.
+     */
+    private void initializeAsync() {
+        if (itemRepository == null) {
+            logger.warning("&e⚠ Cannot initialize cache: ItemRepository is null");
+            return;
+        }
+
+        logger.info("&6⚙ Initializing item cache from database...");
+        retryOperation(() -> itemRepository.getItemsByType(null))
+            .thenAccept(allItems -> {
+                synchronized (cacheLock) {
+                    itemNameCache.clear();
+                    collectionCache.clear();
+                    loreEntryIdCache.clear();
+
+                    for (ItemPropertiesDTO dto : allItems) {
+                        String key = dto.getDisplayName().toLowerCase();
+                        itemNameCache.computeIfAbsent(key, k -> new ArrayList<>()).add(dto);
+                        
+                        if (dto.getLoreEntryId() != null) {
+                            loreEntryIdCache.put(dto.getLoreEntryId(), dto);
+                        }
+                        
+                        if (dto.getCollectionId() != null) {
+                            try {
+                                int colId = Integer.parseInt(dto.getCollectionId());
+                                collectionCache.computeIfAbsent(colId, k -> new ArrayList<>()).add(dto);
+                            } catch (NumberFormatException ignored) {}
+                        }
+                    }
+                    cacheInitialized = true;
+                }
+                logger.info("&a✓ Item cache initialized with " + itemNameCache.size() + " items and " + 
+                    collectionCache.size() + " collections");
+            })
+            .exceptionally(e -> {
+                logger.error("&c✖ Error initializing item cache", e);
+                return null;
+            });
+    }
+
     /**
      * Get the enchantment manager for enchanted item generation and management.
      * 
@@ -106,87 +182,120 @@ public class ItemManager {
     }
     
     /**
-     * Give a lore item to a player (async).
+     * Give a lore item to a player asynchronously.
      *
      * @param itemName Name of the item to give
      * @param player Player to receive the item
-     * @return CompletableFuture<Boolean> True if item was given successfully, false otherwise
+     * @return CompletableFuture<Boolean> True if item was given successfully
      */
     public CompletableFuture<Boolean> giveItemToPlayerAsync(String itemName, org.bukkit.entity.Player player) {
         if (player == null) {
-            logger.error("Cannot give item - player is null", null);
+            logger.error("&c✖ Cannot give item - player is null", null);
             return CompletableFuture.completedFuture(false);
         }
-        return createLoreItemAsync(itemName).thenApply(item -> {
-            if (item == null) {
+
+        return retryOperation(() -> createLoreItemAsync(itemName))
+            .thenApply(item -> {
+                if (item == null) {
+                    logger.warning("&e⚠ Item not found: " + itemName);
+                    return false;
+                }
+                player.getInventory().addItem(item);
+                logger.info("&a✓ Gave item " + itemName + " to player " + player.getName());
+                return true;
+            })
+            .exceptionally(e -> {
+                logger.error("&c✖ Error giving item to player", e);
                 return false;
-            }
-            player.getInventory().addItem(item);
-            return true;
-        });
+            });
     }
 
     /**
-     * Display detailed information about an item to a CommandSender (async).
+     * Display detailed information about an item to a CommandSender asynchronously.
      *
      * @param itemName The name of the item to show information for
      * @param sender The CommandSender to show information to
-     * @return CompletableFuture<Boolean> True if item was found and info displayed, false otherwise
+     * @return CompletableFuture<Boolean> True if item was found and info displayed
      */
     public CompletableFuture<Boolean> displayItemInfoAsync(String itemName, org.bukkit.command.CommandSender sender) {
-        return createLoreItemAsync(itemName).thenApply(item -> {
-            if (item == null) {
+        if (sender == null) {
+            logger.error("&c✖ Cannot display info - sender is null", null);
+            return CompletableFuture.completedFuture(false);
+        }
+
+        return retryOperation(() -> createLoreItemAsync(itemName))
+            .thenApply(item -> {
+                if (item == null) {
+                    sender.sendMessage(org.bukkit.ChatColor.RED + "Item not found: " + itemName);
+                    return false;
+                }
+
+                sender.sendMessage(org.bukkit.ChatColor.GOLD + "===== Item Info: " + itemName + " =====");
+                sender.sendMessage(org.bukkit.ChatColor.YELLOW + "Material: " + item.getType());
+                
+                org.bukkit.inventory.meta.ItemMeta meta = item.getItemMeta();
+                if (meta != null) {
+                    if (meta.hasDisplayName()) {
+                        sender.sendMessage(org.bukkit.ChatColor.YELLOW + "Display Name: " + meta.getDisplayName());
+                    }
+                    if (meta.hasLore()) {
+                        sender.sendMessage(org.bukkit.ChatColor.YELLOW + "Lore:");
+                        for (String line : meta.getLore()) {
+                            sender.sendMessage(org.bukkit.ChatColor.GRAY + "  " + line);
+                        }
+                    }
+                    if (meta.hasCustomModelData()) {
+                        sender.sendMessage(org.bukkit.ChatColor.YELLOW + "Custom Model Data: " + meta.getCustomModelData());
+                    }
+                    if (meta.hasEnchants()) {
+                        sender.sendMessage(org.bukkit.ChatColor.YELLOW + "Enchantments:");
+                        for (Map.Entry<org.bukkit.enchantments.Enchantment, Integer> entry : meta.getEnchants().entrySet()) {
+                            String enchantName = entry.getKey().toString().replace("Enchantment[", "").replace("]", "");
+                            sender.sendMessage(org.bukkit.ChatColor.GRAY + "  " + formatEnchantmentName(enchantName) + " " + entry.getValue());
+                        }
+                    }
+                }
+                return true;
+            })
+            .exceptionally(e -> {
+                logger.error("&c✖ Error displaying item info", e);
+                sender.sendMessage(org.bukkit.ChatColor.RED + "An error occurred while retrieving item information");
                 return false;
-            }
-            org.bukkit.inventory.meta.ItemMeta meta = item.getItemMeta();
-            sender.sendMessage(org.bukkit.ChatColor.GOLD + "===== Item Info: " + itemName + " =====");
-            sender.sendMessage(org.bukkit.ChatColor.YELLOW + "Material: " + item.getType());
-            if (meta != null) {
-                if (meta.hasDisplayName()) {
-                    sender.sendMessage(org.bukkit.ChatColor.YELLOW + "Display Name: " + meta.getDisplayName());
-                }
-                if (meta.hasLore()) {
-                    sender.sendMessage(org.bukkit.ChatColor.YELLOW + "Lore:");
-                    for (String line : meta.getLore()) {
-                        sender.sendMessage(org.bukkit.ChatColor.GRAY + "  " + line);
-                    }
-                }
-                if (meta.hasCustomModelData()) {
-                    sender.sendMessage(org.bukkit.ChatColor.YELLOW + "Custom Model Data: " + meta.getCustomModelData());
-                }
-                if (meta.hasEnchants()) {
-                    sender.sendMessage(org.bukkit.ChatColor.YELLOW + "Enchantments:");
-                    for (Map.Entry<org.bukkit.enchantments.Enchantment, Integer> entry : meta.getEnchants().entrySet()) {
-                        String enchantName = entry.getKey().toString().replace("Enchantment[", "").replace("]", "");
-                        sender.sendMessage(org.bukkit.ChatColor.GRAY + "  " + formatEnchantmentName(enchantName) + " " + entry.getValue());
-                    }
-                }
-            }
-            return true;
-        });
+            });
     }
 
     /**
-     * Display a list of all available items to a CommandSender (async).
+     * Display a list of all available items to a CommandSender asynchronously.
      *
      * @param sender The CommandSender to show available items to
      */
     public void displayAvailableItemsAsync(org.bukkit.command.CommandSender sender) {
-        getAllItemNamesAsync().thenAccept(allItems -> {
-            sender.sendMessage(org.bukkit.ChatColor.GOLD + "Available Items:");
-            if (allItems.isEmpty()) {
-                sender.sendMessage(org.bukkit.ChatColor.GRAY + "   No items available.");
-                return;
-            }
-            for (String name : allItems) {
-                sender.sendMessage(org.bukkit.ChatColor.YELLOW + " - " + name);
-            }
-        });
+        if (sender == null) {
+            logger.error("&c✖ Cannot display items - sender is null", null);
+            return;
+        }
+
+        retryOperation(() -> getAllItemNamesAsync())
+            .thenAccept(allItems -> {
+                sender.sendMessage(org.bukkit.ChatColor.GOLD + "Available Items:");
+                if (allItems.isEmpty()) {
+                    sender.sendMessage(org.bukkit.ChatColor.GRAY + "   No items available.");
+                    return;
+                }
+                for (String name : allItems) {
+                    sender.sendMessage(org.bukkit.ChatColor.YELLOW + " - " + name);
+                }
+            })
+            .exceptionally(e -> {
+                logger.error("&c✖ Error displaying available items", e);
+                sender.sendMessage(org.bukkit.ChatColor.RED + "An error occurred while retrieving item list");
+                return null;
+            });
     }
     
     /**
-     * Format enchantment name for user-friendly display
-     * Converts snake_case to Title Case
+     * Format enchantment name for user-friendly display.
+     * Converts snake_case to Title Case.
      * 
      * @param enchantName Raw enchantment name
      * @return Formatted enchantment name
@@ -198,8 +307,8 @@ public class ItemManager {
         for (String part : parts) {
             if (part.length() > 0) {
                 formatted.append(part.substring(0, 1).toUpperCase())
-                         .append(part.substring(1).toLowerCase())
-                         .append(" ");
+                        .append(part.substring(1).toLowerCase())
+                        .append(" ");
             }
         }
         
@@ -208,8 +317,18 @@ public class ItemManager {
     
     /**
      * Create a generic lore item with basic properties.
+     *
+     * @param type The type of item to create
+     * @param name The name of the item
+     * @param properties The properties to apply to the item
+     * @return The created ItemStack
      */
     public ItemStack createLoreItem(ItemType type, String name, ItemProperties properties) {
+        if (properties == null) {
+            logger.error("&c✖ Cannot create item - properties is null", null);
+            return null;
+        }
+
         switch (type) {
             case ENCHANTED:
                 return enchantManager.createEnchantedItem(properties);
@@ -220,269 +339,236 @@ public class ItemManager {
             case MODEL_DATA:
                 if (modelDataManager != null) {
                     ItemStack item = new ItemStack(properties.getMaterial());
-                    // Map ItemType to ModelDataCategory if possible, else use ModelDataCategory.COSMETIC as default
-                    org.fourz.RVNKLore.lore.item.custommodeldata.CustomModelDataCategory category = org.fourz.RVNKLore.lore.item.custommodeldata.CustomModelDataCategory.COSMETIC;
+                    org.fourz.RVNKLore.lore.item.custommodeldata.CustomModelDataCategory category = 
+                        org.fourz.RVNKLore.lore.item.custommodeldata.CustomModelDataCategory.COSMETIC;
                     try {
                         category = org.fourz.RVNKLore.lore.item.custommodeldata.CustomModelDataCategory.valueOf(type.name());
                     } catch (IllegalArgumentException ignored) {}
                     return modelDataManager.applyModelData(item, name, category);
                 }
-                // Fallback to standard item creation
-                ItemStack fallback = new ItemStack(properties.getMaterial());
-                org.bukkit.inventory.meta.ItemMeta fallbackMeta = fallback.getItemMeta();
-                if (fallbackMeta != null) {
-                    if (properties.getDisplayName() != null) {
-                        fallbackMeta.setDisplayName(properties.getDisplayName());
-                    }
-                    if (properties.getLore() != null && !properties.getLore().isEmpty()) {
-                        fallbackMeta.setLore(properties.getLore());
-                    }
-                    fallbackMeta.setCustomModelData(properties.getCustomModelData());
-                    fallback.setItemMeta(fallbackMeta);
-                }
-                return fallback;
+                return createBasicItem(properties);
             default:
-                // For standard items, create a basic item with the properties
-                ItemStack item = new ItemStack(properties.getMaterial());
-                org.bukkit.inventory.meta.ItemMeta meta = item.getItemMeta();
-                if (meta != null) {
-                    if (properties.getDisplayName() != null) {
-                        meta.setDisplayName(properties.getDisplayName());
-                    }
-                    if (properties.getLore() != null && !properties.getLore().isEmpty()) {
-                        meta.setLore(properties.getLore());
-                    }
-                    meta.setCustomModelData(properties.getCustomModelData());
-                    item.setItemMeta(meta);
-                }
-                return item;
+                return createBasicItem(properties);
         }
     }
 
     /**
-     * Returns a list of all registered item names for tab completion and lookup.
-     * Now async and DTO-based.
+     * Create a basic item with the given properties.
+     *
+     * @param properties The properties to apply
+     * @return The created ItemStack
+     */
+    private ItemStack createBasicItem(ItemProperties properties) {
+        ItemStack item = new ItemStack(properties.getMaterial());
+        org.bukkit.inventory.meta.ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            if (properties.getDisplayName() != null) {
+                meta.setDisplayName(properties.getDisplayName());
+            }
+            if (properties.getLore() != null && !properties.getLore().isEmpty()) {
+                meta.setLore(properties.getLore());
+            }
+            meta.setCustomModelData(properties.getCustomModelData());
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    /**
+     * Returns a list of all registered item names asynchronously.
+     * Used for tab completion and lookup.
+     *
+     * @return CompletableFuture with a list of item names
      */
     public CompletableFuture<List<String>> getAllItemNamesAsync() {
         if (itemRepository != null && cacheInitialized) {
-            return CompletableFuture.completedFuture(new ArrayList<>(itemNameCache.keySet()));
-        } else if (itemRepository != null) {
-            // Fallback: fetch all items from DB
-            return itemRepository.getItemsByType(null).thenApply(list -> {
-                List<String> names = new ArrayList<>();
-                for (ItemPropertiesDTO dto : list) {
-                    names.add(dto.getDisplayName());
-                }
-                return names;
-            });
-        } else {
-            return CompletableFuture.completedFuture(new ArrayList<>());
+            synchronized (cacheLock) {
+                return CompletableFuture.completedFuture(new ArrayList<>(itemNameCache.keySet()));
+            }
         }
+
+        if (itemRepository != null) {
+            return retryOperation(() -> itemRepository.getItemsByType(null))
+                .thenApply(list -> {
+                    List<String> names = new ArrayList<>();
+                    for (ItemPropertiesDTO dto : list) {
+                        names.add(dto.getDisplayName());
+                    }
+                    return names;
+                });
+        }
+
+        logger.warning("&e⚠ ItemRepository not available, returning empty item list");
+        return CompletableFuture.completedFuture(new ArrayList<>());
     }
 
     /**
-     * Create a lore item by name. If multiple items exist with the same name, returns the first found.
-     * Now async and DTO-based.
+     * Create a lore item by name asynchronously.
+     * If multiple items exist with the same name, returns the first found.
+     *
+     * @param itemName The name of the item to create
+     * @return CompletableFuture with the created ItemStack, or null if not found
      */
     public CompletableFuture<ItemStack> createLoreItemAsync(String itemName) {
+        if (itemName == null || itemName.trim().isEmpty()) {
+            logger.warning("&e⚠ Cannot create item - name is null or empty");
+            return CompletableFuture.completedFuture(null);
+        }
+
         String key = itemName.toLowerCase();
-        if (itemRepository != null && cacheInitialized && itemNameCache.containsKey(key)) {
-            ItemPropertiesDTO dto = itemNameCache.get(key).get(0);
-            return CompletableFuture.completedFuture(createLoreItem(dto.toItemProperties().getItemType(), itemName, dto.toItemProperties()));
-        }
-        if (itemRepository != null) {
-            return itemRepository.getItemsByType(null).thenApply(list -> {
-                for (ItemPropertiesDTO dto : list) {
-                    if (dto.getDisplayName().equalsIgnoreCase(itemName)) {
-                        itemNameCache.computeIfAbsent(key, k -> new ArrayList<>()).add(dto);
-                        return createLoreItem(dto.toItemProperties().getItemType(), itemName, dto.toItemProperties());
-                    }
+        if (itemRepository != null && cacheInitialized) {
+            synchronized (cacheLock) {
+                if (itemNameCache.containsKey(key)) {
+                    ItemPropertiesDTO dto = itemNameCache.get(key).get(0);
+                    return CompletableFuture.completedFuture(
+                        createLoreItem(dto.toItemProperties().getItemType(), itemName, dto.toItemProperties())
+                    );
                 }
-                return null;
-            });
+            }
         }
-        // Fallback to cosmetic/collection managers (sync)
+
+        if (itemRepository != null) {
+            return retryOperation(() -> itemRepository.getItemsByType(null))
+                .thenApply(list -> {
+                    for (ItemPropertiesDTO dto : list) {
+                        if (dto.getDisplayName().equalsIgnoreCase(itemName)) {
+                            synchronized (cacheLock) {
+                                itemNameCache.computeIfAbsent(key, k -> new ArrayList<>()).add(dto);
+                            }
+                            return createLoreItem(dto.toItemProperties().getItemType(), itemName, dto.toItemProperties());
+                        }
+                    }
+                    return null;
+                });
+        }
+
+        // Fallback to cosmetic/collection managers
         if (cosmeticItem != null) {
             var variant = cosmeticItem.getHeadVariant(itemName);
             if (variant != null) {
+                logger.debug("Creating cosmetic head item: " + itemName);
                 return CompletableFuture.completedFuture(cosmeticItem.createHeadItem(variant));
             }
         }
+
         if (collectionManager != null) {
-            var collection = collectionManager.getCollection(itemName);
-            if (collection != null) {
-                var props = new ItemProperties(org.bukkit.Material.PAPER, collection.getName());
-                props.setCollectionId(collection.getId());
-                return CompletableFuture.completedFuture(collectionManager.createCollectionItem(props));
-            }
+            return collectionManager.getCollectionAsync(itemName)
+                .thenApply(collection -> {
+                    if (collection != null) {
+                        logger.debug("Creating collection item: " + itemName);
+                        ItemProperties props = new ItemProperties(org.bukkit.Material.PAPER, collection.getName());
+                        props.setCollectionId(collection.getId());
+                        return collectionManager.createCollectionItem(props);
+                    }
+                    return null;
+                });
         }
+
+        logger.warning("&e⚠ Item not found: " + itemName);
         return CompletableFuture.completedFuture(null);
     }
 
     /**
-     * Initialize or refresh the item cache from database (async, DTO-based)
-     */
-    private void initializeCache() {
-        if (itemRepository == null) {
-            logger.warning("Cannot initialize cache: ItemRepository is null");
-            return;
-        }
-        logger.info("Initializing item cache from database (async)...");
-        itemRepository.getItemsByType(null).thenAccept(allItems -> {
-            itemNameCache.clear();
-            collectionCache.clear();
-            loreEntryIdCache.clear();
-            for (ItemPropertiesDTO dto : allItems) {
-                String key = dto.getDisplayName().toLowerCase();
-                itemNameCache.computeIfAbsent(key, k -> new ArrayList<>()).add(dto);
-                if (dto.getLoreEntryId() != null) {
-                    loreEntryIdCache.put(dto.getLoreEntryId(), dto);
-                }
-                if (dto.getCollectionId() != null) {
-                    try {
-                        int colId = Integer.parseInt(dto.getCollectionId());
-                        collectionCache.computeIfAbsent(colId, k -> new ArrayList<>()).add(dto);
-                    } catch (NumberFormatException ignored) {}
-                }
-            }
-            cacheInitialized = true;
-            logger.info("Item cache initialized (async) with " + itemNameCache.size() + " item names and " + collectionCache.size() + " collections");
-        }).exceptionally(e -> {
-            logger.error("Error initializing item cache (async)", e);
-            return null;
-        });
-    }
-    
-    /**
      * Refresh the item cache, reloading all data from the database.
      */
     public void refreshCache() {
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, this::initializeCache);
+        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+            logger.info("&6⚙ Refreshing item cache...");
+            initializeAsync();
+        });
     }
     
     /**
      * Shutdown all sub-managers and clean up resources.
      */
-    public void shutdown() {
-        logger.info("Shutting down ItemManager...");
+    public CompletableFuture<Void> shutdown() {
+        logger.info("&6⚙ Shutting down ItemManager...");
+        
+        List<CompletableFuture<?>> shutdownTasks = new ArrayList<>();
         
         if (modelDataManager != null) {
-            modelDataManager.shutdown();
+            shutdownTasks.add(CompletableFuture.runAsync(() -> modelDataManager.shutdown()));
         }
         
         if (collectionManager != null) {
-            collectionManager.shutdown();
+            shutdownTasks.add(collectionManager.shutdown());
         }
         
         if (cosmeticItem != null) {
-            cosmeticItem.shutdown();
+            shutdownTasks.add(CompletableFuture.runAsync(() -> cosmeticItem.shutdown()));
         }
         
         if (enchantManager != null) {
-            enchantManager.shutdown();
+            shutdownTasks.add(CompletableFuture.runAsync(() -> enchantManager.shutdown()));
         }
         
-        logger.info("ItemManager shutdown complete");
+        return CompletableFuture.allOf(shutdownTasks.toArray(new CompletableFuture[0]))
+            .thenRun(() -> {
+                synchronized (cacheLock) {
+                    itemNameCache.clear();
+                    loreEntryIdCache.clear();
+                    collectionCache.clear();
+                }
+                logger.info("&a✓ ItemManager shutdown complete");
+            })
+            .exceptionally(e -> {
+                logger.error("&c✖ Error during ItemManager shutdown", e);
+                return null;
+            });
     }
     
     /**
      * Clean up resources and shutdown (alias for shutdown).
      */
-    public void cleanup() {
-        shutdown();
+    public CompletableFuture<Void> cleanup() {
+        return shutdown();
     }
 
     /**
-     * Get the plugin instance.
-     * 
-     * @return The RVNKLore plugin instance
-     */
-    protected RVNKLore getPlugin() {
-        return plugin;
-    }
-    
-    /**
-     * Get the logger instance.
-     * 
-     * @return The LogManager instance
-     */
-    protected LogManager getLogger() {
-        return logger;
-    }
-
-    /**
-     * Get all items with their properties, including creation timestamp for sorting
+     * Register a lore item with a reference to its lore entry ID asynchronously.
      *
-     * @return A list of ItemProperties for all items
-     */
-    public List<ItemProperties> getAllItemsWithProperties() {
-        List<ItemProperties> result = new ArrayList<>();
-        if (itemRepository != null && cacheInitialized) {
-            for (List<ItemPropertiesDTO> list : itemNameCache.values()) {
-                for (ItemPropertiesDTO dto : list) {
-                    result.add(dto.toItemProperties());
-                }
-            }
-        } else {
-            if (cosmeticItem != null) {
-                for (var collection : cosmeticItem.getAllCollections()) {
-                    collection.getAllHeads().forEach(head -> {
-                        ItemProperties props = new ItemProperties(org.bukkit.Material.PLAYER_HEAD, head.getName());
-                        props.setItemType(ItemType.COSMETIC);
-                        props.setCreatedAt(System.currentTimeMillis() - (long)(Math.random() * 10000000));
-                        result.add(props);
-                    });
-                }
-            }
-            if (collectionManager != null) {
-                for (var entry : collectionManager.getAllCollections().entrySet()) {
-                    ItemProperties props = new ItemProperties(org.bukkit.Material.PAPER, entry.getValue().getName());
-                    props.setItemType(ItemType.COLLECTION);
-                    props.setCollectionId(entry.getKey());
-                    props.setCreatedAt(entry.getValue().getCreatedAt());
-                    result.add(props);
-                }
-            }
-        }
-        return result;
-    }
-    
-    /**
-     * Register a lore item with a reference to its lore entry ID (async, DTO-based)
      * @param loreEntryId The UUID of the lore entry in the lore_entry table
      * @param properties The properties of the item to register
-     * @return CompletableFuture<Boolean> true if the item was registered successfully, false otherwise
+     * @return CompletableFuture<Boolean> true if registration was successful
      */
-    public CompletableFuture<Boolean> registerLoreItemAsync(java.util.UUID loreEntryId, ItemProperties properties) {
+    public CompletableFuture<Boolean> registerLoreItemAsync(UUID loreEntryId, ItemProperties properties) {
         if (loreEntryId == null || properties == null) {
-            logger.warning("Cannot register lore item with null ID or properties");
+            logger.warning("&e⚠ Cannot register lore item with null ID or properties");
             return CompletableFuture.completedFuture(false);
         }
-        logger.info("Registering lore item (async): " + properties.getDisplayName() + " with lore entry ID: " + loreEntryId);
+
+        logger.info("&6⚙ Registering lore item: " + properties.getDisplayName() + " with lore entry ID: " + loreEntryId);
         properties.setLoreEntryId(loreEntryId.toString());
         ItemPropertiesDTO dto = ItemPropertiesDTO.fromItemProperties(properties);
-        if (itemRepository != null) {
-            return itemRepository.saveItem(dto).thenApply(itemId -> {
-                if (itemId > 0) {
-                    String key = properties.getDisplayName().toLowerCase();
-                    itemNameCache.computeIfAbsent(key, k -> new ArrayList<>()).add(dto);
-                    loreEntryIdCache.put(loreEntryId.toString(), dto);
-                    logger.info("Registered item in database with ID: " + itemId);
-                    return true;
-                } else {
-                    logger.warning("Failed to insert item into database");
-                    return false;
-                }
-            }).exceptionally(e -> {
-                logger.error("Error registering lore item (async)", e);
-                return false;
-            });
-        } else {
-            logger.warning("ItemRepository is not available, item will not be persisted");
-            String key = properties.getDisplayName().toLowerCase();
-            itemNameCache.computeIfAbsent(key, k -> new ArrayList<>()).add(dto);
-            loreEntryIdCache.put(loreEntryId.toString(), dto);
+
+        if (itemRepository == null) {
+            logger.warning("&e⚠ ItemRepository is not available, item will not be persisted");
+            synchronized (cacheLock) {
+                String key = properties.getDisplayName().toLowerCase();
+                itemNameCache.computeIfAbsent(key, k -> new ArrayList<>()).add(dto);
+                loreEntryIdCache.put(loreEntryId.toString(), dto);
+            }
             return CompletableFuture.completedFuture(true);
         }
+
+        return retryOperation(() -> itemRepository.saveItem(dto))
+            .thenApply(itemId -> {
+                if (itemId > 0) {
+                    synchronized (cacheLock) {
+                        String key = properties.getDisplayName().toLowerCase();
+                        itemNameCache.computeIfAbsent(key, k -> new ArrayList<>()).add(dto);
+                        loreEntryIdCache.put(loreEntryId.toString(), dto);
+                    }
+                    logger.info("&a✓ Registered item in database with ID: " + itemId);
+                    return true;
+                } else {
+                    logger.warning("&e⚠ Failed to insert item into database");
+                    return false;
+                }
+            })
+            .exceptionally(e -> {
+                logger.error("&c✖ Error registering lore item", e);
+                return false;
+            });
     }
 }

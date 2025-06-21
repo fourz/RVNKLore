@@ -1,31 +1,36 @@
 package org.fourz.RVNKLore.data;
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.data.dto.NameChangeRecordDTO;
 import org.fourz.RVNKLore.data.dto.PlayerDTO;
+import org.fourz.RVNKLore.data.query.DefaultQueryExecutor;
+import org.fourz.RVNKLore.data.query.QueryBuilder;
 import org.fourz.RVNKLore.debug.LogManager;
 
 /**
- * Service for player-related operations using the new database architecture.
- * Delegates all DB operations to DatabaseManager and uses DTOs for data transfer.
+ * Repository for player-related database operations.
+ * Delegates complex operations to DatabaseManager and uses DTOs for data transfer.
+ * All methods are async and use the new QueryBuilder pattern for SQL operations.
  */
 public class PlayerRepository {
     private final LogManager logger;
     private final DatabaseManager databaseManager;
+    private final DefaultQueryExecutor queryExecutor;
+    private final QueryBuilder queryBuilder;
 
     public PlayerRepository(RVNKLore plugin, DatabaseManager databaseManager) {
         this.databaseManager = databaseManager;
         this.logger = LogManager.getInstance(plugin, "PlayerRepository");
+        this.queryExecutor = databaseManager.getQueryExecutor();
+        this.queryBuilder = databaseManager.getQueryBuilder();
     }
 
     /**
@@ -41,29 +46,18 @@ public class PlayerRepository {
             );
         }
         
-        return CompletableFuture.supplyAsync(() -> {
-            String query = "SELECT s.entry_id, s.content FROM lore_submission s " +
-                "JOIN lore_entry e ON e.id = s.entry_id " +
-                "WHERE e.entry_type = ? AND s.is_current_version = TRUE AND s.content LIKE ? " +
-                "LIMIT 1";
-            
-            try (Connection conn = databaseManager.getConnectionProvider().getConnection();
-                 PreparedStatement stmt = conn.prepareStatement(query)) {
-                
-                stmt.setString(1, "PLAYER");
-                stmt.setString(2, "%\"player_uuid\":\"" + uuid.toString() + "\"%");
-                
-                try (ResultSet rs = stmt.executeQuery()) {
-                    if (rs.next()) {
-                        return PlayerDTO.fromResultSet(rs);
-                    }
-                }
-            } catch (SQLException e) {
+        QueryBuilder query = queryBuilder.select("s.entry_id", "s.content")
+            .from("lore_submission s")
+            .join("lore_entry e", "e.id = s.entry_id")
+            .where("e.entry_type = ? AND s.is_current_version = TRUE AND s.content LIKE ?",
+                  "PLAYER", "%\"player_uuid\":\"" + uuid.toString() + "\"%")
+            .limit(1);
+        
+        return queryExecutor.executeQuery(query, PlayerDTO.class)
+            .exceptionally(e -> {
                 logger.error("Error getting player by UUID: " + uuid, e);
-            }
-            
-            return null;
-        });
+                throw new CompletionException(e);
+            });
     }
 
     /**
@@ -79,33 +73,22 @@ public class PlayerRepository {
             );
         }
         
-        return CompletableFuture.supplyAsync(() -> {
-            List<PlayerDTO> results = new java.util.ArrayList<>();
-            String query = "SELECT s.entry_id, s.content FROM lore_submission s " +
-                "JOIN lore_entry e ON e.id = s.entry_id " +
-                "WHERE e.entry_type = ? AND s.is_current_version = TRUE AND s.content LIKE ?";
-            
-            try (Connection conn = databaseManager.getConnectionProvider().getConnection();
-                 PreparedStatement stmt = conn.prepareStatement(query)) {
-                
-                stmt.setString(1, "PLAYER");
-                stmt.setString(2, "%\"player_name\":\"" + name + "\"%");
-                
-                try (ResultSet rs = stmt.executeQuery()) {
-                    while (rs.next()) {
-                        results.add(PlayerDTO.fromResultSet(rs));
-                    }
-                }
-            } catch (SQLException e) {
+        QueryBuilder query = queryBuilder.select("s.entry_id", "s.content")
+            .from("lore_submission s")
+            .join("lore_entry e", "e.id = s.entry_id")
+            .where("e.entry_type = ? AND s.is_current_version = TRUE AND s.content LIKE ?",
+                  "PLAYER", "%\"player_name\":\"" + name + "\"%");
+        
+        return queryExecutor.executeQueryList(query, PlayerDTO.class)
+            .exceptionally(e -> {
                 logger.error("Error getting players by name: " + name, e);
-            }
-            
-            return results;
-        });
+                return List.of();
+            });
     }
 
     /**
      * Save a player entry (insert or update).
+     * Uses DatabaseManager for complex metadata operations.
      * 
      * @param dto The player DTO to save
      * @return A future containing the player UUID
@@ -117,46 +100,36 @@ public class PlayerRepository {
             );
         }
         
-        return CompletableFuture.supplyAsync(() -> {
-            try {
-                if (dto.getPlayerUuid() == null) {
-                    throw new SQLException("Cannot save player with null UUID");
-                }
-                
-                // Ensure metadata map exists
-                if (dto.getMetadata() == null) {
-                    dto.setMetadata(new HashMap<>());
-                }
-                
-                // Add player UUID and name to metadata
-                Map<String, String> metadata = dto.getMetadata();
-                metadata.put("player_uuid", dto.getPlayerUuid().toString());
-                if (dto.getPlayerName() != null) {
-                    metadata.put("player_name", dto.getPlayerName());
-                }
-                
-                // Check if this is an update or insert
-                if (dto.getEntryId() == null) {
-                    // Create a new player entry
-                    databaseManager.savePlayerMetadata(dto).join();
-                } else {
-                    // Update existing player entry
-                    databaseManager.savePlayerMetadata(dto).join();
-                }
-                
-                return dto.getPlayerUuid();
-            } catch (Exception e) {
-                logger.error("Error saving player: " + (dto.getPlayerUuid() != null ? dto.getPlayerUuid() : "unknown"), e);
-                return null;
-            }
-        });
+        if (dto.getPlayerUuid() == null) {
+            return CompletableFuture.failedFuture(
+                new IllegalArgumentException("Cannot save player with null UUID")
+            );
+        }
+
+        // Ensure metadata exists and contains required fields
+        if (dto.getMetadata() == null) {
+            dto.setMetadata(new HashMap<>());
+        }
+        
+        Map<String, String> metadata = dto.getMetadata();
+        metadata.put("player_uuid", dto.getPlayerUuid().toString());
+        if (dto.getPlayerName() != null) {
+            metadata.put("player_name", dto.getPlayerName());
+        }
+
+        return databaseManager.savePlayerMetadata(dto)
+            .thenApply(success -> dto.getPlayerUuid())
+            .exceptionally(e -> {
+                logger.error("Error saving player: " + dto.getPlayerUuid(), e);
+                throw new CompletionException(e);
+            });
     }
 
     /**
      * Delete a player by UUID.
      * 
      * @param uuid The UUID of the player to delete
-     * @return A future containing true if successful, false otherwise
+     * @return A future containing true if successful
      */
     public CompletableFuture<Boolean> deletePlayer(UUID uuid) {
         if (!databaseManager.validateConnection()) {
@@ -165,24 +138,19 @@ public class PlayerRepository {
             );
         }
         
-        return CompletableFuture.supplyAsync(() -> {
-            String query = "DELETE e FROM lore_entry e " +
-                "JOIN lore_submission s ON e.id = s.entry_id " +
-                "WHERE e.entry_type = ? AND s.content LIKE ?";
-            
-            try (Connection conn = databaseManager.getConnectionProvider().getConnection();
-                 PreparedStatement stmt = conn.prepareStatement(query)) {
-                
-                stmt.setString(1, "PLAYER");
-                stmt.setString(2, "%\"player_uuid\":\"" + uuid.toString() + "\"%");
-                
-                int rowsAffected = stmt.executeUpdate();
-                return rowsAffected > 0;
-            } catch (SQLException e) {
+        QueryBuilder query = queryBuilder.raw(
+            "DELETE e FROM lore_entry e " +
+            "JOIN lore_submission s ON e.id = s.entry_id " +
+            "WHERE e.entry_type = ? AND s.content LIKE ?",
+            "PLAYER", "%\"player_uuid\":\"" + uuid.toString() + "\"%"
+        );
+        
+        return queryExecutor.executeUpdate(query)
+            .thenApply(rowsAffected -> rowsAffected > 0)
+            .exceptionally(e -> {
                 logger.error("Error deleting player: " + uuid, e);
                 return false;
-            }
-        });
+            });
     }
 
     /**
@@ -197,7 +165,7 @@ public class PlayerRepository {
     }
 
     /**
-     * Gets the current player name stored in the database for a given player UUID.
+     * Gets the current player name stored in the database.
      */
     public CompletableFuture<String> getStoredPlayerName(UUID playerUuid) {
         return databaseManager.getStoredPlayerName(playerUuid)
@@ -219,7 +187,7 @@ public class PlayerRepository {
     }
 
     /**
-     * Gets player lore entries by type (e.g., FIRST_JOIN, PLAYER_CHARACTER, NAME_CHANGE).
+     * Gets player lore entries by type.
      */
     public CompletableFuture<List<PlayerDTO>> getPlayerLoreEntriesByType(UUID playerUuid, String entryType) {
         return databaseManager.getPlayerLoreEntriesByType(playerUuid, entryType)

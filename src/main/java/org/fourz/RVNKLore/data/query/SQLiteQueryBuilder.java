@@ -5,6 +5,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Collections;
 
 /**
  * SQLite-specific implementation of QueryBuilder.
@@ -29,6 +30,7 @@ public class SQLiteQueryBuilder implements QueryBuilder {
     private Integer limitValue;
     private Integer offsetValue;
     private boolean hasWhere = false;
+    private String customSql = null;
 
     public SQLiteQueryBuilder() {
         // Default constructor
@@ -158,22 +160,40 @@ public class SQLiteQueryBuilder implements QueryBuilder {
         this.queryType = QueryType.DELETE;
         this.table = table;
         return this;
-    }
-
-    @Override
-    public QueryBuilder join(String table, String condition) {
-        joinClause.append(" JOIN ").append(table).append(" ON ").append(condition);
+    }    @Override
+    public QueryBuilder innerJoin(String table, String condition, Object... params) {
+        joinClause.append(" INNER JOIN ").append(table).append(" ON ").append(condition);
+        if (params != null && params.length > 0) {
+            parameters.addAll(Arrays.asList(params));
+        }
         return this;
     }
 
     @Override
-    public QueryBuilder leftJoin(String table, String condition) {
+    public QueryBuilder leftJoin(String table, String condition, Object... params) {
         joinClause.append(" LEFT JOIN ").append(table).append(" ON ").append(condition);
+        if (params != null && params.length > 0) {
+            parameters.addAll(Arrays.asList(params));
+        }
         return this;
     }
-
+    
     @Override
+    public QueryBuilder rightJoin(String table, String condition, Object... params) {
+        // SQLite doesn't support RIGHT JOIN directly
+        throw new UnsupportedOperationException("RIGHT JOIN not supported in SQLite");
+    }
+    
+    @Override
+    public QueryBuilder fullOuterJoin(String table, String condition, Object... params) {
+        // SQLite doesn't support FULL OUTER JOIN directly
+        throw new UnsupportedOperationException("FULL OUTER JOIN not supported in SQLite");
+    }    @Override
     public String build() {
+        if (customSql != null) {
+            return customSql;
+        }
+        
         StringBuilder query = new StringBuilder();
         
         switch (queryType) {
@@ -234,40 +254,30 @@ public class SQLiteQueryBuilder implements QueryBuilder {
         if (offsetValue != null) {
             query.append(" OFFSET ").append(offsetValue);
         }
-    }
-
-    private void buildInsertQuery(StringBuilder query) {
-        query.append("INSERT INTO ").append(table).append(" (");
-        query.append(String.join(", ", columns));
-        query.append(") VALUES ");
+    }    private void buildInsertQuery(StringBuilder query) {
+        query.append("INSERT INTO ").append(table);
         
-        for (int i = 0; i < insertValues.size(); i++) {
-            if (i > 0) {
-                query.append(", ");
-            }
-            
-            query.append("(");
-            for (int j = 0; j < columns.size(); j++) {
-                if (j > 0) {
-                    query.append(", ");
-                }
-                query.append("?");
-            }
-            query.append(")");
+        if (!columns.isEmpty()) {
+            query.append(" (").append(String.join(", ", columns)).append(")");
         }
-    }
-
-    private void buildUpdateQuery(StringBuilder query) {
+        
+        if (!insertValues.isEmpty()) {
+            query.append(" VALUES ");
+            List<String> valueGroups = new ArrayList<>();
+            for (int i = 0; i < insertValues.size(); i++) {
+                List<Object> values = insertValues.get(i);
+                valueGroups.add("(" + String.join(", ", Collections.nCopies(values.size(), "?")) + ")");
+            }
+            query.append(String.join(", ", valueGroups));
+        }
+    }    private void buildUpdateQuery(StringBuilder query) {
         query.append("UPDATE ").append(table).append(" SET ");
         
-        int i = 0;
+        List<String> setExpressions = new ArrayList<>();
         for (Map.Entry<String, Object> entry : updateValues.entrySet()) {
-            if (i > 0) {
-                query.append(", ");
-            }
-            query.append(entry.getKey()).append(" = ?");
-            i++;
+            setExpressions.add(entry.getKey() + " = ?");
         }
+        query.append(String.join(", ", setExpressions));
         
         if (whereClause.length() > 0) {
             query.append(" WHERE ").append(whereClause);
@@ -293,9 +303,7 @@ public class SQLiteQueryBuilder implements QueryBuilder {
     @Override
     public Object[] getParameters() {
         return parameters.toArray();
-    }
-
-    /**
+    }    /**
      * Creates an upsert query for SQLite (INSERT OR REPLACE).
      * This is SQLite-specific functionality.
      * 
@@ -311,54 +319,21 @@ public class SQLiteQueryBuilder implements QueryBuilder {
         query.append(String.join(", ", columns));
         query.append(") VALUES ");
         
+        List<String> valueGroups = new ArrayList<>();
         for (int i = 0; i < insertValues.size(); i++) {
-            if (i > 0) {
-                query.append(", ");
-            }
-            
-            query.append("(");
-            for (int j = 0; j < columns.size(); j++) {
-                if (j > 0) {
-                    query.append(", ");
-                }
-                query.append("?");
-            }
-            query.append(")");
+            List<Object> values = insertValues.get(i);
+            valueGroups.add("(" + String.join(", ", Collections.nCopies(values.size(), "?")) + ")");
         }
+        query.append(String.join(", ", valueGroups));
         
-        final String finalQuery = query.toString();
-        
-        return new SQLiteQueryBuilder() {
-            @Override
-            public String build() {
-                return finalQuery;
-            }
-            
-            @Override
-            public Object[] getParameters() {
-                return SQLiteQueryBuilder.this.getParameters();
-            }
-        };
-    }
-
-    @Override
-    public QueryBuilder custom(String sql, Object... params) {
-        final String customSql = sql;
-        final List<Object> customParams = new ArrayList<>();
-        if (params != null) {
-            customParams.addAll(Arrays.asList(params));
+        this.customSql = query.toString();
+        return this;
+    }@Override
+    public QueryBuilder raw(String sql, Object... params) {
+        this.customSql = sql;
+        if (params != null && params.length > 0) {
+            parameters.addAll(Arrays.asList(params));
         }
-        
-        return new SQLiteQueryBuilder() {
-            @Override
-            public String build() {
-                return customSql;
-            }
-            
-            @Override
-            public Object[] getParameters() {
-                return customParams.toArray();
-            }
-        };
+        return this;
     }
 }

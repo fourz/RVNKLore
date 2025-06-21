@@ -5,6 +5,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Collections;
 
 /**
  * MySQL-specific implementation of QueryBuilder.
@@ -14,7 +15,8 @@ public class MySQLQueryBuilder implements QueryBuilder {
     private enum QueryType {
         SELECT, INSERT, UPDATE, DELETE
     }
-      private QueryType queryType;
+    
+    private QueryType queryType;
     private String table;
     private List<String> columns = new ArrayList<>();
     private List<Object> parameters = new ArrayList<>();
@@ -48,12 +50,47 @@ public class MySQLQueryBuilder implements QueryBuilder {
     }
 
     @Override
+    public QueryBuilder innerJoin(String table, String condition, Object... params) {
+        joinClause.append(" INNER JOIN ").append(table).append(" ON ").append(condition);
+        if (params != null && params.length > 0) {
+            parameters.addAll(Arrays.asList(params));
+        }
+        return this;
+    }
+
+    @Override
+    public QueryBuilder leftJoin(String table, String condition, Object... params) {
+        joinClause.append(" LEFT JOIN ").append(table).append(" ON ").append(condition);
+        if (params != null && params.length > 0) {
+            parameters.addAll(Arrays.asList(params));
+        }
+        return this;
+    }
+
+    @Override
+    public QueryBuilder rightJoin(String table, String condition, Object... params) {
+        joinClause.append(" RIGHT JOIN ").append(table).append(" ON ").append(condition);
+        if (params != null && params.length > 0) {
+            parameters.addAll(Arrays.asList(params));
+        }
+        return this;
+    }
+
+    @Override
+    public QueryBuilder fullOuterJoin(String table, String condition, Object... params) {
+        // MySQL doesn't support FULL OUTER JOIN directly
+        throw new UnsupportedOperationException("FULL OUTER JOIN not supported in MySQL");
+    }
+
+    @Override
     public QueryBuilder where(String condition, Object... params) {
         if (whereClause.length() > 0) {
             whereClause.append(" AND ");
         }
         whereClause.append(condition);
-        parameters.addAll(Arrays.asList(params));
+        if (params != null && params.length > 0) {
+            parameters.addAll(Arrays.asList(params));
+        }
         hasWhere = true;
         return this;
     }
@@ -64,7 +101,9 @@ public class MySQLQueryBuilder implements QueryBuilder {
             return where(condition, params);
         }
         whereClause.append(" AND ").append(condition);
-        parameters.addAll(Arrays.asList(params));
+        if (params != null && params.length > 0) {
+            parameters.addAll(Arrays.asList(params));
+        }
         return this;
     }
 
@@ -74,7 +113,9 @@ public class MySQLQueryBuilder implements QueryBuilder {
             return where(condition, params);
         }
         whereClause.append(" OR ").append(condition);
-        parameters.addAll(Arrays.asList(params));
+        if (params != null && params.length > 0) {
+            parameters.addAll(Arrays.asList(params));
+        }
         return this;
     }
 
@@ -102,7 +143,9 @@ public class MySQLQueryBuilder implements QueryBuilder {
             havingClause.append(" AND ");
         }
         havingClause.append(condition);
-        parameters.addAll(Arrays.asList(params));
+        if (params != null && params.length > 0) {
+            parameters.addAll(Arrays.asList(params));
+        }
         return this;
     }
 
@@ -161,16 +204,20 @@ public class MySQLQueryBuilder implements QueryBuilder {
     }
 
     @Override
-    public QueryBuilder join(String table, String condition) {
-        joinClause.append(" JOIN ").append(table).append(" ON ").append(condition);
+    public QueryBuilder raw(String sql, Object... params) {
+        this.customSql = sql;
+        if (params != null && params.length > 0) {
+            parameters.addAll(Arrays.asList(params));
+        }
         return this;
     }
 
     @Override
-    public QueryBuilder leftJoin(String table, String condition) {
-        joinClause.append(" LEFT JOIN ").append(table).append(" ON ").append(condition);
-        return this;
-    }    @Override
+    public Object[] getParameters() {
+        return parameters.toArray();
+    }
+
+    @Override
     public String build() {
         if (customSql != null) {
             return customSql;
@@ -200,7 +247,6 @@ public class MySQLQueryBuilder implements QueryBuilder {
 
     private void buildSelectQuery(StringBuilder query) {
         query.append("SELECT ");
-        
         if (columns.isEmpty()) {
             query.append("*");
         } else {
@@ -239,44 +285,34 @@ public class MySQLQueryBuilder implements QueryBuilder {
     }
 
     private void buildInsertQuery(StringBuilder query) {
-        query.append("INSERT INTO ").append(table).append(" (");
-        query.append(String.join(", ", columns));
-        query.append(") VALUES ");
+        query.append("INSERT INTO ").append(table);
         
-        for (int i = 0; i < insertValues.size(); i++) {
-            if (i > 0) {
-                query.append(", ");
+        if (!columns.isEmpty()) {
+            query.append(" (").append(String.join(", ", columns)).append(")");
+        }
+        
+        if (!insertValues.isEmpty()) {
+            query.append(" VALUES ");
+            List<String> valueGroups = new ArrayList<>();
+            for (int i = 0; i < insertValues.size(); i++) {
+                List<Object> values = insertValues.get(i);
+                valueGroups.add("(" + String.join(", ", Collections.nCopies(values.size(), "?")) + ")");
             }
-            
-            query.append("(");
-            for (int j = 0; j < columns.size(); j++) {
-                if (j > 0) {
-                    query.append(", ");
-                }
-                query.append("?");
-            }
-            query.append(")");
+            query.append(String.join(", ", valueGroups));
         }
     }
 
     private void buildUpdateQuery(StringBuilder query) {
         query.append("UPDATE ").append(table).append(" SET ");
         
-        int i = 0;
+        List<String> setExpressions = new ArrayList<>();
         for (Map.Entry<String, Object> entry : updateValues.entrySet()) {
-            if (i > 0) {
-                query.append(", ");
-            }
-            query.append(entry.getKey()).append(" = ?");
-            i++;
+            setExpressions.add(entry.getKey() + " = ?");
         }
+        query.append(String.join(", ", setExpressions));
         
         if (whereClause.length() > 0) {
             query.append(" WHERE ").append(whereClause);
-        }
-        
-        if (limitValue != null) {
-            query.append(" LIMIT ").append(limitValue);
         }
     }
 
@@ -286,72 +322,5 @@ public class MySQLQueryBuilder implements QueryBuilder {
         if (whereClause.length() > 0) {
             query.append(" WHERE ").append(whereClause);
         }
-        
-        if (limitValue != null) {
-            query.append(" LIMIT ").append(limitValue);
-        }
-    }
-
-    @Override
-    public Object[] getParameters() {
-        return parameters.toArray();
-    }    /**
-     * Creates an upsert query for MySQL (INSERT ... ON DUPLICATE KEY UPDATE).
-     * This is MySQL-specific functionality.
-     * 
-     * @param updateColumns The columns to update on duplicate key
-     * @return This QueryBuilder for chaining
-     */
-    public QueryBuilder onDuplicateKeyUpdate(String... updateColumns) {
-        if (queryType != QueryType.INSERT) {
-            throw new IllegalStateException("ON DUPLICATE KEY UPDATE can only be used with INSERT queries");
-        }
-        
-        StringBuilder query = new StringBuilder(build());
-        query.append(" ON DUPLICATE KEY UPDATE ");
-        
-        for (int i = 0; i < updateColumns.length; i++) {
-            if (i > 0) {
-                query.append(", ");
-            }
-            String column = updateColumns[i];
-            query.append(column).append(" = VALUES(").append(column).append(")");
-        }
-        
-        // We need to override the build() method's result with our custom query
-        final String finalQuery = query.toString();
-        
-        return new MySQLQueryBuilder() {
-            @Override
-            public String build() {
-                return finalQuery;
-            }
-            
-            @Override
-            public Object[] getParameters() {
-                return MySQLQueryBuilder.this.getParameters();
-            }
-        };
-    }
-    
-    @Override
-    public QueryBuilder custom(String sql, Object... params) {
-        final String customSql = sql;
-        final List<Object> customParams = new ArrayList<>();
-        if (params != null) {
-            customParams.addAll(Arrays.asList(params));
-        }
-        
-        return new MySQLQueryBuilder() {
-            @Override
-            public String build() {
-                return customSql;
-            }
-            
-            @Override
-            public Object[] getParameters() {
-                return customParams.toArray();
-            }
-        };
     }
 }

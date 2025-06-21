@@ -23,6 +23,58 @@ public interface QueryBuilder {
     QueryBuilder from(String table);
     
     /**
+     * Add a JOIN clause.
+     * 
+     * @param table The table to join
+     * @param condition The join condition
+     * @param params Optional parameters for the join condition
+     * @return This QueryBuilder for chaining
+     */
+    default QueryBuilder join(String table, String condition, Object... params) {
+        return innerJoin(table, condition, params);
+    }
+    
+    /**
+     * Add an INNER JOIN clause.
+     * 
+     * @param table The table to join
+     * @param condition The join condition
+     * @param params Optional parameters for the join condition
+     * @return This QueryBuilder for chaining
+     */
+    QueryBuilder innerJoin(String table, String condition, Object... params);
+    
+    /**
+     * Add a LEFT JOIN clause.
+     * 
+     * @param table The table to join
+     * @param condition The join condition
+     * @param params Optional parameters for the join condition
+     * @return This QueryBuilder for chaining
+     */
+    QueryBuilder leftJoin(String table, String condition, Object... params);
+    
+    /**
+     * Add a RIGHT JOIN clause.
+     * 
+     * @param table The table to join
+     * @param condition The join condition
+     * @param params Optional parameters for the join condition
+     * @return This QueryBuilder for chaining
+     */
+    QueryBuilder rightJoin(String table, String condition, Object... params);
+    
+    /**
+     * Add a FULL OUTER JOIN clause.
+     * 
+     * @param table The table to join
+     * @param condition The join condition
+     * @param params Optional parameters for the join condition
+     * @return This QueryBuilder for chaining
+     */
+    QueryBuilder fullOuterJoin(String table, String condition, Object... params);
+    
+    /**
      * Add a WHERE clause with parametrized values.
      * 
      * @param condition The condition with ? placeholders
@@ -98,15 +150,15 @@ public interface QueryBuilder {
      * @return This QueryBuilder for chaining
      */
     QueryBuilder insertInto(String table);
-    
+
     /**
      * Specify columns for an INSERT statement.
      * 
-     * @param columns The columns to insert into
+     * @param columns The column names
      * @return This QueryBuilder for chaining
      */
     QueryBuilder columns(String... columns);
-    
+
     /**
      * Specify values for an INSERT statement.
      * 
@@ -114,7 +166,7 @@ public interface QueryBuilder {
      * @return This QueryBuilder for chaining
      */
     QueryBuilder values(Object... values);
-    
+
     /**
      * Start building an UPDATE statement.
      * 
@@ -122,16 +174,16 @@ public interface QueryBuilder {
      * @return This QueryBuilder for chaining
      */
     QueryBuilder update(String table);
-    
+
     /**
-     * Set values for an UPDATE statement.
+     * Add a SET clause to an UPDATE statement.
      * 
      * @param column The column to set
      * @param value The value to set
      * @return This QueryBuilder for chaining
      */
     QueryBuilder set(String column, Object value);
-    
+
     /**
      * Start building a DELETE statement.
      * 
@@ -139,56 +191,27 @@ public interface QueryBuilder {
      * @return This QueryBuilder for chaining
      */
     QueryBuilder deleteFrom(String table);
-    
+
     /**
-     * Add a JOIN clause.
+     * Create a raw SQL query.
      * 
-     * @param table The table to join
-     * @param condition The join condition
+     * @param sql The SQL query string
+     * @param params The parameters for the query
      * @return This QueryBuilder for chaining
      */
-    QueryBuilder join(String table, String condition);
-    
+    QueryBuilder raw(String sql, Object... params);
+
     /**
-     * Add a LEFT JOIN clause.
-     * 
-     * @param table The table to join
-     * @param condition The join condition
-     * @return This QueryBuilder for chaining
-     */
-    QueryBuilder leftJoin(String table, String condition);
-    
-    /**
-     * Build the final SQL query.
+     * Build the complete SQL query string.
      * 
      * @return The SQL query string
      */
     String build();
-    
-    /**
-     * Get the parameters to be used with the query.
-     * 
-     * @return Array of parameter values
-     */
-    Object[] getParameters();
-    
-    /**
-     * Create a QueryBuilder with a custom SQL query.
-     * Useful for complex queries or statements that don't fit the builder pattern.
-     * 
-     * @param sql The raw SQL query
-     * @param params Optional parameters for the query
-     * @return This QueryBuilder with the custom SQL
-     */
-    QueryBuilder custom(String sql, Object... params);
 
     /**
-     * Start building an INSERT statement (legacy synonym for insertInto).
-     *
-     * @param table The table to insert into
-     * @return This QueryBuilder for chaining
+     * Get the parameters for this query.
+     * 
+     * @return An array of parameter values
      */
-    default QueryBuilder insert(String table) {
-        return insertInto(table);
-    }
+    Object[] getParameters();
 }

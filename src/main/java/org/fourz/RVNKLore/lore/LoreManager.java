@@ -1,20 +1,14 @@
 package org.fourz.RVNKLore.lore;
 
 import org.bukkit.Location;
-import org.bukkit.Material;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.debug.LogManager;
-import org.fourz.RVNKLore.lore.item.ItemManager;
-import org.fourz.RVNKLore.lore.item.ItemProperties;
 import org.fourz.RVNKLore.data.DatabaseManager;
 import org.fourz.RVNKLore.data.dto.LoreEntryDTO;
 import org.fourz.RVNKLore.data.dto.LoreSubmissionDTO;
-import org.fourz.RVNKLore.exception.LoreException;
-
 import java.sql.Timestamp;
 import java.util.concurrent.CompletableFuture;
 import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * Manages lore entries and interactions with the database.
@@ -258,5 +252,84 @@ public class LoreManager {
         cacheTimestamps.clear();
         instance = null;
         logger.info("LoreManager resources cleaned up.");
+    }
+
+    /**
+     * Get all lore entries asynchronously.
+     * Uses caching with proper expiration for better performance.
+     * 
+     * @return CompletableFuture with a list of lore entries
+     */    public CompletableFuture<List<LoreEntry>> getAllEntriesAsync() {
+        // If the cache is still valid, return from cache
+        if (!cache.isEmpty() && !hasExpiredCache()) {
+            List<LoreEntry> entries = new ArrayList<>(cache.values());
+            return CompletableFuture.completedFuture(entries);
+        }
+
+        // Otherwise, load from database
+        return loadAllLoreEntries()
+            .thenApply(v -> {
+                List<LoreEntry> entries = new ArrayList<>(cache.values());
+                return entries;
+            })
+            .exceptionally(e -> {
+                logger.error("Failed to get all entries", e);
+                return new ArrayList<>();
+            });
+    }
+
+    /**
+     * Get a specific lore entry by UUID asynchronously.
+     * Uses caching with proper expiration for better performance.
+     * 
+     * @param id The UUID of the entry to retrieve
+     * @return CompletableFuture with the requested lore entry, or null if not found
+     */
+    public CompletableFuture<LoreEntry> getEntryByIdAsync(UUID id) {
+        if (id == null) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        String idStr = id.toString();
+        // Check cache first
+        if (cache.containsKey(idStr) && !isEntryExpired(idStr)) {
+            return CompletableFuture.completedFuture(cache.get(idStr));
+        }
+
+        // If not in cache or expired, load from database
+        return databaseManager.getLoreEntryById(id)
+            .thenApply(dto -> {
+                if (dto == null) {
+                    return null;
+                }
+                LoreEntry entry = LoreEntry.fromDTO(dto);
+                cache.put(idStr, entry);
+                cacheTimestamps.put(idStr, System.currentTimeMillis());
+                return entry;
+            })
+            .exceptionally(e -> {
+                logger.error("Failed to get entry by id: " + id, e);
+                return null;
+            });
+    }
+
+    private boolean hasExpiredCache() {
+        if (cacheTimestamps.isEmpty()) {
+            return true;
+        }
+        long currentTime = System.currentTimeMillis();
+        long cacheTime = cacheTimestamps.values().stream()
+            .min(Long::compareTo)
+            .orElse(0L);
+        return currentTime - cacheTime > CACHE_DURATION_MINUTES * 60 * 1000;
+    }
+
+    private boolean isEntryExpired(String id) {
+        if (!cacheTimestamps.containsKey(id)) {
+            return true;
+        }
+        long currentTime = System.currentTimeMillis();
+        long cacheTime = cacheTimestamps.get(id);
+        return currentTime - cacheTime > CACHE_DURATION_MINUTES * 60 * 1000;
     }
 }
