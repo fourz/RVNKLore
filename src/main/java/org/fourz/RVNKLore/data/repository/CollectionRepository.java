@@ -1,7 +1,8 @@
-package org.fourz.RVNKLore.data;
+package org.fourz.RVNKLore.data.repository;
 
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.RVNKLore.data.DatabaseManager;
 import org.fourz.RVNKLore.data.dto.ItemCollectionDTO;
 import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
 

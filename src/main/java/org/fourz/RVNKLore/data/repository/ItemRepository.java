@@ -1,6 +1,7 @@
-package org.fourz.RVNKLore.data;
+package org.fourz.RVNKLore.data.repository;
 
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.data.DatabaseManager;
 import org.fourz.RVNKLore.data.dto.ItemPropertiesDTO;
 import org.fourz.RVNKLore.data.query.DefaultQueryExecutor;
 import org.fourz.RVNKLore.data.query.QueryBuilder;

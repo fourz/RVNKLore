@@ -2,13 +2,13 @@ package org.fourz.RVNKLore.lore.item;
 
 import org.bukkit.inventory.ItemStack;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.data.ItemRepository;
 import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.lore.item.enchant.EnchantManager;
 import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
 import org.fourz.RVNKLore.lore.item.cosmetic.CosmeticsManager;
 import org.fourz.RVNKLore.lore.item.custommodeldata.CustomModelDataManager;
 import org.fourz.RVNKLore.data.dto.ItemPropertiesDTO;
+import org.fourz.RVNKLore.data.repository.ItemRepository;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;

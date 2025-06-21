@@ -4,9 +4,9 @@ import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.data.PlayerRepository;
 import org.fourz.RVNKLore.data.dto.NameChangeRecordDTO;
 import org.fourz.RVNKLore.data.dto.PlayerDTO;
+import org.fourz.RVNKLore.data.repository.PlayerRepository;
 import org.fourz.RVNKLore.debug.LogManager;
 
 import java.text.SimpleDateFormat;

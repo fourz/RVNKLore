@@ -6,8 +6,8 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.lore.item.ItemProperties;
-import org.fourz.RVNKLore.data.CollectionRepository;
 import org.fourz.RVNKLore.data.dto.ItemCollectionDTO;
+import org.fourz.RVNKLore.data.repository.CollectionRepository;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;

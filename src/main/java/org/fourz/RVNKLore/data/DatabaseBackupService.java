@@ -7,6 +7,7 @@ import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.data.connection.ConnectionProvider;
 import org.fourz.RVNKLore.data.connection.SQLiteConnectionProvider;
 import org.fourz.RVNKLore.data.dto.LoreEntryDTO;
+import org.fourz.RVNKLore.data.repository.LoreEntryRepository;
 import org.json.simple.JSONObject;
 
 import java.io.File;

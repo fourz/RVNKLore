@@ -1,4 +1,4 @@
-package org.fourz.RVNKLore.data;
+package org.fourz.RVNKLore.data.repository;
 
 import java.sql.SQLException;
 import java.util.HashMap;
@@ -9,6 +9,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.data.DatabaseManager;
 import org.fourz.RVNKLore.data.dto.NameChangeRecordDTO;
 import org.fourz.RVNKLore.data.dto.PlayerDTO;
 import org.fourz.RVNKLore.data.query.DefaultQueryExecutor;
