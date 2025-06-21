@@ -164,7 +164,7 @@ public class LoreEntryRepository {
         
         // Handle insert case
         QueryBuilder query = databaseManager.getQueryBuilder()
-            .insertInto("lore_entry")
+            .insert("lore_entry", true) // Allow upsert to handle duplicates
             .columns("entry_type", "name", "description")
             .values(dto.getEntryType(), dto.getName(), dto.getDescription());
         

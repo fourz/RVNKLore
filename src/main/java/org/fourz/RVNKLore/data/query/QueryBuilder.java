@@ -144,12 +144,33 @@ public interface QueryBuilder {
     QueryBuilder offset(int offset);
     
     /**
-     * Start building an INSERT statement.
-     * 
+     * Build an INSERT statement with support for database-specific upsert handling.
+     * This is the preferred method for building insert queries as it handles
+     * upsert/merge operations consistently across different database types.
+     *
+     * @param table The table to insert into
+     * @param allowUpsert Whether to allow updating existing records (if supported by the database)
+     * @return This QueryBuilder for chaining
+     */
+    QueryBuilder insert(String table, boolean allowUpsert);
+
+    /**
+     * @deprecated Use {@link #insert(String, boolean)} instead which provides consistent 
+     * upsert behavior across database implementations.
+     */
+    @Deprecated
+    QueryBuilder insertInto(String table);
+
+    /**
+     * Build an INSERT statement that will overwrite existing records.
+     * This is equivalent to calling insert(table, true).
+     *
      * @param table The table to insert into
      * @return This QueryBuilder for chaining
      */
-    QueryBuilder insertInto(String table);
+    default QueryBuilder insertOrUpdate(String table) {
+        return insert(table, true);
+    }
 
     /**
      * Specify columns for an INSERT statement.

@@ -85,7 +85,7 @@ public class LoreApproveSubCommand implements SubCommand {
                         String shortId = uuid != null ? uuid.toString().substring(0, 8) : "unknown";
                         sender.sendMessage(ChatColor.WHITE + shortId + " - " + 
                                 ChatColor.YELLOW + entry.getName() + 
-                                ChatColor.GRAY + " (" + entry.getLoreType() + ")");
+                                ChatColor.GRAY + " (" + entry.getEntryType() + ")");
                     }
                 })
                 .exceptionally(e -> {
@@ -180,8 +180,7 @@ public class LoreApproveSubCommand implements SubCommand {
                 databaseManager.searchLoreEntries(partial)
                     .thenAccept(entries -> {
                         for (LoreEntryDTO entry : entries) {
-                            if (!entry.isApproved()) {
-                                UUID uuid = entry.getUuid();
+                            if (!entry.isApproved()) {                                UUID uuid = entry.getUuid();
                                 if (uuid != null) {
                                     String uuidStr = uuid.toString();
                                     String shortId = uuidStr.length() >= 8 ? uuidStr.substring(0, 8) : uuidStr;

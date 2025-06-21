@@ -457,424 +457,124 @@ public class DatabaseManager {    private final RVNKLore plugin;
         return playerRepository.deletePlayer(uuid);
     }
     
-    // COLLECTION OPERATIONS
+    /**
+     * Save player metadata (insert or update player entry in lore_entry table).
+     *
+     * @param dto The PlayerDTO containing player data
+     * @return CompletableFuture<Boolean> indicating success
+     */
+    public CompletableFuture<Boolean> savePlayerMetadata(PlayerDTO dto) {
+        if (!validateConnection()) {
+            return CompletableFuture.completedFuture(false);
+        }
+        // Use insert or update pattern
+        QueryBuilder query = queryBuilder.insert("lore_entry", false)
+            .set("entry_type", "PLAYER")
+            .set("name", dto.getPlayerName())
+            .set("metadata", dto.getMetadata())
+            .set("is_approved", true)
+            .set("uuid", dto.getPlayerUuid().toString());
+        return queryExecutor.executeUpdate(query)
+            .thenApply(rows -> rows > 0)
+            .exceptionally(e -> {
+                logger.error("Error saving player metadata", e);
+                return false;
+            });
+    }
 
     /**
-     * Gets all collections from the database.
+     * Check if a player exists by UUID.
      *
-     * @return A future containing a list of item collection DTOs
+     * @param playerUuid The player's UUID
+     * @return CompletableFuture<Boolean> indicating existence
      */
-    public CompletableFuture<List<ItemCollectionDTO>> getAllCollections() {
+    public CompletableFuture<Boolean> playerExists(UUID playerUuid) {
         if (!validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
+            return CompletableFuture.completedFuture(false);
         }
-        
+        QueryBuilder query = queryBuilder.select("COUNT(*) as count")
+            .from("lore_entry")
+            .where("entry_type = ? AND uuid = ?", "PLAYER", playerUuid.toString());
+        return queryExecutor.executeQuery(query, PlayerDTO.class)
+            .thenApply(dto -> dto != null)
+            .exceptionally(e -> {
+                logger.error("Error checking if player exists", e);
+                return false;
+            });
+    }
+
+    /**
+     * Get the stored player name for a UUID.
+     *
+     * @param playerUuid The player's UUID
+     * @return CompletableFuture<String> with the player name or null
+     */
+    public CompletableFuture<String> getStoredPlayerName(UUID playerUuid) {
+        if (!validateConnection()) {
+            return CompletableFuture.completedFuture(null);
+        }
+        QueryBuilder query = queryBuilder.select("name")
+            .from("lore_entry")
+            .where("entry_type = ? AND uuid = ?", "PLAYER", playerUuid.toString());
+        return queryExecutor.executeQuery(query, PlayerDTO.class)
+            .thenApply(dto -> dto != null ? dto.getPlayerName() : null)
+            .exceptionally(e -> {
+                logger.error("Error getting stored player name", e);
+                return null;
+            });
+    }
+
+    /**
+     * Get all lore entries for a player.
+     *
+     * @param playerUuid The player's UUID
+     * @return CompletableFuture<List<PlayerDTO>>
+     */
+    public CompletableFuture<List<PlayerDTO>> getPlayerLoreEntries(UUID playerUuid) {
+        if (!validateConnection()) {
+            return CompletableFuture.completedFuture(List.of());
+        }
         QueryBuilder query = queryBuilder.select("*")
-                                       .from("item_collection")
-                                       .orderBy("created_at", false);
-        
-        return queryExecutor.executeQueryList(query, ItemCollectionDTO.class);
+            .from("lore_entry")
+            .where("entry_type = ? AND uuid = ?", "PLAYER", playerUuid.toString());
+        return queryExecutor.executeQueryList(query, PlayerDTO.class);
     }
 
     /**
-     * Gets a collection by ID.
+     * Get player lore entries by type.
      *
-     * @param id The collection ID
-     * @return A future containing the item collection DTO, or null if not found
+     * @param playerUuid The player's UUID
+     * @param entryType The entry type
+     * @return CompletableFuture<List<PlayerDTO>>
      */
-    public CompletableFuture<ItemCollectionDTO> getCollection(String id) {
+    public CompletableFuture<List<PlayerDTO>> getPlayerLoreEntriesByType(UUID playerUuid, String entryType) {
         if (!validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
+            return CompletableFuture.completedFuture(List.of());
         }
-        
         QueryBuilder query = queryBuilder.select("*")
-                                       .from("item_collection")
-                                       .where("id = ?", id);
-        
-        return queryExecutor.executeQuery(query, ItemCollectionDTO.class);
+            .from("lore_entry")
+            .where("entry_type = ? AND uuid = ? AND entry_type = ?", "PLAYER", playerUuid.toString(), entryType);
+        return queryExecutor.executeQueryList(query, PlayerDTO.class);
     }
 
     /**
-     * Saves a collection (insert or update).
+     * Get name change history for a player.
      *
-     * @param dto The item collection DTO to save
-     * @return A future containing true if successful
+     * @param playerUuid The player's UUID
+     * @return CompletableFuture<List<NameChangeRecordDTO>>
      */
-    public CompletableFuture<Boolean> saveCollection(ItemCollectionDTO dto) {
+    public CompletableFuture<List<NameChangeRecordDTO>> getNameChangeHistory(UUID playerUuid) {
         if (!validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
+            return CompletableFuture.completedFuture(List.of());
         }
-
-        return queryExecutor.executeTransaction(conn -> {
-            try {
-                // Check if collection exists
-                QueryBuilder checkQuery = queryBuilder.select("COUNT(*)")
-                                                   .from("item_collection")
-                                                   .where("id = ?", dto.getId());
-
-                try (var stmt = conn.prepareStatement(checkQuery.build())) {
-                    for (int i = 0; i < checkQuery.getParameters().length; i++) {
-                        stmt.setObject(i + 1, checkQuery.getParameters()[i]);
-                    }
-                    
-                    try (var rs = stmt.executeQuery()) {
-                        if (rs.next() && rs.getInt(1) > 0) {
-                            // Update existing collection
-                            QueryBuilder updateQuery = queryBuilder.update("item_collection")
-                                                          .set("name", dto.getName())
-                                                          .set("description", dto.getDescription())
-                                                          .set("theme_id", dto.getThemeId())
-                                                          .set("is_active", dto.isActive())
-                                                          .set("updated_at", new java.sql.Timestamp(System.currentTimeMillis()))
-                                                          .where("id = ?", dto.getId());
-                        
-                            try (var updateStmt = conn.prepareStatement(updateQuery.build())) {
-                                for (int i = 0; i < updateQuery.getParameters().length; i++) {
-                                    updateStmt.setObject(i + 1, updateQuery.getParameters()[i]);
-                                }
-                                updateStmt.executeUpdate();
-                            }
-                        } else {
-                            // Insert new collection
-                            QueryBuilder insertQuery = queryBuilder.insertInto("item_collection")
-                                                          .columns("id", "name", "description", "theme_id", 
-                                                                  "is_active", "created_at", "updated_at")
-                                                          .values(dto.getId(), dto.getName(), dto.getDescription(), 
-                                                                  dto.getThemeId(), dto.isActive(), 
-                                                                  new java.sql.Timestamp(dto.getCreatedAt()), 
-                                                                  new java.sql.Timestamp(System.currentTimeMillis()));
-                        
-                            try (var insertStmt = conn.prepareStatement(insertQuery.build(), java.sql.Statement.RETURN_GENERATED_KEYS)) {
-                                for (int i = 0; i < insertQuery.getParameters().length; i++) {
-                                    insertStmt.setObject(i + 1, insertQuery.getParameters()[i]);
-                                }
-                                insertStmt.executeUpdate();
-                            }
-                        }
-                    }
-                }
-                
-                // Handle serialized items if present
-                if (dto.getSerializedItems() != null && !dto.getSerializedItems().isEmpty()) {
-                    // Delete existing items first
-                    QueryBuilder deleteItemsQuery = queryBuilder.deleteFrom("collection_item")
-                                                       .where("collection_id = ?", dto.getId());
-                
-                    try (var deleteStmt = conn.prepareStatement(deleteItemsQuery.build())) {
-                        for (int i = 0; i < deleteItemsQuery.getParameters().length; i++) {
-                            deleteStmt.setObject(i + 1, deleteItemsQuery.getParameters()[i]);
-                        }
-                        deleteStmt.executeUpdate();
-                    }
-                
-                    // Insert new items
-                    for (int i = 0; i < dto.getSerializedItems().size(); i++) {
-                        String serializedItem = dto.getSerializedItems().get(i);
-                        
-                        QueryBuilder insertItemQuery = queryBuilder.insertInto("collection_item")
-                                                         .columns("collection_id", "item_data", "sequence")
-                                                         .values(dto.getId(), serializedItem, i);
-                        
-                        try (var insertItemStmt = conn.prepareStatement(insertItemQuery.build())) {
-                            for (int j = 0; j < insertItemQuery.getParameters().length; j++) {
-                                insertItemStmt.setObject(j + 1, insertItemQuery.getParameters()[j]);
-                            }
-                            insertItemStmt.executeUpdate();
-                        }
-                    }
-                }
-                
-                return true;
-            } catch (SQLException e) {
-                logger.error("Error saving collection: " + dto.getId(), e);
-                throw new RuntimeException(e);
-            }
-        });
-    }
-
-    /**
-     * Deletes a collection.
-     *
-     * @param id The collection ID to delete
-     * @return A future containing true if successful
-     */
-    public CompletableFuture<Boolean> deleteCollection(String id) {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
-        }
-        
-        return queryExecutor.executeTransaction(conn -> {
-            try {
-                // Delete collection items first
-                QueryBuilder deleteItemsQuery = queryBuilder.deleteFrom("collection_item")
-                                                   .where("collection_id = ?", id);
-            
-                try (var deleteItemsStmt = conn.prepareStatement(deleteItemsQuery.build())) {
-                    for (int i = 0; i < deleteItemsQuery.getParameters().length; i++) {
-                        deleteItemsStmt.setObject(i + 1, deleteItemsQuery.getParameters()[i]);
-                    }
-                    deleteItemsStmt.executeUpdate();
-                }
-                
-                // Delete collection
-                QueryBuilder deleteCollectionQuery = queryBuilder.deleteFrom("item_collection")
-                                                            .where("id = ?", id);
-            
-                try (var deleteCollectionStmt = conn.prepareStatement(deleteCollectionQuery.build())) {
-                    for (int i = 0; i < deleteCollectionQuery.getParameters().length; i++) {
-                        deleteCollectionStmt.setObject(i + 1, deleteCollectionQuery.getParameters()[i]);
-                    }
-                    int rowsAffected = deleteCollectionStmt.executeUpdate();
-                    
-                    return rowsAffected > 0;
-                }
-            } catch (SQLException e) {
-                logger.error("Error deleting collection: " + id, e);
-                throw new RuntimeException(e);
-            }
-        });
-    }
-
-    /**
-     * Gets collections by theme.
-     *
-     * @param themeId The theme ID
-     * @return A future containing a list of item collection DTOs
-     */
-    public CompletableFuture<List<ItemCollectionDTO>> getCollectionsByTheme(String themeId) {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
-        }
-        
         QueryBuilder query = queryBuilder.select("*")
-                                       .from("item_collection")
-                                       .where("theme_id = ?", themeId)
-                                       .orderBy("created_at", false);
-        
-        return queryExecutor.executeQueryList(query, ItemCollectionDTO.class);
+            .from("name_change_record")
+            .where("player_uuid = ?", playerUuid.toString())
+            .orderBy("changed_at", false);
+        return queryExecutor.executeQueryList(query, NameChangeRecordDTO.class);
     }
-
+    
     /**
-     * Gets collections associated with a player.
-     *
-     * @param playerUuid The player UUID as a string
-     * @return A future containing a list of item collection DTOs
-     */
-    public CompletableFuture<List<ItemCollectionDTO>> getPlayerCollections(String playerUuid) {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
-        }
-        
-        QueryBuilder query = queryBuilder.select("c.*")
-                                       .from("item_collection c")
-                                       .join("player_collection pc", "c.id = pc.collection_id")
-                                       .where("pc.player_uuid = ?", playerUuid)
-                                       .orderBy("c.created_at", false);
-        
-        return queryExecutor.executeQueryList(query, ItemCollectionDTO.class);
-    }
-
-    /**
-     * Gets a player's progress for a collection.
-     *
-     * @param playerUuid The player UUID as a string
-     * @param collectionId The collection ID
-     * @return A future containing the progress value (0.0-1.0)
-     */
-    public CompletableFuture<Double> getPlayerCollectionProgress(String playerUuid, String collectionId) {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
-        }
-        
-        QueryBuilder query = queryBuilder.select("progress")
-                                       .from("player_collection")
-                                       .where("player_uuid = ? AND collection_id = ?", playerUuid, collectionId);
-        
-        return queryExecutor.executeQuery(query, Double.class)
-                          .thenApply(result -> result != null ? result : 0.0);
-    }
-
-    /**
-     * Updates a player's progress for a collection.
-     *
-     * @param playerUuid The player UUID as a string
-     * @param collectionId The collection ID
-     * @param progress The progress value (0.0-1.0)
-     * @return A future containing true if successful
-     */
-    public CompletableFuture<Boolean> updatePlayerCollectionProgress(String playerUuid, String collectionId, double progress) {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
-        }
-        
-        return queryExecutor.executeTransaction(conn -> {
-            try {
-                // Check if record exists
-                QueryBuilder checkQuery = queryBuilder.select("COUNT(*)")
-                                                   .from("player_collection")
-                                                   .where("player_uuid = ? AND collection_id = ?", playerUuid, collectionId);
-                
-                boolean exists = false;
-                try (var checkStmt = conn.prepareStatement(checkQuery.build())) {
-                    for (int i = 0; i < checkQuery.getParameters().length; i++) {
-                        checkStmt.setObject(i + 1, checkQuery.getParameters()[i]);
-                    }
-                    
-                    try (var rs = checkStmt.executeQuery()) {
-                        if (rs.next()) {
-                            exists = rs.getInt(1) > 0;
-                        }
-                    }
-                }
-                
-                if (exists) {
-                    // Update existing record
-                    QueryBuilder updateQuery = queryBuilder.update("player_collection")
-                                                  .set("progress", progress)
-                                                  .set("updated_at", new java.sql.Timestamp(System.currentTimeMillis()))
-                                                  .where("player_uuid = ? AND collection_id = ?", playerUuid, collectionId);
-                
-                    try (var updateStmt = conn.prepareStatement(updateQuery.build())) {
-                        for (int i = 0; i < updateQuery.getParameters().length; i++) {
-                            updateStmt.setObject(i + 1, updateQuery.getParameters()[i]);
-                        }
-                        return updateStmt.executeUpdate() > 0;
-                    }
-                } else {
-                    // Insert new record
-                    QueryBuilder insertQuery = queryBuilder.insertInto("player_collection")
-                                                  .columns("player_uuid", "collection_id", "progress", 
-                                                          "created_at", "updated_at")
-                                                  .values(playerUuid, collectionId, progress, 
-                                                          new java.sql.Timestamp(System.currentTimeMillis()),
-                                                          new java.sql.Timestamp(System.currentTimeMillis()));
-                
-                    try (var insertStmt = conn.prepareStatement(insertQuery.build())) {
-                        for (int i = 0; i < insertQuery.getParameters().length; i++) {
-                            insertStmt.setObject(i + 1, insertQuery.getParameters()[i]);
-                        }
-                        return insertStmt.executeUpdate() > 0;
-                    }
-                }
-            } catch (SQLException e) {
-                logger.error("Error updating player collection progress", e);
-                throw new RuntimeException(e);
-            }
-        });
-    }
-
-    /**
-     * Marks a collection as completed by a player.
-     *
-     * @param playerUuid The player UUID as a string
-     * @param collectionId The collection ID
-     * @param timestamp The completion timestamp
-     * @return A future containing true if successful
-     */
-    public CompletableFuture<Boolean> markCollectionCompleted(String playerUuid, String collectionId, long timestamp) {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
-        }
-        
-        return queryExecutor.executeTransaction(conn -> {
-            try {
-                // Check if record exists
-                QueryBuilder checkQuery = queryBuilder.select("COUNT(*)")
-                                                   .from("player_collection")
-                                                   .where("player_uuid = ? AND collection_id = ?", playerUuid, collectionId);
-                
-                boolean exists = false;
-                try (var checkStmt = conn.prepareStatement(checkQuery.build())) {
-                    for (int i = 0; i < checkQuery.getParameters().length; i++) {
-                        checkStmt.setObject(i + 1, checkQuery.getParameters()[i]);
-                    }
-                    
-                    try (var rs = checkStmt.executeQuery()) {
-                        if (rs.next()) {
-                            exists = rs.getInt(1) > 0;
-                        }
-                    }
-                }
-                
-                if (exists) {
-                    // Update existing record
-                    QueryBuilder updateQuery = queryBuilder.update("player_collection")
-                                                  .set("progress", 1.0)
-                                                  .set("completed_at", new java.sql.Timestamp(timestamp))
-                                                  .set("is_completed", true)
-                                                  .set("updated_at", new java.sql.Timestamp(System.currentTimeMillis()))
-                                                  .where("player_uuid = ? AND collection_id = ?", playerUuid, collectionId);
-                
-                    try (var updateStmt = conn.prepareStatement(updateQuery.build())) {
-                        for (int i = 0; i < updateQuery.getParameters().length; i++) {
-                            updateStmt.setObject(i + 1, updateQuery.getParameters()[i]);
-                        }
-                        return updateStmt.executeUpdate() > 0;
-                    }
-                } else {
-                    // Insert new record
-                    QueryBuilder insertQuery = queryBuilder.insertInto("player_collection")
-                                                  .columns("player_uuid", "collection_id", "progress", 
-                                                          "completed_at", "is_completed",
-                                                          "created_at", "updated_at")
-                                                  .values(playerUuid, collectionId, 1.0,
-                                                          new java.sql.Timestamp(timestamp), true,
-                                                          new java.sql.Timestamp(System.currentTimeMillis()),
-                                                          new java.sql.Timestamp(System.currentTimeMillis()));
-                
-                    try (var insertStmt = conn.prepareStatement(insertQuery.build())) {
-                        for (int i = 0; i < insertQuery.getParameters().length; i++) {
-                            insertStmt.setObject(i + 1, insertQuery.getParameters()[i]);
-                        }
-                        return insertStmt.executeUpdate() > 0;
-                    }
-                }
-            } catch (SQLException e) {
-                logger.error("Error marking collection as completed", e);
-                throw new RuntimeException(e);
-            }
-        });
-    }
-
-    /**
-     * Gets all completed collections for a player.
-     *
-     * @param playerUuid The player UUID as a string
-     * @return A future containing a list of completed collection DTOs
-     */
-    public CompletableFuture<List<ItemCollectionDTO>> getCompletedCollections(String playerUuid) {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
-        }
-        
-        QueryBuilder query = queryBuilder.select("c.*")
-                                       .from("item_collection c")
-                                       .join("player_collection pc", "c.id = pc.collection_id")
-                                       .where("pc.player_uuid = ? AND pc.is_completed = TRUE", playerUuid)
-                                       .orderBy("pc.completed_at", false);
-        
-        return queryExecutor.executeQueryList(query, ItemCollectionDTO.class);
-    }    /**
      * Attempt to reconnect to the database.
      * 
      * @throws SQLException If reconnection fails
@@ -1251,191 +951,121 @@ public class DatabaseManager {    private final RVNKLore plugin;
      */
     public <T> CompletableFuture<T> executeQuery(QueryBuilder query, ResultSetMapper<T> mapper) {
         return executeQueryWithMapper(query, mapper);
-    }
-
-    /**
-     * Saves player metadata and returns success status.
+    }    /**
+     * Reload the database connections and configuration.
+     * 
+     * @return A CompletableFuture that completes when the reload is done
      */
-    public CompletableFuture<Boolean> savePlayerMetadata(PlayerDTO dto) {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
-        }
-
-        return CompletableFuture.supplyAsync(() -> {
+    public CompletableFuture<Void> reload() {
+        return CompletableFuture.runAsync(() -> {
+            logger.info("Reloading database connections and configuration...");
+            
             try {
-                boolean isUpdate = dto.getEntryId() != null;
+                // Close existing connection if any
+                connectionProvider.close();
                 
-                QueryBuilder query;
-                if (isUpdate) {
-                    query = queryBuilder.update("lore_submission")
-                        .set("content", dto.toJson())
-                        .where("entry_id = ? AND is_current_version = TRUE", dto.getEntryId());
-                } else {
-                    // First create the lore entry
-                    String entryType = "PLAYER";
-                    QueryBuilder entryQuery = queryBuilder.insertInto("lore_entry")
-                        .columns("entry_type", "created_at")
-                        .values(entryType, new Timestamp(System.currentTimeMillis()));
+                // Get current storage type
+                String storageType = configManager.getStorageType();
+                DatabaseType newType = "mysql".equalsIgnoreCase(storageType) ? 
+                    DatabaseType.MYSQL : DatabaseType.SQLITE;
+                
+                // If storage type changed, create new provider
+                if (databaseType != newType) {
+                    if (newType == DatabaseType.MYSQL) {
+                        this.connectionProvider = new MySQLConnectionProvider(plugin);
+                        this.queryBuilder = new MySQLQueryBuilder();
+                        this.schemaQueryBuilder = new MySQLSchemaQueryBuilder();
+                    } else {
+                        this.connectionProvider = new SQLiteConnectionProvider(plugin);
+                        this.queryBuilder = new SQLiteQueryBuilder();
+                        this.schemaQueryBuilder = new SQLiteSchemaQueryBuilder();
+                    }
                     
-                    int entryId = queryExecutor.executeInsert(entryQuery).join();
-                    dto.setEntryId(entryId);
-
-                    // Then create the submission
-                    query = queryBuilder.insertInto("lore_submission")
-                        .columns("entry_id", "content", "is_current_version", "submitted_at")
-                        .values(entryId, dto.toJson(), true, new Timestamp(System.currentTimeMillis()));
+                    // Update executor
+                    this.queryExecutor = new DefaultQueryExecutor(plugin, connectionProvider);
+                    this.databaseSetup = new DatabaseSetup(plugin, connectionProvider, schemaQueryBuilder, queryExecutor);
                 }
-
-                int result = queryExecutor.executeUpdate(query).join();
-                return result > 0;
+                
+                // Initialize connection
+                connectionProvider.getConnection();
+                
+                // Verify tables exist
+                databaseSetup.initializeTables();
+                
+                logger.info("Database reloaded successfully.");
             } catch (Exception e) {
-                logger.error("Error saving player metadata", e);
-                return false;
+                logger.error("Error reloading database", e);
+                throw new RuntimeException(e);
             }
         }, executor);
     }
-
+    
     /**
-     * Checks if a player exists in the database.
+     * Get all lore entries by type and approval status.
+     * 
+     * @param type The type of lore entries to retrieve
+     * @param approved Whether to retrieve only approved entries
+     * @return A CompletableFuture containing a list of matching lore entries
      */
-    public CompletableFuture<Boolean> playerExists(UUID playerUuid) {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
-        }
-
-        QueryBuilder query = queryBuilder.select("COUNT(*) as count")
-            .from("lore_submission s")
-            .join("lore_entry e", "e.id = s.entry_id")
-            .where("e.entry_type = ? AND s.is_current_version = TRUE AND s.content LIKE ?",
-                  "PLAYER", "%\"player_uuid\":\"" + playerUuid.toString() + "\"%");
-
-        return executeQueryWithMapper(query, rs -> rs.next() && rs.getInt("count") > 0)
+    public CompletableFuture<List<LoreEntryDTO>> getLoreEntriesByTypeAndApproved(String type, boolean approved) {
+        QueryBuilder query = queryBuilder.select("*")
+            .from("lore_entry")
+            .where("entry_type = ? AND is_approved = ?", type, approved)
+            .orderBy("name", true);
+        
+        return queryExecutor.executeQueryList(query, LoreEntryDTO.class)
             .exceptionally(e -> {
-                logger.error("Error checking if player exists", e);
-                return false;
+                logger.error("Error fetching lore entries by type and approval status", e);
+                return new ArrayList<>();
             });
     }
-
+    
     /**
-     * Gets the stored player name from the database.
+     * Get all lore entries by approval status.
+     * 
+     * @param approved Whether to retrieve only approved entries
+     * @return A CompletableFuture containing a list of matching lore entries
      */
-    public CompletableFuture<String> getStoredPlayerName(UUID playerUuid) {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
-        }
-
-        QueryBuilder query = queryBuilder.select("s.content")
-            .from("lore_submission s")
-            .join("lore_entry e", "e.id = s.entry_id")
-            .where("e.entry_type = ? AND s.is_current_version = TRUE AND s.content LIKE ?",
-                  "PLAYER", "%\"player_uuid\":\"" + playerUuid.toString() + "\"%")
-            .limit(1);
-
-        return executeQueryWithMapper(query, rs -> {
-            if (rs.next()) {
-                String content = rs.getString("content");
-                return PlayerDTO.extractPlayerNameFromContent(content);
-            }
-            return null;
-        }).exceptionally(e -> {
-            logger.error("Error getting stored player name", e);
-            return null;
-        });
+    public CompletableFuture<List<LoreEntryDTO>> getLoreEntriesByApproved(boolean approved) {
+        QueryBuilder query = queryBuilder.select("*")
+            .from("lore_entry")
+            .where("is_approved = ?", approved)
+            .orderBy("name", true);
+        
+        return queryExecutor.executeQueryList(query, LoreEntryDTO.class)
+            .exceptionally(e -> {
+                logger.error("Error fetching lore entries by approval status", e);
+                return new ArrayList<>();
+            });
     }
-
+    
     /**
-     * Gets all lore entries for a player.
+     * Update an existing lore entry.
+     * 
+     * @param entry The LoreEntryDTO to update
+     * @return A CompletableFuture containing a boolean indicating success
      */
-    public CompletableFuture<List<PlayerDTO>> getPlayerLoreEntries(UUID playerUuid) {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
+    public CompletableFuture<Boolean> updateLoreEntry(LoreEntryDTO entry) {
+        if (entry == null || entry.getId() <= 0) {
+            return CompletableFuture.completedFuture(false);
         }
-
-        QueryBuilder query = queryBuilder.select("s.entry_id", "s.content")
-            .from("lore_submission s")
-            .join("lore_entry e", "e.id = s.entry_id")
-            .where("e.entry_type = ? AND s.content LIKE ?",
-                  "PLAYER", "%\"player_uuid\":\"" + playerUuid.toString() + "\"%")
-            .orderBy("s.submitted_at", false);
-
-        return executeQueryWithMapper(query, rs -> {
-            List<PlayerDTO> results = new ArrayList<>();
-            while (rs.next()) {
-                results.add(PlayerDTO.fromResultSet(rs));
-            }
-            return results;
-        }).exceptionally(e -> {
-            logger.error("Error getting player lore entries", e);
-            return List.of();
-        });
-    }
-
-    /**
-     * Gets player lore entries by type.
-     */
-    public CompletableFuture<List<PlayerDTO>> getPlayerLoreEntriesByType(UUID playerUuid, String entryType) {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
-        }
-
-        QueryBuilder query = queryBuilder.select("s.entry_id", "s.content")
-            .from("lore_submission s")
-            .join("lore_entry e", "e.id = s.entry_id")
-            .where("e.entry_type = ? AND s.content LIKE ? AND s.content LIKE ?",
-                  "PLAYER", 
-                  "%\"player_uuid\":\"" + playerUuid.toString() + "\"%",
-                  "%\"entry_type\":\"" + entryType + "\"%")
-            .orderBy("s.submitted_at", false);
-
-        return executeQueryWithMapper(query, rs -> {
-            List<PlayerDTO> results = new ArrayList<>();
-            while (rs.next()) {
-                results.add(PlayerDTO.fromResultSet(rs));
-            }
-            return results;
-        }).exceptionally(e -> {
-            logger.error("Error getting player lore entries by type", e);
-            return List.of();
-        });
-    }
-
-    /**
-     * Gets the name change history for a player.
-     */
-    public CompletableFuture<List<NameChangeRecordDTO>> getNameChangeHistory(UUID playerUuid) {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
-        }
-
-        QueryBuilder query = queryBuilder.select("s.submitted_at", "s.content")
-            .from("lore_submission s")
-            .join("lore_entry e", "e.id = s.entry_id")
-            .where("e.entry_type = ? AND s.content LIKE ? AND s.content LIKE ?",
-                  "PLAYER", 
-                  "%\"player_uuid\":\"" + playerUuid.toString() + "\"%",
-                  "%\"entry_type\":\"NAME_CHANGE\"%")
-            .orderBy("s.submitted_at", false);
-
-        return executeQueryWithMapper(query, rs -> {
-            List<NameChangeRecordDTO> results = new ArrayList<>();
-            while (rs.next()) {
-                results.add(new NameChangeRecordDTO(rs));
-            }
-            return results;
-        }).exceptionally(e -> {
-            logger.error("Error getting name change history", e);
-            return List.of();        });
+        
+        // Set updated timestamp
+        entry.setUpdatedAt(new Timestamp(System.currentTimeMillis()));
+        
+        QueryBuilder query = queryBuilder.update("lore_entry")
+            .set("name", entry.getName())
+            .set("description", entry.getDescription())
+            .set("is_approved", entry.isApproved())
+            .set("entry_type", entry.getEntryType())
+            .set("updated_at", entry.getUpdatedAt())
+            .where("id = ?", entry.getId());
+        
+        return queryExecutor.executeUpdate(query)
+            .thenApply(rowsAffected -> rowsAffected > 0)
+            .exceptionally(e -> {
+                logger.error("Error updating lore entry", e);
+                return false;
+            });
     }
 }

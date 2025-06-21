@@ -108,21 +108,19 @@ public class LoreListSubCommand implements SubCommand {
                     String approvalStatus = entry.isApproved() ? 
                             ChatColor.GREEN + "[✓]" : 
                             ChatColor.RED + "[✗]";
-                    
-                    // Get shortened UUID (first 8 characters)
+                      // Get shortened UUID (first 8 characters)
                     UUID uuid = entry.getUuid();
                     String uuidStr = uuid != null ? uuid.toString() : "unknown";
                     // Only take substring if long enough
                     String shortId = uuidStr.length() >= 8 ? uuidStr.substring(0, 8) : uuidStr;
-                            
-                    if (sender.hasPermission("rvnklore.admin")) {
+                              if (sender.hasPermission("rvnklore.admin")) {
                         sender.sendMessage(approvalStatus + " " + 
                                 ChatColor.YELLOW + entry.getName() + 
-                                ChatColor.GRAY + " (" + entry.getLoreType() + ") - " + 
+                                ChatColor.GRAY + " (" + entry.getEntryType() + ") - " + 
                                 ChatColor.WHITE + shortId);
                     } else {
                         sender.sendMessage(ChatColor.YELLOW + entry.getName() + 
-                                ChatColor.GRAY + " (" + entry.getLoreType() + ") - " + 
+                                ChatColor.GRAY + " (" + entry.getEntryType() + ") - " + 
                                 ChatColor.WHITE + shortId);
                     }
                 }
@@ -132,8 +130,7 @@ public class LoreListSubCommand implements SubCommand {
             if (totalPages > 1) {
                 sender.sendMessage(ChatColor.GRAY + "   Use /lore list" + 
                         (finalType != null ? " " + finalType : "") + 
-                        " <page> to navigate pages");
-            }
+                        " <page> to navigate pages");            }
         }).exceptionally(e -> {
             logger.error("Error fetching lore entries", e);
             sender.sendMessage(ChatColor.RED + "✖ An error occurred while fetching lore entries. Please check the console for details.");
@@ -141,7 +138,6 @@ public class LoreListSubCommand implements SubCommand {
         });
         
         return true;
-    }
     }
 
     @Override

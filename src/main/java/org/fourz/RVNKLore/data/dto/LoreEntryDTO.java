@@ -3,6 +3,7 @@ package org.fourz.RVNKLore.data.dto;
 import java.sql.Timestamp;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
 
@@ -48,12 +49,10 @@ public class LoreEntryDTO {
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
         this.metadata = metadata != null ? metadata : new HashMap<>();
-    }
-
-    // Getters and setters for all fields
+    }    // Getters and setters for all fields
     public int getId() { return id; }
     public void setId(int id) { this.id = id; }
-    public String getUuid() { return uuid; }
+    public String getUuidString() { return uuid; }
     public void setUuid(String uuid) { this.uuid = uuid; }
     public String getEntryType() { return entryType; }
     public void setEntryType(String entryType) { this.entryType = entryType; }
@@ -172,5 +171,39 @@ public class LoreEntryDTO {
         obj.put("world", world);
         obj.put("content", content);
         return obj;
+    }
+
+    /**
+     * Gets the UUID object from the stored UUID string
+     * 
+     * @return UUID object or null if the string is invalid
+     */
+    public UUID getUuidObject() {
+        if (uuid == null || uuid.isEmpty()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(uuid);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+    
+    /**
+     * Returns the lore type for display/command purposes
+     * 
+     * @return the lore type
+     */
+    public String getLoreType() {
+        return entryType;
+    }
+    
+    /**
+     * Alias for getUuidObject for command compatibility
+     * 
+     * @return UUID object or null if the string is invalid
+     */
+    public UUID getUuid() {
+        return getUuidObject();
     }
 }

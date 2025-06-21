@@ -136,7 +136,7 @@ public class SubmissionRepository {
             dto.setContentVersion(1);
         }
           QueryBuilder query = databaseManager.getQueryBuilder()
-            .insertInto("lore_submission")
+            .insert("lore_submission", false) // Don't allow upsert - submissions are append-only
             .columns("entry_id", "slug", "visibility", "status", "submitter_uuid", 
                      "created_by", "submission_date", "approval_status", "content_version", 
                      "is_current_version", "content")

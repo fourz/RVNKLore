@@ -146,7 +146,7 @@ public class ItemRepository {
                     }
                 } else {
                     // Insert new item
-                    QueryBuilder query = queryBuilder.insertInto("lore_item")
+                    QueryBuilder query = queryBuilder.insert("lore_item", true) // Allow upsert since items can be updated
                         .columns("lore_entry_id", "item_type", "material", "display_name", 
                                 "lore", "custom_model_data", "rarity", "is_obtainable", 
                                 "glow", "skull_texture", "texture_data", "owner_name", 

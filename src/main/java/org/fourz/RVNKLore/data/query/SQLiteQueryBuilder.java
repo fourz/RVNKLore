@@ -31,6 +31,7 @@ public class SQLiteQueryBuilder implements QueryBuilder {
     private Integer offsetValue;
     private boolean hasWhere = false;
     private String customSql = null;
+    private boolean allowUpsert = false;
 
     public SQLiteQueryBuilder() {
         // Default constructor
@@ -121,10 +122,17 @@ public class SQLiteQueryBuilder implements QueryBuilder {
     }
 
     @Override
-    public QueryBuilder insertInto(String table) {
+    public QueryBuilder insert(String table, boolean allowUpsert) {
         this.queryType = QueryType.INSERT;
         this.table = table;
+        this.allowUpsert = allowUpsert;
         return this;
+    }
+
+    @Override
+    @Deprecated
+    public QueryBuilder insertInto(String table) {
+        return insert(table, false);
     }
 
     @Override
@@ -255,20 +263,23 @@ public class SQLiteQueryBuilder implements QueryBuilder {
             query.append(" OFFSET ").append(offsetValue);
         }
     }    private void buildInsertQuery(StringBuilder query) {
-        query.append("INSERT INTO ").append(table);
-        
-        if (!columns.isEmpty()) {
-            query.append(" (").append(String.join(", ", columns)).append(")");
+        query.append(allowUpsert ? "INSERT OR REPLACE" : "INSERT");
+        query.append(" INTO ").append(table).append(" (");
+
+        if (columns.isEmpty()) {
+            throw new IllegalStateException("No columns specified for insert");
         }
-        
-        if (!insertValues.isEmpty()) {
-            query.append(" VALUES ");
-            List<String> valueGroups = new ArrayList<>();
-            for (int i = 0; i < insertValues.size(); i++) {
-                List<Object> values = insertValues.get(i);
-                valueGroups.add("(" + String.join(", ", Collections.nCopies(values.size(), "?")) + ")");
+
+        query.append(String.join(", ", columns)).append(") VALUES ");
+
+        // Handle multiple value sets
+        boolean first = true;
+        for (List<Object> valueSet : insertValues) {
+            if (!first) {
+                query.append(", ");
             }
-            query.append(String.join(", ", valueGroups));
+            query.append("(").append(String.join(", ", Collections.nCopies(valueSet.size(), "?"))).append(")");
+            first = false;
         }
     }    private void buildUpdateQuery(StringBuilder query) {
         query.append("UPDATE ").append(table).append(" SET ");

@@ -31,6 +31,7 @@ public class MySQLQueryBuilder implements QueryBuilder {
     private Integer offsetValue;
     private boolean hasWhere = false;
     private String customSql = null;
+    private boolean allowUpsert = false;
 
     public MySQLQueryBuilder() {
         // Default constructor
@@ -162,10 +163,17 @@ public class MySQLQueryBuilder implements QueryBuilder {
     }
 
     @Override
-    public QueryBuilder insertInto(String table) {
+    public QueryBuilder insert(String table, boolean allowUpsert) {
         this.queryType = QueryType.INSERT;
         this.table = table;
+        this.allowUpsert = allowUpsert;
         return this;
+    }
+
+    @Override
+    @Deprecated
+    public QueryBuilder insertInto(String table) {
+        return insert(table, false);
     }
 
     @Override
@@ -285,20 +293,42 @@ public class MySQLQueryBuilder implements QueryBuilder {
     }
 
     private void buildInsertQuery(StringBuilder query) {
-        query.append("INSERT INTO ").append(table);
-        
-        if (!columns.isEmpty()) {
-            query.append(" (").append(String.join(", ", columns)).append(")");
+        query.append("INSERT ");
+        if (allowUpsert) {
+            // ON DUPLICATE KEY UPDATE is MySQL's upsert mechanism
+            query.append("INTO ").append(table).append(" (");
+        } else {
+            query.append("INTO ").append(table).append(" (");
         }
-        
-        if (!insertValues.isEmpty()) {
-            query.append(" VALUES ");
-            List<String> valueGroups = new ArrayList<>();
-            for (int i = 0; i < insertValues.size(); i++) {
-                List<Object> values = insertValues.get(i);
-                valueGroups.add("(" + String.join(", ", Collections.nCopies(values.size(), "?")) + ")");
+
+        if (columns.isEmpty()) {
+            throw new IllegalStateException("No columns specified for insert");
+        }        query.append(String.join(", ", columns)).append(") VALUES ");
+
+        // Handle multiple value sets
+        boolean first = true;
+        for (List<Object> valueSet : insertValues) {
+            if (!first) {
+                query.append(", ");
             }
-            query.append(String.join(", ", valueGroups));
+            query.append("(").append(String.join(", ", Collections.nCopies(valueSet.size(), "?"))).append(")");
+            first = false;
+        }
+
+        if (allowUpsert) {
+            // Add ON DUPLICATE KEY UPDATE clause
+            query.append(" ON DUPLICATE KEY UPDATE ");
+            boolean firstColumn = true;
+            for (String column : columns) {
+                if (!firstColumn) {
+                    query.append(", ");
+                }
+                // Exclude primary key or unique columns from update
+                if (!column.equalsIgnoreCase("id") && !column.toLowerCase().endsWith("_id")) {
+                    query.append(column).append("=VALUES(").append(column).append(")");
+                    firstColumn = false;
+                }
+            }
         }
     }
 
