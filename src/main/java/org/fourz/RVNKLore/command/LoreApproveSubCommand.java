@@ -3,12 +3,15 @@ package org.fourz.RVNKLore.command;
 import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.command.subcommand.SubCommand;
+import org.fourz.RVNKLore.data.DatabaseManager;
+import org.fourz.RVNKLore.data.dto.LoreEntryDTO;
 import org.fourz.RVNKLore.debug.LogManager;
-import org.fourz.RVNKLore.lore.LoreEntry;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Subcommand for approving lore entries
@@ -17,98 +20,145 @@ import java.util.UUID;
 public class LoreApproveSubCommand implements SubCommand {
     private final RVNKLore plugin;
     private final LogManager logger;
+    private final DatabaseManager databaseManager;
 
     public LoreApproveSubCommand(RVNKLore plugin) {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "LoreApproveSubCommand");
+        this.databaseManager = plugin.getDatabaseManager();
     }    @Override
     public boolean execute(CommandSender sender, String[] args) {
         if (args.length < 1) {
-            sender.sendMessage(ChatColor.RED + "&c▶ Usage: /lore approve <id>");
+            sender.sendMessage(ChatColor.RED + "▶ Usage: /lore approve <id>");
             return true;
         }
 
         String idInput = args[0];
-        LoreEntry matchedEntry = null;
-
-        // Try to match by full UUID
-        try {
-            UUID id = UUID.fromString(idInput);
-            matchedEntry = plugin.getLoreManager().getLoreEntry(id);
-        } catch (IllegalArgumentException ignored) {}
-
-        // Try to match by short UUID (first 8 chars)
-        if (matchedEntry == null && idInput.length() >= 8) {
-            String shortUuidPart = idInput.substring(0, 8);
-            for (LoreEntry entry : plugin.getLoreManager().findLoreEntries(shortUuidPart)) {
-                if (!entry.isApproved()) {
-                    String entryShortId = entry.getId().toString().substring(0, 8);
-                    if (entryShortId.equalsIgnoreCase(shortUuidPart)) {
-                        matchedEntry = entry;
-                        break;
-                    }
-                }
+        
+        // Notify user that we're processing their request
+        sender.sendMessage(ChatColor.GOLD + "⚙ Processing approval request...");
+        
+        // Try to match by full UUID first
+        if (idInput.length() == 36) {
+            try {
+                UUID uuid = UUID.fromString(idInput);
+                return processApprovalByUuid(sender, uuid);
+            } catch (IllegalArgumentException ignored) {
+                // Not a valid UUID, continue with other matching methods
             }
         }
-
-        // Try to match by short UUID with details (e.g. "shortid Name ...")
-        if (matchedEntry == null && idInput.length() >= 8) {
-            String[] parts = idInput.split(" ", 2);
-            String shortId = parts[0].trim();
-            for (LoreEntry entry : plugin.getLoreManager().findLoreEntries(shortId)) {
-                if (!entry.isApproved()) {
-                    String entryShortId = entry.getId().toString().substring(0, 8);
-                    if (entryShortId.equalsIgnoreCase(shortId)) {
-                        matchedEntry = entry;
-                        break;
+        
+        // If not a full UUID, try to find by partial ID
+        if (idInput.length() >= 4) {
+            // Search by partial ID or name
+            databaseManager.searchLoreEntries(idInput)
+                .thenAccept(entries -> {
+                    if (entries.isEmpty()) {
+                        sender.sendMessage(ChatColor.RED + "✖ No unapproved lore entries found matching: " + idInput);
+                        return;
                     }
-                }
-            }
-        }
-
-        if (matchedEntry == null) {
-            sender.sendMessage(ChatColor.RED + "&c✖ No valid unapproved lore entry found matching: " + idInput);
-            return true;
-        }
-
-        return processApproval(sender, matchedEntry.getUUID());
-    }
-
-    /**
-     * Process the approval of a lore entry
-     * 
-     * @param sender The command sender
-     * @param id The UUID of the lore entry to approve
-     * @return true if the command was processed
-     */
-    private boolean processApproval(CommandSender sender, UUID id) {
-        LoreEntry entry = plugin.getLoreManager().getLoreEntry(id);
-        
-        if (entry == null) {
-            sender.sendMessage(ChatColor.RED + "&c✖ No lore entry found with ID: " + id);
-            return true;
-        }
-        
-        if (entry.isApproved()) {
-            sender.sendMessage(ChatColor.YELLOW + "&e⚠ This lore entry is already approved.");
-            return true;
-        }
-        
-        boolean success = plugin.getLoreManager().approveLoreEntry(id);
-        
-        if (success) {
-            sender.sendMessage(ChatColor.GREEN + "&a✓ Lore entry approved successfully!");
-            
-            // Log the approval
-            logger.info("Lore entry " + id + " (" + entry.getName() + ") approved by " + sender.getName());
+                    
+                    // Filter to just unapproved entries
+                    List<LoreEntryDTO> unapprovedEntries = new ArrayList<>();
+                    for (LoreEntryDTO entry : entries) {
+                        if (!entry.isApproved()) {
+                            unapprovedEntries.add(entry);
+                        }
+                    }
+                    
+                    if (unapprovedEntries.isEmpty()) {
+                        sender.sendMessage(ChatColor.RED + "✖ No unapproved lore entries found matching: " + idInput);
+                        return;
+                    }
+                    
+                    // If we have exactly one match, process it
+                    if (unapprovedEntries.size() == 1) {
+                        LoreEntryDTO entry = unapprovedEntries.get(0);
+                        processApprovalByDto(sender, entry);
+                        return;
+                    }
+                    
+                    // Multiple matches, show options
+                    sender.sendMessage(ChatColor.YELLOW + "⚠ Multiple unapproved entries match your query. Please be more specific:");
+                    for (LoreEntryDTO entry : unapprovedEntries) {
+                        UUID uuid = entry.getUuid();
+                        String shortId = uuid != null ? uuid.toString().substring(0, 8) : "unknown";
+                        sender.sendMessage(ChatColor.WHITE + shortId + " - " + 
+                                ChatColor.YELLOW + entry.getName() + 
+                                ChatColor.GRAY + " (" + entry.getLoreType() + ")");
+                    }
+                })
+                .exceptionally(e -> {
+                    logger.error("Error searching for lore entries", e);
+                    sender.sendMessage(ChatColor.RED + "✖ An error occurred while searching for lore entries. Please check the console for details.");
+                    return null;
+                });
         } else {
-            sender.sendMessage(ChatColor.RED + "&c✖ Failed to approve lore entry. Please check console for errors.");
+            sender.sendMessage(ChatColor.RED + "▶ Please provide at least 4 characters to search for a lore entry.");
         }
         
         return true;
     }
 
-    @Override
+    /**
+     * Process the approval of a lore entry by UUID
+     * 
+     * @param sender The command sender
+     * @param uuid The UUID of the lore entry to approve
+     * @return true if the command was processed
+     */
+    private boolean processApprovalByUuid(CommandSender sender, UUID uuid) {
+        databaseManager.getLoreEntryById(uuid)
+            .thenAccept(entry -> {
+                if (entry == null) {
+                    sender.sendMessage(ChatColor.RED + "✖ No lore entry found with ID: " + uuid);
+                    return;
+                }
+                
+                processApprovalByDto(sender, entry);
+            })
+            .exceptionally(e -> {
+                logger.error("Error fetching lore entry", e);
+                sender.sendMessage(ChatColor.RED + "✖ An error occurred while fetching the lore entry. Please check the console for details.");
+                return null;
+            });
+        
+        return true;
+    }
+    
+    /**
+     * Process the approval of a lore entry by DTO
+     * 
+     * @param sender The command sender
+     * @param entry The lore entry DTO to approve
+     */
+    private void processApprovalByDto(CommandSender sender, LoreEntryDTO entry) {
+        if (entry.isApproved()) {
+            sender.sendMessage(ChatColor.YELLOW + "⚠ This lore entry is already approved.");
+            return;
+        }
+        
+        // Update the entry to approved state
+        entry.setApproved(true);
+        
+        // Save the changes
+        databaseManager.updateLoreEntry(entry)
+            .thenAccept(success -> {
+                if (success) {
+                    sender.sendMessage(ChatColor.GREEN + "✓ Lore entry approved successfully!");
+                    
+                    // Log the approval
+                    logger.info("Lore entry " + entry.getUuid() + " (" + entry.getName() + ") approved by " + sender.getName());
+                } else {
+                    sender.sendMessage(ChatColor.RED + "✖ Failed to approve lore entry. Please check console for errors.");
+                }
+            })
+            .exceptionally(e -> {
+                logger.error("Error approving lore entry", e);
+                sender.sendMessage(ChatColor.RED + "✖ An error occurred while approving the lore entry. Please check the console for details.");
+                return null;
+            });
+    }    @Override
     public String getDescription() {
         return "Approves a lore entry for public viewing";
     }
@@ -125,31 +175,25 @@ public class LoreApproveSubCommand implements SubCommand {
         if (args.length == 1) {
             String partial = args[0].toLowerCase();
 
-            if (partial.length() >= 2) {
-                for (LoreEntry entry : plugin.getLoreManager().findLoreEntries(partial)) {
-                    if (!entry.isApproved()) {
-                        String uuid = entry.getId().toString();
-                        String shortId = uuid.substring(0, 8);
-
-                        // If typing and it matches short ID
-                        if (shortId.startsWith(partial)) {
-                            completions.add(shortId);
+            // Only search if at least 3 characters provided
+            if (partial.length() >= 3) {
+                databaseManager.searchLoreEntries(partial)
+                    .thenAccept(entries -> {
+                        for (LoreEntryDTO entry : entries) {
+                            if (!entry.isApproved()) {
+                                UUID uuid = entry.getUuid();
+                                if (uuid != null) {
+                                    String uuidStr = uuid.toString();
+                                    String shortId = uuidStr.length() >= 8 ? uuidStr.substring(0, 8) : uuidStr;
+                                    completions.add(shortId);
+                                }
+                            }
                         }
-                        //
-
-                    }
-                }
-            }
-        } else if (args.length > 1) {
-            // if a short uuid is prodided, show details
-            String shortUuidPart = args[0].trim();  
-            for (LoreEntry entry : plugin.getLoreManager().findLoreEntries(shortUuidPart)) {
-                if (!entry.isApproved()) {
-                    String entryShortId = entry.getId().toString().substring(0, 8);
-                    if (entryShortId.equalsIgnoreCase(shortUuidPart)) {                        // Stage 2: If they typed a short ID, show details
-                        completions.add(entry.getName() + " " + entry.getDescription() + " " + entry.getSubmittedBy() + " " + entry.getType());
-                    }
-                }
+                    })
+                    .exceptionally(e -> {
+                        logger.error("Error searching for lore entries for tab completion", e);
+                        return null;
+                    });
             }
         }
 

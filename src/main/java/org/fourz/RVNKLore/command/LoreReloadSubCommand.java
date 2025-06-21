@@ -3,10 +3,12 @@ package org.fourz.RVNKLore.command;
 import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.command.subcommand.SubCommand;
 import org.fourz.RVNKLore.debug.LogManager;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Subcommand for reloading the plugin
@@ -24,7 +26,7 @@ public class LoreReloadSubCommand implements SubCommand {
     @Override
     public boolean execute(CommandSender sender, String[] args) {
         logger.debug("Executing reload command");
-        sender.sendMessage(ChatColor.YELLOW + "Reloading RVNKLore plugin...");
+        sender.sendMessage(ChatColor.YELLOW + "⚙ Reloading RVNKLore plugin...");
         
         // Reload configuration
         plugin.getConfigManager().reloadConfig();
@@ -32,16 +34,23 @@ public class LoreReloadSubCommand implements SubCommand {
         // Update log level
         logger.setLogLevel(plugin.getConfigManager().getLogLevel());
         
-        // Reload lore data
-        plugin.getLoreManager().reloadLore();
+        // Reload database connections
+        CompletableFuture<Void> databaseReload = plugin.getDatabaseManager().reload();
         
-        sender.sendMessage(ChatColor.GREEN + "RVNKLore plugin has been reloaded successfully!");
+        databaseReload.thenRun(() -> {
+            sender.sendMessage(ChatColor.GREEN + "✓ RVNKLore plugin has been reloaded successfully!");
+        }).exceptionally(e -> {
+            logger.error("Error reloading database", e);
+            sender.sendMessage(ChatColor.RED + "✖ Error reloading database. Please check the console for details.");
+            return null;
+        });
+        
         return true;
     }
 
     @Override
     public String getDescription() {
-        return "Reloads the plugin configuration and lore data";
+        return "Reloads the plugin configuration and data";
     }
 
     @Override

@@ -3,12 +3,17 @@ package org.fourz.RVNKLore.command;
 import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.lore.LoreEntry;
+import org.fourz.RVNKLore.command.subcommand.SubCommand;
+import org.fourz.RVNKLore.data.DatabaseManager;
+import org.fourz.RVNKLore.data.dto.LoreEntryDTO;
+import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.lore.LoreType;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 /**
@@ -17,13 +22,15 @@ import java.util.stream.Collectors;
  */
 public class LoreListSubCommand implements SubCommand {
     private final RVNKLore plugin;
+    private final LogManager logger;
+    private final DatabaseManager databaseManager;
     private static final int ITEMS_PER_PAGE = 10;
 
     public LoreListSubCommand(RVNKLore plugin) {
         this.plugin = plugin;
-    }
-
-    @Override
+        this.logger = LogManager.getInstance(plugin, "LoreListSubCommand");
+        this.databaseManager = plugin.getDatabaseManager();
+    }    @Override
     public boolean execute(CommandSender sender, String[] args) {
         LoreType type = null;
         int page = 1;
@@ -37,7 +44,7 @@ public class LoreListSubCommand implements SubCommand {
                     // If first arg isn't a valid type, try to parse as a page number
                     page = Integer.parseInt(args[0]);
                 } catch (NumberFormatException ex) {
-                    sender.sendMessage(ChatColor.RED + "Invalid lore type or page number: " + args[0]);
+                    sender.sendMessage(ChatColor.RED + "▶ Invalid lore type or page number: " + args[0]);
                     return true;
                 }
             }
@@ -48,80 +55,93 @@ public class LoreListSubCommand implements SubCommand {
             try {
                 page = Integer.parseInt(args[1]);
             } catch (NumberFormatException e) {
-                sender.sendMessage(ChatColor.RED + "Invalid page number: " + args[1]);
+                sender.sendMessage(ChatColor.RED + "▶ Invalid page number: " + args[1]);
                 return true;
             }
         }
 
         // Ensure page is at least 1
         page = Math.max(1, page);
-
-        // Get lore entries
-        List<LoreEntry> entries;
-        if (type != null) {
-            entries = plugin.getLoreManager().getLoreEntriesByType(type);
-        } else {
-            entries = plugin.getLoreManager().getApprovedLoreEntries();
-        }
-
-        // If sender is an admin, include unapproved entries
+        
+        // Notify user that we're fetching entries
+        sender.sendMessage(ChatColor.GOLD + "⚙ Fetching lore entries...");
+        
+        final int finalPage = page;
+        final LoreType finalType = type;
+        
+        // Get lore entries asynchronously
+        CompletableFuture<List<LoreEntryDTO>> entriesFuture;
+        
         if (sender.hasPermission("rvnklore.admin")) {
-            entries = type != null ? 
-                    plugin.getLoreManager().getLoreEntriesByType(type) : 
-                    new ArrayList<>(plugin.getDatabaseManager().getAllLoreEntries());
+            // Admins can see all entries including unapproved ones
+            if (finalType != null) {
+                entriesFuture = databaseManager.getLoreEntriesByType(finalType.name());
+            } else {
+                entriesFuture = databaseManager.getAllLoreEntries();
+            }
         } else {
-            // Filter out unapproved entries for non-admins            
-            entries = entries.stream()
-                    .filter(LoreEntry::isApproved)
-                    .collect(Collectors.toList());
-        }
-
-        // Calculate pagination
-        int totalPages = (int) Math.ceil(entries.size() / (double) ITEMS_PER_PAGE);
-        int startIndex = (page - 1) * ITEMS_PER_PAGE;
-        int endIndex = Math.min(startIndex + ITEMS_PER_PAGE, entries.size());
-
-        // Display header
-        sender.sendMessage(ChatColor.GOLD + "=== Lore Entries" + 
-                (type != null ? " (" + type + ")" : "") + 
-                " - Page " + page + "/" + Math.max(1, totalPages) + " ===");
-
-        // Display entries
-        if (entries.isEmpty()) {
-            sender.sendMessage(ChatColor.YELLOW + "No lore entries found.");
-        } else {
-            for (int i = startIndex; i < endIndex; i++) {
-                LoreEntry entry = entries.get(i);
-                String approvalStatus = entry.isApproved() ? 
-                        ChatColor.GREEN + "[✓]" : 
-                        ChatColor.RED + "[✗]";
-                
-                // Get shortened UUID (first 8 characters)
-                String uuid = entry.getId().toString();
-                // Fix: Only take substring if long enough
-                String shortId = uuid.length() >= 8 ? uuid.substring(0, 8) : uuid;
-                        
-                if (sender.hasPermission("rvnklore.admin")) {
-                    sender.sendMessage(approvalStatus + " " + 
-                            ChatColor.YELLOW + entry.getName() + 
-                            ChatColor.GRAY + " (" + entry.getType() + ") - " + 
-                            ChatColor.WHITE + shortId);
-                } else {
-                    sender.sendMessage(ChatColor.YELLOW + entry.getName() + 
-                            ChatColor.GRAY + " (" + entry.getType() + ") - " + 
-                            ChatColor.WHITE + shortId);
-                }
+            // Regular users only see approved entries
+            if (finalType != null) {
+                entriesFuture = databaseManager.getLoreEntriesByTypeAndApproved(finalType.name(), true);
+            } else {
+                entriesFuture = databaseManager.getLoreEntriesByApproved(true);
             }
         }
+        
+        entriesFuture.thenAccept(entries -> {
+            // Calculate pagination
+            int totalPages = (int) Math.ceil(entries.size() / (double) ITEMS_PER_PAGE);
+            int startIndex = (finalPage - 1) * ITEMS_PER_PAGE;
+            int endIndex = Math.min(startIndex + ITEMS_PER_PAGE, entries.size());
 
-        // Pagination navigation help
-        if (totalPages > 1) {
-            sender.sendMessage(ChatColor.GRAY + "Use /lore list" + 
-                    (type != null ? " " + type : "") + 
-                    " <page> to navigate pages");
-        }
+            // Display header
+            sender.sendMessage(ChatColor.GOLD + "=== Lore Entries" + 
+                    (finalType != null ? " (" + finalType + ")" : "") + 
+                    " - Page " + finalPage + "/" + Math.max(1, totalPages) + " ===");
 
+            // Display entries
+            if (entries.isEmpty()) {
+                sender.sendMessage(ChatColor.YELLOW + "⚠ No lore entries found.");
+            } else {
+                for (int i = startIndex; i < endIndex; i++) {
+                    LoreEntryDTO entry = entries.get(i);
+                    String approvalStatus = entry.isApproved() ? 
+                            ChatColor.GREEN + "[✓]" : 
+                            ChatColor.RED + "[✗]";
+                    
+                    // Get shortened UUID (first 8 characters)
+                    UUID uuid = entry.getUuid();
+                    String uuidStr = uuid != null ? uuid.toString() : "unknown";
+                    // Only take substring if long enough
+                    String shortId = uuidStr.length() >= 8 ? uuidStr.substring(0, 8) : uuidStr;
+                            
+                    if (sender.hasPermission("rvnklore.admin")) {
+                        sender.sendMessage(approvalStatus + " " + 
+                                ChatColor.YELLOW + entry.getName() + 
+                                ChatColor.GRAY + " (" + entry.getLoreType() + ") - " + 
+                                ChatColor.WHITE + shortId);
+                    } else {
+                        sender.sendMessage(ChatColor.YELLOW + entry.getName() + 
+                                ChatColor.GRAY + " (" + entry.getLoreType() + ") - " + 
+                                ChatColor.WHITE + shortId);
+                    }
+                }
+            }
+
+            // Pagination navigation help
+            if (totalPages > 1) {
+                sender.sendMessage(ChatColor.GRAY + "   Use /lore list" + 
+                        (finalType != null ? " " + finalType : "") + 
+                        " <page> to navigate pages");
+            }
+        }).exceptionally(e -> {
+            logger.error("Error fetching lore entries", e);
+            sender.sendMessage(ChatColor.RED + "✖ An error occurred while fetching lore entries. Please check the console for details.");
+            return null;
+        });
+        
         return true;
+    }
     }
 
     @Override

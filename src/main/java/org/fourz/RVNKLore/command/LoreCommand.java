@@ -6,6 +6,7 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.command.subcommand.SubCommand;
 import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.data.DatabaseManager;
 
@@ -25,34 +26,6 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
     private final LogManager logger;
     private final Map<String, SubCommand> subCommands = new HashMap<>();
     private final DatabaseManager databaseManager;
-    
-    /**
-     * Interface for all lore subcommands.
-     * Provides contract for permission checking and command execution.
-     */
-    public interface SubCommand {
-        /**
-         * Check if sender has permission to use this command
-         */
-        boolean hasPermission(CommandSender sender);
-        
-        /**
-         * Execute the subcommand
-         */
-        boolean execute(CommandSender sender, String[] args);
-        
-        /**
-         * Get command description for help
-         */
-        String getDescription();
-        
-        /**
-         * Get tab completions for command
-         */
-        default List<String> getTabCompletions(CommandSender sender, String[] args) {
-            return List.of();
-        }
-    }
 
     public LoreCommand(RVNKLore plugin) {
         this.plugin = plugin;
