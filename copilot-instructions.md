@@ -209,6 +209,7 @@ public void doSomething() {
 ### Database Interactions
 - **Always use the DatabaseManager as the single entry point for setting up and managing connections.**
 - **Perform all connection logic (initialization, reconnect, shutdown, and health checks) within DatabaseManager.**
+- **Repository classes should own all table-specific logic; DatabaseManager should only provide high-level coordination and delegate to repositories for CRUD logic.**
 - **Repository classes should delegate all connection-dependent operations to DatabaseManager and be limited to table-specific logic.**
 
 ### Query Builder Abstraction
