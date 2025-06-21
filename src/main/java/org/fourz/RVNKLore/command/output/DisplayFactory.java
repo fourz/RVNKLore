@@ -6,6 +6,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
+import org.fourz.RVNKLore.data.dto.ItemCollectionDTO;
 import org.fourz.RVNKLore.lore.item.ItemManager;
 import org.fourz.RVNKLore.lore.item.ItemProperties;
 
@@ -183,6 +184,78 @@ public class DisplayFactory {
         }
         sender.sendMessage(ChatColor.GRAY + "   Use " + ChatColor.WHITE + "/lore collection view <id> " + ChatColor.GRAY + "for details");
         return true;
+    }
+
+    /**
+     * Display a list of collections using DTOs
+     *
+     * @param sender The command sender
+     * @param collections The list of collection DTOs to display
+     * @return true if the display was successful
+     */
+    public static boolean displayCollectionListDTO(CommandSender sender, List<ItemCollectionDTO> collections) {
+        sender.sendMessage(ChatColor.GOLD + "===== Collections (Newest First) =====");
+        if (collections.isEmpty()) {
+            sender.sendMessage(ChatColor.YELLOW + "⚠ No collections found");
+            return true;
+        }
+        for (ItemCollectionDTO collection : collections) {
+            String dateStr = DATE_FORMAT.format(new Date(collection.getCreatedAt()));
+            sender.sendMessage(ChatColor.WHITE + collection.getName() + ChatColor.GRAY + " (" + collection.getId() + ")"
+                    + ChatColor.YELLOW + " - " + dateStr);
+            sender.sendMessage(ChatColor.GRAY + "   " + collection.getDescription());
+            
+            // Get item count from serialized items or direct count
+            int itemCount = collection.getSerializedItems() != null ? collection.getSerializedItems().size() : 0;
+            
+            sender.sendMessage(ChatColor.GRAY + "   " + itemCount + " items • " +
+                    (collection.getThemeId() != null ? collection.getThemeId() : "custom"));
+            
+            // Display progress if available
+            if (collection.getProgress() > 0) {
+                String progressText = String.format("%.1f%%", collection.getProgress() * 100);
+                sender.sendMessage(ChatColor.GRAY + "   Progress: " + ChatColor.YELLOW + progressText);
+                
+                if (collection.getCompletionTime() > 0) {
+                    String completionDate = DATE_FORMAT.format(new Date(collection.getCompletionTime()));
+                    sender.sendMessage(ChatColor.GRAY + "   Completed: " + ChatColor.GREEN + completionDate);
+                }
+            }
+        }
+        sender.sendMessage(ChatColor.GRAY + "   Use " + ChatColor.WHITE + "/lore collection view <id> " + ChatColor.GRAY + "for details");
+        return true;
+    }
+
+    /**
+     * Convert a list of DTOs to domain objects for display
+     * 
+     * @param dtos The list of collection DTOs
+     * @return A list of ItemCollection domain objects
+     */
+    private static List<ItemCollection> convertDTOsToCollections(List<ItemCollectionDTO> dtos) {
+        List<ItemCollection> collections = new ArrayList<>();
+        if (dtos == null || dtos.isEmpty()) {
+            return collections;
+        }
+        
+        for (ItemCollectionDTO dto : dtos) {
+            if (dto != null) {
+                collections.add(dto.toCollection());
+            }
+        }
+        
+        return collections;
+    }
+    
+    /**
+     * Display a list of collections using DTOs by converting to domain objects
+     *
+     * @param sender The command sender
+     * @param collections The list of collection DTOs to display
+     * @return true if the display was successful
+     */
+    public static boolean displayCollectionListFromDTOs(CommandSender sender, List<ItemCollectionDTO> collections) {
+        return displayCollectionList(sender, convertDTOsToCollections(collections));
     }
 
     /**

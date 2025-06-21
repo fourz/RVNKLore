@@ -3,7 +3,7 @@ package org.fourz.RVNKLore.command;
 import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.command.SubCommand;
+import org.fourz.RVNKLore.command.subcommand.SubCommand;
 
 import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.command.output.DisplayFactory;
@@ -12,7 +12,7 @@ import java.util.*;
 
 /**
  * Parent subcommand for item-related operations.
- * Handles routing to child commands: give, info
+ * Handles routing to child commands: give, info, list
  */
 public class LoreItemSubCommand implements SubCommand {
     private final RVNKLore plugin;
@@ -24,9 +24,9 @@ public class LoreItemSubCommand implements SubCommand {
         this.logger = LogManager.getInstance(plugin, "LoreItemSubCommand");
         this.subCommands = new HashMap<>();
         
-        // Register child commands with correct constructor
-        subCommands.put("give", new LoreItemGiveSubCommand(plugin, plugin.getLoreManager().getItemManager()));
-        subCommands.put("info", new LoreItemInfoSubCommand(plugin, plugin.getLoreManager().getItemManager()));
+        // Register child commands with simplified constructor
+        subCommands.put("give", new LoreItemGiveSubCommand(plugin));
+        subCommands.put("info", new LoreItemInfoSubCommand(plugin));
         subCommands.put("list", new LoreItemListSubCommand(plugin));
     }
 
@@ -39,12 +39,10 @@ public class LoreItemSubCommand implements SubCommand {
 
         String subCommandName = args[0].toLowerCase();
 
-        // Remove special handling for /lore item list
-
-        // Special handling for /lore item info list
+        // Remove special handling for /lore item list        // Special handling for /lore item info list
         if ("info".equals(subCommandName) && args.length > 1 && "list".equalsIgnoreCase(args[1])) {
             // Delegate to LoreItemInfoSubCommand for /lore item info list
-            return new LoreItemInfoSubCommand(plugin, plugin.getLoreManager().getItemManager())
+            return new LoreItemInfoSubCommand(plugin)
                 .execute(sender, Arrays.copyOfRange(args, 1, args.length));
         }
 
@@ -63,12 +61,10 @@ public class LoreItemSubCommand implements SubCommand {
                 sender.sendMessage(ChatColor.RED + "✖ An error occurred (ID: " + errorId + "). Please report this to an administrator.");
                 return false;
             }
-        }
-
-        // Special handling for /lore item info <short uuid>|<full uuid>
+        }        // Special handling for /lore item info <short uuid>|<full uuid>
         if ("info".equals(subCommandName) && args.length == 2) {
             // Extracted logic: delegate to LoreItemInfoSubCommand for info lookup
-            return new LoreItemInfoSubCommand(plugin, plugin.getLoreManager().getItemManager())
+            return new LoreItemInfoSubCommand(plugin)
                 .execute(sender, Arrays.copyOfRange(args, 1, args.length));
         }
 
@@ -116,15 +112,13 @@ public class LoreItemSubCommand implements SubCommand {
             
             if ("list".equals(subCommandName)) {
                 // Suggest page numbers for list command
-                return List.of("1", "2", "3");
-            } else if ("info".equals(subCommandName)) {
+                return List.of("1", "2", "3");            } else if ("info".equals(subCommandName)) {
                 // Tab completion for /lore item info <short uuid>
-                List<String> completions = new ArrayList<>();
-                for (org.fourz.RVNKLore.lore.LoreEntry entry : plugin.getLoreManager().getAllLoreEntries()) {
-                    String shortId = entry.getId().toString().substring(0, 8);
-                    completions.add(shortId);
+                // Delegate to the proper subcommand
+                SubCommand infoSubCommand = subCommands.get("info");
+                if (infoSubCommand != null && infoSubCommand.hasPermission(sender)) {
+                    return infoSubCommand.getTabCompletions(sender, Arrays.copyOfRange(args, 1, args.length));
                 }
-                return completions;
             } else if (subCommands.containsKey(subCommandName)) {
                 // Delegate to the appropriate subcommand
                 SubCommand subCommand = subCommands.get(subCommandName);

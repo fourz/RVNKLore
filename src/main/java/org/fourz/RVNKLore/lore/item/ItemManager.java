@@ -401,6 +401,54 @@ public class ItemManager {
         logger.warning("&e⚠ ItemRepository not available, returning empty item list");
         return CompletableFuture.completedFuture(new ArrayList<>());
     }
+    
+    /**
+     * Synchronously get all items with properties.
+     * This is a blocking call that waits for the async operation to complete.
+     * 
+     * @return List of ItemProperties objects
+     */
+    public List<ItemProperties> getAllItemsWithProperties() {
+        try {
+            return getAllItemsWithPropertiesAsync().get();
+        } catch (Exception e) {
+            logger.error("&c✖ Error getting all items with properties", e);
+            return new ArrayList<>();
+        }
+    }
+
+    /**
+     * Get all items with properties asynchronously.
+     * 
+     * @return A CompletableFuture containing a list of ItemProperties objects
+     */
+    public CompletableFuture<List<ItemProperties>> getAllItemsWithPropertiesAsync() {
+        if (itemRepository == null) {
+            logger.warning("&e⚠ ItemRepository is not available, returning cached items");
+            List<ItemProperties> result = new ArrayList<>();
+            synchronized (cacheLock) {
+                for (List<ItemPropertiesDTO> dtos : itemNameCache.values()) {
+                    for (ItemPropertiesDTO dto : dtos) {
+                        result.add(dto.toItemProperties());
+                    }
+                }
+            }
+            return CompletableFuture.completedFuture(result);
+        }
+
+        return plugin.getDatabaseManager().getAllItems()
+            .thenApply(dtos -> {
+                List<ItemProperties> result = new ArrayList<>();
+                for (ItemPropertiesDTO dto : dtos) {
+                    result.add(dto.toItemProperties());
+                }
+                return result;
+            })
+            .exceptionally(e -> {
+                logger.error("&c✖ Error getting all items with properties", e);
+                return new ArrayList<>();
+            });
+    }
 
     /**
      * Create a lore item by name asynchronously.

@@ -94,6 +94,26 @@ public class ItemRepository {
     }
 
     /**
+     * Get all items (async).
+     * Retrieves all items from the database, sorted by creation date in descending order.
+     * 
+     * @return A future containing a list of all item properties DTOs
+     */
+    public CompletableFuture<List<ItemPropertiesDTO>> getAllItems() {
+        if (!databaseManager.validateConnection()) {
+            return CompletableFuture.failedFuture(
+                new SQLException("Database connection is not valid")
+            );
+        }
+        
+        QueryBuilder query = queryBuilder.select("*")
+                                        .from("lore_item")
+                                        .orderBy("created_at", false); // Sort by newest first
+        
+        return queryExecutor.executeQueryList(query, ItemPropertiesDTO.class);
+    }
+
+    /**
      * Save an item (async).
      */
     public CompletableFuture<Integer> saveItem(ItemPropertiesDTO dto) {

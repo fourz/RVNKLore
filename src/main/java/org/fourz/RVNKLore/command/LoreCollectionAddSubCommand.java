@@ -143,6 +143,6 @@ public class LoreCollectionAddSubCommand implements org.fourz.RVNKLore.command.s
 
     @Override
     public String getDescription() {
-        return "Add a new collection to the lore system";
+        return "Create a new item collection";
     }
 }

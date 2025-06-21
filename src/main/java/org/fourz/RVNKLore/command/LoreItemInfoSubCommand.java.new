@@ -19,7 +19,8 @@ import java.util.concurrent.CompletableFuture;
  * Also supports lookup by UUID or short UUID.
  * Uses async database methods for retrieving data.
  */
-public class LoreItemInfoSubCommand implements SubCommand {    private final LogManager logger;
+public class LoreItemInfoSubCommand implements SubCommand {
+    private final LogManager logger;
     private final DatabaseManager databaseManager;
     private final RVNKLore plugin;
     
@@ -32,8 +33,6 @@ public class LoreItemInfoSubCommand implements SubCommand {    private final Log
     public LoreItemInfoSubCommand(RVNKLore plugin, org.fourz.RVNKLore.lore.item.ItemManager itemManager) {
         // Legacy constructor - redirect to primary constructor
         this(plugin);
-    }
-        this.databaseManager = plugin.getDatabaseManager();
     }
 
     @Override
@@ -88,7 +87,8 @@ public class LoreItemInfoSubCommand implements SubCommand {    private final Log
         }
 
         // Try to match by UUID or short UUID for LoreEntry
-        try {            // First try as full UUID
+        try {
+            // First try as full UUID
             try {
                 UUID uuid = UUID.fromString(itemNameOrId);
                 databaseManager.getLoreEntryById(uuid).thenAccept(entryDTO -> {
@@ -106,57 +106,66 @@ public class LoreItemInfoSubCommand implements SubCommand {    private final Log
                 });
                 return true;
             } catch (IllegalArgumentException e) {
-                // Not a valid full UUID, try with short UUID (first 8 characters)
-                if (itemNameOrId.length() >= 8) {                    databaseManager.getAllLoreEntries().thenAccept(entriesDTO -> {
-                        boolean found = false;
-                        for (org.fourz.RVNKLore.data.dto.LoreEntryDTO entryDTO : entriesDTO) {
-                            // Get UUID string and check first 8 chars
-                            String uuidStr = entryDTO.getUuidString();
-                            if (uuidStr != null && uuidStr.length() >= 8) {
-                                String shortId = uuidStr.substring(0, 8);
-                                if (shortId.equalsIgnoreCase(itemNameOrId)) {
-                                    DisplayFactory.displayLoreEntry(sender, entryDTO.toLoreEntry());
-                                    found = true;
-                                    break;
-                                }
-                            }
-                        }
-                        if (!found) {
-                            displayItemByName(sender, itemNameOrId);
-                        }
-                    }).exceptionally(e2 -> {
-                        logger.error("Error searching lore entries for short UUID: " + itemNameOrId, e2);
-                        displayItemByName(sender, itemNameOrId);
-                        return null;
-                    });
-                    return true;
-                }
+                // Not a valid UUID, continue to next check
             }
             
-            // If we get here, it's not a UUID or short UUID, try by name
+            // Try as a short UUID (first 8 characters)
+            if (itemNameOrId.length() >= 8) {
+                final String shortId = itemNameOrId.substring(0, Math.min(8, itemNameOrId.length()));
+                
+                // Get all lore entries and filter by short UUID
+                CompletableFuture<List<org.fourz.RVNKLore.data.dto.LoreEntryDTO>> entriesFuture = 
+                    databaseManager.getAllLoreEntries();
+                
+                entriesFuture.thenAccept(entries -> {
+                    boolean found = false;
+                    for (var entryDTO : entries) {
+                        String entryId = entryDTO.getUuidString();
+                        if (entryId != null && entryId.startsWith(shortId)) {
+                            // Found a match by short UUID
+                            org.fourz.RVNKLore.lore.LoreEntry loreEntry = entryDTO.toLoreEntry();
+                            DisplayFactory.displayLoreEntry(sender, loreEntry);
+                            found = true;
+                            break;
+                        }
+                    }
+                    
+                    if (!found) {
+                        // No match found by UUID, try by name
+                        displayItemByName(sender, itemNameOrId);
+                    }
+                }).exceptionally(e -> {
+                    logger.error("Error retrieving lore entries for short UUID match: " + shortId, e);
+                    displayItemByName(sender, itemNameOrId);
+                    return null;
+                });
+                
+                return true;
+            }
+            
+            // Not a UUID or short UUID, try by name
             displayItemByName(sender, itemNameOrId);
             return true;
             
         } catch (Exception e) {
-            logger.error("Error processing item info command: " + itemNameOrId, e);
-            sender.sendMessage(org.bukkit.ChatColor.RED + "✖ An error occurred while retrieving item info.");
+            logger.error("Error processing item info request: " + itemNameOrId, e);
+            sender.sendMessage(org.bukkit.ChatColor.RED + "✖ An error occurred while retrieving item information.");
             return true;
         }
     }
     
-    /**
-     * Tries to display an item by its name
-     */
     private void displayItemByName(CommandSender sender, String itemName) {
+        // Try to get the item by name and display it
         databaseManager.getAllItems().thenAccept(items -> {
             ItemPropertiesDTO matchedItem = null;
-            for (ItemPropertiesDTO item : items) {
-                if (item.getDisplayName().equalsIgnoreCase(itemName)) {
-                    matchedItem = item;
+            for (ItemPropertiesDTO dto : items) {
+                if (dto.getDisplayName().equalsIgnoreCase(itemName)) {
+                    matchedItem = dto;
                     break;
                 }
             }
-              if (matchedItem != null) {
+            
+            if (matchedItem != null) {
                 org.fourz.RVNKLore.lore.item.ItemProperties properties = matchedItem.toItemProperties();
                 org.bukkit.inventory.ItemStack item = new org.bukkit.inventory.ItemStack(properties.getMaterial());
                 org.bukkit.inventory.meta.ItemMeta meta = item.getItemMeta();
@@ -173,29 +182,26 @@ public class LoreItemInfoSubCommand implements SubCommand {    private final Log
                 sender.sendMessage(org.bukkit.ChatColor.RED + "✖ Item not found: " + itemName);
             }
         }).exceptionally(e -> {
-            logger.error("Error retrieving items to match by name: " + itemName, e);
-            sender.sendMessage(org.bukkit.ChatColor.RED + "✖ An error occurred while retrieving item info.");
+            logger.error("Error retrieving item by name: " + itemName, e);
+            sender.sendMessage(org.bukkit.ChatColor.RED + "✖ An error occurred while retrieving item information.");
             return null;
         });
     }
 
     @Override
     public String getDescription() {
-        return "Get information about a lore item by name.";
+        return "Get information about a lore item by name or ID.";
     }
 
     @Override
     public List<String> getTabCompletions(CommandSender sender, String[] args) {
-        if (!hasPermission(sender)) {
-            return List.of();
-        }
-        
         List<String> completions = new ArrayList<>();
+        
         if (args.length == 1 && databaseManager != null) {
             CompletableFuture<List<ItemPropertiesDTO>> future = databaseManager.getAllItems();
             future.thenAccept(items -> {
-                for (ItemPropertiesDTO item : items) {
-                    completions.add(item.getDisplayName());
+                for (ItemPropertiesDTO dto : items) {
+                    completions.add(dto.getDisplayName());
                 }
             }).exceptionally(e -> {
                 logger.error("Error getting item names for tab completion", e);
@@ -209,6 +215,7 @@ public class LoreItemInfoSubCommand implements SubCommand {    private final Log
                 logger.error("Error waiting for item names", e);
             }
         }
+        
         return completions;
     }
 }

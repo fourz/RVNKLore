@@ -916,4 +916,14 @@ public class DatabaseManager {    private final RVNKLore plugin;
         }
         return loreEntryRepository.findNearbyLoreEntries(location, radius);
     }
+
+    /**
+     * Get all items from the database.
+     * Retrieves all items, sorted by creation date in descending order.
+     *
+     * @return A future containing a list of all item properties DTOs
+     */
+    public CompletableFuture<List<ItemPropertiesDTO>> getAllItems() {
+        return itemRepository.getAllItems();
+    }
 }

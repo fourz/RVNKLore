@@ -10,6 +10,7 @@ import org.fourz.RVNKLore.data.dto.ItemCollectionDTO;
 import org.fourz.RVNKLore.data.repository.CollectionRepository;
 import org.fourz.RVNKLore.lore.item.collection.CollectionTheme;
 import org.fourz.RVNKLore.command.output.DisplayFactory;
+import org.fourz.RVNKLore.command.subcommand.SubCommand;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -19,7 +20,7 @@ import java.util.List;
  * Handles the /lore collection list [theme] command.
  * Lists all collections, optionally filtered by theme, with progress and metadata.
  */
-public class LoreCollectionListSubCommand implements org.fourz.RVNKLore.command.subcommand.SubCommand {
+public class LoreCollectionListSubCommand implements SubCommand {
     private final RVNKLore plugin;
     private final LogManager logger;
     private final DatabaseManager databaseManager;
@@ -65,9 +66,8 @@ public class LoreCollectionListSubCommand implements org.fourz.RVNKLore.command.
                 }
             } else {
                 collectionsToShow.addAll(collections);
-            }
-            collectionsToShow.sort(Comparator.comparingLong(ItemCollectionDTO::getCreatedAt).reversed());
-            DisplayFactory.displayCollectionList(player, collectionsToShow);
+            }            collectionsToShow.sort(Comparator.comparingLong(ItemCollectionDTO::getCreatedAt).reversed());
+            DisplayFactory.displayCollectionListFromDTOs(player, collectionsToShow);
         }).exceptionally(e -> {
             logger.error("Error loading collections for list command", e);
             player.sendMessage(ChatColor.RED + "&c✖ Failed to load collections from database.");
