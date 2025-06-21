@@ -9,11 +9,16 @@ import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
+import org.fourz.RVNKLore.data.DatabaseManager;
+import org.fourz.RVNKLore.data.dto.LoreEntryDTO;
+import org.fourz.RVNKLore.data.repository.LoreEntryRepository;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Handler for city lore entries
@@ -21,12 +26,14 @@ import java.util.List;
 public class CityLoreHandler implements LoreHandler {
     private final RVNKLore plugin;
     private final LogManager logger;
+    private final DatabaseManager databaseManager;
     private static final int MAX_DESCRIPTION_LENGTH = 1000;
     private static final int MIN_DESCRIPTION_LENGTH = 10;
     
     public CityLoreHandler(RVNKLore plugin) {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "CityLoreHandler");
+        this.databaseManager = plugin.getDatabaseManager();
     }
 
     @Override
@@ -42,6 +49,20 @@ public class CityLoreHandler implements LoreHandler {
             validationErrors.add("Name is required");
         } else if (!entry.getName().matches("^[a-zA-Z0-9\\s-]{3,32}$")) {
             validationErrors.add("Invalid city name format");
+        } else {
+            // Check for duplicate names asynchronously
+            try {
+                LoreEntryRepository repo = databaseManager.getLoreEntryRepository();
+                LoreEntryDTO existingEntry = repo.getLoreEntryByName(entry.getName())
+                    .get(5, TimeUnit.SECONDS); // Short timeout for validation
+                
+                if (existingEntry != null && !existingEntry.getUuidString().equals(entry.getId())) {
+                    validationErrors.add("City name already exists");
+                }
+            } catch (Exception e) {
+                logger.error("Error checking for duplicate city name", e);
+                validationErrors.add("Error validating city name");
+            }
         }
         
         if (entry.getDescription() == null || entry.getDescription().isEmpty()) {
@@ -74,12 +95,22 @@ public class CityLoreHandler implements LoreHandler {
             }
         }
         
-        // Record validation attempt
-        entry.addMetadata("validation_attempt_time", System.currentTimeMillis() + "");
-        entry.addMetadata("validation_errors", String.join(";", validationErrors));
+        // Record validation metadata
+        entry.setMetadata("validation_attempt_time", String.valueOf(System.currentTimeMillis()));
+        entry.setMetadata("validation_errors", String.join(";", validationErrors));
         
-        // Log validation errors
+        // Update metadata in database asynchronously
         if (!validationErrors.isEmpty()) {
+            CompletableFuture.runAsync(() -> {
+                try {
+                    databaseManager.getLoreEntryRepository()
+                        .updateLoreEntry(entry.toDTO())
+                        .get(5, TimeUnit.SECONDS);
+                } catch (Exception e) {
+                    logger.error("Error updating validation metadata", e);
+                }
+            });
+            
             logger.debug("City validation failed for " + entry.getName() + 
                        " (Transaction: " + entry.getMetadata("transaction_id") + "): " + 
                        String.join(", ", validationErrors));
@@ -105,7 +136,6 @@ public class CityLoreHandler implements LoreHandler {
             
             List<String> lore = new ArrayList<>();
             lore.add(ChatColor.GRAY + "Type: " + ChatColor.AQUA + "Settlement");
-            
             // Format founding date if available
             if (entry.getMetadata("founding_date") != null) {
                 try {

@@ -7,12 +7,16 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.RVNKLore.data.DatabaseManager;
+import org.fourz.RVNKLore.data.dto.LoreEntryDTO;
+import org.fourz.RVNKLore.data.repository.LoreEntryRepository;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.logging.Level;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Default implementation of LoreHandler for generic lore types
@@ -20,18 +24,18 @@ import java.util.logging.Level;
 public class DefaultLoreHandler implements LoreHandler {
     protected final RVNKLore plugin;
     protected final LogManager logger;
+    protected final DatabaseManager databaseManager;
     
     public DefaultLoreHandler(RVNKLore plugin) {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "DefaultLoreHandler");
+        this.databaseManager = plugin.getDatabaseManager();
     }
     
     @Override
     public void initialize() {
         logger.debug("Initializing default lore handler");
-    }
-
-    @Override
+    }    @Override
     public boolean validateEntry(LoreEntry entry) {
         // Basic validation common to all lore entries
         if (entry.getName() == null || entry.getName().isEmpty()) {
@@ -44,7 +48,22 @@ public class DefaultLoreHandler implements LoreHandler {
             return false;
         }
         
-        return true;
+        // Check for duplicate names using repository
+        try {            // Check for duplicate names using the lore entry repository
+            LoreEntryRepository repo = databaseManager.getLoreEntryRepository();
+            LoreEntryDTO existingEntry = repo.getLoreEntryByName(entry.getName())
+                .get(5, TimeUnit.SECONDS); // Short timeout for validation
+            
+            if (existingEntry != null && !existingEntry.getUuidString().equals(entry.getId())) {
+                logger.debug("Lore validation failed: Name already exists with ID " + existingEntry.getUuidString());
+                return false;
+            }
+            
+            return true;
+        } catch (Exception e) {
+            logger.error("Error validating lore entry", e);
+            return false;
+        }
     }
 
     @Override
@@ -154,7 +173,26 @@ public class DefaultLoreHandler implements LoreHandler {
             return null;
         }
     }
-    
+      /**
+     * Sets metadata on an entry and updates it in the database
+     */
+    protected CompletableFuture<Boolean> setMetadataAsync(LoreEntry entry, String key, String value) {
+        if (entry == null || key == null) {
+            return CompletableFuture.completedFuture(false);
+        }
+
+        entry.setMetadata(key, value);
+        LoreEntryDTO dto = entry.toDTO();
+        return CompletableFuture.supplyAsync(() -> {            try {
+                LoreEntryRepository repo = databaseManager.getLoreEntryRepository();
+                return repo.updateLoreEntry(dto)
+                    .join(); // Wait for completion since we're already in an async context
+            } catch (Exception e) {
+                logger.error("Error updating metadata for entry " + entry.getId() + ", key: " + key, e);
+                return false;
+            }
+        });
+    }
 
     public RVNKLore getPlugin() {
         return plugin;

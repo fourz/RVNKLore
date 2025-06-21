@@ -12,6 +12,7 @@ import org.fourz.RVNKLore.command.CommandManager;
 import org.fourz.RVNKLore.util.UtilityManager;
 import org.fourz.RVNKLore.lore.item.ItemManager;
 import org.fourz.RVNKLore.lore.player.PlayerManager;
+import org.fourz.RVNKLore.lore.LoreManager;
 
 public class RVNKLore extends JavaPlugin {
     private LogManager logger;
@@ -195,5 +196,14 @@ public class RVNKLore extends JavaPlugin {
      */
     public ItemManager getItemManager() {
         return itemManager;
+    }
+
+    /**
+     * Get the lore manager for lore entry operations (async support)
+     *
+     * @return The LoreManager instance
+     */
+    public LoreManager getLoreManager() {
+        return LoreManager.getInstance(this);
     }
 }

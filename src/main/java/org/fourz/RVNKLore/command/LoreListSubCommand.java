@@ -21,13 +21,11 @@ import java.util.stream.Collectors;
  * Usage: /lore list [type] [page]
  */
 public class LoreListSubCommand implements SubCommand {
-    private final RVNKLore plugin;
     private final LogManager logger;
     private final DatabaseManager databaseManager;
     private static final int ITEMS_PER_PAGE = 10;
 
     public LoreListSubCommand(RVNKLore plugin) {
-        this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "LoreListSubCommand");
         this.databaseManager = plugin.getDatabaseManager();
     }    @Override

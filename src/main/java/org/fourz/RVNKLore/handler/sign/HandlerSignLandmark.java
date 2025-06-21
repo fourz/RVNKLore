@@ -11,9 +11,13 @@ import org.fourz.RVNKLore.handler.DefaultLoreHandler;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
 import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.RVNKLore.data.DatabaseManager;
+import org.fourz.RVNKLore.data.dto.LoreEntryDTO;
+import org.fourz.RVNKLore.config.ConfigManager;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Handler for creating landmarks via sign creation
@@ -24,10 +28,14 @@ public class HandlerSignLandmark extends DefaultLoreHandler {
     private static final String LANDMARK_SIGN_HEADER = "[Landmark]";
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     private final LogManager logger;
+    private final DatabaseManager databaseManager;
+    private final ConfigManager configManager;
     
     public HandlerSignLandmark(RVNKLore plugin) {
         super(plugin);
         this.logger = LogManager.getInstance(plugin, "HandlerSignLandmark");
+        this.databaseManager = plugin.getDatabaseManager();
+        this.configManager = plugin.getConfigManager();
     }
     
     @Override
@@ -83,35 +91,55 @@ public class HandlerSignLandmark extends DefaultLoreHandler {
      * Create a landmark lore entry from a sign
      */
     private void createLandmarkEntry(Player player, String name, String description, Block block) {
-        // Create a new lore entry using the factory pattern
-        LoreEntry entry = LoreEntry.createLocationLore(name, description, LoreType.LANDMARK, block.getLocation(), player);
+        // Create a new lore entry
+        LoreEntry entry = new LoreEntry();
+        entry.setType(LoreType.LANDMARK);
+        entry.setName(name);
+        entry.setDescription(description);
+        entry.setLocation(block.getLocation());
+        entry.setSubmittedBy(player.getName());
         
         // Add metadata to track origin and additional information
         String currentTime = dateFormat.format(new Date());
-        entry.addMetadata("created_at", currentTime);
-        entry.addMetadata("player_uuid", player.getUniqueId().toString());
-        entry.addMetadata("player_name", player.getName());
-        entry.addMetadata("world", block.getWorld().getName());
-        entry.addMetadata("x", String.valueOf(block.getX()));
-        entry.addMetadata("y", String.valueOf(block.getY()));
-        entry.addMetadata("z", String.valueOf(block.getZ()));
-        entry.addMetadata("source", "sign");
+        entry.setMetadata("created_at", currentTime);
+        entry.setMetadata("player_uuid", player.getUniqueId().toString());
+        entry.setMetadata("player_name", player.getName());
+        entry.setMetadata("world", block.getWorld().getName());
+        entry.setMetadata("x", String.valueOf(block.getX()));
+        entry.setMetadata("y", String.valueOf(block.getY()));
+        entry.setMetadata("z", String.valueOf(block.getZ()));
+        entry.setMetadata("source", "sign");
         
-        // Use ConfigManager instead of direct getConfig() access for consistency
-        boolean autoApprove = plugin.getConfigManager().getConfig().getBoolean("landmarks.signs.auto_approve", false);
+        // Use ConfigManager for settings
+        boolean autoApprove = configManager.getConfig().getBoolean("landmarks.signs.auto_approve", false);
         entry.setApproved(autoApprove || player.hasPermission("rvnklore.approve.own"));
         
-        // Save the entry
-        boolean success = plugin.getLoreManager().addLoreEntry(entry);
-        
-        if (success) {
-            player.sendMessage(ChatColor.GREEN + "Landmark '" + name + "' has been " + 
-                (entry.isApproved() ? "created" : "submitted for approval") + ".");
-            logger.debug("Created landmark via sign: " + name + " by " + player.getName());
-        } else {
-            player.sendMessage(ChatColor.RED + "Failed to create landmark. Please try again or contact an admin.");
-            logger.warning("Failed to create landmark via sign: " + name + " by " + player.getName());
-        }
+        // Save asynchronously using DatabaseManager
+        CompletableFuture.runAsync(() -> {
+            try {
+                LoreEntryDTO dto = entry.toDTO();
+                databaseManager.getLoreEntryRepository()
+                    .addLoreEntry(dto)
+                    .thenAccept(success -> {
+                        if (success) {
+                            player.sendMessage(ChatColor.GREEN + "Landmark '" + name + "' has been " + 
+                                (entry.isApproved() ? "created" : "submitted for approval") + ".");
+                            logger.debug("Created landmark via sign: " + name + " by " + player.getName());
+                        } else {
+                            player.sendMessage(ChatColor.RED + "Failed to create landmark. Please try again or contact an admin.");
+                            logger.warning("Failed to create landmark via sign: " + name + " by " + player.getName());
+                        }
+                    })
+                    .exceptionally(e -> {
+                        logger.error("Error saving landmark entry", e);
+                        player.sendMessage(ChatColor.RED + "An error occurred while creating the landmark. Please try again or contact an admin.");
+                        return null;
+                    });
+            } catch (Exception e) {
+                logger.error("Error preparing landmark entry for save", e);
+                player.sendMessage(ChatColor.RED + "An error occurred while creating the landmark. Please try again or contact an admin.");
+            }
+        });
     }
     
     @Override

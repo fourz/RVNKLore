@@ -368,4 +368,111 @@ public class LoreEntryRepository {
                 return -1;
             });
     }
+
+    /**
+     * Get all lore entries by approval status (async).
+     *
+     * @param approved Whether to retrieve only approved entries
+     * @return CompletableFuture with a list of LoreEntryDTOs
+     */
+    public CompletableFuture<List<LoreEntryDTO>> getLoreEntriesByApproved(boolean approved) {
+        QueryBuilder query = databaseManager.getQueryBuilder()
+            .select("*")
+            .from("lore_entry")
+            .where("is_approved = ?", approved)
+            .orderBy("created_at", false);
+        return databaseManager.getQueryExecutor().executeQueryList(query, LoreEntryDTO.class)
+            .exceptionally(e -> {
+                logger.error("Error retrieving lore entries by approved status: " + approved, e);
+                return new ArrayList<>();
+            });
+    }
+
+    /**
+     * Get lore entry by name (async).
+     *
+     * @param name The name of the lore entry to retrieve
+     * @return CompletableFuture with the LoreEntryDTO, or null if not found
+     */
+    public CompletableFuture<LoreEntryDTO> getLoreEntryByName(String name) {
+        QueryBuilder query = databaseManager.getQueryBuilder()
+            .select("*")
+            .from("lore_entry")
+            .where("name = ?", name);
+        
+        return databaseManager.getQueryExecutor().executeQuery(query, LoreEntryDTO.class)
+            .exceptionally(e -> {
+                logger.error("Error retrieving lore entry by name: " + name, e);
+                return null;
+            });
+    }
+
+    /**
+     * Find lore entries by the unique identifier.
+     *
+     * @param uuid The UUID of the lore entry
+     * @return A CompletableFuture with a list of matching lore entries
+     */
+    public CompletableFuture<List<LoreEntryDTO>> getLoreEntriesByUuid(String uuid) {
+        QueryBuilder query = databaseManager.getQueryBuilder()
+            .select("*")
+            .from("lore_entry")
+            .where("uuid = ?", uuid);
+        return databaseManager.getQueryExecutor().executeQueryList(query, LoreEntryDTO.class)
+            .exceptionally(e -> {
+                logger.error("Error retrieving lore entries by uuid: " + uuid, e);
+                return new ArrayList<>();
+            });
+    }
+
+    /**
+     * Find lore entries associated with a specific player UUID.
+     *
+     * @param playerUuid The UUID of the player
+     * @return A CompletableFuture with a list of matching lore entries
+     */
+    public CompletableFuture<List<LoreEntryDTO>> findLoreEntriesByPlayerUuid(String playerUuid) {
+        QueryBuilder query = databaseManager.getQueryBuilder()
+            .select("*")
+            .from("lore_entry")
+            .where("player_uuid = ?", playerUuid);
+        return databaseManager.getQueryExecutor().executeQueryList(query, LoreEntryDTO.class)
+            .exceptionally(e -> {
+                logger.error("Error retrieving lore entries by player uuid: " + playerUuid, e);
+                return new ArrayList<>();
+            });
+    }
+
+    private LoreEntryDTO mapResultSetToDTO(ResultSet rs) throws SQLException {
+        LoreEntryDTO dto = new LoreEntryDTO();
+        dto.setId(rs.getInt("id"));
+        dto.setUuid(rs.getString("uuid"));
+        dto.setEntryType(rs.getString("entry_type"));
+        dto.setName(rs.getString("name"));
+        dto.setDescription(rs.getString("description"));
+        // Parse metadata string to Map<String, String> before setting
+        String metadataStr = rs.getString("metadata");
+        Map<String, String> metadataMap = new HashMap<>();
+        if (metadataStr != null && !metadataStr.isEmpty()) {
+            String[] pairs = metadataStr.split(",");
+            for (String pair : pairs) {
+                String[] keyValue = pair.split("=");
+                if (keyValue.length == 2) {
+                    metadataMap.put(keyValue[0].trim(), keyValue[1].trim());
+                } else {
+                    logger.warning("Invalid metadata pair: " + pair);
+                }
+            }
+        }
+        dto.setMetadata(metadataMap);
+        dto.setApproved(rs.getBoolean("is_approved"));
+        dto.setSubmittedBy(rs.getString("submitted_by"));
+        dto.setWorld(rs.getString("world"));
+        dto.setX(rs.getDouble("x"));
+        dto.setY(rs.getDouble("y"));
+        dto.setZ(rs.getDouble("z"));
+        dto.setCreatedAt(rs.getTimestamp("created_at"));
+        dto.setUpdatedAt(rs.getTimestamp("updated_at"));
+        return dto;
+    }
 }

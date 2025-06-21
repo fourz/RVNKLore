@@ -33,8 +33,6 @@ public class LoreItemInfoSubCommand implements SubCommand {    private final Log
         // Legacy constructor - redirect to primary constructor
         this(plugin);
     }
-        this.databaseManager = plugin.getDatabaseManager();
-    }
 
     @Override
     public boolean hasPermission(CommandSender sender) {
@@ -186,29 +184,8 @@ public class LoreItemInfoSubCommand implements SubCommand {    private final Log
 
     @Override
     public List<String> getTabCompletions(CommandSender sender, String[] args) {
-        if (!hasPermission(sender)) {
-            return List.of();
-        }
-        
-        List<String> completions = new ArrayList<>();
-        if (args.length == 1 && databaseManager != null) {
-            CompletableFuture<List<ItemPropertiesDTO>> future = databaseManager.getAllItems();
-            future.thenAccept(items -> {
-                for (ItemPropertiesDTO item : items) {
-                    completions.add(item.getDisplayName());
-                }
-            }).exceptionally(e -> {
-                logger.error("Error getting item names for tab completion", e);
-                return null;
-            });
-            
-            // Since we're in a synchronous context, we need to wait for the async operation
-            try {
-                future.get(); // Wait for the operation to complete
-            } catch (Exception e) {
-                logger.error("Error waiting for item names", e);
-            }
-        }
-        return completions;
+        // Async tab completion is not supported in Bukkit/Spigot, so we return an empty list.
+        // TODO: Implement smarter tab completion with caching if needed.
+        return List.of();
     }
 }

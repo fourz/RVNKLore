@@ -158,4 +158,34 @@ public class LoreEntry {
     public Map<String, String> getAllMetadata() {
         return metadata != null ? new HashMap<>(metadata) : new HashMap<>();
     }
+
+    /**
+     * Gets a specific metadata value by key
+     * 
+     * @param key The metadata key to retrieve
+     * @return The metadata value, or null if not found
+     */
+    public String getMetadata(String key) {
+        if (metadata == null || key == null) return null;
+        return metadata.get(key);
+    }
+
+    /**
+     * Sets a metadata value for the specified key
+     * 
+     * @param key The metadata key to set
+     * @param value The value to store
+     */
+    public void setMetadata(String key, String value) {
+        if (metadata == null) {
+            metadata = new HashMap<>();
+        }
+        if (key != null) {
+            if (value != null) {
+                metadata.put(key, value);
+            } else {
+                metadata.remove(key);
+            }
+        }
+    }
 }

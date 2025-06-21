@@ -959,4 +959,78 @@ public class DatabaseManager {    private final RVNKLore plugin;
             return LoreEntry.fromDTO(dto);
         });
     }
+
+    /**
+     * Get all lore entries by approval status.
+     *
+     * @param approved Whether to retrieve only approved entries
+     * @return A CompletableFuture containing a list of matching lore entries
+     */
+    public CompletableFuture<List<LoreEntryDTO>> getLoreEntriesByApproved(boolean approved) {
+        if (!validateConnection()) {
+            return CompletableFuture.failedFuture(
+                new SQLException("Database connection is not valid")
+            );
+        }
+        return loreEntryRepository.getLoreEntriesByApproved(approved);
+    }
+
+    /**
+     * Get the LoreEntry repository instance.
+     *
+     * @return The LoreEntryRepository instance
+     */
+    public LoreEntryRepository getLoreEntryRepository() {
+        return this.loreEntryRepository;
+    }
+    
+    /**
+     * Checks if the database connection is valid.
+     * @return true if connected, false otherwise
+     */
+    public boolean isConnected() {
+        try (Connection conn = connectionProvider.getConnection()) {
+            return conn != null && !conn.isClosed();
+        } catch (SQLException e) {
+            logger.error("Database connection check failed", e);
+            return false;
+        }
+    }
+
+    /**
+     * Returns basic database info string (driver/version).
+     * @return info string or null if unavailable
+     */
+    public String getDatabaseInfo() {
+        try (Connection conn = connectionProvider.getConnection()) {
+            DatabaseMetaData meta = conn.getMetaData();
+            return meta.getDatabaseProductName() + " " + meta.getDatabaseProductVersion();
+        } catch (SQLException e) {
+            logger.error("Failed to get database info", e);
+            return null;
+        }
+    }
+
+    /**
+     * Checks if the database is in read-only mode.
+     * @return true if read-only, false otherwise
+     */
+    public boolean isReadOnly() {
+        try (Connection conn = connectionProvider.getConnection()) {
+            return conn.isReadOnly();
+        } catch (SQLException e) {
+            logger.error("Failed to check read-only status", e);
+            return false;
+        }
+    }
+
+    /**
+     * Returns the last connection error message, if any.
+     * @return last error string or null
+     */
+    public String getLastConnectionError() {
+        // This is a stub; implement error tracking if needed
+        // For now, return null
+        return null;
+    }
 }

@@ -4,7 +4,6 @@ import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
-import org.bukkit.event.Listener;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -12,20 +11,24 @@ import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.handler.DefaultLoreHandler;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
+import org.fourz.RVNKLore.data.DatabaseManager;
+import org.fourz.RVNKLore.data.dto.LoreEntryDTO;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Handler for creating lore entries when players die
  */
 public class PlayerDeathLoreHandler extends DefaultLoreHandler {
+    private final DatabaseManager databaseManager;
     
     public PlayerDeathLoreHandler(RVNKLore plugin) {
         super(plugin);
-        // logger is already initialized in DefaultLoreHandler; do not reassign
+        this.databaseManager = plugin.getDatabaseManager();
     }
     
     @Override
@@ -102,15 +105,34 @@ public class PlayerDeathLoreHandler extends DefaultLoreHandler {
         entry.setSubmittedBy("Server");
         
         // Add metadata
-        entry.addMetadata("player_uuid", player.getUniqueId().toString());
-        entry.addMetadata("death_date", System.currentTimeMillis() + "");
-        entry.addMetadata("death_message", deathMessage);
+        entry.setMetadata("player_uuid", player.getUniqueId().toString());
+        entry.setMetadata("death_date", String.valueOf(System.currentTimeMillis()));
+        entry.setMetadata("death_message", deathMessage != null ? deathMessage : "");
         
         // Save to database - might need admin approval
         entry.setApproved(false);
-        plugin.getLoreManager().addLoreEntry(entry);
         
-        logger.debug("Death lore entry created for: " + player.getName());
+        // Save asynchronously using DatabaseManager
+        CompletableFuture.runAsync(() -> {
+            try {
+                LoreEntryDTO dto = entry.toDTO();
+                databaseManager.getLoreEntryRepository()
+                    .addLoreEntry(dto)
+                    .thenAccept(success -> {
+                        if (!success) {
+                            logger.warning("Failed to save death lore entry for: " + player.getName());
+                        } else {
+                            logger.debug("Death lore entry created for: " + player.getName());
+                        }
+                    })
+                    .exceptionally(e -> {
+                        logger.error("Error saving death lore entry", e);
+                        return null;
+                    });
+            } catch (Exception e) {
+                logger.error("Error preparing death lore entry for save", e);
+            }
+        });
     }
 
     @Override
@@ -125,9 +147,10 @@ public class PlayerDeathLoreHandler extends DefaultLoreHandler {
             lore.add(ChatColor.GRAY + "Type: " + ChatColor.RED + "Notable Death");
             
             // Death date if available
-            if (entry.getMetadata("death_date") != null) {
+            String deathDateStr = entry.getMetadata("death_date");
+            if (deathDateStr != null) {
                 try {
-                    long deathTimestamp = Long.parseLong(entry.getMetadata("death_date"));
+                    long deathTimestamp = Long.parseLong(deathDateStr);
                     Date deathDate = new Date(deathTimestamp);
                     lore.add(ChatColor.GRAY + "Date: " + ChatColor.WHITE + 
                              new SimpleDateFormat("yyyy-MM-dd").format(deathDate));

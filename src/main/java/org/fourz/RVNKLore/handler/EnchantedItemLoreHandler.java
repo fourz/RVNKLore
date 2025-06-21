@@ -3,7 +3,6 @@ package org.fourz.RVNKLore.handler;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.enchantments.Enchantment;
-import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.enchantment.EnchantItemEvent;
 import org.bukkit.inventory.ItemStack;
@@ -11,23 +10,31 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
+import org.fourz.RVNKLore.data.DatabaseManager;
+import org.fourz.RVNKLore.data.dto.LoreEntryDTO;
+import org.fourz.RVNKLore.debug.LogManager;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Handler for creating lore entries for enchanted items
  */
 public class EnchantedItemLoreHandler extends DefaultLoreHandler {
+    private final LogManager logger;
+    private final DatabaseManager databaseManager;
     
     public EnchantedItemLoreHandler(RVNKLore plugin) {
         super(plugin);
+        this.logger = LogManager.getInstance(plugin, "EnchantedItemLoreHandler");
+        this.databaseManager = plugin.getDatabaseManager();
     }
     
     @Override
     public void initialize() {
-        //logger.debug("Initializing enchanted item lore handler");
+        logger.debug("Initializing enchanted item lore handler");
     }
 
     /**
@@ -67,13 +74,30 @@ public class EnchantedItemLoreHandler extends DefaultLoreHandler {
         entry.setSubmittedBy(event.getEnchanter().getName());
         
         // Add metadata
-        entry.addMetadata("enchanter_uuid", event.getEnchanter().getUniqueId().toString());
-        entry.addMetadata("exp_cost", String.valueOf(event.getExpLevelCost()));
+        entry.setMetadata("enchanter_uuid", event.getEnchanter().getUniqueId().toString());
+        entry.setMetadata("exp_cost", String.valueOf(event.getExpLevelCost()));
         
         // Auto-approve since it's system-generated
         entry.setApproved(true);
         
-        getPlugin().getLoreManager().addLoreEntry(entry);
+        // Save asynchronously using DatabaseManager
+        CompletableFuture.runAsync(() -> {
+            try {
+                LoreEntryDTO dto = entry.toDTO();
+                databaseManager.getLoreEntryRepository()
+                    .addLoreEntry(dto)
+                    .thenAccept(success -> {
+                        if (!success) {                            logger.warning("Failed to save enchantment lore entry: " + entry.getName());
+                        }
+                    })
+                    .exceptionally(e -> {
+                        logger.error("Error saving enchantment lore entry", e);
+                        return null;
+                    });
+            } catch (Exception e) {
+                logger.error("Error preparing enchantment lore entry for save", e);
+            }
+        });
     }
 
     @Override
@@ -86,6 +110,12 @@ public class EnchantedItemLoreHandler extends DefaultLoreHandler {
             
             List<String> lore = new ArrayList<>();
             lore.add(ChatColor.GRAY + "Type: " + ChatColor.LIGHT_PURPLE + "Enchanted Item");
+            
+            // Add enchantment info if available
+            if (entry.getMetadata("exp_cost") != null) {
+                lore.add(ChatColor.GRAY + "Enchantment Cost: " + ChatColor.WHITE + entry.getMetadata("exp_cost") + " levels");
+            }
+            
             lore.add("");
             lore.add(ChatColor.WHITE + entry.getDescription());
             

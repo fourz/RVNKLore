@@ -7,6 +7,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.RVNKLore.data.DatabaseManager;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
 
@@ -19,10 +20,12 @@ import java.util.List;
 public class ItemLoreHandler implements LoreHandler {
     private final RVNKLore plugin;
     private final LogManager logger;
+    private final DatabaseManager databaseManager;
     
     public ItemLoreHandler(RVNKLore plugin) {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "ItemLoreHandler");
+        this.databaseManager = plugin.getDatabaseManager();
     }
 
     @Override

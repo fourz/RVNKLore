@@ -9,6 +9,8 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.SkullMeta;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.RVNKLore.data.DatabaseManager;
+import org.fourz.RVNKLore.data.dto.LoreEntryDTO;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
 
@@ -21,10 +23,12 @@ import java.util.List;
 public class PlayerLoreHandler implements LoreHandler {
     private final RVNKLore plugin;
     private final LogManager logger;
+    private final DatabaseManager databaseManager;
     
     public PlayerLoreHandler(RVNKLore plugin) {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "PlayerLoreHandler");
+        this.databaseManager = plugin.getDatabaseManager();
     }
     
     @Override
@@ -53,35 +57,35 @@ public class PlayerLoreHandler implements LoreHandler {
      */
     private void handlePlayerNameChangeLore(Player player, String oldName) {
         logger.info("Detected player name change: " + oldName + " -> " + player.getName());
-        
         try {
-            // Create a name change lore entry
             String uniqueName = "NameChange_" + player.getUniqueId().toString().substring(0, 8) + "_" + System.currentTimeMillis();
-            
-            LoreEntry entry = new LoreEntry();
-            entry.setType(LoreType.PLAYER);
-            entry.setName(uniqueName);
-            entry.setDescription(oldName + " is now known as " + player.getName() + ".\nName changed on " + 
-                                java.time.LocalDate.now().toString());
-            entry.setLocation(player.getLocation());
-            entry.setSubmittedBy("Server");
-            
-            // Add metadata
-            entry.addMetadata("player_uuid", player.getUniqueId().toString());
-            entry.addMetadata("player_name", player.getName());
-            entry.addMetadata("previous_name", oldName);
-            entry.addMetadata("name_change_date", System.currentTimeMillis() + "");
-            
-            // Save to database - automatically approved since this is server-generated
-            entry.setApproved(true);
-            boolean success = plugin.getLoreManager().addLoreEntry(entry);
-            
-            if (success) {
-                logger.info("Player name change lore entry created for: " + player.getName());
-                player.sendMessage(ChatColor.GOLD + "Your name change has been recorded in the annals of history!");
-            } else {
-                logger.warning("Failed to create player name change lore entry for: " + player.getName());
-            }
+            LoreEntryDTO dto = new LoreEntryDTO();
+            dto.setEntryType(LoreType.PLAYER.name());
+            dto.setName(uniqueName);
+            dto.setDescription(oldName + " is now known as " + player.getName() + ".\nName changed on " + java.time.LocalDate.now());
+            dto.setWorld(player.getWorld().getName());
+            dto.setX(player.getLocation().getX());
+            dto.setY(player.getLocation().getY());
+            dto.setZ(player.getLocation().getZ());
+            dto.setSubmittedBy("Server");
+            dto.setApproved(true);
+            java.util.Map<String, String> metadata = new java.util.HashMap<>();
+            metadata.put("player_uuid", player.getUniqueId().toString());
+            metadata.put("player_name", player.getName());
+            metadata.put("previous_name", oldName);
+            metadata.put("name_change_date", String.valueOf(System.currentTimeMillis()));
+            dto.setMetadata(metadata);
+            databaseManager.saveLoreEntry(dto).thenAccept(id -> {
+                if (id > 0) {
+                    logger.info("Player name change lore entry created for: " + player.getName());
+                    player.sendMessage(ChatColor.GOLD + "Your name change has been recorded in the annals of history!");
+                } else {
+                    logger.warning("Failed to create player name change lore entry for: " + player.getName());
+                }
+            }).exceptionally(e -> {
+                logger.error("Error creating player name change lore entry", e);
+                return null;
+            });
         } catch (Exception e) {
             logger.error("Error creating player name change lore entry", e);
         }
@@ -90,32 +94,33 @@ public class PlayerLoreHandler implements LoreHandler {
      */
     private void createPlayerLoreEntry(Player player) {
         logger.info("Creating new player lore entry for: " + player.getName());
-        
         try {
             String uniqueName = player.getName() + "_" + player.getUniqueId().toString().substring(0, 8);
-            
-            LoreEntry entry = new LoreEntry();
-            entry.setType(LoreType.PLAYER);
-            entry.setName(uniqueName);
-            entry.setDescription("A player who joined the realm on " + 
-                                java.time.LocalDate.now().toString());
-            entry.setLocation(player.getLocation());
-            entry.setSubmittedBy("Server");
-            
-            // Add metadata
-            entry.addMetadata("player_uuid", player.getUniqueId().toString());
-            entry.addMetadata("player_name", player.getName());
-            entry.addMetadata("first_join_date", System.currentTimeMillis() + "");
-            
-            // Save to database - automatically approved since this is server-generated
-            entry.setApproved(true);
-            boolean success = plugin.getLoreManager().addLoreEntry(entry);
-            
-            if (success) {
-                logger.info("Player lore entry created for: " + player.getName());
-            } else {
-                logger.warning("Failed to create player lore entry for: " + player.getName());
-            }
+            LoreEntryDTO dto = new LoreEntryDTO();
+            dto.setEntryType(LoreType.PLAYER.name());
+            dto.setName(uniqueName);
+            dto.setDescription("A player who joined the realm on " + java.time.LocalDate.now());
+            dto.setWorld(player.getWorld().getName());
+            dto.setX(player.getLocation().getX());
+            dto.setY(player.getLocation().getY());
+            dto.setZ(player.getLocation().getZ());
+            dto.setSubmittedBy("Server");
+            dto.setApproved(true);
+            java.util.Map<String, String> metadata = new java.util.HashMap<>();
+            metadata.put("player_uuid", player.getUniqueId().toString());
+            metadata.put("player_name", player.getName());
+            metadata.put("first_join_date", String.valueOf(System.currentTimeMillis()));
+            dto.setMetadata(metadata);
+            databaseManager.saveLoreEntry(dto).thenAccept(id -> {
+                if (id > 0) {
+                    logger.info("Player lore entry created for: " + player.getName());
+                } else {
+                    logger.warning("Failed to create player lore entry for: " + player.getName());
+                }
+            }).exceptionally(e -> {
+                logger.error("Error creating player lore entry", e);
+                return null;
+            });
         } catch (Exception e) {
             logger.error("Error creating player lore entry", e);
         }

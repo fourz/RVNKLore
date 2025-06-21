@@ -6,9 +6,8 @@ import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.handler.HandlerFactory;
 import org.fourz.RVNKLore.handler.LoreHandler;
-import org.fourz.RVNKLore.lore.LoreEntry;
-import org.fourz.RVNKLore.lore.LoreManager;
 import org.fourz.RVNKLore.lore.LoreType;
+import org.fourz.RVNKLore.data.dto.LoreEntryDTO;
 
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
@@ -17,6 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 
 /**
  * Utility class for diagnosing plugin health and performance
@@ -36,52 +36,40 @@ public class DiagnosticUtil {
      */
     public List<String> runDiagnostics() {
         List<String> results = new ArrayList<>();
-        
         results.add("===== RVNKLore Diagnostics =====");
         results.add("Plugin Version: " + plugin.getDescription().getVersion());
         results.add("Server Version: " + Bukkit.getVersion());
-        
-        // Memory diagnostics
         addMemoryDiagnostics(results);
-        
-        // Check all handlers
         addHandlerDiagnostics(results);
-        
-        // Check database connectivity
         addDatabaseDiagnostics(results);
-        
-        // Check lore entries
-        addLoreDiagnostics(results);
-        
-        // Check plugin dependencies
+        addLoreDiagnosticsAsync(results);
         addDependencyDiagnostics(results);
-        
         return results;
     }
-    
+
     private void addMemoryDiagnostics(List<String> results) {
         results.add("\n----- Memory Usage -----");
         MemoryMXBean memoryBean = ManagementFactory.getMemoryMXBean();
         MemoryUsage heapUsage = memoryBean.getHeapMemoryUsage();
-        
+
         long usedMemory = heapUsage.getUsed() / (1024 * 1024);
         long maxMemory = heapUsage.getMax() / (1024 * 1024);
-        
+
         results.add("Heap Memory: " + usedMemory + "MB / " + maxMemory + "MB");
-        
+
         Runtime runtime = Runtime.getRuntime();
         results.add("Free Memory: " + (runtime.freeMemory() / (1024 * 1024)) + "MB");
         results.add("Total Memory: " + (runtime.totalMemory() / (1024 * 1024)) + "MB");
         results.add("Available Processors: " + runtime.availableProcessors());
     }
-    
+
     private void addHandlerDiagnostics(List<String> results) {
         results.add("\n----- Handler Status -----");
         HandlerFactory factory = plugin.getHandlerFactory();
         Map<LoreType, LoreHandler> handlers = factory.getAllHandlers();
-        
+
         results.add("Registered Handlers: " + handlers.size());
-        
+
         // Check for missing handlers
         int missingHandlers = 0;
         for (LoreType type : LoreType.values()) {
@@ -90,14 +78,14 @@ public class DiagnosticUtil {
                 missingHandlers++;
             }
         }
-        
+
         if (missingHandlers == 0) {
             results.add("All lore types have handlers registered");
         } else {
             results.add("WARNING: " + missingHandlers + " lore types are missing handlers");
         }
     }
-    
+
     /**
      * Adds database diagnostics information to the results list
      */
@@ -109,8 +97,6 @@ public class DiagnosticUtil {
             if (connected) {
                 String dbType = plugin.getConfigManager().getStorageType();
                 results.add("Database Type: " + dbType.toUpperCase());
-                int totalEntries = plugin.getLoreManager().getAllLoreEntries().size();
-                results.add("Total Entries in Cache: " + totalEntries);
                 try {
                     String dbInfo = plugin.getDatabaseManager().getDatabaseInfo();
                     if (dbInfo != null && !dbInfo.isEmpty()) {
@@ -142,54 +128,44 @@ public class DiagnosticUtil {
             logger.error("Error during database diagnostics", e);
         }
     }
-    
-    private void addLoreDiagnostics(List<String> results) {
+
+    /**
+     * Adds lore diagnostics using async DatabaseManager methods and DTOs
+     */
+    private void addLoreDiagnosticsAsync(List<String> results) {
         results.add("\n----- Lore Status -----");
-        LoreManager loreManager = plugin.getLoreManager();
-        int totalEntries = loreManager.getAllLoreEntries().size();
-        int approvedEntries = loreManager.getApprovedLoreEntries().size();
-        results.add("Total Lore Entries: " + totalEntries);
-        results.add("Approved Entries: " + approvedEntries);
-        int invalidEntries = 0;
-        for (LoreEntry entry : loreManager.getAllLoreEntries()) {
-            if (!entry.isValid()) {
-                invalidEntries++;
-                logger.debug("Invalid lore entry: " + entry.getId() + " - " + entry.getName());
-            }
-        }
-        if (invalidEntries > 0) {
-            results.add("WARNING: " + invalidEntries + " invalid lore entries detected");
-        } else {
-            results.add("All lore entries are valid");
-        }
-        results.add("\nEntries by Type:");
-        for (LoreType type : LoreType.values()) {
-            int count = loreManager.getLoreEntriesByType(type).size();
-            if (count > 0) {
-                results.add("  " + type + ": " + count);
-            }
-        }
-    }
-    
-    private void addDependencyDiagnostics(List<String> results) {
-        results.add("\n----- Plugin Dependencies -----");
-        String[] dependencies = plugin.getDescription().getDepend().toArray(new String[0]);
-        
-        if (dependencies.length == 0) {
-            results.add("No dependencies required");
-            return;
-        }
-        
-        for (String dependency : dependencies) {
-            Plugin dependencyPlugin = Bukkit.getPluginManager().getPlugin(dependency);
-            if (dependencyPlugin != null && dependencyPlugin.isEnabled()) {
-                results.add(dependency + ": OK (v" + dependencyPlugin.getDescription().getVersion() + ")");
+        try {
+            List<LoreEntryDTO> allEntries = plugin.getDatabaseManager().getAllLoreEntries().get();
+            long approvedEntries = allEntries.stream().filter(LoreEntryDTO::isApproved).count();
+            results.add("Total Lore Entries: " + allEntries.size());
+            results.add("Approved Entries: " + approvedEntries);
+            long invalidEntries = allEntries.stream().filter(dto -> !isValidLoreEntry(dto)).count();
+            if (invalidEntries > 0) {
+                results.add("WARNING: " + invalidEntries + " invalid lore entries detected");
             } else {
-                results.add(dependency + ": MISSING or DISABLED");
+                results.add("All lore entries are valid");
             }
+            results.add("\nEntries by Type:");
+            for (LoreType type : LoreType.values()) {
+                long count = allEntries.stream().filter(dto -> type.name().equalsIgnoreCase(dto.getEntryType())).count();
+                if (count > 0) {
+                    results.add("  " + type + ": " + count);
+                }
+            }
+        } catch (InterruptedException | ExecutionException e) {
+            results.add("ERROR retrieving lore entries: " + e.getMessage());
+            logger.error("Error during lore diagnostics", e);
         }
     }
-    
+
+    /**
+     * Checks if a LoreEntryDTO is valid (basic validation)
+     */
+    private boolean isValidLoreEntry(LoreEntryDTO dto) {
+        return dto.getName() != null && !dto.getName().isEmpty()
+            && dto.getDescription() != null && !dto.getDescription().isEmpty();
+    }
+
     /**
      * Log diagnostic results to console
      */
@@ -199,7 +175,7 @@ public class DiagnosticUtil {
             logger.info(line);
         }
     }
-    
+
     /**
      * Check system health and return true if everything is functioning properly
      * @return true if system checks pass
