@@ -15,6 +15,9 @@ import org.fourz.RVNKLore.data.query.DefaultQueryExecutor;
 import org.fourz.RVNKLore.data.query.MySQLQueryBuilder;
 import org.fourz.RVNKLore.data.query.QueryBuilder;
 import org.fourz.RVNKLore.data.query.SQLiteQueryBuilder;
+import org.fourz.RVNKLore.data.query.MySQLSchemaQueryBuilder;
+import org.fourz.RVNKLore.data.query.SQLiteSchemaQueryBuilder;
+import org.fourz.RVNKLore.data.query.SchemaQueryBuilder;
 import org.fourz.RVNKLore.data.service.DatabaseHealthService;
 import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.data.dto.PlayerDTO;
@@ -23,6 +26,7 @@ import org.fourz.RVNKLore.data.dto.NameChangeRecordDTO;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.*;
 
@@ -37,14 +41,18 @@ import java.util.concurrent.*;
 public class DatabaseManager {
     private final RVNKLore plugin;
     private final LogManager logger;
-    private final ConnectionProvider connectionProvider;
+    private ConnectionProvider connectionProvider;
     private final DatabaseType databaseType;
-    private final QueryBuilder queryBuilder;
-    private final DefaultQueryExecutor queryExecutor;
+    private QueryBuilder queryBuilder;
+    private DefaultQueryExecutor queryExecutor;
     private final ConfigManager configManager;
     private final ExecutorService executor;
     private DatabaseHealthService healthService;
-      /**
+    private String storageType;
+    private DatabaseSetup databaseSetup;
+    private SchemaQueryBuilder schemaQueryBuilder;
+    
+    /**
      * Database types supported by the plugin.
      */
     public enum DatabaseType {
@@ -64,6 +72,7 @@ public class DatabaseManager {
     public DatabaseManager(RVNKLore plugin) {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "DatabaseManager");
+        this.executor = Executors.newCachedThreadPool();
         this.configManager = plugin.getConfigManager();
         
         // Get storage type directly from ConfigManager
@@ -74,18 +83,66 @@ public class DatabaseManager {
         // Initialize connection provider based on type - providers get settings directly from ConfigManager
         if (databaseType == DatabaseType.MYSQL) {
             this.connectionProvider = new MySQLConnectionProvider(plugin);
-            this.queryBuilder = new MySQLQueryBuilder();
         } else {
             this.connectionProvider = new SQLiteConnectionProvider(plugin);
-            this.queryBuilder = new SQLiteQueryBuilder();
         }
         
-        // Initialize query executor and thread pool
+        // Initialize query builder and executor
+        if (databaseType == DatabaseType.MYSQL) {
+            this.queryBuilder = new MySQLQueryBuilder();
+            this.schemaQueryBuilder = new MySQLSchemaQueryBuilder();
+        } else {
+            this.queryBuilder = new SQLiteQueryBuilder();
+            this.schemaQueryBuilder = new SQLiteSchemaQueryBuilder();
+        }
+        
         this.queryExecutor = new DefaultQueryExecutor(plugin, connectionProvider);
-        this.executor = Executors.newFixedThreadPool(10);
         
         // Initialize health service
         this.healthService = new DatabaseHealthService(this, plugin);
+    }
+
+    /**
+     * Initialize the database connection and schema.
+     * This method should be called during plugin startup.
+     */
+    public void initialize() {
+        logger.info("Initializing database connection...");
+        
+        // Initialize connection provider based on storage type
+        initializeConnectionProvider();
+        
+        // Create appropriate query builder based on storage type
+        if (databaseType == DatabaseType.MYSQL) {
+            queryBuilder = new MySQLQueryBuilder();
+            schemaQueryBuilder = new MySQLSchemaQueryBuilder();
+        } else {
+            queryBuilder = new SQLiteQueryBuilder();
+            schemaQueryBuilder = new SQLiteSchemaQueryBuilder();
+        }
+        
+        // Initialize query executor
+        queryExecutor = new DefaultQueryExecutor(plugin, connectionProvider);
+        
+        // Initialize database setup
+        databaseSetup = new DatabaseSetup(plugin, connectionProvider, schemaQueryBuilder, queryExecutor);
+        
+        // Initialize database schema
+        databaseSetup.initializeTables()
+            .thenRun(() -> {
+                logger.info("Database schema initialized successfully");
+                validateTables();
+            })
+            .exceptionally(e -> {
+                logger.error("Failed to initialize database schema", e);
+                return null;
+            });
+            
+        // Start health check service
+        healthService = new DatabaseHealthService(this, plugin);
+        //healthService.startHealthCheck();
+        
+        logger.info("Database initialized with " + databaseType + " storage");
     }
 
     /**
@@ -97,10 +154,10 @@ public class DatabaseManager {
                 logger.info("Creating database schema...");
                 
                 // Create core tables
-                createLoreEntryTable(conn);
-                createLoreSubmissionTable(conn);
-                createLoreItemTable(conn);
-                createLoreLocationTable(conn);
+                // Removed: createLoreEntryTable(conn);
+                // Removed: createLoreSubmissionTable(conn);
+                // Removed: createLoreItemTable(conn);
+                // Removed: createLoreLocationTable(conn);
                 
                 logger.info("Database schema created successfully");
                 
@@ -220,174 +277,6 @@ public class DatabaseManager {
                 "CREATE INDEX IF NOT EXISTS idx_submission_current_version ON lore_submission (is_current_version)"
             };
             
-            for (String indexSql : indexSqls) {
-                try (var stmt = conn.createStatement()) {
-                    stmt.execute(indexSql);
-                }
-            }
-        }
-        
-        try (var stmt = conn.createStatement()) {
-            stmt.execute(sql);
-        }
-    }
-    
-    /**
-     * Create the lore_item table.
-     *
-     * @param conn The database connection
-     * @throws SQLException If a database error occurs
-     */
-    private void createLoreItemTable(Connection conn) throws SQLException {
-        String sql;
-        
-        if (databaseType == DatabaseType.MYSQL) {
-            sql = "CREATE TABLE IF NOT EXISTS lore_item (" +
-                  "id INT AUTO_INCREMENT PRIMARY KEY," +
-                  "lore_entry_id INT NOT NULL," +
-                  "item_type VARCHAR(50) NOT NULL," +
-                  "material VARCHAR(50) NOT NULL," +
-                  "display_name VARCHAR(100) NOT NULL," +
-                  "lore TEXT," +
-                  "custom_model_data INT," +
-                  "rarity VARCHAR(20) NOT NULL DEFAULT 'COMMON'," +
-                  "is_obtainable BOOLEAN NOT NULL DEFAULT TRUE," +
-                  "glow BOOLEAN NOT NULL DEFAULT FALSE," +
-                  "skull_texture TEXT," +
-                  "texture_data TEXT," +
-                  "owner_name VARCHAR(100)," +
-                  "collection_id VARCHAR(50)," +
-                  "theme_id VARCHAR(50)," +
-                  "rarity_level VARCHAR(20)," +
-                  "collection_sequence INT," +
-                  "nbt_data TEXT," +
-                  "created_by VARCHAR(36)," +
-                  "created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP," +
-                  "updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP," +
-                  "custom_properties JSON," +
-                  "metadata JSON," +
-                  "FOREIGN KEY (lore_entry_id) REFERENCES lore_entry(id) ON DELETE CASCADE," +
-                  "INDEX idx_lore_entry_id (lore_entry_id)," +
-                  "INDEX idx_item_type (item_type)," +
-                  "INDEX idx_collection_id (collection_id)" +
-                  ") ENGINE=InnoDB";
-        } else {
-            sql = "CREATE TABLE IF NOT EXISTS lore_item (" +
-                  "id INTEGER PRIMARY KEY AUTOINCREMENT," +
-                  "lore_entry_id INTEGER NOT NULL," +
-                  "item_type TEXT NOT NULL," +
-                  "material TEXT NOT NULL," +
-                  "display_name TEXT NOT NULL," +
-                  "lore TEXT," +
-                  "custom_model_data INTEGER," +
-                  "rarity TEXT NOT NULL DEFAULT 'COMMON'," +
-                  "is_obtainable INTEGER NOT NULL DEFAULT 1," +
-                  "glow INTEGER NOT NULL DEFAULT 0," +
-                  "skull_texture TEXT," +
-                  "texture_data TEXT," +
-                  "owner_name TEXT," +
-                  "collection_id TEXT," +
-                  "theme_id TEXT," +
-                  "rarity_level TEXT," +
-                  "collection_sequence INTEGER," +
-                  "nbt_data TEXT," +
-                  "created_by TEXT," +
-                  "created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP," +
-                  "updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP," +
-                  "custom_properties TEXT," +
-                  "metadata TEXT," +
-                  "FOREIGN KEY (lore_entry_id) REFERENCES lore_entry(id) ON DELETE CASCADE" +
-                  ")";
-            
-            // Create indices in separate statements for SQLite
-            String[] indexSqls = {
-                "CREATE INDEX IF NOT EXISTS idx_item_lore_entry_id ON lore_item (lore_entry_id)",
-                "CREATE INDEX IF NOT EXISTS idx_item_type ON lore_item (item_type)",
-                "CREATE INDEX IF NOT EXISTS idx_item_collection_id ON lore_item (collection_id)"
-            };
-            
-            for (String indexSql : indexSqls) {
-                try (var stmt = conn.createStatement()) {
-                    stmt.execute(indexSql);
-                }
-            }
-        }
-        
-        try (var stmt = conn.createStatement()) {
-            stmt.execute(sql);
-        }
-    }
-    
-    /**
-     * Create the lore_location table.
-     *
-     * @param conn The database connection
-     * @throws SQLException If a database error occurs
-     */
-    private void createLoreLocationTable(Connection conn) throws SQLException {
-        String sql;
-        
-        if (databaseType == DatabaseType.MYSQL) {
-            // Add spatial columns and index
-            sql = "CREATE TABLE IF NOT EXISTS lore_location (" +
-                  "id INT AUTO_INCREMENT PRIMARY KEY," +
-                  "lore_entry_id INT NOT NULL," +
-                  "world VARCHAR(100) NOT NULL," +
-                  "x DOUBLE NOT NULL," +
-                  "y DOUBLE NOT NULL," +
-                  "z DOUBLE NOT NULL," +
-                  "yaw FLOAT," +
-                  "pitch FLOAT," +
-                  "location_type VARCHAR(50) NOT NULL," +
-                  "discovery_message TEXT," +
-                  "discoverable BOOLEAN NOT NULL DEFAULT TRUE," +
-                  "discovery_radius DOUBLE NOT NULL DEFAULT 10.0," +
-                  "created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP," +
-                  "updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP," +
-                  "point POINT NOT NULL SRID 0," +
-                  "SPATIAL INDEX idx_location_point (point)," +
-                  "FOREIGN KEY (lore_entry_id) REFERENCES lore_entry(id) ON DELETE CASCADE," +
-                  "INDEX idx_lore_location_entry_id (lore_entry_id)," +
-                  "INDEX idx_lore_location_world (world)" +
-                  ") ENGINE=InnoDB";
-        } else {
-            // For SQLite, we use R*Tree virtual table for spatial indexing
-            sql = "CREATE TABLE IF NOT EXISTS lore_location (" +
-                  "id INTEGER PRIMARY KEY AUTOINCREMENT," +
-                  "lore_entry_id INTEGER NOT NULL," +
-                  "world TEXT NOT NULL," +
-                  "x REAL NOT NULL," +
-                  "y REAL NOT NULL," +
-                  "z REAL NOT NULL," +
-                  "yaw REAL," +
-                  "pitch REAL," +
-                  "location_type TEXT NOT NULL," +
-                  "discovery_message TEXT," +
-                  "discoverable INTEGER NOT NULL DEFAULT 1," +
-                  "discovery_radius REAL NOT NULL DEFAULT 10.0," +
-                  "created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP," +
-                  "updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP," +
-                  "FOREIGN KEY (lore_entry_id) REFERENCES lore_entry(id) ON DELETE CASCADE" +
-                  ")";
-
-            String rtreeSql = "CREATE VIRTUAL TABLE IF NOT EXISTS lore_location_rtree USING rtree(" +
-                            "id," +      // Primary key from main table
-                            "minX, maxX," + // X coordinate bounds
-                            "minY, maxY," + // Y coordinate bounds
-                            "minZ, maxZ" +  // Z coordinate bounds
-                            ")";
-
-            String[] indexSqls = {
-                "CREATE INDEX IF NOT EXISTS idx_location_lore_entry_id ON lore_location (lore_entry_id)",
-                "CREATE INDEX IF NOT EXISTS idx_location_world ON lore_location (world)"
-            };
-
-            // Create R*Tree index
-            try (var stmt = conn.createStatement()) {
-                stmt.execute(rtreeSql);
-            }
-            
-            // Create regular indices
             for (String indexSql : indexSqls) {
                 try (var stmt = conn.createStatement()) {
                     stmt.execute(indexSql);
@@ -1286,5 +1175,109 @@ public class DatabaseManager {
                 return false;
             }
         }, executor);
+    }
+
+    /**
+     * Initialize the connection provider based on the storage type.
+     */
+    private void initializeConnectionProvider() {        // Get storage type from configuration
+        storageType = plugin.getConfigManager().getConfig().getString("storage.type", "sqlite").toLowerCase();
+        
+        if (storageType.equalsIgnoreCase("mysql")) {
+            // Get MySQL settings from configuration
+            ConfigManager configManager = plugin.getConfigManager();
+            Map<String, Object> mysqlSettings = configManager.getMySQLSettings();
+            
+            MySQLSettingsDTO settings = new MySQLSettingsDTO(
+                (String) mysqlSettings.get("host"),
+                (Integer) mysqlSettings.get("port"),
+                (String) mysqlSettings.get("database"),
+                (String) mysqlSettings.get("username"),
+                (String) mysqlSettings.get("password"),
+                (Boolean) mysqlSettings.get("useSSL"),
+                (String) mysqlSettings.get("tablePrefix")
+            );
+            
+            // Create MySQL connection provider
+            connectionProvider = new MySQLConnectionProvider(plugin);
+        } else {
+            // Default to SQLite
+            ConfigManager configManager = plugin.getConfigManager();
+            Map<String, Object> sqliteSettings = configManager.getSQLiteSettings();
+            
+            String dbName = (String) sqliteSettings.getOrDefault("database", "data.db");
+            boolean walMode = (Boolean) sqliteSettings.getOrDefault("walMode", true);
+            int busyTimeout = (Integer) sqliteSettings.getOrDefault("busyTimeout", 30000);
+            int cacheSize = (Integer) sqliteSettings.getOrDefault("cacheSize", 4000);
+            
+            // Create SQLite settings DTO
+            SQLiteSettingsDTO settings = new SQLiteSettingsDTO(dbName, walMode, busyTimeout, cacheSize);
+            
+            // Create SQLite connection provider
+            connectionProvider = new SQLiteConnectionProvider(plugin);
+        }
+    }
+
+    /**
+     * Validate that all required database tables exist.
+     */
+    private void validateTables() {
+        logger.info("Validating database tables...");
+        
+        try {
+            // Check if essential tables exist
+            boolean playerTableExists = tableExists("player");
+            boolean loreEntryTableExists = tableExists("lore_entry");
+            boolean loreSubmissionTableExists = tableExists("lore_submission");
+            boolean itemPropertiesTableExists = tableExists("item_properties");
+            boolean loreCollectionTableExists = tableExists("lore_collection");
+            
+            // Log validation results
+            logger.info("Table validation results:");
+            logger.info("- player: " + (playerTableExists ? "exists" : "missing"));
+            logger.info("- lore_entry: " + (loreEntryTableExists ? "exists" : "missing"));
+            logger.info("- lore_submission: " + (loreSubmissionTableExists ? "exists" : "missing"));
+            logger.info("- item_properties: " + (itemPropertiesTableExists ? "exists" : "missing"));
+            logger.info("- lore_collection: " + (loreCollectionTableExists ? "exists" : "missing"));
+            
+            // If any essential table is missing, initialize tables
+            if (!playerTableExists || !loreEntryTableExists || !loreSubmissionTableExists || 
+                !itemPropertiesTableExists || !loreCollectionTableExists) {
+                logger.warning("Some essential tables are missing. Initializing database tables...");
+                databaseSetup.initializeTables()
+                    .thenRun(() -> logger.info("Database tables initialized successfully after validation"))
+                    .exceptionally(e -> {
+                        logger.error("Failed to initialize database tables after validation", e);
+                        return null;
+                    });
+            } else {
+                logger.info("All essential database tables exist");
+            }
+        } catch (SQLException e) {
+            logger.error("Failed to validate database tables", e);
+        }
+    }
+
+    /**
+     * Check if a table exists in the database.
+     *
+     * @param tableName The name of the table to check
+     * @return True if the table exists, false otherwise
+     * @throws SQLException if an SQL error occurs
+     */
+    private boolean tableExists(String tableName) throws SQLException {
+        try (Connection connection = connectionProvider.getConnection()) {
+            DatabaseMetaData metaData = connection.getMetaData();
+            
+            // Get table metadata
+            try (ResultSet tables = metaData.getTables(
+                    connection.getCatalog(), 
+                    connection.getSchema(), 
+                    tableName, 
+                    new String[]{"TABLE"})) {
+                
+                return tables.next();
+            }
+        }
     }
 }
