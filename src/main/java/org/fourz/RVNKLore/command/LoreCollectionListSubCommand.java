@@ -5,29 +5,31 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.debug.LogManager;
-import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
+import org.fourz.RVNKLore.data.DatabaseManager;
+import org.fourz.RVNKLore.data.dto.ItemCollectionDTO;
+import org.fourz.RVNKLore.data.repository.CollectionRepository;
 import org.fourz.RVNKLore.lore.item.collection.CollectionTheme;
-import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
 import org.fourz.RVNKLore.command.output.DisplayFactory;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Handles the /lore collection list [theme] command.
  * Lists all collections, optionally filtered by theme, with progress and metadata.
  */
-public class LoreCollectionListSubCommand implements SubCommand {
+public class LoreCollectionListSubCommand implements org.fourz.RVNKLore.command.subcommand.SubCommand {
     private final RVNKLore plugin;
     private final LogManager logger;
-    private final CollectionManager collectionManager;
+    private final DatabaseManager databaseManager;
+    private final CollectionRepository collectionRepository;
 
     public LoreCollectionListSubCommand(RVNKLore plugin) {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "LoreCollectionListSubCommand");
-        this.collectionManager = plugin.getLoreManager().getItemManager().getCollectionManager();
+        this.databaseManager = plugin.getDatabaseManager();
+        this.collectionRepository = databaseManager.getCollectionRepository();
     }
 
     @Override
@@ -42,33 +44,29 @@ public class LoreCollectionListSubCommand implements SubCommand {
             return true;
         }
         Player player = (Player) sender;
-
         String themeFilter = null;
         if (args.length > 0) {
             themeFilter = args[0];
         }
         final String filter = themeFilter;
-        // Async reload from DB, then filter and display
-        collectionManager.reloadCollectionsFromDatabase().thenAccept(count -> {
-            List<ItemCollection> collectionsToShow = new ArrayList<>();
+        collectionRepository.getAllCollections().thenAccept(collections -> {
+            List<ItemCollectionDTO> collectionsToShow = new ArrayList<>();
             if (filter != null) {
                 CollectionTheme theme = CollectionTheme.fromDisplayName(filter);
                 if (theme == null || theme == CollectionTheme.CUSTOM) {
                     player.sendMessage(ChatColor.RED + "&c✖ Unknown theme: " + filter);
-                    listThemes(player);
+                    listThemes(player, collections);
                     return;
                 }
-                for (ItemCollection collection : collectionManager.getAllCollections().values()) {
+                for (ItemCollectionDTO collection : collections) {
                     if (theme.name().equalsIgnoreCase(collection.getThemeId())) {
                         collectionsToShow.add(collection);
                     }
                 }
             } else {
-                collectionsToShow.addAll(collectionManager.getAllCollections().values());
+                collectionsToShow.addAll(collections);
             }
-            // Sort newest to oldest
-            collectionsToShow.sort(Comparator.comparingLong(ItemCollection::getCreatedAt).reversed());
-            // Output via DisplayFactory
+            collectionsToShow.sort(Comparator.comparingLong(ItemCollectionDTO::getCreatedAt).reversed());
             DisplayFactory.displayCollectionList(player, collectionsToShow);
         }).exceptionally(e -> {
             logger.error("Error loading collections for list command", e);
@@ -78,11 +76,11 @@ public class LoreCollectionListSubCommand implements SubCommand {
         return true;
     }
 
-    private void listThemes(Player player) {
+    private void listThemes(Player player, List<ItemCollectionDTO> collections) {
         player.sendMessage(ChatColor.YELLOW + "⚙ " + ChatColor.BOLD + "Available Themes");
         player.sendMessage("");
         for (CollectionTheme theme : CollectionTheme.values()) {
-            int count = (int) collectionManager.getAllCollections().values().stream()
+            int count = (int) collections.stream()
                     .filter(c -> theme.name().equalsIgnoreCase(c.getThemeId()))
                     .count();
             if (count > 0) {

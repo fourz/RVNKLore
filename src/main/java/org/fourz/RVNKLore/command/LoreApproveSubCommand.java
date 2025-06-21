@@ -26,7 +26,9 @@ public class LoreApproveSubCommand implements SubCommand {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "LoreApproveSubCommand");
         this.databaseManager = plugin.getDatabaseManager();
-    }    @Override
+    }
+
+    @Override
     public boolean execute(CommandSender sender, String[] args) {
         if (args.length < 1) {
             sender.sendMessage(ChatColor.RED + "▶ Usage: /lore approve <id>");
@@ -53,38 +55,27 @@ public class LoreApproveSubCommand implements SubCommand {
             // Search by partial ID or name
             databaseManager.searchLoreEntries(idInput)
                 .thenAccept(entries -> {
-                    if (entries.isEmpty()) {
-                        sender.sendMessage(ChatColor.RED + "✖ No unapproved lore entries found matching: " + idInput);
-                        return;
-                    }
-                    
-                    // Filter to just unapproved entries
                     List<LoreEntryDTO> unapprovedEntries = new ArrayList<>();
                     for (LoreEntryDTO entry : entries) {
                         if (!entry.isApproved()) {
                             unapprovedEntries.add(entry);
                         }
                     }
-                    
                     if (unapprovedEntries.isEmpty()) {
                         sender.sendMessage(ChatColor.RED + "✖ No unapproved lore entries found matching: " + idInput);
                         return;
                     }
-                    
-                    // If we have exactly one match, process it
                     if (unapprovedEntries.size() == 1) {
                         LoreEntryDTO entry = unapprovedEntries.get(0);
                         processApprovalByDto(sender, entry);
                         return;
                     }
-                    
-                    // Multiple matches, show options
                     sender.sendMessage(ChatColor.YELLOW + "⚠ Multiple unapproved entries match your query. Please be more specific:");
                     for (LoreEntryDTO entry : unapprovedEntries) {
                         UUID uuid = entry.getUuid();
                         String shortId = uuid != null ? uuid.toString().substring(0, 8) : "unknown";
-                        sender.sendMessage(ChatColor.WHITE + shortId + " - " + 
-                                ChatColor.YELLOW + entry.getName() + 
+                        sender.sendMessage(ChatColor.WHITE + shortId + " - " +
+                                ChatColor.YELLOW + entry.getName() +
                                 ChatColor.GRAY + " (" + entry.getEntryType() + ")");
                     }
                 })
@@ -96,7 +87,6 @@ public class LoreApproveSubCommand implements SubCommand {
         } else {
             sender.sendMessage(ChatColor.RED + "▶ Please provide at least 4 characters to search for a lore entry.");
         }
-        
         return true;
     }
 
@@ -142,9 +132,9 @@ public class LoreApproveSubCommand implements SubCommand {
         entry.setApproved(true);
         
         // Save the changes
-        databaseManager.updateLoreEntry(entry)
-            .thenAccept(success -> {
-                if (success) {
+        databaseManager.saveLoreEntry(entry)
+            .thenAccept(id -> {
+                if (id > 0) {
                     sender.sendMessage(ChatColor.GREEN + "✓ Lore entry approved successfully!");
                     
                     // Log the approval

@@ -313,4 +313,27 @@ public class SubmissionRepository {
                 return null;
             });
     }
+    
+    /**
+     * Search lore entries by their content in submissions.
+     *
+     * @param keyword The keyword to search for
+     * @return A future containing a list of matching lore entry DTOs
+     */
+    public CompletableFuture<List<LoreEntryDTO>> searchLoreEntriesInSubmissions(String keyword) {
+        String searchTerm = "%" + keyword + "%";
+        
+        QueryBuilder query = databaseManager.getQueryBuilder().select("e.*")
+            .from("lore_entry e")
+            .join("lore_submission s", "s.entry_id = e.id")
+            .where("s.is_current_version = TRUE AND (s.content LIKE ? OR e.entry_type LIKE ?)", 
+                  searchTerm, searchTerm)
+            .orderBy("s.submitted_at", false);
+        
+        return databaseManager.getQueryExecutor().executeQueryList(query, LoreEntryDTO.class)
+            .exceptionally(e -> {
+                logger.error("Error searching lore submissions", e);
+                return List.of();
+            });
+    }
 }

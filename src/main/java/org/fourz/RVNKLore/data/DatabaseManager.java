@@ -1,6 +1,5 @@
 package org.fourz.RVNKLore.data;
 
-import org.bukkit.Location;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.config.ConfigManager;
 import org.fourz.RVNKLore.data.connection.ConnectionProvider;
@@ -25,7 +24,6 @@ import org.fourz.RVNKLore.data.service.DatabaseHealthService;
 import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.data.dto.PlayerDTO;
 import org.fourz.RVNKLore.data.dto.NameChangeRecordDTO;
-import org.fourz.RVNKLore.data.dto.ItemCollectionDTO;
 
 import java.sql.*;
 import java.util.ArrayList;
@@ -239,14 +237,8 @@ public class DatabaseManager {    private final RVNKLore plugin;
         // Delegate to LoreEntryRepository
         return loreEntryRepository.deleteLoreEntry(id);
     }
-    
-    /**
-     * Search lore entries by keyword.
-     *
-     * @param keyword The keyword to search for
-     * @return A future containing a list of matching lore entry DTOs
-     */    /**
-     * Search lore entries by their content in submissions.
+      /**
+     * Search lore entries by keyword in submissions.
      *
      * @param keyword The keyword to search for
      * @return A future containing a list of matching lore entry DTOs
@@ -257,22 +249,7 @@ public class DatabaseManager {    private final RVNKLore plugin;
                 new SQLException("Database connection is not valid")
             );
         }
-        
-        // Create a search term with wildcards
-        String searchTerm = "%" + keyword + "%";
-        
-        QueryBuilder query = queryBuilder.select("e.*")
-                                        .from("lore_entry e")
-                                        .join("lore_submission s", "s.entry_id = e.id")
-                                        .where("s.is_current_version = TRUE AND (s.content LIKE ? OR e.entry_type LIKE ?)", 
-                                              searchTerm, searchTerm)
-                                        .orderBy("s.submitted_at", false);
-        
-        return queryExecutor.executeQueryList(query, LoreEntryDTO.class)
-            .exceptionally(e -> {
-                logger.error("Error searching lore submissions", e);
-                return List.of();
-            });
+        return submissionRepository.searchLoreEntriesInSubmissions(keyword);
     }
     
     // LORE SUBMISSION OPERATIONS
@@ -456,9 +433,8 @@ public class DatabaseManager {    private final RVNKLore plugin;
     public CompletableFuture<Boolean> deletePlayer(UUID uuid) {
         return playerRepository.deletePlayer(uuid);
     }
-    
-    /**
-     * Save player metadata (insert or update player entry in lore_entry table).
+      /**
+     * Save player metadata.
      *
      * @param dto The PlayerDTO containing player data
      * @return CompletableFuture<Boolean> indicating success
@@ -467,19 +443,7 @@ public class DatabaseManager {    private final RVNKLore plugin;
         if (!validateConnection()) {
             return CompletableFuture.completedFuture(false);
         }
-        // Use insert or update pattern
-        QueryBuilder query = queryBuilder.insert("lore_entry", false)
-            .set("entry_type", "PLAYER")
-            .set("name", dto.getPlayerName())
-            .set("metadata", dto.getMetadata())
-            .set("is_approved", true)
-            .set("uuid", dto.getPlayerUuid().toString());
-        return queryExecutor.executeUpdate(query)
-            .thenApply(rows -> rows > 0)
-            .exceptionally(e -> {
-                logger.error("Error saving player metadata", e);
-                return false;
-            });
+        return playerRepository.savePlayerMetadata(dto);
     }
 
     /**
@@ -492,15 +456,7 @@ public class DatabaseManager {    private final RVNKLore plugin;
         if (!validateConnection()) {
             return CompletableFuture.completedFuture(false);
         }
-        QueryBuilder query = queryBuilder.select("COUNT(*) as count")
-            .from("lore_entry")
-            .where("entry_type = ? AND uuid = ?", "PLAYER", playerUuid.toString());
-        return queryExecutor.executeQuery(query, PlayerDTO.class)
-            .thenApply(dto -> dto != null)
-            .exceptionally(e -> {
-                logger.error("Error checking if player exists", e);
-                return false;
-            });
+        return playerRepository.playerExists(playerUuid);
     }
 
     /**
@@ -513,15 +469,7 @@ public class DatabaseManager {    private final RVNKLore plugin;
         if (!validateConnection()) {
             return CompletableFuture.completedFuture(null);
         }
-        QueryBuilder query = queryBuilder.select("name")
-            .from("lore_entry")
-            .where("entry_type = ? AND uuid = ?", "PLAYER", playerUuid.toString());
-        return queryExecutor.executeQuery(query, PlayerDTO.class)
-            .thenApply(dto -> dto != null ? dto.getPlayerName() : null)
-            .exceptionally(e -> {
-                logger.error("Error getting stored player name", e);
-                return null;
-            });
+        return playerRepository.getStoredPlayerName(playerUuid);
     }
 
     /**
@@ -534,10 +482,7 @@ public class DatabaseManager {    private final RVNKLore plugin;
         if (!validateConnection()) {
             return CompletableFuture.completedFuture(List.of());
         }
-        QueryBuilder query = queryBuilder.select("*")
-            .from("lore_entry")
-            .where("entry_type = ? AND uuid = ?", "PLAYER", playerUuid.toString());
-        return queryExecutor.executeQueryList(query, PlayerDTO.class);
+        return playerRepository.getPlayerLoreEntries(playerUuid);
     }
 
     /**
@@ -551,10 +496,7 @@ public class DatabaseManager {    private final RVNKLore plugin;
         if (!validateConnection()) {
             return CompletableFuture.completedFuture(List.of());
         }
-        QueryBuilder query = queryBuilder.select("*")
-            .from("lore_entry")
-            .where("entry_type = ? AND uuid = ? AND entry_type = ?", "PLAYER", playerUuid.toString(), entryType);
-        return queryExecutor.executeQueryList(query, PlayerDTO.class);
+        return playerRepository.getPlayerLoreEntriesByType(playerUuid, entryType);
     }
 
     /**
@@ -567,11 +509,7 @@ public class DatabaseManager {    private final RVNKLore plugin;
         if (!validateConnection()) {
             return CompletableFuture.completedFuture(List.of());
         }
-        QueryBuilder query = queryBuilder.select("*")
-            .from("name_change_record")
-            .where("player_uuid = ?", playerUuid.toString())
-            .orderBy("changed_at", false);
-        return queryExecutor.executeQueryList(query, NameChangeRecordDTO.class);
+        return playerRepository.getNameChangeHistory(playerUuid);
     }
     
     /**
@@ -642,142 +580,6 @@ public class DatabaseManager {    private final RVNKLore plugin;
             healthService.stop();
             healthService = null;
         }
-    }
-
-    /**
-     * Find nearby lore entries within a radius of a location.
-     *
-     * @param location The base location to search from
-     * @param radius The radius in blocks to search within
-     * @return A future containing a list of nearby lore entry DTOs
-     */
-    public CompletableFuture<List<LoreEntryDTO>> findNearbyLoreEntries(Location location, double radius) {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(new SQLException("Database connection is not valid"));
-        }
-        
-        QueryBuilder query = queryBuilder.select("*")
-            .from("lore_entry")
-            .where("world = ?", location.getWorld().getName())
-            .where("is_approved = ?", true)
-            .where(String.format("SQRT(POW(x - ?, 2) + POW(y - ?, 2) + POW(z - ?, 2)) <= ?",
-                location.getX(), location.getY(), location.getZ(), radius));
-        
-        return queryExecutor.executeQueryList(query, LoreEntryDTO.class);
-    }
-
-    /**
-     * Find lore entries in a specific world.
-     *
-     * @param worldName The name of the world
-     * @return A future containing a list of lore entry DTOs in the world
-     */
-    public CompletableFuture<List<LoreEntryDTO>> findLoreEntriesInWorld(String worldName) {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(new SQLException("Database connection is not valid"));
-        }
-        
-        QueryBuilder query = queryBuilder.select("*")
-            .from("lore_entry")
-            .where("world = ?", worldName)
-            .where("is_approved = ?", true);
-        
-        return queryExecutor.executeQueryList(query, LoreEntryDTO.class);
-    }
-
-    /**
-     * Find lore entries by submitter name.
-     *
-     * @param submitter The name of the submitter
-     * @return A future containing a list of lore entry DTOs
-     */
-    public CompletableFuture<List<LoreEntryDTO>> findLoreEntriesBySubmitter(String submitter) {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(new SQLException("Database connection is not valid"));
-        }
-        
-        QueryBuilder query = queryBuilder.select("*")
-            .from("lore_entry")
-            .where("submitted_by = ?", submitter);
-        
-        return queryExecutor.executeQueryList(query, LoreEntryDTO.class);
-    }
-
-    /**
-     * Get a lore entry by UUID.
-     *
-     * @param uuid The UUID of the lore entry
-     * @return A future containing the lore entry DTO, or null if not found
-     */
-    public CompletableFuture<LoreEntryDTO> getLoreEntryById(UUID uuid) {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(new SQLException("Database connection is not valid"));
-        }
-        
-        QueryBuilder query = queryBuilder.select("*")
-            .from("lore_entry")
-            .where("uuid = ?", uuid.toString());
-        
-        return queryExecutor.executeQuery(query, LoreEntryDTO.class);
-    }
-
-    /**
-     * Find pending (unapproved) lore entries.
-     *
-     * @return A future containing a list of pending lore entry DTOs
-     */
-    public CompletableFuture<List<LoreEntryDTO>> findPendingLoreEntries() {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(new SQLException("Database connection is not valid"));
-        }
-        
-        QueryBuilder query = queryBuilder.select("*")
-            .from("lore_entry")
-            .where("is_approved = ?", false)
-            .orderBy("created_at", true);
-        
-        return queryExecutor.executeQueryList(query, LoreEntryDTO.class);
-    }
-
-    /**
-     * Find recent lore entries, sorted by creation date.
-     *
-     * @param count The maximum number of entries to return
-     * @return A future containing a list of recent lore entry DTOs
-     */
-    public CompletableFuture<List<LoreEntryDTO>> findRecentLoreEntries(int count) {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(new SQLException("Database connection is not valid"));
-        }
-        
-        QueryBuilder query = queryBuilder.select("*")
-            .from("lore_entry")
-            .where("is_approved = ?", true)
-            .orderBy("created_at", false)
-            .limit(count);
-        
-        return queryExecutor.executeQueryList(query, LoreEntryDTO.class);
-    }
-
-    /**
-     * Search lore entries by text in their name or description.
-     *
-     * @param searchText The text to search for
-     * @return A future containing a list of matching lore entry DTOs
-     */
-    public CompletableFuture<List<LoreEntryDTO>> searchLoreEntries(String searchText) {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(new SQLException("Database connection is not valid"));
-        }
-        
-        String pattern = "%" + searchText.toLowerCase() + "%";
-        QueryBuilder query = queryBuilder.select("*")
-            .from("lore_entry")
-            .where("LOWER(name) LIKE ? OR LOWER(description) LIKE ?", pattern, pattern)
-            .where("is_approved = ?", true)
-            .orderBy("created_at", false);
-        
-        return queryExecutor.executeQueryList(query, LoreEntryDTO.class);
     }
 
     /**
@@ -1008,64 +810,110 @@ public class DatabaseManager {    private final RVNKLore plugin;
      * @return A CompletableFuture containing a list of matching lore entries
      */
     public CompletableFuture<List<LoreEntryDTO>> getLoreEntriesByTypeAndApproved(String type, boolean approved) {
-        QueryBuilder query = queryBuilder.select("*")
-            .from("lore_entry")
-            .where("entry_type = ? AND is_approved = ?", type, approved)
-            .orderBy("name", true);
-        
-        return queryExecutor.executeQueryList(query, LoreEntryDTO.class)
-            .exceptionally(e -> {
-                logger.error("Error fetching lore entries by type and approval status", e);
-                return new ArrayList<>();
-            });
+        return loreEntryRepository.getLoreEntriesByTypeAndApproved(type, approved);
     }
-    
-    /**
-     * Get all lore entries by approval status.
-     * 
-     * @param approved Whether to retrieve only approved entries
-     * @return A CompletableFuture containing a list of matching lore entries
+      /**
+     * Search lore entries by text in their name or description.
+     *
+     * @param searchText The text to search for
+     * @return A future containing a list of matching lore entry DTOs
      */
-    public CompletableFuture<List<LoreEntryDTO>> getLoreEntriesByApproved(boolean approved) {
-        QueryBuilder query = queryBuilder.select("*")
-            .from("lore_entry")
-            .where("is_approved = ?", approved)
-            .orderBy("name", true);
-        
-        return queryExecutor.executeQueryList(query, LoreEntryDTO.class)
-            .exceptionally(e -> {
-                logger.error("Error fetching lore entries by approval status", e);
-                return new ArrayList<>();
-            });
-    }
-    
-    /**
-     * Update an existing lore entry.
-     * 
-     * @param entry The LoreEntryDTO to update
-     * @return A CompletableFuture containing a boolean indicating success
-     */
-    public CompletableFuture<Boolean> updateLoreEntry(LoreEntryDTO entry) {
-        if (entry == null || entry.getId() <= 0) {
-            return CompletableFuture.completedFuture(false);
+    public CompletableFuture<List<LoreEntryDTO>> searchLoreEntries(String searchText) {
+        if (!validateConnection()) {
+            return CompletableFuture.failedFuture(
+                new SQLException("Database connection is not valid")
+            );
         }
-        
-        // Set updated timestamp
-        entry.setUpdatedAt(new Timestamp(System.currentTimeMillis()));
-        
-        QueryBuilder query = queryBuilder.update("lore_entry")
-            .set("name", entry.getName())
-            .set("description", entry.getDescription())
-            .set("is_approved", entry.isApproved())
-            .set("entry_type", entry.getEntryType())
-            .set("updated_at", entry.getUpdatedAt())
-            .where("id = ?", entry.getId());
-        
-        return queryExecutor.executeUpdate(query)
-            .thenApply(rowsAffected -> rowsAffected > 0)
-            .exceptionally(e -> {
-                logger.error("Error updating lore entry", e);
-                return false;
-            });
+        return loreEntryRepository.searchLoreEntries(searchText);
+    }
+
+    /**
+     * Find recent lore entries, sorted by creation date.
+     *
+     * @param count The maximum number of entries to return
+     * @return A future containing a list of recent lore entry DTOs
+     */
+    public CompletableFuture<List<LoreEntryDTO>> findRecentLoreEntries(int count) {
+        if (!validateConnection()) {
+            return CompletableFuture.failedFuture(
+                new SQLException("Database connection is not valid")
+            );
+        }
+        return loreEntryRepository.findRecentLoreEntries(count);
+    }
+
+    /**
+     * Find pending (unapproved) lore entries.
+     *
+     * @return A future containing a list of pending lore entry DTOs
+     */
+    public CompletableFuture<List<LoreEntryDTO>> findPendingLoreEntries() {
+        if (!validateConnection()) {
+            return CompletableFuture.failedFuture(
+                new SQLException("Database connection is not valid")
+            );
+        }
+        return loreEntryRepository.findPendingLoreEntries();
+    }
+
+    /**
+     * Get a lore entry by UUID.
+     *
+     * @param uuid The UUID of the lore entry
+     * @return A future containing the lore entry DTO, or null if not found
+     */
+    public CompletableFuture<LoreEntryDTO> getLoreEntryById(UUID uuid) {
+        if (!validateConnection()) {
+            return CompletableFuture.failedFuture(
+                new SQLException("Database connection is not valid")
+            );
+        }
+        return loreEntryRepository.getLoreEntryById(uuid);
+    }
+
+    /**
+     * Find lore entries by submitter name.
+     *
+     * @param submitter The name of the submitter
+     * @return A future containing a list of lore entry DTOs
+     */
+    public CompletableFuture<List<LoreEntryDTO>> findLoreEntriesBySubmitter(String submitter) {
+        if (!validateConnection()) {
+            return CompletableFuture.failedFuture(
+                new SQLException("Database connection is not valid")
+            );
+        }
+        return loreEntryRepository.findLoreEntriesBySubmitter(submitter);
+    }
+
+    /**
+     * Find lore entries in a specific world.
+     *
+     * @param worldName The name of the world
+     * @return A future containing a list of lore entry DTOs in the world
+     */
+    public CompletableFuture<List<LoreEntryDTO>> findLoreEntriesInWorld(String worldName) {
+        if (!validateConnection()) {
+            return CompletableFuture.failedFuture(
+                new SQLException("Database connection is not valid")
+            );
+        }
+        return loreEntryRepository.findLoreEntriesInWorld(worldName);
+    }
+
+    /**
+     * Find nearby lore entries within a radius of a location.
+     *
+     * @param location The base location to search from
+     * @param radius The radius in blocks to search within
+     * @return A future containing a list of nearby lore entry DTOs
+     */
+    public CompletableFuture<List<LoreEntryDTO>> findNearbyLoreEntries(org.bukkit.Location location, double radius) {
+        if (!validateConnection()) {
+            return CompletableFuture.failedFuture(
+                new SQLException("Database connection is not valid")
+            );
+        }
+        return loreEntryRepository.findNearbyLoreEntries(location, radius);
     }
 }

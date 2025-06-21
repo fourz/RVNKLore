@@ -31,11 +31,15 @@ public class LoreEntryRepository {
     protected final RVNKLore plugin; // Used by subclasses
     private final LogManager logger;
     private final DatabaseManager databaseManager;
+    private final QueryBuilder queryBuilder;
+    private final org.fourz.RVNKLore.data.query.DefaultQueryExecutor queryExecutor;
 
     public LoreEntryRepository(RVNKLore plugin, DatabaseManager databaseManager) {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "LoreEntryRepository");
         this.databaseManager = databaseManager;
+        this.queryBuilder = databaseManager.getQueryBuilder();
+        this.queryExecutor = databaseManager.getQueryExecutor();
     }
 
     /**
@@ -134,65 +138,41 @@ public class LoreEntryRepository {
     }
 
     /**
-     * Save a lore entry (insert or update).
+     * Get all lore entries by type and approval status.
      *
-     * @param dto The lore entry DTO to save
-     * @return CompletableFuture of saved lore entry ID
+     * @param type The type of lore entries to retrieve
+     * @param approved Whether to retrieve only approved entries
+     * @return A CompletableFuture containing a list of matching lore entries
      */
-    public CompletableFuture<Integer> saveLoreEntry(LoreEntryDTO dto) {
-        if (dto == null) {
-            logger.error("Cannot save null LoreEntryDTO", null);
-            return CompletableFuture.completedFuture(-1);
-        }
-        
-        // Handle update case
-        if (dto.getId() > 0) {
-            QueryBuilder query = databaseManager.getQueryBuilder()
-                .update("lore_entry")
-                .set("entry_type", dto.getEntryType())
-                .set("name", dto.getName())
-                .set("description", dto.getDescription())
-                .where("id = ?", dto.getId());
-            
-            return databaseManager.getQueryExecutor().executeUpdate(query)
-                .thenApply(rowsAffected -> rowsAffected > 0 ? dto.getId() : -1)
-                .exceptionally(e -> {
-                    logger.error("Error updating lore entry with ID: " + dto.getId(), e);
-                    return -1;
-                });
-        }
-        
-        // Handle insert case
+    public CompletableFuture<List<LoreEntryDTO>> getLoreEntriesByTypeAndApproved(String type, boolean approved) {
         QueryBuilder query = databaseManager.getQueryBuilder()
-            .insert("lore_entry", true) // Allow upsert to handle duplicates
-            .columns("entry_type", "name", "description")
-            .values(dto.getEntryType(), dto.getName(), dto.getDescription());
-        
-        return databaseManager.getQueryExecutor().executeInsert(query)
+            .select("*")
+            .from("lore_entry")
+            .where("entry_type = ? AND approved = ?", type, approved)
+            .orderBy("created_at", false);
+        return databaseManager.getQueryExecutor().executeQueryList(query, LoreEntryDTO.class)
             .exceptionally(e -> {
-                logger.error("Error inserting new lore entry", e);
-                return -1;
+                logger.error("Error retrieving lore entries by type and approved: " + type + ", " + approved, e);
+                return new ArrayList<>();
             });
     }
 
     /**
-     * Search lore entries by keyword in name or description asynchronously
+     * Search lore entries by text in their name or description.
      *
-     * @param keyword The keyword to search for
-     * @return CompletableFuture with a list of matching lore entries as DTOs
+     * @param searchText The text to search for
+     * @return A future containing a list of matching lore entry DTOs
      */
-    public CompletableFuture<List<LoreEntryDTO>> searchLoreEntries(String keyword) {
-        String searchPattern = "%" + keyword + "%";
-        
+    public CompletableFuture<List<LoreEntryDTO>> searchLoreEntries(String searchText) {
+        String pattern = "%" + searchText + "%";
         QueryBuilder query = databaseManager.getQueryBuilder()
             .select("*")
             .from("lore_entry")
-            .where("name LIKE ? OR description LIKE ?", searchPattern, searchPattern)
+            .where("name LIKE ? OR description LIKE ?", pattern, pattern)
             .orderBy("created_at", false);
-        
         return databaseManager.getQueryExecutor().executeQueryList(query, LoreEntryDTO.class)
             .exceptionally(e -> {
-                logger.error("Error searching lore entries with keyword: " + keyword, e);
+                logger.error("Error searching lore entries: " + searchText, e);
                 return new ArrayList<>();
             });
     }
@@ -226,7 +206,8 @@ public class LoreEntryRepository {
     public CompletableFuture<List<LoreEntryDTO>> findNearbyLoreEntries(Location location, double radius) {
         if (location == null) {
             return CompletableFuture.completedFuture(new ArrayList<>());
-        }            QueryBuilder query = databaseManager.getQueryBuilder()
+        }
+        QueryBuilder query = databaseManager.getQueryBuilder()
             .select("e.*")
             .from("lore_entry e")
             .join("lore_location", "l", "e.id = l.entry_id")
@@ -249,7 +230,8 @@ public class LoreEntryRepository {
      * @param worldName The name of the world
      * @return A future containing a list of lore entry DTOs in the world
      */
-    public CompletableFuture<List<LoreEntryDTO>> findLoreEntriesInWorld(String worldName) {        QueryBuilder query = databaseManager.getQueryBuilder()
+    public CompletableFuture<List<LoreEntryDTO>> findLoreEntriesInWorld(String worldName) {
+        QueryBuilder query = databaseManager.getQueryBuilder()
             .select("e.*")
             .from("lore_entry e")
             .join("lore_location", "l", "e.id = l.entry_id")
@@ -267,7 +249,8 @@ public class LoreEntryRepository {
      *
      * @return A future containing a list of pending lore entry DTOs
      */
-    public CompletableFuture<List<LoreEntryDTO>> findPendingLoreEntries() {        QueryBuilder query = databaseManager.getQueryBuilder()
+    public CompletableFuture<List<LoreEntryDTO>> findPendingLoreEntries() {
+        QueryBuilder query = databaseManager.getQueryBuilder()
             .select("e.*")
             .from("lore_entry e")
             .join("lore_submission", "s", "e.id = s.entry_id")
@@ -321,7 +304,8 @@ public class LoreEntryRepository {
      * @param submitter The name of the submitter
      * @return A future containing a list of lore entry DTOs
      */
-    public CompletableFuture<List<LoreEntryDTO>> findLoreEntriesBySubmitter(String submitter) {        QueryBuilder query = databaseManager.getQueryBuilder()
+    public CompletableFuture<List<LoreEntryDTO>> findLoreEntriesBySubmitter(String submitter) {
+        QueryBuilder query = databaseManager.getQueryBuilder()
             .select("e.*")
             .from("lore_entry e")
             .join("lore_submission", "s", "e.id = s.entry_id")
@@ -351,6 +335,37 @@ public class LoreEntryRepository {
             .exceptionally(e -> {
                 logger.error("Error finding lore entry with UUID: " + uuid, e);
                 return null;
+            });
+    }
+
+    /**
+     * Save a lore entry to the database.
+     *
+     * @param dto The LoreEntryDTO to save
+     * @return A CompletableFuture containing the saved lore entry ID
+     */
+    public CompletableFuture<Integer> saveLoreEntry(LoreEntryDTO dto) {
+        // Use QueryBuilder insert for upsert/insert logic
+        QueryBuilder query = queryBuilder.insert("lore_entry", true)
+            .set("uuid", dto.getUuid() != null ? dto.getUuid().toString() : null)
+            .set("entry_type", dto.getEntryType())
+            .set("name", dto.getName())
+            .set("description", dto.getDescription())
+            .set("metadata", dto.getMetadata())
+            .set("is_approved", dto.isApproved())
+            .set("submitted_by", dto.getSubmittedBy())
+            .set("world", dto.getWorld())
+            .set("x", dto.getX())
+            .set("y", dto.getY())
+            .set("z", dto.getZ())
+            .set("created_at", dto.getCreatedAt())
+            .set("updated_at", dto.getUpdatedAt());
+
+        return queryExecutor.executeInsert(query)
+            .thenApply(id -> id != null ? id : -1)
+            .exceptionally(e -> {
+                logger.error("Error saving lore entry", e);
+                return -1;
             });
     }
 }

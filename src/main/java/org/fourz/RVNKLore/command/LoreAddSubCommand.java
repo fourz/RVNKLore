@@ -4,23 +4,28 @@ import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.lore.LoreEntry;
+import org.fourz.RVNKLore.data.DatabaseManager;
+import org.fourz.RVNKLore.data.dto.LoreEntryDTO;
 import org.fourz.RVNKLore.lore.LoreType;
 
+import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 /**
  * Subcommand for adding new lore entries
  * Usage: /lore add <type> <name> <description>
  */
-public class LoreAddSubCommand implements SubCommand {
+public class LoreAddSubCommand implements org.fourz.RVNKLore.command.subcommand.SubCommand {
     private final RVNKLore plugin;
+    private final DatabaseManager databaseManager;
 
     public LoreAddSubCommand(RVNKLore plugin) {
         this.plugin = plugin;
+        this.databaseManager = plugin.getDatabaseManager();
     }
 
     @Override
@@ -64,32 +69,42 @@ public class LoreAddSubCommand implements SubCommand {
             }
         }
 
-        // Create lore entry
-        LoreEntry entry = new LoreEntry(name, null, type, player);
+        // Build LoreEntryDTO
+        LoreEntryDTO dto = new LoreEntryDTO();
+        dto.setName(name);
+        dto.setEntryType(type.name());
+        dto.setSubmittedBy(player.getName());
+        dto.setApproved(false);
+        dto.setCreatedAt(new Timestamp(System.currentTimeMillis()));
+        dto.setUpdatedAt(new Timestamp(System.currentTimeMillis()));
         // For ITEM type, set material from hand
         if (type == LoreType.ITEM) {
             org.bukkit.Material mat = player.getInventory().getItemInMainHand().getType();
-            entry.addMetadata("material", mat.name());
+            dto.getMetadata().put("material", mat.name());
         }
         // For location-based lore types, add player's current location
         if (type == LoreType.LANDMARK || type == LoreType.CITY || type == LoreType.PATH) {
-            entry.setLocation(player.getLocation());
+            dto.setLocation(player.getLocation());
         }
         // If player has item in hand and type is a head/hat type, get NBT data
         if ((type == LoreType.HEAD) && 
             player.getInventory().getItemInMainHand() != null) {
             // In a real implementation, you would use an NBT API to extract NBT data
             // For this example, we'll use a placeholder
-            entry.setNbtData("{}");
+            dto.setNbtData("{}");
         }
-        // Add the entry
-        boolean success = plugin.getLoreManager().addLoreEntry(entry);
-        if (success) {
-            player.sendMessage(ChatColor.GREEN + "&a✓ Lore entry added successfully! ID: " + entry.getId());
-            player.sendMessage(ChatColor.YELLOW + "&7   Your submission will be reviewed by a staff member.");
-        } else {
-            player.sendMessage(ChatColor.RED + "&c✖ Failed to add lore entry. Please check console for errors.");
-        }
+        // Async save
+        databaseManager.saveLoreEntry(dto).thenAccept(id -> {
+            if (id > 0) {
+                player.sendMessage(ChatColor.GREEN + "&a✓ Lore entry added successfully! ID: " + id);
+                player.sendMessage(ChatColor.YELLOW + "&7   Your submission will be reviewed by a staff member.");
+            } else {
+                player.sendMessage(ChatColor.RED + "&c✖ Failed to add lore entry. Please check console for errors.");
+            }
+        }).exceptionally(e -> {
+            player.sendMessage(ChatColor.RED + "&c✖ An error occurred while adding lore entry. Please check console for details.");
+            return null;
+        });
         return true;
     }
 

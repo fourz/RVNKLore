@@ -5,9 +5,10 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.debug.LogManager;
-import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
+import org.fourz.RVNKLore.data.DatabaseManager;
+import org.fourz.RVNKLore.data.dto.ItemCollectionDTO;
+import org.fourz.RVNKLore.data.repository.CollectionRepository;
 import org.fourz.RVNKLore.lore.item.collection.CollectionTheme;
-import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -18,15 +19,17 @@ import java.util.stream.Collectors;
  * Handles the /lore collection add command.
  * Allows administrators to define and persist new item collections in the database.
  */
-public class LoreCollectionAddSubCommand implements SubCommand {
+public class LoreCollectionAddSubCommand implements org.fourz.RVNKLore.command.subcommand.SubCommand {
     private final RVNKLore plugin;
     private final LogManager logger;
-    private final CollectionManager collectionManager;
+    private final DatabaseManager databaseManager;
+    private final CollectionRepository collectionRepository;
 
     public LoreCollectionAddSubCommand(RVNKLore plugin) {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "LoreCollectionAddSubCommand");
-        this.collectionManager = plugin.getLoreManager().getItemManager().getCollectionManager();
+        this.databaseManager = plugin.getDatabaseManager();
+        this.collectionRepository = databaseManager.getCollectionRepository();
     }
 
     @Override
@@ -59,12 +62,6 @@ public class LoreCollectionAddSubCommand implements SubCommand {
             return true;
         }
 
-        // Check if collection already exists
-        if (collectionManager.getCollection(collectionId) != null) {
-            sender.sendMessage(ChatColor.RED + "✖ A collection with ID '" + collectionId + "' already exists.");
-            return true;
-        }
-
         // Validate theme
         CollectionTheme theme;
         try {
@@ -75,16 +72,24 @@ public class LoreCollectionAddSubCommand implements SubCommand {
             return true;
         }
 
-        try {
-            // Create and validate the collection
-            ItemCollection collection = collectionManager.createCollection(collectionId, name, description);
-            if (collection == null) {
-                sender.sendMessage(ChatColor.RED + "&c✖ Failed to create collection: validation error");
-                return true;
+        // Check if collection already exists (async)
+        collectionRepository.getAllCollections().thenAccept(collections -> {
+            boolean exists = collections.stream().anyMatch(c -> c.getId().equalsIgnoreCase(collectionId));
+            if (exists) {
+                sender.sendMessage(ChatColor.RED + "✖ A collection with ID '" + collectionId + "' already exists.");
+                return;
             }
-            // Set theme and save to database (async)
-            collection.setThemeId(theme.name().toLowerCase());
-            collectionManager.saveCollection(collection).thenAccept(saved -> {
+
+            // Build DTO and save
+            ItemCollectionDTO dto = new ItemCollectionDTO();
+            dto.setId(collectionId);
+            dto.setName(name);
+            dto.setDescription(description);
+            dto.setThemeId(theme.name().toLowerCase());
+            dto.setActive(true);
+            dto.setCreatedAt(System.currentTimeMillis());
+            dto.setUpdatedAt(System.currentTimeMillis());
+            collectionRepository.saveCollectionDTO(dto).thenAccept(saved -> {
                 if (saved) {
                     sender.sendMessage(ChatColor.GREEN + "&a✓ Created collection: " + name + " (" + collectionId + ")");
                     sender.sendMessage(ChatColor.GRAY + "&7   Theme: " + theme.getDisplayName());
@@ -97,12 +102,12 @@ public class LoreCollectionAddSubCommand implements SubCommand {
                 sender.sendMessage(ChatColor.RED + "&c✖ An error occurred while saving the collection.");
                 return null;
             });
-            return true;
-        } catch (Exception e) {
-            logger.error("Error creating collection: " + collectionId, e);
-            sender.sendMessage(ChatColor.RED + "&c✖ An error occurred while creating the collection.");
-            return true;
-        }
+        }).exceptionally(e -> {
+            logger.error("Error checking for existing collections", e);
+            sender.sendMessage(ChatColor.RED + "&c✖ An error occurred while checking for existing collections.");
+            return null;
+        });
+        return true;
     }
 
     private List<String> getThemeNames() {

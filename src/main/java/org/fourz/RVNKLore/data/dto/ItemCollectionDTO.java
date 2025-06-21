@@ -20,6 +20,8 @@ public class ItemCollectionDTO {
     private long createdAt;
     private long updatedAt;
     private List<String> serializedItems; // Stored as serialized Base64 strings
+    private double progress;
+    private long completionTime;
 
     public ItemCollectionDTO() {
         this.serializedItems = new ArrayList<>();
@@ -66,6 +68,12 @@ public class ItemCollectionDTO {
     
     public List<String> getSerializedItems() { return serializedItems; }
     public void setSerializedItems(List<String> serializedItems) { this.serializedItems = serializedItems; }
+
+    public double getProgress() { return progress; }
+    public void setProgress(double progress) { this.progress = progress; }
+    
+    public long getCompletionTime() { return completionTime; }
+    public void setCompletionTime(long completionTime) { this.completionTime = completionTime; }
 
     /**
      * Convert from domain model to DTO

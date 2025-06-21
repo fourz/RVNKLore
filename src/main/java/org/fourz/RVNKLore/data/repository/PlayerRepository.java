@@ -1,12 +1,8 @@
 package org.fourz.RVNKLore.data.repository;
 
-import java.sql.SQLException;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.data.DatabaseManager;
@@ -21,191 +17,163 @@ import org.fourz.RVNKLore.debug.LogManager;
  * Delegates complex operations to DatabaseManager and uses DTOs for data transfer.
  * All methods are async and use the new QueryBuilder pattern for SQL operations.
  */
-public class PlayerRepository {
-    private final LogManager logger;
-    private final DatabaseManager databaseManager;
-    private final DefaultQueryExecutor queryExecutor;
+public class PlayerRepository {    private final LogManager logger;
     private final QueryBuilder queryBuilder;
+    private final DefaultQueryExecutor queryExecutor;
 
     public PlayerRepository(RVNKLore plugin, DatabaseManager databaseManager) {
-        this.databaseManager = databaseManager;
         this.logger = LogManager.getInstance(plugin, "PlayerRepository");
-        this.queryExecutor = databaseManager.getQueryExecutor();
         this.queryBuilder = databaseManager.getQueryBuilder();
+        this.queryExecutor = databaseManager.getQueryExecutor();
     }
 
     /**
      * Get a player by UUID.
-     * 
-     * @param uuid The UUID of the player to find
-     * @return A future containing the player DTO, or null if not found
+     *
+     * @param uuid The UUID of the player
+     * @return A future containing the PlayerDTO, or null if not found
      */
     public CompletableFuture<PlayerDTO> getPlayerByUuid(UUID uuid) {
-        if (!databaseManager.validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
-        }
+        QueryBuilder query = queryBuilder.select("*")
+            .from("player")
+            .where("uuid = ?", uuid.toString());
         
-        QueryBuilder query = queryBuilder.select("s.entry_id", "s.content")
-            .from("lore_submission s")
-            .join("lore_entry e", "e.id = s.entry_id")
-            .where("e.entry_type = ? AND s.is_current_version = TRUE AND s.content LIKE ?",
-                  "PLAYER", "%\"player_uuid\":\"" + uuid.toString() + "\"%")
-            .limit(1);
-        
-        return queryExecutor.executeQuery(query, PlayerDTO.class)
-            .exceptionally(e -> {
-                logger.error("Error getting player by UUID: " + uuid, e);
-                throw new CompletionException(e);
-            });
+        return queryExecutor.executeQuery(query, PlayerDTO.class);
     }
 
     /**
      * Get players by name.
-     * 
-     * @param name The name of the player to find
-     * @return A future containing a list of matching player DTOs
+     *
+     * @param name The name of the player
+     * @return A future containing a list of PlayerDTOs
      */
     public CompletableFuture<List<PlayerDTO>> getPlayersByName(String name) {
-        if (!databaseManager.validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
-        }
+        QueryBuilder query = queryBuilder.select("*")
+            .from("player")
+            .where("name = ?", name);
         
-        QueryBuilder query = queryBuilder.select("s.entry_id", "s.content")
-            .from("lore_submission s")
-            .join("lore_entry e", "e.id = s.entry_id")
-            .where("e.entry_type = ? AND s.is_current_version = TRUE AND s.content LIKE ?",
-                  "PLAYER", "%\"player_name\":\"" + name + "\"%");
-        
-        return queryExecutor.executeQueryList(query, PlayerDTO.class)
-            .exceptionally(e -> {
-                logger.error("Error getting players by name: " + name, e);
-                return List.of();
-            });
+        return queryExecutor.executeQueryList(query, PlayerDTO.class);
     }
 
     /**
-     * Save a player entry (insert or update).
-     * Uses DatabaseManager for complex metadata operations.
-     * 
-     * @param dto The player DTO to save
-     * @return A future containing the player UUID
+     * Save a player.
+     *
+     * @param dto The PlayerDTO to save
+     * @return A future containing the saved player UUID
      */
     public CompletableFuture<UUID> savePlayer(PlayerDTO dto) {
-        if (!databaseManager.validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
-        }
+        QueryBuilder query = queryBuilder.insert("player", false)
+            .set("uuid", dto.getPlayerUuid().toString())
+            .set("name", dto.getPlayerName())
+            .set("metadata", dto.getMetadata());
         
-        if (dto.getPlayerUuid() == null) {
-            return CompletableFuture.failedFuture(
-                new IllegalArgumentException("Cannot save player with null UUID")
-            );
-        }
-
-        // Ensure metadata exists and contains required fields
-        if (dto.getMetadata() == null) {
-            dto.setMetadata(new HashMap<>());
-        }
-        
-        Map<String, String> metadata = dto.getMetadata();
-        metadata.put("player_uuid", dto.getPlayerUuid().toString());
-        if (dto.getPlayerName() != null) {
-            metadata.put("player_name", dto.getPlayerName());
-        }
-
-        return databaseManager.savePlayerMetadata(dto)
-            .thenApply(success -> dto.getPlayerUuid())
-            .exceptionally(e -> {
-                logger.error("Error saving player: " + dto.getPlayerUuid(), e);
-                throw new CompletionException(e);
-            });
+        return queryExecutor.executeUpdate(query)
+            .thenApply(rows -> dto.getPlayerUuid());
     }
 
     /**
      * Delete a player by UUID.
-     * 
+     *
      * @param uuid The UUID of the player to delete
-     * @return A future containing true if successful
+     * @return A future containing true if the player was deleted, false otherwise
      */
     public CompletableFuture<Boolean> deletePlayer(UUID uuid) {
-        if (!databaseManager.validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
-        }
-        
-        QueryBuilder query = queryBuilder.raw(
-            "DELETE e FROM lore_entry e " +
-            "JOIN lore_submission s ON e.id = s.entry_id " +
-            "WHERE e.entry_type = ? AND s.content LIKE ?",
-            "PLAYER", "%\"player_uuid\":\"" + uuid.toString() + "\"%"
-        );
+        QueryBuilder query = queryBuilder.deleteFrom("player")
+            .where("uuid = ?", uuid.toString());
         
         return queryExecutor.executeUpdate(query)
-            .thenApply(rowsAffected -> rowsAffected > 0)
-            .exceptionally(e -> {
-                logger.error("Error deleting player: " + uuid, e);
-                return false;
-            });
+            .thenApply(rows -> rows > 0);
     }
 
     /**
-     * Checks if a player exists in the lore system.
+     * Save player metadata (insert or update player entry in lore_entry table).
+     *
+     * @param dto The PlayerDTO containing player data
+     * @return CompletableFuture<Boolean> indicating success
+     */
+    public CompletableFuture<Boolean> savePlayerMetadata(PlayerDTO dto) {
+        QueryBuilder query = queryBuilder.insert("lore_entry", false)
+            .set("entry_type", "PLAYER")
+            .set("name", dto.getPlayerName())
+            .set("metadata", dto.getMetadata())
+            .set("is_approved", true)
+            .set("uuid", dto.getPlayerUuid().toString());
+            
+        return queryExecutor.executeUpdate(query)
+            .thenApply(rows -> rows > 0);
+    }
+
+    /**
+     * Check if a player exists by UUID.
+     *
+     * @param playerUuid The player's UUID
+     * @return CompletableFuture<Boolean> indicating existence
      */
     public CompletableFuture<Boolean> playerExists(UUID playerUuid) {
-        return databaseManager.playerExists(playerUuid)
-            .exceptionally(e -> {
-                logger.error("Error checking if player exists: " + playerUuid, e);
-                return false;
-            });
+        QueryBuilder query = queryBuilder.select("COUNT(*) as count")
+            .from("lore_entry")
+            .where("entry_type = ? AND uuid = ?", "PLAYER", playerUuid.toString());
+            
+        return queryExecutor.executeQuery(query, PlayerDTO.class)
+            .thenApply(dto -> dto != null);
     }
 
     /**
-     * Gets the current player name stored in the database.
+     * Get the stored player name for a UUID.
+     *
+     * @param playerUuid The player's UUID
+     * @return CompletableFuture<String> with the player name or null
      */
     public CompletableFuture<String> getStoredPlayerName(UUID playerUuid) {
-        return databaseManager.getStoredPlayerName(playerUuid)
-            .exceptionally(e -> {
-                logger.error("Error getting stored player name: " + playerUuid, e);
-                return null;
-            });
+        QueryBuilder query = queryBuilder.select("name")
+            .from("lore_entry")
+            .where("entry_type = ? AND uuid = ?", "PLAYER", playerUuid.toString());
+            
+        return queryExecutor.executeQuery(query, PlayerDTO.class)
+            .thenApply(dto -> dto != null ? dto.getPlayerName() : null);
     }
 
     /**
-     * Gets all lore entries associated with a player.
+     * Get all lore entries for a player.
+     *
+     * @param playerUuid The player's UUID
+     * @return CompletableFuture<List<PlayerDTO>>
      */
     public CompletableFuture<List<PlayerDTO>> getPlayerLoreEntries(UUID playerUuid) {
-        return databaseManager.getPlayerLoreEntries(playerUuid)
-            .exceptionally(e -> {
-                logger.error("Error getting player lore entries: " + playerUuid, e);
-                return List.of();
-            });
+        QueryBuilder query = queryBuilder.select("*")
+            .from("lore_entry")
+            .where("entry_type = ? AND uuid = ?", "PLAYER", playerUuid.toString());
+            
+        return queryExecutor.executeQueryList(query, PlayerDTO.class);
     }
 
     /**
-     * Gets player lore entries by type.
+     * Get player lore entries by type.
+     *
+     * @param playerUuid The player's UUID
+     * @param entryType The entry type
+     * @return CompletableFuture<List<PlayerDTO>>
      */
     public CompletableFuture<List<PlayerDTO>> getPlayerLoreEntriesByType(UUID playerUuid, String entryType) {
-        return databaseManager.getPlayerLoreEntriesByType(playerUuid, entryType)
-            .exceptionally(e -> {
-                logger.error("Error getting player lore entries by type: " + playerUuid + ", " + entryType, e);
-                return List.of();
-            });
+        QueryBuilder query = queryBuilder.select("*")
+            .from("lore_entry")
+            .where("entry_type = ? AND uuid = ? AND entry_type = ?", "PLAYER", playerUuid.toString(), entryType);
+            
+        return queryExecutor.executeQueryList(query, PlayerDTO.class);
     }
 
     /**
-     * Gets the history of name changes for a player.
+     * Get name change history for a player.
+     *
+     * @param playerUuid The player's UUID
+     * @return CompletableFuture<List<NameChangeRecordDTO>>
      */
     public CompletableFuture<List<NameChangeRecordDTO>> getNameChangeHistory(UUID playerUuid) {
-        return databaseManager.getNameChangeHistory(playerUuid)
-            .exceptionally(e -> {
-                logger.error("Error getting name change history: " + playerUuid, e);
-                return List.of();
-            });
+        QueryBuilder query = queryBuilder.select("*")
+            .from("name_change_record")
+            .where("player_uuid = ?", playerUuid.toString())
+            .orderBy("changed_at", false);
+            
+        return queryExecutor.executeQueryList(query, NameChangeRecordDTO.class);
     }
 }
