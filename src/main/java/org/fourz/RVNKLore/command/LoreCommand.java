@@ -7,24 +7,57 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.RVNKLore.data.DatabaseManager;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Main command handler for the /lore command.
- * Dispatches to appropriate subcommands based on arguments.
+ * Implements centralized command handling with async operation support.
+ * Delegates to appropriate subcommands based on arguments.
  */
 public class LoreCommand implements CommandExecutor, TabCompleter {
     private final RVNKLore plugin;
     private final LogManager logger;
     private final Map<String, SubCommand> subCommands = new HashMap<>();
+    private final DatabaseManager databaseManager;
+    
+    /**
+     * Interface for all lore subcommands.
+     * Provides contract for permission checking and command execution.
+     */
+    public interface SubCommand {
+        /**
+         * Check if sender has permission to use this command
+         */
+        boolean hasPermission(CommandSender sender);
+        
+        /**
+         * Execute the subcommand
+         */
+        boolean execute(CommandSender sender, String[] args);
+        
+        /**
+         * Get command description for help
+         */
+        String getDescription();
+        
+        /**
+         * Get tab completions for command
+         */
+        default List<String> getTabCompletions(CommandSender sender, String[] args) {
+            return List.of();
+        }
+    }
 
     public LoreCommand(RVNKLore plugin) {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "LoreCommand");
+        this.databaseManager = plugin.getDatabaseManager();
         registerSubCommands();
     }
 
@@ -33,38 +66,67 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
      */
     private void registerSubCommands() {
         logger.debug("Registering subcommands...");
-          // Register all subcommands at once to reduce debug log spam
-        Map<String, SubCommand> commands = new HashMap<>();
-        commands.put("add", new LoreAddSubCommand(plugin));
-        commands.put("get", new LoreGetSubCommand(plugin));
-        commands.put("list", new LoreListSubCommand(plugin));
-        commands.put("approve", new LoreApproveSubCommand(plugin));
-        commands.put("reload", new LoreReloadSubCommand(plugin));
-        commands.put("export", new LoreExportSubCommand(plugin));
-        commands.put("debug", new LoreDebugSubCommand(plugin));
         
-        // Add cosmetic management commands using the new ItemManager-based API
-        //if (plugin.getItemManager() != null && plugin.getItemManager().getCosmeticManager() != null) {
-        if (plugin.getLoreManager().getItemManager() != null && plugin.getLoreManager().getItemManager().getCosmeticItem() != null) {
-            commands.put("collection", new LoreCollectionSubCommand(plugin));
-            // Register the /lore item parent subcommand and its children
-            commands.put("item", new LoreItemSubCommand(plugin));
-            // Remove /lore itemgive registration
-        }
+        // Create placeholder subcommands
+        registerPlaceholderCommand("add", "rvnklore.lore.add", "Add a new lore entry");
+        registerPlaceholderCommand("edit", "rvnklore.lore.edit", "Edit a lore entry");
+        registerPlaceholderCommand("delete", "rvnklore.lore.delete", "Delete a lore entry");
+        registerPlaceholderCommand("info", "rvnklore.lore.info", "View lore entry information");
+        registerPlaceholderCommand("list", "rvnklore.lore.list", "List lore entries");
+        registerPlaceholderCommand("search", "rvnklore.lore.search", "Search lore entries");
+        registerPlaceholderCommand("approve", "rvnklore.lore.approve", "Approve a lore entry");
+        registerPlaceholderCommand("reject", "rvnklore.lore.reject", "Reject a lore entry");
+        registerPlaceholderCommand("nearby", "rvnklore.lore.nearby", "Find nearby lore entries");
+        registerPlaceholderCommand("submit", "rvnklore.lore.submit", "Submit a lore entry");
+        registerPlaceholderCommand("item", "rvnklore.lore.item", "Item management commands");
         
-        // Add all commands to the subCommands map
-        commands.forEach(this::registerSubCommand);
-        logger.debug("Registered " + commands.size() + " subcommands successfully");
+        // Add aliases
+        registerAlias("create", "add"); // Alias for add
+        registerAlias("new", "add");    // Alias for add
+        registerAlias("update", "edit"); // Alias for edit
+        registerAlias("modify", "edit"); // Alias for edit
+        registerAlias("remove", "delete"); // Alias for delete
+        registerAlias("view", "info"); // Alias for info
+        registerAlias("get", "info");  // Alias for info
+        registerAlias("find", "search"); // Alias for search
+        
+        logger.debug("Registered " + subCommands.size() + " subcommands successfully");
     }
 
     /**
-     * Registers a subcommand
-     * 
-     * @param name The name of the subcommand
-     * @param subCommand The subcommand implementation
+     * Registers a placeholder command that shows "coming soon" message.
      */
-    private void registerSubCommand(String name, SubCommand subCommand) {
-        subCommands.put(name.toLowerCase(), subCommand);
+    private void registerPlaceholderCommand(String name, String permission, String description) {
+        subCommands.put(name.toLowerCase(), new SubCommand() {
+            @Override
+            public boolean hasPermission(CommandSender sender) {
+                return sender.hasPermission(permission);
+            }
+            
+            @Override
+            public boolean execute(CommandSender sender, String[] args) {
+                sender.sendMessage("§e⚠ The '" + name + "' command is being updated to use the new system");
+                sender.sendMessage("§7   This feature will be available soon");
+                return true;
+            }
+            
+            @Override
+            public String getDescription() {
+                return description;
+            }
+        });
+    }
+
+    /**
+     * Registers a command alias that points to another command.
+     */
+    private void registerAlias(String alias, String targetCommand) {
+        SubCommand target = subCommands.get(targetCommand.toLowerCase());
+        if (target != null) {
+            subCommands.put(alias.toLowerCase(), target);
+        } else {
+            logger.warning("Cannot register alias '" + alias + "' for non-existent command '" + targetCommand + "'");
+        }
     }
 
     @Override
@@ -98,30 +160,17 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
 
     /**
      * Shows help information to the sender
-     * 
-     * @param sender Command sender to show help to
      */
     private void showHelp(CommandSender sender) {
         sender.sendMessage(ChatColor.GOLD + "===== RVNKLore Commands =====");
         for (Map.Entry<String, SubCommand> entry : subCommands.entrySet()) {
             if (entry.getValue().hasPermission(sender)) {
-                // Update help for unified item give command
-                if ("itemgive".equals(entry.getKey())) {
-                    sender.sendMessage(ChatColor.YELLOW + "/lore itemgive <item_name> <player>" +
-                        ChatColor.WHITE + " - Give any lore item (cosmetic, collection, etc.) by name");
-                } else if ("collection".equals(entry.getKey())) {
-                    sender.sendMessage(ChatColor.YELLOW + "/lore collection <view|claim> <collection_id>" +
-                        ChatColor.WHITE + " - View or claim collection progress/rewards");
-                } else if ("give".equals(entry.getKey())) {
-                    sender.sendMessage(ChatColor.DARK_GRAY + "/lore give ... [DEPRECATED, use /lore itemgive]" +
-                        ChatColor.GRAY + " - Deprecated: use /lore itemgive");
-                } else {
-                    sender.sendMessage(ChatColor.YELLOW + "/lore " + entry.getKey() + 
-                        ChatColor.WHITE + " - " + entry.getValue().getDescription());
-                }
+                String command = entry.getKey();
+                String description = entry.getValue().getDescription();
+                sender.sendMessage(ChatColor.YELLOW + "/lore " + command + 
+                    ChatColor.WHITE + " - " + description);
             }
         }
-        sender.sendMessage(ChatColor.GRAY + "\nSee /lore itemgive and /lore collection for unified item and collection management.");
     }
 
     @Override
