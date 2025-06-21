@@ -2,7 +2,6 @@ package org.fourz.RVNKLore.data.connection;
 
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.config.ConfigManager;
-import org.fourz.RVNKLore.config.dto.SQLiteSettingsDTO;
 import org.fourz.RVNKLore.debug.LogManager;
 
 import java.io.File;
@@ -21,11 +20,13 @@ import java.util.concurrent.locks.ReentrantLock;
 public class SQLiteConnectionProvider implements ConnectionProvider {
     private final RVNKLore plugin;
     private final LogManager logger;
-    private final SQLiteSettingsDTO settings;
     private Connection connection;
     private String lastConnectionError;
     private final ReentrantLock connectionLock = new ReentrantLock();
-    private final File databaseFile;    /**
+    private final File databaseFile;
+    private final Map<String, Object> settings;
+
+    /**
      * Create a new SQLite connection provider.
      *
      * @param plugin The RVNKLore plugin instance
@@ -35,20 +36,15 @@ public class SQLiteConnectionProvider implements ConnectionProvider {
         this.logger = LogManager.getInstance(plugin, "SQLiteConnectionProvider");
         
         // Get SQLite settings directly from ConfigManager
-        ConfigManager configManager = plugin.getConfigManager();
-        Map<String, Object> settingsMap = configManager.getSQLiteSettings();
-        String dbName = (String) settingsMap.getOrDefault("database", "data.db");
+        this.settings = plugin.getConfigManager().getSQLiteSettings();
         
-        // Create SQLiteSettingsDTO with file path
+        // Setup database file
         File dataFolder = new File(plugin.getDataFolder(), "database");
         if (!dataFolder.exists()) {
             dataFolder.mkdirs();
         }
         
-        String dbPath = new File(dataFolder, dbName).getAbsolutePath();
-        this.settings = new SQLiteSettingsDTO(dbPath);
-        
-        this.databaseFile = new File(dataFolder, dbName);
+        this.databaseFile = new File(dataFolder, (String) settings.get("database"));
         
         initializeConnection();
     }
@@ -72,28 +68,24 @@ public class SQLiteConnectionProvider implements ConnectionProvider {
             // Configure connection properties
             Properties properties = new Properties();
             properties.setProperty("foreign_keys", "true");
-            properties.setProperty("busy_timeout", String.valueOf(settings.getBusyTimeout()));
-            if (settings.isWalMode()) {
+            properties.setProperty("busy_timeout", String.valueOf(settings.get("busyTimeout")));
+            if ((Boolean) settings.get("walMode")) {
                 properties.setProperty("journal_mode", "WAL");
             }
-            properties.setProperty("synchronous", "NORMAL");
+            properties.setProperty("synchronous", (String) settings.get("synchronous"));
             
             // Get the connection
             String url = "jdbc:sqlite:" + databaseFile.getAbsolutePath();
             connection = DriverManager.getConnection(url, properties);
             
-            // Configure SQLite connection properties
+            // Configure SQLite connection
             connection.setAutoCommit(false);
             
             // Additional PRAGMA settings
             try (Statement statement = connection.createStatement()) {
-                // Enable foreign keys
                 statement.execute("PRAGMA foreign_keys = ON");
-                // Set cache size (4MB)
                 statement.execute("PRAGMA cache_size = -4000");
-                // Set temp storage to memory
                 statement.execute("PRAGMA temp_store = MEMORY");
-                // Commit these changes
                 connection.commit();
             }
             

@@ -1,11 +1,14 @@
 package org.fourz.RVNKLore.data.dto;
 
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Timestamp;
 import org.fourz.RVNKLore.lore.LoreSubmission;
 
 /**
  * Data Transfer Object for LoreSubmission.
  * Used to transfer lore submission data between database and domain layers.
+ * Includes static helper methods for mapping between domain objects and DTOs.
  */
 public class LoreSubmissionDTO {
     private int id;
@@ -88,9 +91,7 @@ public class LoreSubmissionDTO {
     public boolean isCurrentVersion() { return isCurrentVersion; }
     public void setCurrentVersion(boolean currentVersion) { this.isCurrentVersion = currentVersion; }
     public String getContent() { return content; }
-    public void setContent(String content) { this.content = content; }
-
-    /**
+    public void setContent(String content) { this.content = content; }    /**
      * Converts a LoreSubmission domain object to a DTO.
      */
     public static LoreSubmissionDTO fromLoreSubmission(LoreSubmission submission) {
@@ -117,11 +118,66 @@ public class LoreSubmissionDTO {
             submission.getContent()
         );
     }
-
+    
     /**
+     * Creates a DTO from a SQL ResultSet.
+     * This is used by the repository layer for mapping database results.
+     * 
+     * @param rs The ResultSet containing the lore submission data
+     * @return A new LoreSubmissionDTO populated from the ResultSet
+     * @throws SQLException If a database access error occurs
+     */
+    public static LoreSubmissionDTO fromResultSet(ResultSet rs) throws SQLException {
+        LoreSubmissionDTO dto = new LoreSubmissionDTO();
+        
+        dto.setId(rs.getInt("id"));
+        dto.setEntryId(rs.getInt("entry_id"));
+        dto.setSlug(rs.getString("slug"));
+        dto.setVisibility(rs.getString("visibility"));
+        dto.setStatus(rs.getString("status"));
+        dto.setSubmitterUuid(rs.getString("submitter_uuid"));
+        dto.setCreatedBy(rs.getString("created_by"));
+        dto.setSubmissionDate(rs.getTimestamp("submission_date"));
+        dto.setApprovalStatus(rs.getString("approval_status"));
+        dto.setApprovedBy(rs.getString("approved_by"));
+        dto.setApprovedAt(rs.getTimestamp("approved_at"));
+        dto.setViewCount(rs.getInt("view_count"));
+        dto.setLastViewedAt(rs.getTimestamp("last_viewed_at"));
+        dto.setCreatedAt(rs.getTimestamp("created_at"));
+        dto.setUpdatedAt(rs.getTimestamp("updated_at"));
+        dto.setContentVersion(rs.getInt("content_version"));
+        dto.setCurrentVersion(rs.getBoolean("is_current_version"));
+        dto.setContent(rs.getString("content"));
+        
+        return dto;
+    }    /**
      * Converts this DTO to a LoreSubmission domain object.
+     * 
+     * @return A new LoreSubmission domain object populated from this DTO
      */
     public LoreSubmission toLoreSubmission() {
         return new LoreSubmission(this);
+    }
+    
+    /**
+     * Creates a new DTO with default values for a new submission.
+     * 
+     * @param content The submission content
+     * @param submitterUuid The UUID of the player submitting the content
+     * @param entryId The ID of the lore entry this submission is for (0 for new entries)
+     * @return A new LoreSubmissionDTO with default values set
+     */
+    public static LoreSubmissionDTO createNew(String content, String submitterUuid, int entryId) {
+        LoreSubmissionDTO dto = new LoreSubmissionDTO();
+        dto.setContent(content);
+        dto.setSubmitterUuid(submitterUuid);
+        dto.setEntryId(entryId);
+        dto.setApprovalStatus("PENDING");
+        dto.setStatus("PENDING");
+        dto.setContentVersion(1);
+        dto.setCurrentVersion(true);
+        dto.setSubmissionDate(new Timestamp(System.currentTimeMillis()));
+        dto.setCreatedAt(new Timestamp(System.currentTimeMillis()));
+        return dto;
     }
 }

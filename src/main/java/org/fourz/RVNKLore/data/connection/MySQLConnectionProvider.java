@@ -1,26 +1,27 @@
 package org.fourz.RVNKLore.data.connection;
 
-import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.config.ConfigManager;
-import org.fourz.RVNKLore.config.dto.MySQLSettingsDTO;
-import org.fourz.RVNKLore.debug.LogManager;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
+import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.debug.LogManager;
 
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.Map;
 
 /**
  * MySQL implementation of the ConnectionProvider interface.
- * Uses HikariCP for connection pooling and efficient connection management.
+ * Uses HikariCP for connection pooling.
  */
 public class MySQLConnectionProvider implements ConnectionProvider {
     private final RVNKLore plugin;
     private final LogManager logger;
     private HikariDataSource dataSource;
-    private final MySQLSettingsDTO settings;
-    private String lastConnectionError;    /**
+    private String lastConnectionError;
+    private final Map<String, Object> settings;
+
+    /**
      * Create a new MySQL connection provider.
      *
      * @param plugin The RVNKLore plugin instance
@@ -30,78 +31,71 @@ public class MySQLConnectionProvider implements ConnectionProvider {
         this.logger = LogManager.getInstance(plugin, "MySQLConnectionProvider");
         
         // Get MySQL settings directly from ConfigManager
-        ConfigManager configManager = plugin.getConfigManager();
-        Map<String, Object> settingsMap = configManager.getMySQLSettings();
-        
-        this.settings = new MySQLSettingsDTO(
-            (String) settingsMap.get("host"),
-            (Integer) settingsMap.get("port"),
-            (String) settingsMap.get("database"),
-            (String) settingsMap.get("username"),
-            (String) settingsMap.get("password"),
-            (Boolean) settingsMap.get("useSSL"),
-            (String) settingsMap.get("tablePrefix")
-        );
+        this.settings = plugin.getConfigManager().getMySQLSettings();
         
         initializeConnectionPool();
     }
 
     /**
-     * Initialize the connection pool with the provided settings.
+     * Initialize the connection pool using HikariCP.
      */
     public void initializeConnectionPool() {
+        if (dataSource != null && !dataSource.isClosed()) {
+            logger.info("Closing existing connection pool...");
+            dataSource.close();
+        }
+
         try {
             logger.info("Initializing MySQL connection pool...");
-            
-            // Create Hikari configuration
+
             HikariConfig config = new HikariConfig();
-            config.setJdbcUrl(String.format("jdbc:mysql://%s:%d/%s?useSSL=%s&serverTimezone=UTC", 
-                settings.getHost(), 
-                settings.getPort(), 
-                settings.getDatabase(), 
-                settings.isUseSSL()));
-            config.setUsername(settings.getUsername());
-            config.setPassword(settings.getPassword());
+            config.setDriverClassName("com.mysql.jdbc.Driver");
+            config.setJdbcUrl(String.format("jdbc:mysql://%s:%d/%s",
+                settings.get("host"),
+                settings.get("port"),
+                settings.get("database")));
+            config.setUsername((String) settings.get("username"));
+            config.setPassword((String) settings.get("password"));
+            config.setMaximumPoolSize((Integer) settings.get("poolSize"));
+            config.setConnectionTimeout((Integer) settings.get("connectionTimeout"));
+            config.setIdleTimeout((Integer) settings.get("idleTimeout"));
+            config.setMaxLifetime((Integer) settings.get("maxLifetime"));
             
-            // Configure pool settings
-            config.setPoolName("RVNKLore-MySQL-Pool");
-            config.setMaximumPoolSize(10);
-            config.setMinimumIdle(2);
-            config.setIdleTimeout(30000);
-            config.setConnectionTimeout(5000);
-            config.setMaxLifetime(1800000);
+            // Add MySQL-specific properties
+            config.addDataSourceProperty("useSSL", settings.get("useSSL"));
+            config.addDataSourceProperty("characterEncoding", "utf8");
+            config.addDataSourceProperty("useUnicode", "true");
+            config.addDataSourceProperty("serverTimezone", "UTC");
+            config.addDataSourceProperty("tcpKeepAlive", true);
+            config.addDataSourceProperty("autoReconnect", true);
             
-            // Configure connection testing
-            config.setConnectionTestQuery("SELECT 1");
-            config.setLeakDetectionThreshold(60000);
-            
-            // Create data source
             dataSource = new HikariDataSource(config);
             
             // Test connection
-            try (Connection conn = dataSource.getConnection()) {
-                logger.info("MySQL connection established successfully to " + settings.getHost() + ":" + settings.getPort() + "/" + settings.getDatabase());
+            try (Connection conn = dataSource.getConnection();
+                 Statement stmt = conn.createStatement()) {
+                stmt.execute("SELECT 1");
+                logger.info("MySQL connection pool initialized successfully");
             }
+            
+            lastConnectionError = null;
             
         } catch (SQLException e) {
             lastConnectionError = e.getMessage();
             logger.error("Failed to initialize MySQL connection pool", e);
+            if (dataSource != null) {
+                dataSource.close();
+            }
             dataSource = null;
         }
     }
 
     @Override
     public Connection getConnection() throws SQLException {
-        if (dataSource == null) {
-            throw new SQLException("MySQL connection pool not initialized");
+        if (dataSource == null || dataSource.isClosed()) {
+            throw new SQLException("Connection pool is not initialized");
         }
-        try {
-            return dataSource.getConnection();
-        } catch (SQLException e) {
-            lastConnectionError = e.getMessage();
-            logger.error("Failed to get MySQL connection from pool", e);
-            throw e;
-        }
+        return dataSource.getConnection();
     }
 
     @Override
@@ -109,7 +103,6 @@ public class MySQLConnectionProvider implements ConnectionProvider {
         if (dataSource != null && !dataSource.isClosed()) {
             logger.info("Closing MySQL connection pool...");
             dataSource.close();
-            dataSource = null;
         }
     }
 
@@ -119,8 +112,10 @@ public class MySQLConnectionProvider implements ConnectionProvider {
             return false;
         }
         
-        try (Connection conn = dataSource.getConnection()) {
-            return conn.isValid(2); // Check if connection is valid with 2-second timeout
+        try (Connection conn = dataSource.getConnection();
+             Statement stmt = conn.createStatement()) {
+            stmt.execute("SELECT 1");
+            return true;
         } catch (SQLException e) {
             lastConnectionError = e.getMessage();
             logger.error("MySQL connection health check failed", e);
@@ -143,11 +138,11 @@ public class MySQLConnectionProvider implements ConnectionProvider {
     }
     
     /**
-     * Get the current connection pool statistics.
+     * Get connection pool statistics.
      *
-     * @return A string containing the connection pool statistics
+     * @return A string containing connection pool statistics
      */
-    public String getPoolStats() {
+    public String getConnectionStats() {
         if (dataSource == null) {
             return "Connection pool not initialized";
         }

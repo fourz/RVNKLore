@@ -9,9 +9,6 @@ import org.fourz.RVNKLore.handler.HandlerFactory;
 import org.fourz.RVNKLore.handler.LoreHandler;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
-import org.fourz.RVNKLore.config.dto.DatabaseSettingsDTO;
-import org.fourz.RVNKLore.config.dto.MySQLSettingsDTO;
-import org.fourz.RVNKLore.config.dto.SQLiteSettingsDTO;
 
 import java.util.HashMap;
 import java.util.List;
@@ -235,7 +232,7 @@ public class ConfigManager {
     }
     
     /**
-     * Get database connection settings for MySQL
+     * Get MySQL database configuration with defaults.
      */
     public Map<String, Object> getMySQLSettings() {
         Map<String, Object> settings = new HashMap<>();
@@ -245,63 +242,37 @@ public class ConfigManager {
         settings.put("username", config.getString("storage.mysql.username", "root"));
         settings.put("password", config.getString("storage.mysql.password", ""));
         settings.put("useSSL", config.getBoolean("storage.mysql.useSSL", false));
+        settings.put("poolSize", config.getInt("storage.mysql.poolSize", 10));
+        settings.put("connectionTimeout", config.getInt("storage.mysql.connectionTimeout", 30000));
+        settings.put("idleTimeout", config.getInt("storage.mysql.idleTimeout", 600000));
+        settings.put("maxLifetime", config.getInt("storage.mysql.maxLifetime", 1800000));
         settings.put("tablePrefix", config.getString("storage.mysql.tablePrefix", ""));
         return settings;
     }
     
     /**
-     * Get database connection settings for SQLite
+     * Get SQLite database configuration with defaults.
      */
     public Map<String, Object> getSQLiteSettings() {
         Map<String, Object> settings = new HashMap<>();
-        settings.put("database", config.getString("storage.sqlite.database", "data.db"));
+        String dbFile = config.getString("storage.sqlite.database", "data.db");
+        String dbPath = new java.io.File(plugin.getDataFolder(), "database/" + dbFile).getAbsolutePath();
+        settings.put("database", dbFile);
+        settings.put("path", dbPath);
+        settings.put("busyTimeout", config.getInt("storage.sqlite.busyTimeout", 3000));
+        settings.put("walMode", config.getBoolean("storage.sqlite.walMode", true));
+        settings.put("synchronous", config.getString("storage.sqlite.synchronous", "NORMAL"));
         return settings;
     }
-    
-    /**
-     * Get test mode setting
-     */
-    public boolean isTestMode() {
-        return "yes".equalsIgnoreCase(config.getString("storage.test-mode", "no"));
-    }
 
     /**
-     * Get database settings for the plugin.
-     * @return A DatabaseSettingsDTO containing all database configuration
+     * Get database connection retry settings.
      */
-    public DatabaseSettingsDTO getDatabaseSettings() {
-        DatabaseSettingsDTO.DatabaseType type = "mysql".equalsIgnoreCase(getStorageType()) 
-            ? DatabaseSettingsDTO.DatabaseType.MYSQL 
-            : DatabaseSettingsDTO.DatabaseType.SQLITE;
-
-        // Get MySQL settings if needed
-        MySQLSettingsDTO mysqlSettings = null;
-        if (type == DatabaseSettingsDTO.DatabaseType.MYSQL) {
-            Map<String, Object> settings = getMySQLSettings();
-            mysqlSettings = new MySQLSettingsDTO(
-                (String) settings.get("host"),
-                (Integer) settings.get("port"),
-                (String) settings.get("database"),
-                (String) settings.get("username"),
-                (String) settings.get("password"),
-                (Boolean) settings.get("useSSL"),
-                (String) settings.get("tablePrefix")
-            );
-        }
-
-        // Get SQLite settings if needed
-        SQLiteSettingsDTO sqliteSettings = null;
-        if (type == DatabaseSettingsDTO.DatabaseType.SQLITE) {
-            String dbPath = plugin.getDataFolder().getAbsolutePath() + "/database.db";
-            sqliteSettings = new SQLiteSettingsDTO(dbPath);
-        }
-
-        return new DatabaseSettingsDTO(
-            type,
-            mysqlSettings,
-            sqliteSettings,
-            config.getInt("storage.connectionTimeout", 30000),
-            config.getInt("storage.maxRetries", 3)
-        );
+    public Map<String, Object> getDatabaseRetrySettings() {
+        Map<String, Object> settings = new HashMap<>();
+        settings.put("maxRetries", config.getInt("storage.maxRetries", 3));
+        settings.put("retryDelay", config.getInt("storage.retryDelay", 1000));
+        settings.put("connectionTimeout", config.getInt("storage.connectionTimeout", 30000));
+        return settings;
     }
 }

@@ -2,7 +2,6 @@ package org.fourz.RVNKLore;
 
 import org.bukkit.plugin.java.JavaPlugin;
 import org.fourz.RVNKLore.handler.HandlerFactory;
-import org.fourz.RVNKLore.lore.LoreManager;
 import org.fourz.RVNKLore.config.ConfigManager;
 import org.fourz.RVNKLore.data.DatabaseManager;
 import org.fourz.RVNKLore.debug.Debug;
@@ -15,7 +14,6 @@ import org.fourz.RVNKLore.lore.item.ItemManager;
 import org.fourz.RVNKLore.lore.player.PlayerManager;
 
 public class RVNKLore extends JavaPlugin {
-    private LoreManager loreManager;
     private LogManager logger;
     private ConfigManager configManager;
     private CommandManager commandManager;
@@ -28,44 +26,21 @@ public class RVNKLore extends JavaPlugin {
     private boolean shuttingDown = false;
     private final Object shutdownLock = new Object();@Override
     public void onEnable() {
-        // Initialize logger first
-        logger = LogManager.getInstance(this, "RVNKLore");
-        
-        // Initialize ConfigManager first to get the log level
-        configManager = new ConfigManager(this);
-        
-        // Initialize debug in ConfigManager
-        configManager.initDebugLogging();
-        
-        registerShutdownHook();
-        
-        logger.info("Initializing RVNKLore...");
-          try {
-            // First try to initialize the database with settings from config
-            logger.info("Initializing database...");
-            databaseManager = new DatabaseManager(this, configManager);
-            // Start database health service
-            databaseManager.startHealthService();
+        // Initialize logging
+        this.logger = LogManager.getInstance(this, "RVNKLore");
+        logger.info("&6⚙ Enabling RVNKLore plugin...");
 
-            // Create required utility systems
-            logger.info("Initializing utility systems...");
-            utilityManager = UtilityManager.getInstance(this);
-            handlerFactory = new HandlerFactory(this);
+        // Load configuration (DTO-based, no explicit load() call)
+        this.configManager = new ConfigManager(this);
+        logger.info("&a✓ Configuration manager initialized");
 
-            // Database schema is loaded by DatabaseManager constructor
-            logger.info("Database schema loaded. Initializing core systems...");
-            handlerFactory.initialize();
-            loreManager = LoreManager.getInstance(this);
-            loreManager.initializeLore();
-            playerManager = new PlayerManager(this);
-            playerManager.initialize();
-            itemManager = loreManager.getItemManager();
-            commandManager = new CommandManager(this);
-            logger.info("RVNKLore has been enabled!");
-        } catch (Exception e) {
-            logger.error("Failed to initialize plugin", e);
-            getServer().getPluginManager().disablePlugin(this);
-        }
+        // Initialize database manager (central hub for all DB operations)
+        this.databaseManager = new DatabaseManager(this);
+        databaseManager.initialize();
+        logger.info("&a✓ DatabaseManager initialized");
+
+        // Register commands, events, and managers as needed
+        // ...existing code for command/event registration...
     }
 
     private void registerShutdownHook() {
@@ -82,6 +57,11 @@ public class RVNKLore extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        logger.info("&6⚙ Disabling RVNKLore plugin...");
+        if (databaseManager != null) {
+            databaseManager.close();
+            logger.info("&a✓ DatabaseManager closed");
+        }
         synchronized(shutdownLock) {
             if (!shuttingDown) {
                 shuttingDown = true;
@@ -131,11 +111,6 @@ public class RVNKLore extends JavaPlugin {
             playerManager = null;
         }
 
-        if (loreManager != null) {
-            loreManager.cleanup();
-            loreManager = null;
-        }
-
         if (handlerFactory != null) {
             handlerFactory.unregisterAllHandlers();
             handlerFactory = null;
@@ -158,9 +133,6 @@ public class RVNKLore extends JavaPlugin {
         configManager = null; // ConfigManager doesn't need cleanup
     }
 
-    public LoreManager getLoreManager() {
-        return loreManager;
-    }    
     public LogManager getLogManager() {
         return logger;
     }

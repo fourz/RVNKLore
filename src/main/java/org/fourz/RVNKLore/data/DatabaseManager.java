@@ -19,6 +19,7 @@ import org.fourz.RVNKLore.data.query.SchemaQueryBuilder;
 import org.fourz.RVNKLore.data.repository.CollectionRepository;
 import org.fourz.RVNKLore.data.repository.ItemRepository;
 import org.fourz.RVNKLore.data.repository.LoreEntryRepository;
+import org.fourz.RVNKLore.data.repository.SubmissionRepository;
 import org.fourz.RVNKLore.data.repository.PlayerRepository;
 import org.fourz.RVNKLore.data.service.DatabaseHealthService;
 import org.fourz.RVNKLore.debug.LogManager;
@@ -56,6 +57,7 @@ public class DatabaseManager {    private final RVNKLore plugin;
     private PlayerRepository playerRepository;
     private CollectionRepository collectionRepository;
     private LoreEntryRepository loreEntryRepository;
+    private SubmissionRepository submissionRepository;
     
     /**
      * Database types supported by the plugin.
@@ -136,6 +138,7 @@ public class DatabaseManager {    private final RVNKLore plugin;
         this.playerRepository = new PlayerRepository(plugin, this);
         this.collectionRepository = new CollectionRepository(plugin, this);
         this.loreEntryRepository = new LoreEntryRepository(plugin, this);
+        this.submissionRepository = new SubmissionRepository(plugin, this);
         
         // Initialize database schema
         databaseSetup.initializeTables()
@@ -244,8 +247,11 @@ public class DatabaseManager {    private final RVNKLore plugin;
      * @return A future containing a list of matching lore entry DTOs
      */    /**
      * Search lore entries by their content in submissions.
+     *
+     * @param keyword The keyword to search for
+     * @return A future containing a list of matching lore entry DTOs
      */
-    public CompletableFuture<List<LoreEntryDTO>> searchLoreSubmissions(String keyword) {
+    public CompletableFuture<List<LoreEntryDTO>> searchLoreEntriesInSubmissions(String keyword) {
         if (!validateConnection()) {
             return CompletableFuture.failedFuture(
                 new SQLException("Database connection is not valid")
@@ -276,23 +282,15 @@ public class DatabaseManager {    private final RVNKLore plugin;
      *
      * @param id The ID of the lore submission
      * @return A future containing the lore submission DTO, or null if not found
+     */    /**
+     * Get a lore submission by ID.
+     *
+     * @param id The ID of the submission
+     * @return A future containing the lore submission DTO, or null if not found
      */
     public CompletableFuture<LoreSubmissionDTO> getLoreSubmission(int id) {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
-        }
-
-        QueryBuilder query = queryBuilder.select("*")
-                                        .from("lore_submission")
-                                        .where("id = ?", id);
-        
-        return queryExecutor.executeQuery(query, LoreSubmissionDTO.class)
-            .exceptionally(e -> {
-                logger.error("Error getting lore submission", e);
-                throw new CompletionException(e);
-            });
+        // Delegate to SubmissionRepository
+        return submissionRepository.getLoreSubmission(id);
     }
 
     /**
@@ -302,17 +300,8 @@ public class DatabaseManager {    private final RVNKLore plugin;
      * @return A future containing the lore submission DTO, or null if not found
      */
     public CompletableFuture<LoreSubmissionDTO> getCurrentSubmission(int entryId) {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
-        }
-        
-        QueryBuilder query = queryBuilder.select("*")
-                                        .from("lore_submission")
-                                        .where("entry_id = ? AND is_current_version = ?", entryId, true);
-        
-        return queryExecutor.executeQuery(query, LoreSubmissionDTO.class);
+        // Delegate to SubmissionRepository
+        return submissionRepository.getCurrentSubmission(entryId);
     }
     
     /**
@@ -322,18 +311,8 @@ public class DatabaseManager {    private final RVNKLore plugin;
      * @return A future containing a list of lore submission DTOs
      */
     public CompletableFuture<List<LoreSubmissionDTO>> getSubmissionsForEntry(int entryId) {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
-        }
-        
-        QueryBuilder query = queryBuilder.select("*")
-                                        .from("lore_submission")
-                                        .where("entry_id = ?", entryId)
-                                        .orderBy("content_version", false);
-        
-        return queryExecutor.executeQueryList(query, LoreSubmissionDTO.class);
+        // Delegate to SubmissionRepository
+        return submissionRepository.getSubmissionsForEntry(entryId);
     }
     
     /**
@@ -343,39 +322,10 @@ public class DatabaseManager {    private final RVNKLore plugin;
      * @return A future containing the saved lore submission ID
      */
     public CompletableFuture<Integer> saveLoreSubmission(LoreSubmissionDTO dto) {
-        String query = "INSERT INTO lore_submissions "
-            + "(content, submitter_uuid, approval_status, submission_date) "
-            + "VALUES (?, ?, ?, ?)";
-        
-        return CompletableFuture.supplyAsync(() -> {
-            try (Connection conn = connectionProvider.getConnection();
-                 PreparedStatement stmt = conn.prepareStatement(query, Statement.RETURN_GENERATED_KEYS)) {
-                
-                stmt.setString(1, dto.getContent());
-                stmt.setString(2, dto.getSubmitterUuid());
-                stmt.setString(3, dto.getApprovalStatus());
-                stmt.setTimestamp(4, dto.getSubmissionDate());
-
-                int affectedRows = stmt.executeUpdate();
-                if (affectedRows == 0) {
-                    throw new SQLException("Creating lore submission failed, no rows affected.");
-                }
-
-                try (ResultSet generatedKeys = stmt.getGeneratedKeys()) {
-                    if (generatedKeys.next()) {
-                        return generatedKeys.getInt(1);
-                    } else {
-                        throw new SQLException("Creating lore submission failed, no ID obtained.");
-                    }
-                }
-            } catch (SQLException e) {
-                logger.error("Error saving lore submission", e);
-                throw new RuntimeException(e);
-            }
-        }, executor);
+        // Delegate to SubmissionRepository
+        return submissionRepository.saveLoreSubmission(dto);
     }
-    
-    /**
+      /**
      * Approve a lore submission.
      *
      * @param submissionId The ID of the submission to approve
@@ -383,117 +333,35 @@ public class DatabaseManager {    private final RVNKLore plugin;
      * @return A future containing true if the submission was approved, false otherwise
      */
     public CompletableFuture<Boolean> approveSubmission(int submissionId, String approverUuid) {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
-        }
-
-        return queryExecutor.executeTransaction(conn -> {
-            // 1. Get the submission
-            QueryBuilder query = queryBuilder.select("*")
-                                          .from("lore_submission")
-                                          .where("id = ?", submissionId);
-
-            LoreSubmissionDTO submission = queryExecutor.executeQuery(query, LoreSubmissionDTO.class).join();
-            if (submission == null) {
-                logger.error("Failed to approve submission", 
-                    new IllegalStateException("Submission not found for ID: " + submissionId));
-                return false;
-            }
-
-            // 2. Check if it's already approved
-            if ("APPROVED".equals(submission.getApprovalStatus())) {
-                logger.warning("Submission " + submissionId + " is already approved");
-                return true;
-            }
-
-            // 3. Mark any existing current version as not current
-            QueryBuilder resetQuery = queryBuilder.update("lore_submission")
-                                               .set("is_current_version", false)
-                                               .where("entry_id = ? AND id != ? AND is_current_version = ?", 
-                                                    submission.getEntryId(), submissionId, true);
-
-            queryExecutor.executeUpdate(resetQuery).join();
-
-            // 4. Update the submission being approved
-            QueryBuilder updateQuery = queryBuilder.update("lore_submission")
-                                                .set("approval_status", "APPROVED")
-                                                .set("approved_by", approverUuid)
-                                                .set("approved_at", new java.sql.Timestamp(System.currentTimeMillis()))
-                                                .set("status", "ACTIVE")
-                                                .set("is_current_version", true)
-                                                .where("id = ?", submissionId);
-
-            int rowsAffected = queryExecutor.executeUpdate(updateQuery).join();
-            if (rowsAffected != 1) {
-                logger.error("Failed to approve submission, rows affected: " + rowsAffected, 
-                    new SQLException("Update failed for submission ID: " + submissionId));
-                return false;
-            }
-
-            return true;
-        });
+        // Delegate to SubmissionRepository
+        return submissionRepository.approveSubmission(submissionId, approverUuid);
     }
     
     /**
      * Approves a lore submission and creates the associated lore entry.
      */
     public CompletableFuture<Boolean> approveLoreSubmission(int submissionId, String approverUuid) {
-        return getLoreSubmission(submissionId)
-            .thenCompose(submissionDto -> {
-                if (submissionDto == null) {
-                    return CompletableFuture.completedFuture(false);
-                }
-                
-                // Update submission status
-                submissionDto.setApprovalStatus("APPROVED");
-                submissionDto.setApprovedBy(approverUuid);
-                submissionDto.setApprovedAt(new Timestamp(System.currentTimeMillis()));
-                
-                // Create the lore entry
-                LoreEntryDTO entryDto = new LoreEntryDTO();
-                entryDto.setContent(submissionDto.getContent());
-                entryDto.setSubmittedBy(submissionDto.getSubmitterUuid());
-                entryDto.setSubmissionDate(submissionDto.getSubmissionDate());
-                entryDto.setApproved(true);
-                
-                // Save both changes
-                return saveLoreEntry(entryDto)
-                    .thenCompose(loreId -> {
-                        if (loreId != null && loreId > 0) {
-                            return updateLoreSubmission(submissionDto);
-                        }
-                        return CompletableFuture.completedFuture(false);
-                    });
-            });
+        // Delegate to SubmissionRepository
+        return submissionRepository.approveLoreSubmission(submissionId, approverUuid);
     }
-    
-    /**
+      /**
      * Updates a lore submission's approval status and related fields.
      */
     public CompletableFuture<Boolean> updateLoreSubmission(LoreSubmissionDTO submission) {
-        String query = "UPDATE lore_submissions SET "
-            + "approval_status = ?, "
-            + "approved_by = ?, "
-            + "approved_at = ?, "
-            + "updated_at = NOW() "
-            + "WHERE id = ?";
-
-        return CompletableFuture.supplyAsync(() -> {
-            try (Connection conn = connectionProvider.getConnection();
-                 PreparedStatement stmt = conn.prepareStatement(query)) {
-                stmt.setString(1, submission.getApprovalStatus());
-                stmt.setString(2, submission.getApprovedBy());
-                stmt.setTimestamp(3, submission.getApprovedAt());
-                stmt.setInt(4, submission.getId());
-                int affectedRows = stmt.executeUpdate();
-                return affectedRows > 0;
-            } catch (SQLException e) {
-                logger.error("Error updating lore submission", e);
-                return false;
-            }
-        }, executor);
+        // Delegate to SubmissionRepository
+        return submissionRepository.saveLoreSubmission(submission)
+            .thenApply(id -> id > 0);
+    }
+    
+    /**
+     * Search for lore submissions by keyword.
+     *
+     * @param keyword The keyword to search for
+     * @return A future containing a list of matching lore submissions
+     */
+    public CompletableFuture<List<LoreSubmissionDTO>> searchLoreSubmissions(String keyword) {
+        // Delegate to SubmissionRepository
+        return submissionRepository.searchLoreSubmissions(keyword);
     }
     
     // ITEM OPERATIONS
@@ -1568,32 +1436,6 @@ public class DatabaseManager {    private final RVNKLore plugin;
             return results;
         }).exceptionally(e -> {
             logger.error("Error getting name change history", e);
-            return List.of();
-        });
-    }
-
-    private LoreSubmissionDTO extractLoreSubmissionFromResultSet(ResultSet rs) throws SQLException {
-        LoreSubmissionDTO dto = new LoreSubmissionDTO();
-        
-        dto.setId(rs.getInt("id"));
-        dto.setEntryId(rs.getInt("entry_id"));
-        dto.setSlug(rs.getString("slug"));
-        dto.setVisibility(rs.getString("visibility"));
-        dto.setStatus(rs.getString("status"));
-        dto.setSubmitterUuid(rs.getString("submitter_uuid"));
-        dto.setCreatedBy(rs.getString("created_by"));
-        dto.setSubmissionDate(rs.getTimestamp("submission_date"));
-        dto.setApprovalStatus(rs.getString("approval_status"));
-        dto.setApprovedBy(rs.getString("approved_by"));
-        dto.setApprovedAt(rs.getTimestamp("approved_at"));
-        dto.setViewCount(rs.getInt("view_count"));
-        dto.setLastViewedAt(rs.getTimestamp("last_viewed_at"));
-        dto.setCreatedAt(rs.getTimestamp("created_at"));
-        dto.setUpdatedAt(rs.getTimestamp("updated_at"));
-        dto.setContentVersion(rs.getInt("content_version"));
-        dto.setCurrentVersion(rs.getBoolean("is_current_version"));
-        dto.setContent(rs.getString("content"));
-        
-        return dto;
+            return List.of();        });
     }
 }
