@@ -28,29 +28,54 @@ public class LoreEntry {
     public LoreEntry() {
         this.metadata = new HashMap<>();
         this.id = UUID.randomUUID().toString();
-    }
-
-    // Convert from DTO
+    }    // Convert from DTO
     public static LoreEntry fromDTO(LoreEntryDTO dto) {
+        if (dto == null) return null;
+        
         LoreEntry entry = new LoreEntry();
         entry.numericId = dto.getId();
+        entry.id = dto.getUuidString();
         entry.name = dto.getName();
-        entry.type = LoreType.valueOf(dto.getEntryType());
+        
+        try {
+            if (dto.getEntryType() != null) {
+                entry.type = LoreType.valueOf(dto.getEntryType());
+            } else {
+                entry.type = LoreType.GENERIC;
+            }
+        } catch (IllegalArgumentException e) {
+            entry.type = LoreType.GENERIC;
+        }
+        
         entry.description = dto.getDescription();
+        entry.approved = dto.isApproved();
+        entry.submittedBy = dto.getSubmittedBy();
+        entry.submissionDate = dto.getSubmissionDate();
+        entry.nbtData = dto.getNbtData();
         entry.createdAt = dto.getCreatedAt();
         entry.updatedAt = dto.getUpdatedAt();
+        entry.metadata = dto.getMetadata() != null ? new HashMap<>(dto.getMetadata()) : new HashMap<>();
+        entry.location = dto.getLocation();
+        
         return entry;
-    }
-
-    // Convert to DTO
+    }// Convert to DTO
     public LoreEntryDTO toDTO() {
         LoreEntryDTO dto = new LoreEntryDTO();
         dto.setId(this.numericId);
+        dto.setUuid(this.id);
+        dto.setEntryType(this.type != null ? this.type.name() : null);
         dto.setName(this.name);
-        dto.setEntryType(this.type.name());
         dto.setDescription(this.description);
+        dto.setApproved(this.approved);
+        dto.setSubmittedBy(this.submittedBy);
+        dto.setSubmissionDate(this.submissionDate);
+        dto.setNbtData(this.nbtData);
         dto.setCreatedAt(this.createdAt);
         dto.setUpdatedAt(this.updatedAt);
+        dto.setMetadata(this.metadata);
+        if (this.location != null) {
+            dto.setLocation(this.location);
+        }
         return dto;
     }
 
@@ -114,4 +139,23 @@ public class LoreEntry {
         }
         
         return json;
-    }}
+    }
+
+    /**
+     * Checks if this entry has any metadata
+     * 
+     * @return true if the entry has metadata
+     */
+    public boolean hasMetadata() {
+        return metadata != null && !metadata.isEmpty();
+    }
+    
+    /**
+     * Gets all metadata for this entry
+     * 
+     * @return A map of all metadata key-value pairs
+     */
+    public Map<String, String> getAllMetadata() {
+        return metadata != null ? new HashMap<>(metadata) : new HashMap<>();
+    }
+}

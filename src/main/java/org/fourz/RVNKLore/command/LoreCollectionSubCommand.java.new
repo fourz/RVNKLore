@@ -11,7 +11,6 @@ import org.fourz.RVNKLore.data.dto.ItemCollectionDTO;
 import org.fourz.RVNKLore.data.repository.CollectionRepository;
 import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
-import org.fourz.RVNKLore.lore.item.collection.CollectionRewards;
 import org.fourz.RVNKLore.lore.item.collection.CollectionTheme;
 import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
 
@@ -334,6 +333,7 @@ public class LoreCollectionSubCommand implements SubCommand {
                     player.sendMessage(ChatColor.RED + "✖ Collection not found: " + collectionId);
                     return CompletableFuture.completedFuture(false);
                 }
+                
                 // Check progress
                 return collectionRepository.getPlayerCollectionProgress(player.getUniqueId(), collectionId)
                     .thenCompose(progress -> {
@@ -341,6 +341,7 @@ public class LoreCollectionSubCommand implements SubCommand {
                             player.sendMessage(ChatColor.YELLOW + "⚠ You must complete the collection to claim rewards.");
                             return CompletableFuture.completedFuture(false);
                         }
+                        
                         // Mark as claimed with completion timestamp if not already claimed
                         long now = System.currentTimeMillis();
                         return collectionRepository.markCollectionCompleted(player.getUniqueId(), collectionId, now);
@@ -348,43 +349,11 @@ public class LoreCollectionSubCommand implements SubCommand {
             })
             .thenAccept(success -> {
                 if (success) {
-                    // Fetch the collection domain object and grant rewards
-                    CollectionManager collectionManager = plugin.getItemManager().getCollectionManager();
-                    collectionManager.getCollectionAsync(collectionId).thenAccept(itemCollection -> {
-                        if (itemCollection == null) {
-                            player.sendMessage(ChatColor.RED + "✖ Error: Collection data not found for rewards.");
-                            return;
-                        }
-                        // Assume rewards are stored in a CollectionRewards object in ItemCollection (extend as needed)
-                        CollectionRewards rewards = itemCollection.getRewards();
-                        if (rewards == null || !rewards.hasRewards()) {
-                            player.sendMessage(ChatColor.YELLOW + "⚠ No rewards configured for this collection.");
-                            return;
-                        }
-                        // Grant item rewards
-                        for (org.bukkit.inventory.ItemStack rewardItem : rewards.getItems()) {
-                            player.getInventory().addItem(rewardItem);
-                        }
-                        // Grant experience points
-                        if (rewards.getExperiencePoints() > 0) {
-                            player.giveExp(rewards.getExperiencePoints());
-                        }
-                        // Grant title (if applicable)
-                        if (rewards.getTitle() != null) {
-                            // Example: send title to player (requires Paper/Spigot API)
-                            player.sendTitle(rewards.getTitle(), "", 10, 60, 10);
-                        }
-                        // Send completion message
-                        if (rewards.getCompletionMessage() != null) {
-                            player.sendMessage(ChatColor.GREEN + rewards.getCompletionMessage());
-                        } else {
-                            player.sendMessage(ChatColor.GREEN + "✓ Rewards claimed for collection: " + collectionId);
-                        }
-                        // Execute command rewards (as console)
-                        for (String command : rewards.getCommands()) {
-                            plugin.getServer().dispatchCommand(plugin.getServer().getConsoleSender(), command.replace("{player}", player.getName()));
-                        }
-                    });
+                    // Call item manager to grant rewards
+                    CollectionManager collectionManager = plugin.getLoreManager().getItemManager().getCollectionManager();
+                    collectionManager.grantCollectionReward(player.getUniqueId(), collectionId);
+                    
+                    player.sendMessage(ChatColor.GREEN + "✓ Rewards claimed for collection: " + collectionId);
                 }
             })
             .exceptionally(e -> {

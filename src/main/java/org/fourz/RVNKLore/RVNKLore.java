@@ -187,4 +187,13 @@ public class RVNKLore extends JavaPlugin {
         }
         return playerManager;
     }
+
+    /**
+     * Get the item manager for item and collection operations
+     * 
+     * @return The ItemManager instance
+     */
+    public ItemManager getItemManager() {
+        return itemManager;
+    }
 }

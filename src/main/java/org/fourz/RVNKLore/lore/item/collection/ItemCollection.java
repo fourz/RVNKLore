@@ -18,6 +18,7 @@ public class ItemCollection {
     private String themeId;
     private boolean isActive;
     private long createdAt;
+    private CollectionRewards rewards;
     
     public ItemCollection(String id, String name, String description) {
         this.id = id;
@@ -154,6 +155,24 @@ public class ItemCollection {
      */
     public long getCreatedAt() {
         return createdAt;
+    }
+
+    /**
+     * Get the rewards for this collection.
+     *
+     * @return The CollectionRewards object, or null if none set
+     */
+    public CollectionRewards getRewards() {
+        return rewards;
+    }
+
+    /**
+     * Set the rewards for this collection.
+     *
+     * @param rewards The CollectionRewards to set
+     */
+    public void setRewards(CollectionRewards rewards) {
+        this.rewards = rewards;
     }
     
     @Override

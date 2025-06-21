@@ -7,6 +7,7 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
 import org.fourz.RVNKLore.data.dto.ItemCollectionDTO;
+import org.fourz.RVNKLore.data.dto.LoreEntryDTO;
 import org.fourz.RVNKLore.lore.item.ItemManager;
 import org.fourz.RVNKLore.lore.item.ItemProperties;
 
@@ -93,9 +94,9 @@ public class DisplayFactory {
      * @return true if the display was successful
      */
     public static boolean displayLoreEntry(CommandSender sender, LoreEntry entry) {
-        sender.sendMessage(ChatColor.GOLD + "===== Item Info: " + entry.getName() + " =====");
-        sender.sendMessage(ChatColor.YELLOW + "Type: " + entry.getType());
-        sender.sendMessage(ChatColor.YELLOW + "ID: " + entry.getId());
+        sender.sendMessage(ChatColor.GOLD + "===== Lore Info: " + entry.getName() + " =====");
+        sender.sendMessage(ChatColor.YELLOW + "Type: " + (entry.getType() != null ? entry.getType().name() : "Unknown"));
+        sender.sendMessage(ChatColor.YELLOW + "ID: " + entry.getNumericId() + " (UUID: " + entry.getId() + ")");
         
         if (entry.getDescription() != null && !entry.getDescription().isEmpty()) {
             sender.sendMessage(ChatColor.YELLOW + "Description: " + entry.getDescription());
@@ -105,7 +106,7 @@ public class DisplayFactory {
             sender.sendMessage(ChatColor.YELLOW + "Submitted by: " + entry.getSubmittedBy());
         }
         
-        if (entry.hasMetadata() ) {
+        if (entry.hasMetadata()) {
             sender.sendMessage(ChatColor.YELLOW + "Metadata:");
             entry.getAllMetadata().forEach((k, v) ->
                 sender.sendMessage(ChatColor.GRAY + "  " + k + ": " + v)
@@ -116,6 +117,22 @@ public class DisplayFactory {
     }
     
     /**
+     * Display detailed information about a lore entry using DTO
+     *
+     * @param sender The command sender
+     * @param dto The lore entry DTO to display
+     * @return true if the display was successful
+     */
+    public static boolean displayLoreEntryDTO(CommandSender sender, LoreEntryDTO dto) {
+        if (dto == null) {
+            sender.sendMessage(ChatColor.RED + "✖ Lore entry not found");
+            return false;
+        }
+        
+        LoreEntry entry = LoreEntry.fromDTO(dto);
+        return displayLoreEntry(sender, entry);
+    }
+      /**
      * Display detailed information about an item
      *
      * @param sender The command sender
@@ -160,8 +177,7 @@ public class DisplayFactory {
         
         return true;
     }
-    
-    /**
+      /**
      * Display a paginated list of collections
      *
      * @param sender The command sender
@@ -170,15 +186,21 @@ public class DisplayFactory {
      */
     public static boolean displayCollectionList(CommandSender sender, List<ItemCollection> collections) {
         sender.sendMessage(ChatColor.GOLD + "===== Collections (Newest First) =====");
-        if (collections.isEmpty()) {
+        if (collections == null || collections.isEmpty()) {
             sender.sendMessage(ChatColor.YELLOW + "⚠ No collections found");
             return true;
         }
         for (ItemCollection collection : collections) {
-            String dateStr = DATE_FORMAT.format(new Date(collection.getCreatedAt()));
+            String dateStr = collection.getCreatedAt() > 0 ? 
+                DATE_FORMAT.format(new Date(collection.getCreatedAt())) : "Unknown";
+            
             sender.sendMessage(ChatColor.WHITE + collection.getName() + ChatColor.GRAY + " (" + collection.getId() + ")"
                     + ChatColor.YELLOW + " - " + dateStr);
-            sender.sendMessage(ChatColor.GRAY + "   " + collection.getDescription());
+            
+            if (collection.getDescription() != null && !collection.getDescription().isEmpty()) {
+                sender.sendMessage(ChatColor.GRAY + "   " + collection.getDescription());
+            }
+            
             sender.sendMessage(ChatColor.GRAY + "   " + collection.getItemCount() + " items • " +
                     (collection.getThemeId() != null ? collection.getThemeId() : "custom"));
         }
@@ -195,15 +217,21 @@ public class DisplayFactory {
      */
     public static boolean displayCollectionListDTO(CommandSender sender, List<ItemCollectionDTO> collections) {
         sender.sendMessage(ChatColor.GOLD + "===== Collections (Newest First) =====");
-        if (collections.isEmpty()) {
+        if (collections == null || collections.isEmpty()) {
             sender.sendMessage(ChatColor.YELLOW + "⚠ No collections found");
             return true;
         }
+        
         for (ItemCollectionDTO collection : collections) {
-            String dateStr = DATE_FORMAT.format(new Date(collection.getCreatedAt()));
+            String dateStr = collection.getCreatedAt() > 0 ? 
+                DATE_FORMAT.format(new Date(collection.getCreatedAt())) : "Unknown";
+            
             sender.sendMessage(ChatColor.WHITE + collection.getName() + ChatColor.GRAY + " (" + collection.getId() + ")"
                     + ChatColor.YELLOW + " - " + dateStr);
-            sender.sendMessage(ChatColor.GRAY + "   " + collection.getDescription());
+            
+            if (collection.getDescription() != null && !collection.getDescription().isEmpty()) {
+                sender.sendMessage(ChatColor.GRAY + "   " + collection.getDescription());
+            }
             
             // Get item count from serialized items or direct count
             int itemCount = collection.getSerializedItems() != null ? collection.getSerializedItems().size() : 0;
@@ -224,9 +252,7 @@ public class DisplayFactory {
         }
         sender.sendMessage(ChatColor.GRAY + "   Use " + ChatColor.WHITE + "/lore collection view <id> " + ChatColor.GRAY + "for details");
         return true;
-    }
-
-    /**
+    }    /**
      * Convert a list of DTOs to domain objects for display
      * 
      * @param dtos The list of collection DTOs
@@ -266,6 +292,10 @@ public class DisplayFactory {
      * @return Formatted enchantment name
      */
     private static String formatEnchantmentName(String enchantName) {
+        if (enchantName == null || enchantName.isEmpty()) {
+            return "";
+        }
+        
         String[] parts = enchantName.split("_");
         StringBuilder formatted = new StringBuilder();
         
@@ -293,32 +323,85 @@ public class DisplayFactory {
      * @return true if the display was successful
      */
     public static <T> boolean displayPaginatedList(CommandSender sender, String title, List<T> items, int page, int itemsPerPage, Function<T, String> formatter) {
+        if (items == null) {
+            sender.sendMessage(ChatColor.YELLOW + "⚠ No items found");
+            return true;
+        }
+        
         int totalItems = items.size();
         int totalPages = (int) Math.ceil((double) totalItems / itemsPerPage);
 
         // Validate page number and provide feedback if needed
         if (page < 1) {
-            sender.sendMessage(org.bukkit.ChatColor.YELLOW + "⚠ Page number must be positive. Showing first page.");
+            sender.sendMessage(ChatColor.YELLOW + "⚠ Page number must be positive. Showing first page.");
             page = 1;
         } else if (page > totalPages && totalPages > 0) {
-            sender.sendMessage(org.bukkit.ChatColor.YELLOW + "⚠ Page number exceeds max pages. Showing last page.");
+            sender.sendMessage(ChatColor.YELLOW + "⚠ Page number exceeds max pages. Showing last page.");
             page = totalPages;
         }
 
         int startIndex = (page - 1) * itemsPerPage;
         int endIndex = Math.min(startIndex + itemsPerPage, totalItems);
 
-        sender.sendMessage(org.bukkit.ChatColor.GOLD + "===== " + title + " (Page " + page + "/" + Math.max(1, totalPages) + ") =====");
+        sender.sendMessage(ChatColor.GOLD + "===== " + title + " (Page " + page + "/" + Math.max(1, totalPages) + ") =====");
         if (items.isEmpty()) {
-            sender.sendMessage(org.bukkit.ChatColor.YELLOW + "⚠ No items found");
+            sender.sendMessage(ChatColor.YELLOW + "⚠ No items found");
             return true;
         }
+        
         for (int i = startIndex; i < endIndex; i++) {
             sender.sendMessage(formatter.apply(items.get(i)));
         }
+        
         if (totalPages > 1) {
-            sender.sendMessage(org.bukkit.ChatColor.GRAY + "Use /lore item list <page> to navigate pages");
+            sender.sendMessage(ChatColor.GRAY + "Use /lore item list <page> to navigate pages");
         }
+        
         return true;
+    }
+    
+    /**
+     * Display paginated list of LoreEntries
+     * 
+     * @param sender The command sender
+     * @param entries The list of lore entries to display
+     * @param page The page number (1-based)
+     * @param title The title for the list
+     * @return true if the display was successful
+     */
+    public static boolean displayLoreEntryList(CommandSender sender, List<LoreEntry> entries, int page, String title) {
+        return displayPaginatedList(
+            sender,
+            title != null ? title : "Lore Entries",
+            entries,
+            page,
+            ITEMS_PER_PAGE,
+            entry -> ChatColor.WHITE + entry.getName() + 
+                     ChatColor.GRAY + " (" + entry.getType() + ") - " + 
+                     ChatColor.YELLOW + (entry.getCreatedAt() != null ? 
+                         DATE_FORMAT.format(new Date(entry.getCreatedAt().getTime())) : "Unknown")
+        );
+    }
+    
+    /**
+     * Display paginated list of LoreEntry DTOs
+     * 
+     * @param sender The command sender
+     * @param dtos The list of lore entry DTOs to display
+     * @param page The page number (1-based)
+     * @param title The title for the list
+     * @return true if the display was successful
+     */
+    public static boolean displayLoreEntryDTOList(CommandSender sender, List<LoreEntryDTO> dtos, int page, String title) {
+        List<LoreEntry> entries = new ArrayList<>();
+        if (dtos != null) {
+            for (LoreEntryDTO dto : dtos) {
+                if (dto != null) {
+                    entries.add(LoreEntry.fromDTO(dto));
+                }
+            }
+        }
+        
+        return displayLoreEntryList(sender, entries, page, title);
     }
 }

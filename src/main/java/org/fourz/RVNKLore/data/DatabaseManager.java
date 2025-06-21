@@ -24,6 +24,7 @@ import org.fourz.RVNKLore.data.service.DatabaseHealthService;
 import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.data.dto.PlayerDTO;
 import org.fourz.RVNKLore.data.dto.NameChangeRecordDTO;
+import org.fourz.RVNKLore.lore.LoreEntry;
 
 import java.sql.*;
 import java.util.ArrayList;
@@ -925,5 +926,37 @@ public class DatabaseManager {    private final RVNKLore plugin;
      */
     public CompletableFuture<List<ItemPropertiesDTO>> getAllItems() {
         return itemRepository.getAllItems();
+    }
+    
+    /**
+     * Get a LoreEntry domain object by ID.
+     * Convenience method that retrieves the DTO and converts it to a domain object.
+     *
+     * @param id The ID of the lore entry
+     * @return A future containing the LoreEntry domain object, or null if not found
+     */
+    public CompletableFuture<LoreEntry> getLoreEntryDomain(int id) {
+        return getLoreEntry(id).thenApply(dto -> {
+            if (dto == null) {
+                return null;
+            }
+            return LoreEntry.fromDTO(dto);
+        });
+    }
+
+    /**
+     * Get a LoreEntry domain object by UUID.
+     * Convenience method that retrieves the DTO and converts it to a domain object.
+     *
+     * @param uuid The UUID of the lore entry
+     * @return A future containing the LoreEntry domain object, or null if not found
+     */
+    public CompletableFuture<LoreEntry> getLoreEntryDomain(UUID uuid) {
+        return getLoreEntryById(uuid).thenApply(dto -> {
+            if (dto == null) {
+                return null;
+            }
+            return LoreEntry.fromDTO(dto);
+        });
     }
 }
