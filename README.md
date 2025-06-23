@@ -180,10 +180,21 @@ RVNKLore can automatically generate lore entries for:
 
 ## Database
 
-RVNKLore stores all lore entries in a comprehensive relational database:
+RVNKLore uses a sophisticated database architecture for storing all lore entries and related data:
 
-- **SQLite**: Default database, stored in `plugins/RVNKLore/data.db`
+- **SQLite**: Default database, stored in `plugins/RVNKLore/database/data.db`
 - **MySQL**: Optional for larger servers or multi-server networks
+
+### Architecture Highlights
+
+- **Query Builder Pattern**: Abstracts SQL dialect differences between MySQL and SQLite
+- **DTO-Based Data Transfer**: Clean separation between database and domain layers
+- **Asynchronous Operations**: All database operations run off the main thread
+- **Connection Pooling**: Optimized connection management for high performance
+- **Transaction Support**: ACID-compliant transactions for data integrity
+- **Comprehensive Error Handling**: Robust error recovery and detailed logging
+
+For full details on the database architecture, see `docs/rvnklore-database-architecture.md`.
 
 ### Core Data Structure
 
@@ -237,54 +248,84 @@ To build RVNKLore from source:
 
 ### API for Developers
 
-RVNKLore provides an API for other plugins to interact with the lore system:
+RVNKLore provides a comprehensive API for other plugins to interact with the lore system:
 
 ```java
 // Get the RVNKLore plugin instance
 RVNKLore rvnkLore = (RVNKLore) Bukkit.getPluginManager().getPlugin("RVNKLore");
 
+// Access the DatabaseManager for data operations
+DatabaseManager dbManager = rvnkLore.getDatabaseManager();
+
+// Retrieve lore entries asynchronously
+dbManager.getLoreEntry("entry-id")
+    .thenAccept(loreEntryDTO -> {
+        // Process the lore entry
+        String name = loreEntryDTO.getName();
+        String description = loreEntryDTO.getDescription();
+        // Other operations...
+    })
+    .exceptionally(ex -> {
+        // Handle errors
+        return null;
+    });
+
 // Create a new lore entry programmatically
-LoreEntry entry = new LoreEntry();
-entry.setType(LoreType.EVENT);
+LoreEntryDTO entry = new LoreEntryDTO();
+entry.setEntryType(LoreType.EVENT.name());
 entry.setName("Battle of the North");
 entry.setDescription("A legendary battle that took place between rival factions.");
-entry.setLocation(location);
-entry.setSubmittedBy("PluginName");
+entry.setSubmittedBy(UUID.randomUUID()); // Player UUID
 entry.setApproved(true);
 
-// Add the entry
-rvnkLore.getLoreManager().addLoreEntry(entry);
+// Add the entry asynchronously
+dbManager.addLoreEntry(entry)
+    .thenAccept(success -> {
+        if (success) {
+            // Entry added successfully
+        }
+    });
 
 // Working with items
-LoreItem item = new LoreItem();
-item.setName("Frost Blade");
-item.setMaterial(Material.DIAMOND_SWORD);
-item.setItemType(ItemType.LEGENDARY);
-item.setRarity(RarityLevel.EPIC);
-item.setDescription("A blade forged in the eternal ice of the North.");
-
-// Add custom model data
+ItemPropertiesDTO item = new ItemPropertiesDTO();
+item.setDisplayName("Frost Blade");
+item.setMaterial(Material.DIAMOND_SWORD.name());
+item.setItemType("LEGENDARY");
+item.setRarity("EPIC");
 item.setCustomModelData(101); // Using weapon range (101-200)
+item.setProperties(Map.of(
+    "description", "A blade forged in the eternal ice of the North",
+    "season", "WINTER",
+    "event", "CHRISTMAS",
+    "availableFrom", "12-01",
+    "availableTo", "12-25"
+));
 
 // Add the item to a collection
-rvnkLore.getCollectionManager().addItemToCollection("Winter Weapons", item);
+dbManager.getCollectionRepository().addItemToCollection("Winter Weapons", item.getId())
+    .thenAccept(success -> {
+        // Item added to collection
+    });
+```
 
-// Set seasonal availability
-SeasonalSettings seasonal = new SeasonalSettings();
-seasonal.setSeason(Season.WINTER);
-seasonal.setEventName(Holiday.CHRISTMAS);
-seasonal.setAvailabilityWindow(new TimeWindow(WindowType.ANNUAL_HOLIDAY, "12-01", "12-25"));
-item.setSeasonalSettings(seasonal);
+#### Working with DTOs and Domain Models
 
-// Create a lore character
-LoreCharacter character = new LoreCharacter();
-character.setName("Frostbeard the Smith");
-character.setType(CharacterType.NPC);
-character.setDescription("The legendary smith who forged the Frost Blade.");
-character.setHomeLocation(northernForgeLocation);
+The plugin uses Data Transfer Objects (DTOs) for clean separation between database and domain layers:
 
-// Add the character
-rvnkLore.getCharacterManager().addCharacter(character);
+```java
+// Convert between DTOs and domain objects
+LoreEntryDTO dto = loreEntry.toDTO(); // Domain object to DTO
+LoreEntry entry = LoreEntry.fromDTO(dto); // DTO to domain object
+
+// Domain objects provide business logic
+loreEntry.approve(adminUuid);
+loreEntry.addLocation(location);
+loreEntry.linkToCharacter(characterId);
+
+// DTOs provide clean data transfer
+loreEntryDTO.setApproved(true);
+loreEntryDTO.setApprovedBy(adminUuid);
+loreEntryDTO.setApprovedAt(new Timestamp(System.currentTimeMillis()));
 ```
 
 ### Entity Relationship Model

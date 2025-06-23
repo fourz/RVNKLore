@@ -25,6 +25,7 @@ public class SQLiteConnectionProvider implements ConnectionProvider {
     private final ReentrantLock connectionLock = new ReentrantLock();
     private final File databaseFile;
     private final Map<String, Object> settings;
+    private boolean initialized = false;
 
     /**
      * Create a new SQLite connection provider.
@@ -45,32 +46,37 @@ public class SQLiteConnectionProvider implements ConnectionProvider {
         }
         
         this.databaseFile = new File(dataFolder, (String) settings.get("database"));
-        
-        initializeConnection();
     }
 
     /**
      * Initialize the SQLite connection.
      */
-    public void initializeConnection() {
-        boolean firstInit = (connection == null);
+    public synchronized void initializeConnection() {
+        if (initialized && isValid()) {
+            logger.debug("SQLite connection already initialized and valid, skipping initialization");
+            return;
+        }
+
+        connectionLock.lock();
         try {
             // Load the SQLite JDBC driver
             Class.forName("org.sqlite.JDBC");
-            if (firstInit) {
+            if (!initialized) {
                 logger.info("Initializing SQLite connection...");
             } else {
                 logger.debug("Re-initializing SQLite connection...");
             }
+
             // Create the database file if it doesn't exist
             if (!databaseFile.exists()) {
-                if (firstInit) {
+                if (!initialized) {
                     logger.info("Creating new SQLite database file: " + databaseFile.getAbsolutePath());
                 } else {
                     logger.debug("Creating new SQLite database file: " + databaseFile.getAbsolutePath());
                 }
                 databaseFile.createNewFile();
             }
+
             // Configure connection properties
             Properties properties = new Properties();
             properties.setProperty("foreign_keys", "true");
@@ -79,27 +85,34 @@ public class SQLiteConnectionProvider implements ConnectionProvider {
                 properties.setProperty("journal_mode", "WAL");
             }
             properties.setProperty("synchronous", (String) settings.get("synchronous"));
+
             // Get the connection
             String url = "jdbc:sqlite:" + databaseFile.getAbsolutePath();
-            connection = DriverManager.getConnection(url, properties);
-            // Configure SQLite connection
-            connection.setAutoCommit(false);
-            // Additional PRAGMA settings
-            try (Statement statement = connection.createStatement()) {
-                statement.execute("PRAGMA foreign_keys = ON");
-                statement.execute("PRAGMA cache_size = -4000");
-                statement.execute("PRAGMA temp_store = MEMORY");
-                connection.commit();
+            if (connection == null || !isValid()) {
+                connection = DriverManager.getConnection(url, properties);
+                // Configure SQLite connection
+                connection.setAutoCommit(false);
+                // Additional PRAGMA settings
+                try (Statement statement = connection.createStatement()) {
+                    statement.execute("PRAGMA foreign_keys = ON");
+                    statement.execute("PRAGMA cache_size = -4000");
+                    statement.execute("PRAGMA temp_store = MEMORY");
+                    connection.commit();
+                }
             }
+
             // Test connection
             try (Statement statement = connection.createStatement()) {
                 statement.execute("SELECT 1");
-                if (firstInit) {
+                if (!initialized) {
                     logger.info("SQLite connection established successfully to " + databaseFile.getAbsolutePath());
                 } else {
-                    logger.debug("SQLite connection established successfully to " + databaseFile.getAbsolutePath());
+                    logger.debug("SQLite connection re-established successfully");
                 }
             }
+
+            initialized = true;
+            lastConnectionError = null;
         } catch (ClassNotFoundException e) {
             lastConnectionError = "SQLite JDBC driver not found";
             logger.error("SQLite JDBC driver not found", e);
@@ -112,6 +125,8 @@ public class SQLiteConnectionProvider implements ConnectionProvider {
             lastConnectionError = e.getMessage();
             logger.error("Error initializing SQLite database", e);
             connection = null;
+        } finally {
+            connectionLock.unlock();
         }
     }
 
@@ -177,7 +192,24 @@ public class SQLiteConnectionProvider implements ConnectionProvider {
     }
     
     /**
-     * Get the database file.
+     * Checks if the current connection is valid.
+     *
+     * @return true if the connection is valid and can be used, false otherwise
+     */
+    private boolean isValid() {
+        if (connection == null) {
+            return false;
+        }
+        try {
+            return connection.isValid(1); // 1 second timeout
+        } catch (SQLException e) {
+            logger.debug("Connection validity check failed: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Returns the database file for this SQLite connection.
      *
      * @return The database file
      */

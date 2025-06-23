@@ -27,7 +27,7 @@ import org.fourz.RVNKLore.data.dto.NameChangeRecordDTO;
 import org.fourz.RVNKLore.lore.LoreEntry;
 
 import java.sql.*;
-import java.util.ArrayList;
+
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.*;
@@ -49,7 +49,7 @@ public class DatabaseManager {    private final RVNKLore plugin;
     private final ConfigManager configManager;
     private final ExecutorService executor;
     private DatabaseHealthService healthService;
-    private String storageType;
+
     private DatabaseSetup databaseSetup;
     private SchemaQueryBuilder schemaQueryBuilder;
     private ItemRepository itemRepository;
@@ -109,16 +109,12 @@ public class DatabaseManager {    private final RVNKLore plugin;
     }
 
     /**
-     * Initialize the database connection and schema.
-     * This method should be called during plugin startup.
+     * Initialize the database connection and setup required components.
      */
     public void initialize() {
-        logger.info("Initializing database connection...");
+        logger.info("Initializing database manager...");
         
-        // Initialize connection provider based on storage type
-        initializeConnectionProvider();
-        
-        // Create appropriate query builder based on storage type
+        // Initialize query builder and executor based on database type
         if (databaseType == DatabaseType.MYSQL) {
             queryBuilder = new MySQLQueryBuilder();
             schemaQueryBuilder = new MySQLSchemaQueryBuilder();
@@ -127,35 +123,40 @@ public class DatabaseManager {    private final RVNKLore plugin;
             schemaQueryBuilder = new SQLiteSchemaQueryBuilder();
         }
         
-        // Initialize query executor
         queryExecutor = new DefaultQueryExecutor(plugin, connectionProvider);
         
-        // Initialize database setup
-        databaseSetup = new DatabaseSetup(plugin, connectionProvider, schemaQueryBuilder, queryExecutor);
-          // Initialize repositories
-        this.itemRepository = new ItemRepository(plugin, this);
-        this.playerRepository = new PlayerRepository(plugin, this);
-        this.collectionRepository = new CollectionRepository(plugin, this);
-        this.loreEntryRepository = new LoreEntryRepository(plugin, this);
-        this.submissionRepository = new SubmissionRepository(plugin, this);
-          // Initialize database schema
-        databaseSetup.initializeTables()
-            .thenRun(() -> {
-                logger.debug("Database schema initialized successfully");
-                validateTables();
-            })
-            .exceptionally(e -> {
-                logger.error("Failed to initialize database schema", e);
-                return null;
-            });
+        // Initialize repositories
+        itemRepository = new ItemRepository(plugin, this);
+        playerRepository = new PlayerRepository(plugin, this);
+        collectionRepository = new CollectionRepository(plugin, this);
+        loreEntryRepository = new LoreEntryRepository(plugin, this);
+        submissionRepository = new SubmissionRepository(plugin, this);
+
+        // Initialize the database connection
+        try {
+            if (databaseType == DatabaseType.SQLITE) {
+                // For SQLite, we initialize the connection here once
+                ((SQLiteConnectionProvider) connectionProvider).initializeConnection();
+            }
             
-        // Start health check service
-        healthService = new DatabaseHealthService(this, plugin);
-        //healthService.startHealthCheck();
-        
-        logger.info("Database initialized with " + databaseType + " storage");
+            // Initialize health service
+            healthService = new DatabaseHealthService(this, plugin);
+            healthService.start();
+
+            // Initialize database schema with all required dependencies
+            databaseSetup = new DatabaseSetup(plugin, connectionProvider, 
+                schemaQueryBuilder, queryExecutor);
+            databaseSetup.initializeTables()
+                .thenRun(() -> logger.info("Database initialization complete"))
+                .exceptionally(e -> {
+                    logger.error("Failed to initialize database: " + e.getMessage(), e);
+                    return null;
+                });
+        } catch (Exception e) {
+            logger.error("Failed to initialize database: " + e.getMessage(), e);
+        }
     }
-    
+
     // LORE ENTRY OPERATIONS
       /**
      * Get a lore entry by ID.
@@ -600,24 +601,7 @@ public class DatabaseManager {    private final RVNKLore plugin;
         
         return queryExecutor.executeQueryList(query, LoreEntryDTO.class);
     }
-    
-    /**
-     * Initialize the connection provider based on the storage type.
-     */
-    private void initializeConnectionProvider() {        // Get storage type from configuration
-        storageType = plugin.getConfigManager().getConfig().getString("storage.type", "sqlite").toLowerCase();
-          if (storageType.equalsIgnoreCase("mysql")) {            // Get MySQL settings from configuration
-            // Note: MySQLConnectionProvider gets settings directly from ConfigManager
-            
-            // Create MySQL connection provider
-            connectionProvider = new MySQLConnectionProvider(plugin);
-        } else {            // Default to SQLite
-            // Note: SQLiteConnectionProvider gets settings directly from ConfigManager
-            
-            // Create SQLite connection provider
-            connectionProvider = new SQLiteConnectionProvider(plugin);
-        }
-    }    /**
+  /**
      * Validate that all required database tables exist.
      */
     private void validateTables() {

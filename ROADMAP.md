@@ -1,6 +1,6 @@
 # RVNKLore Development Roadmap
 
-**Last Updated**: May 25, 2025
+**Last Updated**: June 22, 2025
 
 This document outlines the planned features and improvements for the RVNKLore plugin.
 
@@ -8,7 +8,9 @@ This document outlines the planned features and improvements for the RVNKLore pl
 
 RVNKLore has established a solid foundation with core functionality in place:
 
-- ✅ Database structure and connection management
+- ✅ Database structure and connection management with unified architecture
+- ✅ Query Builder pattern for database dialect abstraction
+- ✅ DTO pattern for clean data transfer between layers
 - ✅ Basic lore entry creation and management
 - ✅ Handler system for different lore types
 - ✅ Command framework for player interaction
@@ -20,6 +22,45 @@ RVNKLore has established a solid foundation with core functionality in place:
 ## Logging Refactoring Tasks
 
 All core classes now use the LogManager logger pattern (`logger.debug`, `logger.info`, `logger.error`, etc.). No remaining classes use Debug directly. This milestone is complete.
+
+## Database Architecture Implementation
+
+Following the plan from `docs/plans/rvnklore-database-architecture-refactor-steps.md`, significant progress has been made on the database architecture refactoring:
+
+- ✅ **Core Interface Abstractions**
+  - Created `QueryBuilder` interface with implementations for MySQL and SQLite
+  - Implemented `SchemaQueryBuilder` for database schema operations
+  - Created `ConnectionProvider` interface with database-specific implementations
+  - Added `QueryExecutor` interface for standardized query execution
+
+- ✅ **Data Transfer Objects (DTOs)**
+  - Implemented comprehensive DTOs for all major entities
+  - Created conversion methods between DTOs and domain objects
+  - Added JSON serialization support for complex properties
+
+- ✅ **DatabaseManager as Central Hub**
+  - Refactored DatabaseManager to serve as the central data access point
+  - Implemented async operation support with CompletableFuture
+  - Added connection pooling for MySQL and persistent connection for SQLite
+  - Centralized transaction management and error handling
+
+- ✅ **Connection Management Optimization**
+  - Implemented connection state tracking to prevent duplicate initialization
+  - Added health monitoring and automatic reconnection
+  - Improved error recovery and connection validation
+  - Added proper resource cleanup on plugin disable
+
+- 🟡 **Repository Layer Transformation**
+  - Partially converted repositories to service pattern
+  - Added DTO-based data access methods
+  - Repositories now delegate connection management to DatabaseManager
+  - Transaction support added for multi-step operations
+
+- 🟡 **Caching Implementation**
+  - Basic in-memory caching added for frequently accessed data
+  - Added cache invalidation on data updates
+  - Time-based cache expiration implemented
+  - Performance metrics for cache hit rates
 
 ## Q2 2025 Priorities
 
@@ -302,9 +343,23 @@ We prioritize features based on:
 | Date | Version | Notes |
 |------|---------|-------|
 | April 12, 2025 | 1.0 | Initial roadmap draft |
+| May 25, 2025 | 1.1 | Updated with Head & Cosmetic System completion |
+| June 22, 2025 | 1.2 | Updated with Database Architecture implementation |
 
 ## Recent Updates
-- Unified item command system with improved permission checks and refined UUID matching.
-- Enhanced database caching and fallback mechanisms in the ItemManager.
-- Updated lore approval and info commands with asynchronous cache updates.
-- Logging improvements implemented across core systems via LogManager.
+
+### Database Architecture Improvements (June 2025)
+
+- Unified database architecture implemented with Query Builder pattern and DTO support
+- Optimized SQLite connection handling to eliminate duplicate connection attempts
+- Improved logging system with standardized LogManager usage across all classes
+- Enhanced error handling and recovery for database operations
+- Implemented transaction support for multi-step database operations
+- Created comprehensive documentation for database architecture in `docs/rvnklore-database-architecture.md`
+
+### Item System Updates (May 2025)
+
+- Unified item command system with improved permission checks and refined UUID matching
+- Enhanced database caching and fallback mechanisms in the ItemManager
+- Updated lore approval and info commands with asynchronous cache updates
+- Logging improvements implemented across core systems via LogManager
