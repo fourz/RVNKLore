@@ -61,7 +61,7 @@ Use these standardized message prefixes:
 - `&a✓` for success messages
 - `&c✖` for error messages
 - `&e⚠` for warnings
-- `&7   ` (three spaces after) for additional information or tips
+- `&7␣␣␣` for additional information or tips (three spaces after)
 
 ### Console and Debug Messages
 
@@ -83,6 +83,7 @@ Use these standardized message prefixes:
 - Reserve the `Debug` class for debug-level or trace logging only.
 
 **Example:**
+
 ```java
 private final LogManager logger;
 
@@ -99,49 +100,28 @@ public void doSomething() {
 
 ## Database Architecture Guidelines
 
-### DatabaseManager as Central Hub
-- **Always use the DatabaseManager as the single entry point for setting up and managing connections.**
-- **Perform all connection logic (initialization, reconnect, shutdown, and health checks) within DatabaseManager.**
-- **Repository classes should delegate all connection-dependent operations to DatabaseManager and be limited to table-specific logic.**
+See the detailed documentation in [Database Architecture](../docs/rvnklore-database-architecture.md).
 
-### Repository Layer Strategy
-- **Repositories should merely map table results to DTOs.**
-- **Migration: Deprecate existing Repository logic that handles direct SQL query formation.**
-- **Plan to remove such logic once all queries are refactored to use the new QueryBuilder and QueryExecutor interfaces.**
+Key principles:
 
-### Query Builder Abstraction
-- **Define a common interface (QueryBuilder) for constructing SQL queries.**
-- **Implement MySQLQueryBuilder and SQLiteQueryBuilder to encapsulate dialect-specific logic.**
-- **All Repository classes should use these interfaces to build and execute queries, ensuring reusability and consistency.**
-
-### DTOs
-- **Load configuration values into dedicated DTOs for consistency.**
-- **Access configuration settings strictly through these DTO getters rather than using raw config calls.**
-
-### Configuration Management
-- **Update ConfigManager to utilize DTOs (e.g., MySQLSettingsDTO) for settings retrieval.**
-  - *Example:*
-    ```java
-    // Before
-    String host = config.getString("storage.mysql.host");
-    
-    // After
-    MySQLSettingsDTO settings = configManager.getMySQLSettings();
-    String host = settings.getHost();
-    ```
+- DatabaseManager as central hub for connections
+- Repository layer for table-specific operations
+- Query builder abstraction for SQL dialect handling
+- DTOs for clean data flow between layers
+- Asynchronous operations for all database calls
 
 ## Code Structure Best Practices
 
 ### Command Implementation
 
-- Implement appropriate interfaces and follow class hierarchy
-- Follow consistent validation, execution, and feedback pattern:
-  1. Permission check
-  2. Argument validation
-  3. Entity/target validation
-  4. Operation execution
-  5. User feedback
-  6. Next-step guidance
+See the detailed documentation in [Command Manager](../docs/rvnklore-commandmanager.md).
+
+Key principles:
+
+- Follow class hierarchy and command patterns
+- Consistent validation, execution, and feedback flow
+- Asynchronous database operations
+- Clear user feedback and error handling
 
 ### Event Handling
 
@@ -158,86 +138,15 @@ public void doSomething() {
 
 ## Performance Considerations
 
-### General Performance Guidelines
-- Use asynchronous tasks for database operations and file I/O
-- Batch database operations when possible
-- Consider memory usage when implementing data structures
-- Profile code for potential performance bottlenecks
+See the detailed documentation in [Performance Considerations](../docs/rvnklore-performance-consideration.md).
 
-### Caching Implementation Pattern
-When implementing caching in service classes:
-- **Use two-level caching approach:**
-  ```java
-  public abstract class AbstractCachingService<K, V> {
-      private final Map<K, V> cache = new ConcurrentHashMap<>();
-      private final Map<K, Long> cacheTimestamps = new ConcurrentHashMap<>();
-      private static final long CACHE_DURATION = 300000; // 5 minutes
-  }
-  ```
-- **First Level:** Memory cache in service classes using `Map<String, T>` with expiration
-- **Second Level:** Database access through `DatabaseManager` async methods
-- **Invalidation:** Clear on updates, plugin disable, and expiration
-- **Access Pattern:** Check cache → return cached || fetch from DB → cache → return
+Key principles:
 
-## Data Strategy Implementation Guidelines
+- Use asynchronous operations for I/O and database access
+- Implement caching for frequently accessed data
+- Batch operations when possible
+- Monitor resource usage and performance metrics
 
-### Database Interactions
-- **Always use the DatabaseManager as the single entry point for setting up and managing connections.**
-- **Perform all connection logic (initialization, reconnect, shutdown, and health checks) within DatabaseManager.**
-- **Repository classes should delegate all connection-dependent operations to DatabaseManager and be limited to table-specific logic.**
-
-### Query Builder Abstraction
-- **Define a common interface (QueryBuilder) for constructing SQL queries.**
-- **Implement MySQLQueryBuilder and SQLiteQueryBuilder to encapsulate dialect-specific logic.**
-- **All Repository classes should use these interfaces to build and execute queries, ensuring reusability and consistency.**
-
-### Data Transfer and Repository Behavior
-- **Repositories should merely map table results to DTOs.**
-- **Migration: Deprecate existing Repository logic that handles direct SQL query formation.**
-- **Plan to remove such logic once all queries are refactored to use the new QueryBuilder and QueryExecutor interfaces.**
-
-### Configuration
-- **Load configuration values into dedicated DTOs for consistency.**
-- **Access configuration settings strictly through these DTO getters rather than using raw config calls.**
-
-### Migration of Command, Config, Item, and Lore Domain Classes
-- **Command Classes:** Refactor commands to invoke DatabaseManager for all data operations asynchronously.
-  - *Example:*
-    ```java
-    // Before
-    LoreEntry entry = loreRepository.getLoreEntryById(id);
-    
-    // After
-    CompletableFuture<LoreEntry> futureEntry = databaseManager.getLoreEntry(id);
-    futureEntry.thenAccept(entry -> { /* Process entry */ });
-    ```
-- **Configuration System:** Update ConfigManager to utilize DTOs (e.g., MySQLSettingsDTO) for settings retrieval.
-  - *Example:*
-    ```java
-    // Before
-    String host = config.getString("storage.mysql.host");
-    
-    // After
-    MySQLSettingsDTO settings = configManager.getMySQLSettings();
-    String host = settings.getHost();
-    ```
-- **Item and Lore Domain Classes:** Introduce DTO-based data handling in domain classes with conversion getters/setters.
-  - *Example:*
-    ```java
-    // Before
-    String name = loreEntry.getName();
-    
-    // After
-    String name = loreEntry.getLoreEntryDTO().getName();
-    ```
-
-### Performance and Best Practices
-- **Ensure all database operations are asynchronous to avoid blocking the main thread.**
-- **Implement robust error handling and connection validation within DatabaseManager.**
-- **Log all connection events using the designated LogManager.**
-- **Monitor cache hit rates and adjust expiration times accordingly.**
-
---- 
 ## Development Workflow
 
 ### Building and Testing
@@ -259,9 +168,38 @@ These tasks can be executed from the VS Code task runner or directly from the te
 - Reject code that violates schema, naming, or logging standards.
 - Validate event registration and plugin lifecycle alignment.
 
-## Appendix
+## Documentation Reference
 
-*Links for quick reference:*
-- [README](./README.md)
-- [ROADMAP](./ROADMAP.md)
-- [Schema Docs](./docs/schema/)
+For detailed information on specific areas of the RVNKLore plugin, refer to these documentation files:
+
+### Project Information
+
+- [README](../README.md)
+- [ROADMAP](../ROADMAP.md)
+
+### Architecture & Design
+
+- [Database Architecture](../docs/rvnklore-database-architecture.md)
+- [Schema Documentation](../docs/schema/)
+- [Command Manager](../docs/rvnklore-commandmanager.md)
+- [Performance Considerations](../docs/rvnklore-performance-consideration.md)
+- [Item Manager](../docs/rvnklore-itemmanager.md)
+- [Lore Manager](../docs/rvnklore-loremanager.md)
+- [Collection Manager](../docs/rvnklore-collectionmanager.md)
+- [Enchant Manager](../docs/rvnklore-enchantmanager.md)
+- [Model Data Manager](../docs/rvnklore-modeldatamanager.md)
+
+### API References
+
+- [Commands & Permissions](../docs/api-reference/commands-permissions.md)
+- [Configuration API](../docs/api-reference/configuration-api.md)
+- [Database Integration](../docs/api-reference/database-integration.md)
+- [Minecraft Java Edition](../docs/api-reference/minecraft-java-edition.md)
+- [Bukkit API](../docs/api-reference/bukkit-api.md)
+- [Spigot API](../docs/api-reference/spigot-api.md)
+- [Paper API](../docs/api-reference/paper-api.md)
+- [Items & Inventory API](../docs/api-reference/items-inventory-api.md)
+- [Entity & Mob API](../docs/api-reference/entity-mob-api.md)
+- [World & Block API](../docs/api-reference/world-block-api.md)
+- [Event System](../docs/api-reference/event-system.md)
+- [Minecraft 1.21 Features](../docs/api-reference/1.21.md)
