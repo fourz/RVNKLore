@@ -275,7 +275,7 @@ LoreEntryDTO entry = new LoreEntryDTO();
 entry.setEntryType(LoreType.EVENT.name());
 entry.setName("Battle of the North");
 entry.setDescription("A legendary battle that took place between rival factions.");
-entry.setSubmittedBy(UUID.randomUUID()); // Player UUID
+entry.setSubmittedBy(player.getUniqueId());
 entry.setApproved(true);
 
 // Add the entry asynchronously
