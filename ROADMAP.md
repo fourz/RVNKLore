@@ -1,6 +1,6 @@
 # RVNKLore Development Roadmap
 
-**Last Updated**: June 22, 2025
+**Last Updated**: June 25, 2025
 
 This document outlines the planned features and improvements for the RVNKLore plugin.
 
@@ -50,17 +50,19 @@ Following the plan from `docs/plans/rvnklore-database-architecture-refactor-step
   - Improved error recovery and connection validation
   - Added proper resource cleanup on plugin disable
 
-- 🟡 **Repository Layer Transformation**
-  - Partially converted repositories to service pattern
-  - Added DTO-based data access methods
-  - Repositories now delegate connection management to DatabaseManager
-  - Transaction support added for multi-step operations
+- ✅ **Repository Layer Transformation**
+  - Completed conversion of repositories to DTO-based service pattern
+  - All repositories now implement asynchronous data access methods
+  - Repositories fully delegate connection management to DatabaseManager
+  - Transaction support implemented for all multi-step operations
+  - Comprehensive error handling with standardized logging patterns
 
 - 🟡 **Caching Implementation**
-  - Basic in-memory caching added for frequently accessed data
+  - Implemented in-memory caching for frequently accessed data
   - Added cache invalidation on data updates
   - Time-based cache expiration implemented
   - Performance metrics for cache hit rates
+  - Pending: Advanced two-level caching with repository-specific optimizations
 
 ## Q2 2025 Priorities
 
@@ -128,10 +130,13 @@ Building on the item generation system, we'll implement comprehensive storage an
   - Backup and recovery systems
 
 - [ ] **Collection Management** *(Medium Priority)*
-  - Collection definition and organization tools
-  - UI for browsing and managing collections
-  - Completion tracking and rewards
-  - Collection statistics and leaderboards
+  - Collection definition and organization system implemented
+  - Database schema and DTO structures completed
+  - Asynchronous collection operations with proper caching
+  - Collection theme support with metadata
+  - Player progress tracking with completion rewards
+  - Integration with item manager for consistent data access
+  - Next: Collection UI for browsing and statistics tracking
 
 - [ ] **Item Lifecycle Management** *(Medium Priority)*
   - Item deprecation and replacement mechanisms
@@ -313,10 +318,33 @@ Integrate the item and collection systems with VotingPlugin to provide dynamic, 
 
 ## Risk Assessment
 
-- **Technical Complexity**: Item generation system requires careful design to avoid performance issues
-- **Data Migration**: Existing items need consistent migration path
-- **Plugin Dependencies**: Changes to VotingPlugin API may require adaptation
-- **Resource Pack Coordination**: Custom model data needs coordination with server resource pack
+- **Performance Impact**: As the plugin scales, careful performance optimization is required, particularly for database operations and caching
+- **Repository Pattern Complexity**: The DTO/repository pattern increases maintainability but requires diligent adherence to established patterns
+- **Async Operation Management**: CompletableFuture-based async operations require careful error handling and context management
+- **Plugin Compatibility**: Integration with other plugins may present compatibility challenges, particularly for older plugins
+- **Resource Pack Coordination**: Custom model data management requires tight coordination with server resource packs
+
+## Performance Optimization Goals
+
+As the plugin expands, maintaining performance is critical:
+
+- [ ] **Advanced Caching System** *(High Priority)*
+  - Implement AbstractCachingService pattern across all managers
+  - Two-level caching with memory and disk tiers
+  - Configurable cache sizes and expiration policies
+  - Cache hit/miss metrics and analytics
+  
+- [ ] **Asynchronous Operation Optimization** *(High Priority)*
+  - Standardize CompletableFuture usage patterns
+  - Implement shared thread pool management
+  - Batch operation support for database-intensive tasks
+  - Main thread offloading for all I/O operations
+  
+- [ ] **Resource Management** *(Medium Priority)*
+  - Memory footprint optimization
+  - Object pooling for frequently created instances
+  - Resource leak detection and prevention
+  - Automatic cleanup for abandoned operations
 
 ## Contributing to the Roadmap
 
@@ -345,17 +373,31 @@ We prioritize features based on:
 | April 12, 2025 | 1.0 | Initial roadmap draft |
 | May 25, 2025 | 1.1 | Updated with Head & Cosmetic System completion |
 | June 22, 2025 | 1.2 | Updated with Database Architecture implementation |
+| June 25, 2025 | 1.3 | Updated with Repository Layer completion and Collection System enhancements |
 
 ## Recent Updates
 
-### Database Architecture Improvements (June 2025)
+### Repository Layer Completion (June 2025)
+- Completed transformation of all repositories to DTO-based async pattern
+- Standardized error handling and logging across all database operations
+- Implemented consistent transaction management for complex operations
+- Enhanced performance with optimized query patterns
+- Added comprehensive JavaDoc documentation for repository interfaces
 
+### Collection System Enhancements (June 2025)
+- Completed CollectionManager with full DTO support and async operations
+- Implemented player progress tracking with CompletableFuture-based API
+- Added collection theme support with metadata storage
+- Enhanced integration with ItemManager for unified item access
+- Improved error handling and recovery for collection operations
+
+### Database Architecture Improvements (June 2025)
 - Unified database architecture implemented with Query Builder pattern and DTO support
 - Optimized SQLite connection handling to eliminate duplicate connection attempts
 - Improved logging system with standardized LogManager usage across all classes
 - Enhanced error handling and recovery for database operations
 - Implemented transaction support for multi-step database operations
-- Created comprehensive documentation for database architecture in `docs/rvnklore-database-architecture.md`
+- Created comprehensive documentation for database architecture in rvnklore-database-architecture.md
 
 ### Item System Updates (May 2025)
 
@@ -363,3 +405,20 @@ We prioritize features based on:
 - Enhanced database caching and fallback mechanisms in the ItemManager
 - Updated lore approval and info commands with asynchronous cache updates
 - Logging improvements implemented across core systems via LogManager
+
+## Custom Model Data Manager Implementation
+
+The Custom Model Data Manager is a critical component for resource pack integration:
+
+- 🟡 **ModelDataManager Core** *(High Priority)*
+  - Initial framework implemented for model data ID allocation and tracking
+  - Organized model ID ranges by category (weapons, armor, tools, etc.)
+  - Registration system for new model data IDs
+  - Conflict detection to prevent model ID collisions
+  - Pending: Model data import/export and automatic resource pack synchronization
+  
+- [ ] **Resource Pack Integration** *(Medium Priority)*
+  - Resource pack version management
+  - Automatic asset generation for custom model data
+  - Dynamic model data updates based on player context
+  - Performance optimization for model data application

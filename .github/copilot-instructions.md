@@ -1,6 +1,6 @@
 # RVNKLore Copilot Instructions
 
-This document outlines the coding standards and best practices for the RVNKLore plugin. These guidelines should be followed when modifying or creating code to maintain consistency throughout the codebase.
+These guidelines should be followed when modifying or creating code to maintain consistency throughout the codebase using documentation files as references.
 
 ## General Directive
 
@@ -44,7 +44,7 @@ This document outlines the coding standards and best practices for the RVNKLore 
 
 ### Code Comments
 
-- Comment on "why" not "what" - explain reasoning behind code
+- Comment on "why" less "what" - explain reasoning behind code
 - Place comments above the code they describe
 - Keep comments concise and meaningful
 - Use TODO and FIXME sparingly and with clear descriptions
@@ -170,9 +170,12 @@ These tasks can be executed from the VS Code task runner or directly from the te
 
 ## Documentation Reference
 
-For detailed information on specific areas of the RVNKLore plugin, refer to these documentation files:
+### Context Window Include Directive
 
-### Project Information
+- **Only include linked documentation files if relevant to current task or question.**
+- **Limit included files to those that directly relate to the task at hand.** 
+
+### RVNKLore Project Information (project overview and status)
 
 - [README](../README.md)
 - [ROADMAP](../ROADMAP.md)
@@ -188,18 +191,3 @@ For detailed information on specific areas of the RVNKLore plugin, refer to thes
 - [Collection Manager](../docs/rvnklore-collectionmanager.md)
 - [Enchant Manager](../docs/rvnklore-enchantmanager.md)
 - [Model Data Manager](../docs/rvnklore-modeldatamanager.md)
-
-### API References
-
-- [Commands & Permissions](../docs/api-reference/commands-permissions.md)
-- [Configuration API](../docs/api-reference/configuration-api.md)
-- [Database Integration](../docs/api-reference/database-integration.md)
-- [Minecraft Java Edition](../docs/api-reference/minecraft-java-edition.md)
-- [Bukkit API](../docs/api-reference/bukkit-api.md)
-- [Spigot API](../docs/api-reference/spigot-api.md)
-- [Paper API](../docs/api-reference/paper-api.md)
-- [Items & Inventory API](../docs/api-reference/items-inventory-api.md)
-- [Entity & Mob API](../docs/api-reference/entity-mob-api.md)
-- [World & Block API](../docs/api-reference/world-block-api.md)
-- [Event System](../docs/api-reference/event-system.md)
-- [Minecraft 1.21 Features](../docs/api-reference/1.21.md)

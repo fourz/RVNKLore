@@ -1,7 +1,6 @@
 package org.fourz.RVNKLore.data.connection;
 
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.config.ConfigManager;
 import org.fourz.RVNKLore.debug.LogManager;
 
 import java.io.File;
