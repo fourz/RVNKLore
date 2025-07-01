@@ -34,9 +34,6 @@ import org.fourz.RVNKLore.data.dto.NameChangeRecordDTO;
 import org.fourz.RVNKLore.lore.LoreEntry;
 
 import java.sql.*;
-
-
-import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.*;
 
@@ -48,7 +45,8 @@ import java.util.concurrent.*;
  * Database settings are accessed directly from ConfigManager, and the ConnectionProvider
  * implementations retrieve their configuration settings directly from ConfigManager.
  */
-public class DatabaseManager {    private final RVNKLore plugin;
+public class DatabaseManager {    
+    private final RVNKLore plugin;
     private final LogManager logger;
     private final DatabaseConfig databaseConfig;
     private final DatabaseType databaseType;
@@ -63,7 +61,6 @@ public class DatabaseManager {    private final RVNKLore plugin;
     private LoreEntryRepository loreEntryRepository;
     private SubmissionRepository submissionRepository;
     private DatabaseHealthService healthService;
-    // Add a field to track schema validation state
     private volatile boolean schemaValidated = false;
 
     /**
@@ -86,9 +83,9 @@ public class DatabaseManager {    private final RVNKLore plugin;
     public DatabaseManager(RVNKLore plugin) {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "DatabaseManager");
-        this.databaseConfig = plugin.getConfigManager().getDatabaseConfig();
+        this.databaseConfig = plugin.getConfigManager().
         this.databaseType = databaseConfig.getType();
-        this.databaseSetup = new DatabaseSetup(plugin);
+        this.databaseSetup = new DatabaseSetup(plugin, connectionProvider);
         initializeInternal();
     }
 
@@ -511,47 +508,14 @@ public class DatabaseManager {    private final RVNKLore plugin;
      * Attempt to reconnect to the database
      */
     public void reconnect() {
-        logger.info("Attempting to reconnect to database...");
         try {
-            // Close the existing connection first
             if (connectionProvider != null) {
                 connectionProvider.close();
-                logger.info("Database connection closed");
             }
-            
-            // Recreate the connection provider
-            if (databaseType == DatabaseType.MYSQL) {
-                connectionProvider = new MySQLConnectionProvider(plugin);
-            } else {
-                connectionProvider = new SQLiteConnectionProvider(plugin);
-            }
-            
-            // Initialize the connection without schema setup
-            if (databaseType == DatabaseType.SQLITE && connectionProvider instanceof SQLiteConnectionProvider) {
-                ((SQLiteConnectionProvider) connectionProvider).initializeConnection();
-            }
-            
-            // Only run schema setup and validation once at startup or on reload
-            if (!schemaValidated) {
-                try {
-                    // Setup schema
-                    DatabaseSetup databaseSetup = new DatabaseSetup(plugin, connectionProvider, 
-                                                                  schemaQueryBuilder, queryExecutor);
-                    databaseSetup.initializeTables().get(); // Use get() to make it synchronous
-                    
-                    logger.info("Database schema initialized successfully after reconnect");
-                    
-                    // Validate tables
-                    validateTables();
-                    
-                    // Mark schema as validated
-                    schemaValidated = true;
-                } catch (Exception e) {
-                    logger.error("Failed to initialize database schema after reconnect", e);
-                }
-            }
+            initialize();
         } catch (Exception e) {
             logger.error("Failed to reconnect to database", e);
+            throw new DatabaseException("Failed to reconnect to database", e);
         }
     }
 
@@ -562,27 +526,24 @@ public class DatabaseManager {    private final RVNKLore plugin;
      * Initialize the database and validate schema
      */
     private void initializeInternal() {
-        // Initialize connection provider
-        if (databaseType == DatabaseType.MYSQL) {
-            connectionProvider = new MySQLConnectionProvider(plugin);
-        } else {
-            connectionProvider = new SQLiteConnectionProvider(plugin);
+        try {
+            initializeConnection();
+            if (!schemaValidated) {
+                validateAndUpdateSchema();
+                schemaValidated = true;
+            }
+        } catch (Exception e) {
+            logger.error("Failed to initialize database", e);
+            throw new RuntimeException("Failed to initialize database", e);
         }
-        
-        // Initialize database components
-        initialize();
     }
 
     /**
-     * Reload the database connection and schema.
-     * This explicitly resets the schema validation flag to force
-     * revalidation on the next initialization.
+     * Reload the database connection and schema
      */
     public void reload() {
-        logger.info("Reloading database manager...");
         schemaValidated = false;
-        close();
-        initializeInternal();
+        reconnect();
     }
 
     /**
@@ -1037,7 +998,7 @@ public class DatabaseManager {    private final RVNKLore plugin;
     private void validateAndUpdateSchema() {
         try (Connection conn = connectionProvider.getConnection()) {
             if (databaseSetup == null) {
-                databaseSetup = new DatabaseSetup(plugin);
+                databaseSetup = new DatabaseSetup(plugin, connectionProvider);
             }
             databaseSetup.validateAndUpdateSchema(conn);
         } catch (SQLException e) {
@@ -1051,9 +1012,9 @@ public class DatabaseManager {    private final RVNKLore plugin;
      */
     private ConnectionProvider createConnectionProvider() {
         if (databaseType == DatabaseType.MYSQL) {
-            return new MySQLConnectionProvider(databaseConfig);
+            return new MySQLConnectionProvider(plugin);
         } else {
-            return new SQLiteConnectionProvider(databaseConfig);
+            return new SQLiteConnectionProvider(plugin);
         }
     }
 }

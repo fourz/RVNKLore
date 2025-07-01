@@ -15,25 +15,42 @@ import java.util.concurrent.CompletableFuture;
  * Handles database table creation and initialization operations.
  * Responsible for setting up the database schema during plugin startup.
  */
-public class DatabaseSetup {    private final RVNKLore plugin;
+public class DatabaseSetup {   
+    private final RVNKLore plugin;
     private final LogManager logger;
     private final ConnectionProvider connectionProvider;
-    private final SchemaQueryBuilder schemaQueryBuilder;
-    private final QueryExecutor queryExecutor;    /**
-     * Creates a new DatabaseSetup instance.
+    private SchemaQueryBuilder schemaQueryBuilder;
+    private QueryExecutor queryExecutor;
+    private boolean initialized = false;
+
+    /**
+     * Creates a new DatabaseSetup instance with minimal required dependencies.
      *
      * @param plugin The RVNKLore plugin instance
      * @param connectionProvider The connection provider to use
-     * @param schemaQueryBuilder The schema query builder to use
-     * @param queryExecutor The query executor to use
      */
-    public DatabaseSetup(RVNKLore plugin, ConnectionProvider connectionProvider, 
-                          SchemaQueryBuilder schemaQueryBuilder, QueryExecutor queryExecutor) {
+    public DatabaseSetup(RVNKLore plugin, ConnectionProvider connectionProvider) {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "DatabaseSetup");
         this.connectionProvider = connectionProvider;
+    }
+
+    /**
+     * Initializes the DatabaseSetup with remaining dependencies.
+     * Must be called before any database operations are performed.
+     *
+     * @param schemaQueryBuilder The schema query builder to use
+     * @param queryExecutor The query executor to use
+     * @throws IllegalStateException if initialize is called more than once
+     */
+    public void initialize(SchemaQueryBuilder schemaQueryBuilder, QueryExecutor queryExecutor) {
+        if (initialized) {
+            throw new IllegalStateException("DatabaseSetup already initialized");
+        }
+        
         this.schemaQueryBuilder = schemaQueryBuilder;
         this.queryExecutor = queryExecutor;
+        this.initialized = true;
     }
 
     /**
@@ -42,6 +59,9 @@ public class DatabaseSetup {    private final RVNKLore plugin;
      *
      * @return A CompletableFuture that completes when all tables are created
      */    public CompletableFuture<Void> initializeTables() {
+        if (!initialized) {
+            throw new IllegalStateException("DatabaseSetup not initialized. Call initialize() first.");
+        }
         return CompletableFuture.runAsync(() -> {
             try {
                 logger.debug("Initializing database tables...");
@@ -60,6 +80,45 @@ public class DatabaseSetup {    private final RVNKLore plugin;
             } catch (SQLException e) {
                 logger.error("Failed to initialize database tables", e);
                 throw new RuntimeException("Failed to initialize database tables", e);
+            }
+        });
+    }
+
+    /**
+     * Validates that all required tables exist in the database.
+     * This is a lightweight check that doesn't create or modify tables.
+     *
+     * @return A CompletableFuture that completes when validation is done
+     */
+    public CompletableFuture<Boolean> validateSchema() {
+        if (!initialized) {
+            throw new IllegalStateException("DatabaseSetup not initialized. Call initialize() first.");
+        }
+        return CompletableFuture.supplyAsync(() -> {
+            try (Connection conn = connectionProvider.getConnection();
+                 Statement stmt = conn.createStatement()) {
+                
+                // Check each required table using a simple SELECT
+                String[] tables = {
+                    "player", "name_change_record", "lore_entry", "lore_submission",
+                    "item_properties", "lore_collection", "lore_collection_entry",
+                    "lore_item", "lore_location"
+                };
+                
+                for (String table : tables) {
+                    try {
+                        stmt.executeQuery("SELECT 1 FROM " + table + " LIMIT 1");
+                    } catch (SQLException e) {
+                        logger.error("Table " + table + " is missing", e);
+                        return false;
+                    }
+                }
+                
+                logger.debug("Database schema validation complete");
+                return true;
+            } catch (SQLException e) {
+                logger.error("Failed to validate database schema", e);
+                return false;
             }
         });
     }
@@ -300,5 +359,14 @@ public class DatabaseSetup {    private final RVNKLore plugin;
                 connection.commit();
             }
         }
+    }
+
+    /**
+     * Checks if this DatabaseSetup instance has been initialized.
+     *
+     * @return true if initialize() has been called successfully
+     */
+    public boolean isInitialized() {
+        return initialized;
     }
 }
