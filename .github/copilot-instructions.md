@@ -174,6 +174,7 @@ These tasks can be executed from the VS Code task runner or directly from the te
 
 - **Only include linked documentation files if relevant to current task or question.**
 - **Limit included files to those that directly relate to the task at hand.** 
+- **Search the web for additional information if needed especially for queries related to Minecraft, Spigot or Bukkit.**
 
 ### RVNKLore Project Information (project overview and status)
 

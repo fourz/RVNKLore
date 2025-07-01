@@ -1,6 +1,6 @@
 # RVNKLore Development Roadmap
 
-**Last Updated**: June 25, 2025
+**Last Updated**: June 22, 2025
 
 This document outlines the planned features and improvements for the RVNKLore plugin.
 
@@ -373,31 +373,17 @@ We prioritize features based on:
 | April 12, 2025 | 1.0 | Initial roadmap draft |
 | May 25, 2025 | 1.1 | Updated with Head & Cosmetic System completion |
 | June 22, 2025 | 1.2 | Updated with Database Architecture implementation |
-| June 25, 2025 | 1.3 | Updated with Repository Layer completion and Collection System enhancements |
 
 ## Recent Updates
 
-### Repository Layer Completion (June 2025)
-- Completed transformation of all repositories to DTO-based async pattern
-- Standardized error handling and logging across all database operations
-- Implemented consistent transaction management for complex operations
-- Enhanced performance with optimized query patterns
-- Added comprehensive JavaDoc documentation for repository interfaces
-
-### Collection System Enhancements (June 2025)
-- Completed CollectionManager with full DTO support and async operations
-- Implemented player progress tracking with CompletableFuture-based API
-- Added collection theme support with metadata storage
-- Enhanced integration with ItemManager for unified item access
-- Improved error handling and recovery for collection operations
-
 ### Database Architecture Improvements (June 2025)
+
 - Unified database architecture implemented with Query Builder pattern and DTO support
 - Optimized SQLite connection handling to eliminate duplicate connection attempts
 - Improved logging system with standardized LogManager usage across all classes
 - Enhanced error handling and recovery for database operations
 - Implemented transaction support for multi-step database operations
-- Created comprehensive documentation for database architecture in rvnklore-database-architecture.md
+- Created comprehensive documentation for database architecture in `docs/rvnklore-database-architecture.md`
 
 ### Item System Updates (May 2025)
 

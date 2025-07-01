@@ -18,9 +18,13 @@ public class DatabaseHealthService {
     private final DatabaseManager databaseManager;
     private final LogManager logger;
     private final AtomicInteger reconnectAttempts;
+    private volatile long lastLogTime;
+    private volatile boolean wasInvalid;
+    
     private static final int MAX_RECONNECT_ATTEMPTS = 5;
     private static final int INITIAL_DELAY_SECONDS = 30;
-    private static final int CHECK_INTERVAL_SECONDS = 30;
+    private static final int CHECK_INTERVAL_SECONDS = 60; // Increased from 30
+    private static final int LOG_THROTTLE_MS = 300000; // 5 minutes
 
     /**
      * Create a new DatabaseHealthService.
@@ -67,7 +71,20 @@ public class DatabaseHealthService {
     }
 
     /**
-     * Perform a health check and attempt reconnection if needed.
+     * Initialize the health check service
+     */
+    public void initialize() {
+        scheduler.scheduleAtFixedRate(
+            this::performHealthCheck,
+            INITIAL_DELAY_SECONDS,
+            CHECK_INTERVAL_SECONDS,
+            TimeUnit.SECONDS
+        );
+        logger.info("Database health check service initialized");
+    }
+
+    /**
+     * Check database health and attempt reconnection if needed
      */
     private void performHealthCheck() {
         if (!databaseManager.validateConnection()) {
