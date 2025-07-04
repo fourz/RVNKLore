@@ -1,6 +1,7 @@
 package org.fourz.RVNKLore.data.config;
 
 import org.bukkit.configuration.ConfigurationSection;
+import org.fourz.RVNKLore.data.DatabaseType;
 
 public class DatabaseConfig {
     private final DatabaseType type;

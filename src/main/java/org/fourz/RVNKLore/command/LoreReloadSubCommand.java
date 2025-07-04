@@ -34,17 +34,18 @@ public class LoreReloadSubCommand implements SubCommand {
         // Update log level
         logger.setLogLevel(plugin.getConfigManager().getLogLevel());
         
-        // Reload database connections
-        CompletableFuture<Void> databaseReload = plugin.getDatabaseManager().reload();
-        
-        databaseReload.thenRun(() -> {
-            sender.sendMessage(ChatColor.GREEN + "✓ RVNKLore plugin has been reloaded successfully!");
-        }).exceptionally(e -> {
-            logger.error("Error reloading database", e);
-            sender.sendMessage(ChatColor.RED + "✖ Error reloading database. Please check the console for details.");
+        // Reload database connections        
+        CompletableFuture<Void> reloadFuture = plugin.getDatabaseManager().reloadAsync();
+
+        reloadFuture.thenRun(() -> {
+            sender.sendMessage(ChatColor.GREEN + "✅ RVNKLore plugin reloaded successfully!");
+            logger.info("Plugin reloaded successfully");
+        }).exceptionally(ex -> {
+            sender.sendMessage(ChatColor.RED + "❌ Failed to reload RVNKLore plugin: " + ex.getMessage());
+            logger.error("Failed to reload plugin", ex);
             return null;
         });
-        
+                
         return true;
     }
 

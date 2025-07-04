@@ -40,7 +40,21 @@ public class DatabaseHealthService {
     }
 
     /**
-     * Start periodic health checks.
+     * Returns true if the database is SQLite.
+     */
+    private boolean isSQLite() {
+        return databaseManager.getConnectionProvider() instanceof org.fourz.RVNKLore.data.connection.SQLiteConnectionProvider;
+    }
+
+    /**
+     * Returns the health check interval in seconds, optimized for SQLite.
+     */
+    private int getHealthCheckIntervalSeconds() {
+        return isSQLite() ? 180 : CHECK_INTERVAL_SECONDS; // 3 min for SQLite, 1 min for MySQL
+    }
+
+    /**
+     * Start periodic health checks (with SQLite optimization).
      */
     public void start() {
         scheduler.scheduleAtFixedRate(() -> {
@@ -49,7 +63,7 @@ public class DatabaseHealthService {
             } catch (Exception e) {
                 logger.error("Error during database health check", e);
             }
-        }, INITIAL_DELAY_SECONDS, CHECK_INTERVAL_SECONDS, TimeUnit.SECONDS);
+        }, INITIAL_DELAY_SECONDS, getHealthCheckIntervalSeconds(), TimeUnit.SECONDS);
         
         logger.info("Database health check service started");
     }
@@ -84,7 +98,7 @@ public class DatabaseHealthService {
     }
 
     /**
-     * Check database health and attempt reconnection if needed
+     * Check database health and attempt reconnection if needed (lightweight, no schema validation).
      */
     private void performHealthCheck() {
         if (!databaseManager.validateConnection()) {
@@ -95,8 +109,8 @@ public class DatabaseHealthService {
                 
                 try {
                     Thread.sleep(backoffSeconds * 1000);
-                    databaseManager.reconnect();
-                    if (databaseManager.validateConnection()) {
+                    boolean reconnected = databaseManager.reconnect();
+                    if (reconnected && databaseManager.validateConnection()) {
                         logger.info("Database connection restored successfully");
                         reconnectAttempts.set(0);
                     } else {

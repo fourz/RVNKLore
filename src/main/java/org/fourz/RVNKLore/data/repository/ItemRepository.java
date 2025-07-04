@@ -3,7 +3,7 @@ package org.fourz.RVNKLore.data.repository;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.data.DatabaseManager;
 import org.fourz.RVNKLore.data.dto.ItemPropertiesDTO;
-import org.fourz.RVNKLore.data.query.DefaultQueryExecutor;
+import org.fourz.RVNKLore.data.query.QueryExecutor;
 import org.fourz.RVNKLore.data.query.QueryBuilder;
 import org.fourz.RVNKLore.debug.LogManager;
 
@@ -25,7 +25,7 @@ import java.util.concurrent.CompletionException;
 public class ItemRepository {
     private final LogManager logger;
     private final DatabaseManager databaseManager;
-    private final DefaultQueryExecutor queryExecutor;
+    private final QueryExecutor queryExecutor;
     private final QueryBuilder queryBuilder;
 
     /**

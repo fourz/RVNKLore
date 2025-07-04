@@ -10,7 +10,7 @@ import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.data.DatabaseManager;
 import org.fourz.RVNKLore.data.dto.ItemCollectionDTO;
 import org.fourz.RVNKLore.data.query.QueryBuilder;
-import org.fourz.RVNKLore.data.query.DefaultQueryExecutor;
+import org.fourz.RVNKLore.data.query.QueryExecutor;
 import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
 
 /**
@@ -21,7 +21,7 @@ import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
 public class CollectionRepository {
     private final LogManager logger;
     private final DatabaseManager databaseManager;
-    private final DefaultQueryExecutor queryExecutor;
+    private final QueryExecutor queryExecutor;
 
     /**
      * Create a new CollectionRepository

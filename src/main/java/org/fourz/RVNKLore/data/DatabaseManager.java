@@ -1,9 +1,6 @@
 package org.fourz.RVNKLore.data;
 
-import java.sql.Connection;
-import java.sql.SQLException;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.config.ConfigManager;
@@ -66,9 +63,6 @@ public class DatabaseManager {
     /**
      * Database types supported by the plugin.
      */
-    public enum DatabaseType {
-        MYSQL, SQLITE
-    }
     
     /**
      * Create a new DatabaseManager instance.
@@ -83,10 +77,32 @@ public class DatabaseManager {
     public DatabaseManager(RVNKLore plugin) {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "DatabaseManager");
-        this.databaseConfig = plugin.getConfigManager().
+        this.databaseConfig = new DatabaseConfig(plugin.getConfigManager().getConfig());
         this.databaseType = databaseConfig.getType();
+        
+        // Step 1: Create connection provider first
+        createConnectionProvider();
+        
+        // Step 2: Create DatabaseSetup with minimal dependencies
         this.databaseSetup = new DatabaseSetup(plugin, connectionProvider);
-        initializeInternal();
+        
+        // Step 3: Complete initialization
+        initialize();
+        
+        // Step 4: Initialize the connection and validate schema
+        initializeConnection();
+    }
+    
+    /**
+     * Creates the appropriate connection provider based on database type.
+     */
+    private void createConnectionProvider() {
+        if (databaseType == DatabaseType.MYSQL) {
+            connectionProvider = new MySQLConnectionProvider(plugin);
+        } else {
+            connectionProvider = new SQLiteConnectionProvider(plugin);
+        }
+        logger.debug("Connection provider created: " + connectionProvider.getClass().getSimpleName());
     }
 
     /**
@@ -104,7 +120,11 @@ public class DatabaseManager {
             schemaQueryBuilder = new SQLiteSchemaQueryBuilder();
         }
         
+        // Create the query executor
         queryExecutor = new DefaultQueryExecutor(plugin, connectionProvider);
+        
+        // Complete the two-phase initialization of DatabaseSetup
+        databaseSetup.initialize(schemaQueryBuilder, queryExecutor);
         
         // Initialize repositories
         itemRepository = new ItemRepository(plugin, this);
@@ -497,8 +517,8 @@ public class DatabaseManager {
      * Check if the database connection is valid
      */
     public boolean isConnectionValid() {
-        try {
-            return connectionProvider.isValid();
+        try (Connection conn = connectionProvider.getConnection()) {
+            return conn != null && !conn.isClosed();
         } catch (Exception e) {
             return false;
         }
@@ -506,16 +526,38 @@ public class DatabaseManager {
 
     /**
      * Attempt to reconnect to the database
+     * 
+     * @return true if reconnection was successful, false otherwise
      */
-    public void reconnect() {
+    public boolean reconnect() {
+        logger.info("Attempting to reconnect to database...");
         try {
+            // Close existing connection
             if (connectionProvider != null) {
                 connectionProvider.close();
             }
-            initialize();
+            
+            // Create a new connection provider
+            createConnectionProvider();
+            
+            // For SQLite, we need to initialize the connection explicitly
+            if (databaseType == DatabaseType.SQLITE) {
+                ((SQLiteConnectionProvider) connectionProvider).initializeConnection();
+            }
+            
+            // Simple validation without schema checks
+            try (Connection conn = connectionProvider.getConnection()) {
+                boolean valid = conn != null && !conn.isClosed();
+                if (valid) {
+                    logger.info("Reconnection successful");
+                } else {
+                    logger.warning("Reconnection failed - connection invalid");
+                }
+                return valid;
+            }
         } catch (Exception e) {
-            logger.error("Failed to reconnect to database", e);
-            throw new DatabaseException("Failed to reconnect to database", e);
+            logger.error("Reconnection failed with error", e);
+            throw new RuntimeException("Failed to reconnect to database", e);
         }
     }
 
@@ -528,10 +570,7 @@ public class DatabaseManager {
     private void initializeInternal() {
         try {
             initializeConnection();
-            if (!schemaValidated) {
-                validateAndUpdateSchema();
-                schemaValidated = true;
-            }
+            // Schema validation is now handled by validateSchemaIfNeeded()
         } catch (Exception e) {
             logger.error("Failed to initialize database", e);
             throw new RuntimeException("Failed to initialize database", e);
@@ -544,17 +583,44 @@ public class DatabaseManager {
     public void reload() {
         schemaValidated = false;
         reconnect();
+        // Force schema validation on reload
+        validateSchemaIfNeeded();
+    }
+
+    public CompletableFuture<Void> reloadAsync() {
+        return CompletableFuture.runAsync(() -> {
+            try {
+                reload();
+            } catch (Exception e) {
+                logger.error("Error reloading database", e);
+                throw new CompletionException(e);
+            }
+        });
     }
 
     /**
-     * Validate the current database connection.
-     * 
+     * Validates that the database connection is valid.
+     * This is called before each database operation.
+     *
      * @return true if the connection is valid, false otherwise
      */
     public boolean validateConnection() {
-        return connectionProvider != null && connectionProvider.validateConnection();
+        try {
+            // For routine checks, just verify the connection is valid
+            if (connectionProvider != null) {
+                // The isValid method might not be directly available, use a ping-style check
+                try (Connection conn = connectionProvider.getConnection()) {
+                    return conn != null && !conn.isClosed();
+                }
+            }
+            return false;
+        } catch (Exception e) {
+            logger.warning("Connection validation failed: " + e.getMessage());
+            // Try to reconnect
+            return reconnect();
+        }
     }
-    
+
     /**
      * Close the database connection and clean up resources.
      */
@@ -694,9 +760,15 @@ public class DatabaseManager {
     }
 
     /**
-     * Gets the query executor instance.
+     * Gets the query executor for database operations.
+     * Returns the interface type rather than the implementation.
+     *
+     * @return The QueryExecutor interface
      */
-    public DefaultQueryExecutor getQueryExecutor() {
+    public QueryExecutor getQueryExecutor() {
+        if (queryExecutor == null) {
+            throw new IllegalStateException("QueryExecutor not initialized - call initialize() first");
+        }
         return queryExecutor;
     }
 
@@ -728,7 +800,7 @@ public class DatabaseManager {
                 logger.error("Error executing query with mapper", e);
                 throw new CompletionException(e);
             }
-        }, executor);
+        });
     }
 
     @FunctionalInterface
@@ -975,46 +1047,60 @@ public class DatabaseManager {
     }
 
     /**
-     * Initialize database connection
+     * Initializes the database connection and validates the schema if needed.
      */
     private void initializeConnection() {
-        if (connectionProvider == null) {
-            connectionProvider = createConnectionProvider();
-        }
-        // Test the connection
-        try (Connection conn = connectionProvider.getConnection()) {
-            if (!conn.isValid(5)) { // 5 second timeout
-                throw new SQLException("Database connection is invalid");
+        try {
+            logger.debug("Initializing database connection...");
+            
+            // For SQLite, we need to initialize the connection explicitly
+            if (databaseType == DatabaseType.MYSQL) {
+                // For MySQL, connection pooling is handled by the provider
+                logger.debug("Using MySQL connection pool");
+            } else {
+                // For SQLite, we initialize the connection here once
+                logger.debug("Initializing SQLite connection");
+                ((SQLiteConnectionProvider) connectionProvider).initializeConnection();
             }
-        } catch (SQLException e) {
-            logger.error("Failed to initialize database connection", e);
+            
+            // Initialize health service
+            healthService = new DatabaseHealthService(this, plugin);
+            healthService.start();
+            
+            // Validate schema if not already done
+            validateSchemaIfNeeded();
+            
+        } catch (Exception e) {
+            logger.error("Failed to initialize database connection: " + e.getMessage(), e);
             throw new RuntimeException("Failed to initialize database connection", e);
         }
     }
-
+    
     /**
-     * Validate and update database schema
+     * Validates the database schema if it hasn't been validated yet.
+     * This should only be called during initialization or explicit reload.
      */
-    private void validateAndUpdateSchema() {
-        try (Connection conn = connectionProvider.getConnection()) {
-            if (databaseSetup == null) {
-                databaseSetup = new DatabaseSetup(plugin, connectionProvider);
+    private void validateSchemaIfNeeded() {
+        if (!schemaValidated) {
+            try {
+                logger.info("Validating database schema...");
+                
+                // First, do a lightweight check to see if tables exist
+                boolean tablesExist = databaseSetup.validateSchema().join();
+                
+                if (!tablesExist) {
+                    // Tables don't exist or are incomplete, create them
+                    logger.info("Schema validation failed, creating tables...");
+                    databaseSetup.initializeTables().join();
+                    logger.info("Database schema setup complete");
+                }
+                
+                schemaValidated = true;
+                logger.info("Database validation complete - all tables exist");
+            } catch (Exception e) {
+                logger.error("Database schema validation failed", e);
+                throw new RuntimeException("Database schema validation failed", e);
             }
-            databaseSetup.validateAndUpdateSchema(conn);
-        } catch (SQLException e) {
-            logger.error("Failed to validate and update database schema", e);
-            throw new RuntimeException("Failed to validate and update database schema", e);
-        }
-    }
-
-    /**
-     * Create appropriate connection provider based on configuration
-     */
-    private ConnectionProvider createConnectionProvider() {
-        if (databaseType == DatabaseType.MYSQL) {
-            return new MySQLConnectionProvider(plugin);
-        } else {
-            return new SQLiteConnectionProvider(plugin);
         }
     }
 }

@@ -8,6 +8,7 @@ import org.fourz.RVNKLore.data.dto.LoreSubmissionDTO;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.bukkit.Location;
 import org.fourz.RVNKLore.data.query.QueryBuilder;
+import org.fourz.RVNKLore.data.query.QueryExecutor;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -32,7 +33,7 @@ public class LoreEntryRepository {
     private final LogManager logger;
     private final DatabaseManager databaseManager;
     private final QueryBuilder queryBuilder;
-    private final org.fourz.RVNKLore.data.query.DefaultQueryExecutor queryExecutor;
+    private final QueryExecutor queryExecutor;
 
     public LoreEntryRepository(RVNKLore plugin, DatabaseManager databaseManager) {
         this.plugin = plugin;

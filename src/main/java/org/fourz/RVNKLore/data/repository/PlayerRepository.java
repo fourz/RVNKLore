@@ -8,8 +8,8 @@ import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.data.DatabaseManager;
 import org.fourz.RVNKLore.data.dto.NameChangeRecordDTO;
 import org.fourz.RVNKLore.data.dto.PlayerDTO;
-import org.fourz.RVNKLore.data.query.DefaultQueryExecutor;
 import org.fourz.RVNKLore.data.query.QueryBuilder;
+import org.fourz.RVNKLore.data.query.QueryExecutor;
 import org.fourz.RVNKLore.debug.LogManager;
 
 /**
@@ -19,7 +19,7 @@ import org.fourz.RVNKLore.debug.LogManager;
  */
 public class PlayerRepository {    private final LogManager logger;
     private final QueryBuilder queryBuilder;
-    private final DefaultQueryExecutor queryExecutor;
+    private final QueryExecutor queryExecutor;
 
     public PlayerRepository(RVNKLore plugin, DatabaseManager databaseManager) {
         this.logger = LogManager.getInstance(plugin, "PlayerRepository");
