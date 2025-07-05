@@ -83,4 +83,42 @@ public class SQLiteConnection extends DatabaseConnection {
             return true;
         }
     }
+    
+    /**
+     * Checks if the SQLite connection is valid (non-null and not closed).
+     * This avoids JDBC isValid() and any test queries, which can cause false positives.
+     *
+     * @return true if the connection is open, false otherwise
+     */
+    public boolean isValid() {
+        try {
+            return connection != null && !connection.isClosed();
+        } catch (SQLException e) {
+            lastConnectionError = e.getMessage();
+            debug.debug("Connection check failed: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Attempts to reconnect to the SQLite database by closing and re-initializing the connection.
+     * Uses only isValid() for validation to avoid false positives.
+     *
+     * @return true if reconnection was successful, false otherwise
+     */
+    @Override
+    public boolean reconnect() {
+        try {
+            if (isValid()) {
+                connection.close();
+            }
+            initialize();
+            // Validate the new connection (non-null and not closed)
+            return isValid();
+        } catch (Exception e) {
+            lastConnectionError = e.getMessage();
+            debug.error("Failed to reconnect to SQLite database", e);
+            return false;
+        }
+    }
 }

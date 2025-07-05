@@ -99,14 +99,18 @@ public class DatabaseHealthService {
 
     /**
      * Check database health and attempt reconnection if needed (lightweight, no schema validation).
+     * For SQLite, skip health check to avoid false positives.
      */
     private void performHealthCheck() {
+        if (isSQLite()) {
+            // Do not perform health check for SQLite to avoid false positives
+            return;
+        }
         if (!databaseManager.validateConnection()) {
             int attempts = reconnectAttempts.get();
             if (attempts < MAX_RECONNECT_ATTEMPTS) {
                 long backoffSeconds = (long) Math.pow(2, attempts);
                 logger.warning("Database connection invalid. Attempting reconnect in " + backoffSeconds + " seconds. (Attempt " + (attempts + 1) + "/" + MAX_RECONNECT_ATTEMPTS + ")");
-                
                 try {
                     Thread.sleep(backoffSeconds * 1000);
                     boolean reconnected = databaseManager.reconnect();

@@ -162,23 +162,66 @@ public class SQLiteConnectionProvider implements ConnectionProvider {
         }
     }
 
+
+    /**
+     * Checks if the SQLite connection is usable.
+     * For SQLite, we only check if the connection exists and isn't closed.
+     * We don't use JDBC's isValid() as it's unreliable for SQLite.
+     *
+     * @return true if we have a non-null, non-closed connection
+     */
+    private boolean isValid() {
+        try {
+            return connection != null && !connection.isClosed();
+        } catch (SQLException e) {
+            lastConnectionError = e.getMessage();
+            logger.debug("Connection check failed: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Checks if the SQLite connection is healthy.
+     * For SQLite, a connection is considered healthy if it exists and isn't closed.
+     * We avoid using JDBC's isValid() check as it can cause false negatives with SQLite.
+     *
+     * @return true if the connection appears healthy
+     */
     @Override
     public boolean isHealthy() {
         connectionLock.lock();
         try {
-            return connection != null && !connection.isClosed() && connection.isValid(2);
-        } catch (SQLException e) {
-            lastConnectionError = e.getMessage();
-            logger.error("SQLite connection health check failed", e);
-            return false;
+            return isValid();
         } finally {
             connectionLock.unlock();
         }
     }
 
+    /**
+     * Validates the SQLite connection by checking its state and attempting a test query.
+     * This is a more thorough check than isHealthy() but still avoids unreliable JDBC methods.
+     *
+     * @return true if the connection is valid and can execute a test query
+     */
     @Override
     public boolean validateConnection() {
-        return isHealthy();
+        connectionLock.lock();
+        try {
+            if (!isValid()) {
+                return false;
+            }
+            // Only do a lightweight test query if we think the connection is valid
+            try (Statement statement = connection.createStatement()) {
+                statement.execute("SELECT 1");
+                return true;
+            } catch (SQLException e) {
+                lastConnectionError = e.getMessage();
+                logger.debug("Validation query failed: " + e.getMessage());
+                return false;
+            }
+        } finally {
+            connectionLock.unlock();
+        }
     }
 
     /**
@@ -190,23 +233,6 @@ public class SQLiteConnectionProvider implements ConnectionProvider {
         return lastConnectionError;
     }
     
-    /**
-     * Checks if the current connection is valid.
-     *
-     * @return true if the connection is valid and can be used, false otherwise
-     */
-    private boolean isValid() {
-        if (connection == null) {
-            return false;
-        }
-        try {
-            return connection.isValid(1); // 1 second timeout
-        } catch (SQLException e) {
-            logger.debug("Connection validity check failed: " + e.getMessage());
-            return false;
-        }
-    }
-
     /**
      * Returns the database file for this SQLite connection.
      *

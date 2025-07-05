@@ -100,7 +100,7 @@ public class DatabaseSetup {
         return CompletableFuture.runAsync(() -> {
             try {
                 logger.debug("Initializing database tables...");
-                
+
                 createPlayerTable();
                 createNameChangeRecordTable();
                 createLoreEntryTable();
@@ -110,8 +110,7 @@ public class DatabaseSetup {
                 createLoreCollectionEntryTable();
                 createLoreItemTable();
                 createLoreLocationTable();
-                
-                logger.info("Database schema setup complete");
+                // Only log schema setup complete in performFullInitialization()
             } catch (SQLException e) {
                 logger.error("Failed to initialize database tables", e);
                 throw new RuntimeException("Failed to initialize database tables", e);

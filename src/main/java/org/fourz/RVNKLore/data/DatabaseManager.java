@@ -1,4 +1,3 @@
-
 package org.fourz.RVNKLore.data;
 
 import org.fourz.RVNKLore.RVNKLore;
@@ -128,19 +127,35 @@ public class DatabaseManager {
     // Core Database Operations
     
     /**
-     * Check if the database connection is valid
+     * Check if the database connection is valid using the connection provider's health check.
+     * For SQLite, this uses a simplified validation that only checks if the connection exists
+     * and isn't closed, avoiding unreliable JDBC isValid() checks.
+     *
+     * @return true if the connection appears valid
      */
     public boolean isConnectionValid() {
-        return databaseConnection.isConnected();
+        return connectionProvider.isHealthy();
     }
 
     /**
-     * Attempt to reconnect to the database
-     * 
-     * @return true if reconnection was successful, false otherwise
+     * Attempt to reconnect to the database.
+     * Delegates to the DatabaseConnection implementation for the actual logic.
+     *
+     * @return true if reconnection was successful
      */
     public boolean reconnect() {
         return databaseConnection.reconnect();
+    }
+
+    /**
+     * Validates the database connection using appropriate checks for the database type.
+     * For SQLite, this uses a simplified validation to avoid false negatives.
+     * For MySQL, this performs a full validation including testing the connection.
+     *
+     * @return true if the connection is valid
+     */
+    public boolean validateConnection() {
+        return connectionProvider.validateConnection();
     }
 
     /**
@@ -161,16 +176,6 @@ public class DatabaseManager {
                 throw new CompletionException(e);
             }
         });
-    }
-
-    /**
-     * Validates that the database connection is valid.
-     * This is called before each database operation.
-     *
-     * @return true if the connection is valid, false otherwise
-     */
-    public boolean validateConnection() {
-        return databaseConnection.isConnected();
     }
 
     /**
