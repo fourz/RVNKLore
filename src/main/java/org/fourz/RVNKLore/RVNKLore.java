@@ -81,7 +81,9 @@ public class RVNKLore extends JavaPlugin {
         try {
             // Remove shutdown hook to prevent duplicate cleanup
             try {
-                Runtime.getRuntime().removeShutdownHook(shutdownHook);
+                if (shutdownHook != null) {
+                    Runtime.getRuntime().removeShutdownHook(shutdownHook);
+                }
             } catch (IllegalStateException e) {
                 // JVM is already shutting down, ignore
             }

@@ -77,7 +77,8 @@ public class DatabaseManager {
     public DatabaseManager(RVNKLore plugin) {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "DatabaseManager");
-        this.databaseConfig = new DatabaseConfig(plugin.getConfigManager().getConfig());
+        // Use ConfigManager to get config data (already loaded)
+        this.databaseConfig = new DatabaseConfig(plugin.getConfigManager());
         this.databaseType = databaseConfig.getType();
         
         // Step 1: Create connection provider first
@@ -86,11 +87,8 @@ public class DatabaseManager {
         // Step 2: Create DatabaseSetup with minimal dependencies
         this.databaseSetup = new DatabaseSetup(plugin, connectionProvider);
         
-        // Step 3: Complete initialization
-        initialize();
-        
-        // Step 4: Initialize the connection and validate schema
-        initializeConnection();
+        // Step 3: Initialization is now explicit; do not call initialize() here
+        // Step 4: Do not call initializeConnection() here
     }
     
     /**
@@ -106,12 +104,23 @@ public class DatabaseManager {
     }
 
     /**
-     * Initialize the database connection and setup required components.
+     * Initializes the database manager and all core components.
+     *
+     * This method is the single entry point for all database startup logic. It ensures:
+     *   - The correct QueryBuilder and SchemaQueryBuilder are selected for the configured database type.
+     *   - The QueryExecutor and all repositories are created.
+     *   - The database connection is established (for SQLite) or the pool is ready (for MySQL).
+     *   - The DatabaseHealthService is started for ongoing connection monitoring.
+     *   - The schema is created and validated exactly once at startup.
+     *
+     * By centralizing schema setup and validation here, we prevent duplicate validation/logging,
+     * which can occur if validation is called from multiple places (e.g., both DatabaseSetup and DatabaseManager).
+     * This ensures the log message 'Database validation complete - all tables exist' appears only once.
      */
     public void initialize() {
         logger.info("Initializing database manager...");
-        
-        // Initialize query builder and executor based on database type
+
+        // Select the correct query and schema builders for the configured database type
         if (databaseType == DatabaseType.MYSQL) {
             queryBuilder = new MySQLQueryBuilder();
             schemaQueryBuilder = new MySQLSchemaQueryBuilder();
@@ -119,32 +128,27 @@ public class DatabaseManager {
             queryBuilder = new SQLiteQueryBuilder();
             schemaQueryBuilder = new SQLiteSchemaQueryBuilder();
         }
-        
-        // Create the query executor
+
+        // Create the query executor and initialize repositories
         queryExecutor = new DefaultQueryExecutor(plugin, connectionProvider);
-        
-        // Complete the two-phase initialization of DatabaseSetup
         databaseSetup.initialize(schemaQueryBuilder, queryExecutor);
-        
-        // Initialize repositories
         itemRepository = new ItemRepository(plugin, this);
         playerRepository = new PlayerRepository(plugin, this);
         collectionRepository = new CollectionRepository(plugin, this);
         loreEntryRepository = new LoreEntryRepository(plugin, this);
         submissionRepository = new SubmissionRepository(plugin, this);
 
-        // Initialize the database connection
+        // Establish the database connection for SQLite (MySQL uses connection pool)
         try {
             if (databaseType == DatabaseType.SQLITE) {
-                // For SQLite, we initialize the connection here once
                 ((SQLiteConnectionProvider) connectionProvider).initializeConnection();
             }
-            
-            // Initialize health service
+
+            // Start the health check service
             healthService = new DatabaseHealthService(this, plugin);
             healthService.start();
 
-            // Only run schema setup and validation once at startup
+            // Run schema setup and validation only once at startup
             if (!schemaValidated) {
                 try {
                     databaseSetup.initializeTables().join();

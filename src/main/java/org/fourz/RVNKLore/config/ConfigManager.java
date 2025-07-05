@@ -175,6 +175,7 @@ public class ConfigManager {
     }
     
     public double getNearbyRadius() {
+        // Always use the config value, defaulting to 50.0 if not set
         return config.getDouble("lore.nearbyRadius", 50.0);
     }
     

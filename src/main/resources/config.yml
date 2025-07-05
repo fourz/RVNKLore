@@ -32,10 +32,9 @@ storage:
     username: root
     password: ''
     useSSL: false
-    database: 
-    tablePrefix: 
+    database: lore
   sqlite:
-    database: data.db
+    database: lore.db
 messages:
   generic:
     error:
