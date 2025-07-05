@@ -1,4 +1,4 @@
-package org.fourz.RVNKLore.data.connection;
+package org.fourz.RVNKLore.data.connection.provider;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;

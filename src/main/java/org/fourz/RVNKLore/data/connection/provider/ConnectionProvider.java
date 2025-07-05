@@ -1,4 +1,4 @@
-package org.fourz.RVNKLore.data.connection;
+package org.fourz.RVNKLore.data.connection.provider;
 
 import java.sql.Connection;
 import java.sql.SQLException;

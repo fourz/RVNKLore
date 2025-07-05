@@ -1,8 +1,8 @@
 package org.fourz.RVNKLore.data;
 
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.data.connection.ConnectionProvider;
 import org.fourz.RVNKLore.data.query.SchemaQueryBuilder;
+import org.fourz.RVNKLore.data.connection.provider.ConnectionProvider;
 import org.fourz.RVNKLore.data.query.QueryExecutor;
 import org.fourz.RVNKLore.debug.LogManager;
 
@@ -51,6 +51,41 @@ public class DatabaseSetup {
         this.schemaQueryBuilder = schemaQueryBuilder;
         this.queryExecutor = queryExecutor;
         this.initialized = true;
+    }
+
+    /**
+     * Performs complete database initialization including connection setup and schema validation.
+     * This method handles the full initialization lifecycle for the database.
+     *
+     * @return A CompletableFuture that completes when initialization is done
+     */
+    public CompletableFuture<Boolean> performFullInitialization() {
+        if (!initialized) {
+            throw new IllegalStateException("DatabaseSetup not initialized. Call initialize() first.");
+        }
+        
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                logger.info("Starting database initialization...");
+                
+                // Step 1: Initialize tables
+                initializeTables().join();
+                logger.info("Database schema setup complete");
+                
+                // Step 2: Validate schema
+                boolean validationResult = validateSchema().join();
+                if (validationResult) {
+                    logger.info("Database validation complete - all tables exist");
+                    return true;
+                } else {
+                    logger.error("Database validation failed - missing tables", null);
+                    return false;
+                }
+            } catch (Exception e) {
+                logger.error("Database initialization failed", e);
+                throw new RuntimeException("Database initialization failed", e);
+            }
+        });
     }
 
     /**

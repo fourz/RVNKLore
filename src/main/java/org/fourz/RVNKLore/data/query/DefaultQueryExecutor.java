@@ -1,7 +1,7 @@
 package org.fourz.RVNKLore.data.query;
 
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.data.connection.ConnectionProvider;
+import org.fourz.RVNKLore.data.connection.provider.ConnectionProvider;
 import org.fourz.RVNKLore.debug.LogManager;
 
 import java.lang.reflect.Constructor;

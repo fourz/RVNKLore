@@ -1,10 +1,10 @@
+
 package org.fourz.RVNKLore.data;
 
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.data.config.DatabaseConfig;
-import org.fourz.RVNKLore.data.connection.ConnectionProvider;
-import org.fourz.RVNKLore.data.connection.MySQLConnectionProvider;
-import org.fourz.RVNKLore.data.connection.SQLiteConnectionProvider;
+import org.fourz.RVNKLore.data.connection.DatabaseConnection;
+import org.fourz.RVNKLore.data.connection.provider.ConnectionProvider;
 import org.fourz.RVNKLore.data.query.DefaultQueryExecutor;
 import org.fourz.RVNKLore.data.query.MySQLQueryBuilder;
 import org.fourz.RVNKLore.data.query.QueryBuilder;
@@ -35,6 +35,7 @@ public class DatabaseManager {
     private final DatabaseConfig databaseConfig;
     private final DatabaseType databaseType;
     private ConnectionProvider connectionProvider;
+    private DatabaseConnection databaseConnection;
     private DatabaseSetup databaseSetup;
     private QueryBuilder queryBuilder;
     private QueryExecutor queryExecutor;
@@ -62,30 +63,19 @@ public class DatabaseManager {
     public DatabaseManager(RVNKLore plugin) {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "DatabaseManager");
-        // Use ConfigManager to get config data (already loaded)
         this.databaseConfig = new DatabaseConfig(plugin.getConfigManager());
         this.databaseType = databaseConfig.getType();
-        
-        // Step 1: Create connection provider first
-        createConnectionProvider();
-        
-        // Step 2: Create DatabaseSetup with minimal dependencies
-        this.databaseSetup = new DatabaseSetup(plugin, connectionProvider);
-        
-        // Step 3: Initialization is now explicit; do not call initialize() here
-        // Step 4: Do not call initializeConnection() here
-    }
-
-    /**
-     * Creates the appropriate connection provider based on database type.
-     */
-    private void createConnectionProvider() {
+        // Step 1: Create connection provider
         if (databaseType == DatabaseType.MYSQL) {
-            connectionProvider = new MySQLConnectionProvider(plugin);
+            this.connectionProvider = new org.fourz.RVNKLore.data.connection.provider.MySQLConnectionProvider(plugin);
+            this.databaseConnection = new org.fourz.RVNKLore.data.connection.MySQLConnection(plugin);
         } else {
-            connectionProvider = new SQLiteConnectionProvider(plugin);
+            this.connectionProvider = new org.fourz.RVNKLore.data.connection.provider.SQLiteConnectionProvider(plugin);
+            this.databaseConnection = new org.fourz.RVNKLore.data.connection.SQLiteConnection(plugin);
         }
-        logger.debug("Connection provider created: " + connectionProvider.getClass().getSimpleName());
+        // Step 2: Create DatabaseSetup with connection provider
+        this.databaseSetup = new DatabaseSetup(plugin, connectionProvider);
+        // Step 3: Initialization is now explicit; do not call initialize() here
     }
 
     /**
@@ -115,25 +105,19 @@ public class DatabaseManager {
         this.queryService = new QueryService(connectionProvider, logger);
 
         try {
-            // Initialize SQLite connection if needed
+            // For SQLite, initialize connection explicitly
             if (databaseType == DatabaseType.SQLITE) {
-                ((SQLiteConnectionProvider) connectionProvider).initializeConnection();
+                ((org.fourz.RVNKLore.data.connection.provider.SQLiteConnectionProvider) connectionProvider).initializeConnection();
             }
-
             healthService = new DatabaseHealthService(this, plugin);
             healthService.start();
-
-            // Run schema validation
+            // Run complete database initialization through DatabaseSetup
             if (!schemaValidated) {
-                try {
-                    databaseSetup.initializeTables().join();
-                    logger.info("Database schema setup complete");
-                    databaseSetup.validateSchema().join();
+                boolean initializationResult = databaseSetup.performFullInitialization().join();
+                if (initializationResult) {
                     schemaValidated = true;
-                    logger.info("Database validation complete - all tables exist");
-                } catch (Exception e) {
-                    logger.error("Database schema setup/validation failed", e);
-                    throw new RuntimeException("Database schema setup/validation failed", e);
+                } else {
+                    throw new RuntimeException("Database initialization failed");
                 }
             }
         } catch (Exception e) {
@@ -147,11 +131,7 @@ public class DatabaseManager {
      * Check if the database connection is valid
      */
     public boolean isConnectionValid() {
-        try (Connection conn = connectionProvider.getConnection()) {
-            return conn != null && !conn.isClosed();
-        } catch (Exception e) {
-            return false;
-        }
+        return databaseConnection.isConnected();
     }
 
     /**
@@ -160,35 +140,7 @@ public class DatabaseManager {
      * @return true if reconnection was successful, false otherwise
      */
     public boolean reconnect() {
-        logger.info("Attempting to reconnect to database...");
-        try {
-            // Close existing connection
-            if (connectionProvider != null) {
-                connectionProvider.close();
-            }
-            
-            // Create a new connection provider
-            createConnectionProvider();
-            
-            // For SQLite, we need to initialize the connection explicitly
-            if (databaseType == DatabaseType.SQLITE) {
-                ((SQLiteConnectionProvider) connectionProvider).initializeConnection();
-            }
-            
-            // Simple validation without schema checks
-            try (Connection conn = connectionProvider.getConnection()) {
-                boolean valid = conn != null && !conn.isClosed();
-                if (valid) {
-                    logger.info("Reconnection successful");
-                } else {
-                    logger.warning("Reconnection failed - connection invalid");
-                }
-                return valid;
-            }
-        } catch (Exception e) {
-            logger.error("Reconnection failed with error", e);
-            throw new RuntimeException("Failed to reconnect to database", e);
-        }
+        return databaseConnection.reconnect();
     }
 
     /**
@@ -218,33 +170,15 @@ public class DatabaseManager {
      * @return true if the connection is valid, false otherwise
      */
     public boolean validateConnection() {
-        try {
-            // For routine checks, just verify the connection is valid
-            if (connectionProvider != null) {
-                // The isValid method might not be directly available, use a ping-style check
-                try (Connection conn = connectionProvider.getConnection()) {
-                    return conn != null && !conn.isClosed();
-                }
-            }
-            return false;
-        } catch (Exception e) {
-            logger.warning("Connection validation failed: " + e.getMessage());
-            // Try to reconnect
-            return reconnect();
-        }
+        return databaseConnection.isConnected();
     }
 
     /**
      * Close the database connection and clean up resources.
      */
     public void close() {
-        try {
-            if (connectionProvider != null) {
-                connectionProvider.close();
-                logger.info("Database connection closed");
-            }
-        } catch (SQLException e) {
-            logger.error("Error closing database connection", e);
+        if (databaseConnection != null) {
+            databaseConnection.close();
         }
     }
 
@@ -271,7 +205,7 @@ public class DatabaseManager {
     }
 
     public ConnectionProvider getConnectionProvider() {
-        return this.connectionProvider;
+        return connectionProvider;
     }
 
     public LoreEntryRepository getLoreEntryRepository() {
@@ -326,12 +260,7 @@ public class DatabaseManager {
      * @return true if connected, false otherwise
      */
     public boolean isConnected() {
-        try (Connection conn = connectionProvider.getConnection()) {
-            return conn != null && !conn.isClosed();
-        } catch (SQLException e) {
-            logger.error("Database connection check failed", e);
-            return false;
-        }
+        return databaseConnection.isConnected();
     }
 
     /**
@@ -339,13 +268,7 @@ public class DatabaseManager {
      * @return info string or null if unavailable
      */
     public String getDatabaseInfo() {
-        try (Connection conn = connectionProvider.getConnection()) {
-            DatabaseMetaData meta = conn.getMetaData();
-            return meta.getDatabaseProductName() + " " + meta.getDatabaseProductVersion();
-        } catch (SQLException e) {
-            logger.error("Failed to get database info", e);
-            return null;
-        }
+        return databaseConnection.getDatabaseInfo();
     }
 
     /**
@@ -353,12 +276,7 @@ public class DatabaseManager {
      * @return true if read-only, false otherwise
      */
     public boolean isReadOnly() {
-        try (Connection conn = connectionProvider.getConnection()) {
-            return conn.isReadOnly();
-        } catch (SQLException e) {
-            logger.error("Failed to check read-only status", e);
-            return false;
-        }
+        return databaseConnection.isReadOnly();
     }
 
     /**
@@ -366,9 +284,7 @@ public class DatabaseManager {
      * @return last error string or null
      */
     public String getLastConnectionError() {
-        // This is a stub; implement error tracking if needed
-        // For now, return null
-        return null;
+        return databaseConnection.getLastConnectionError();
     }
 
     // Private Helpers

@@ -43,7 +43,7 @@ public class DatabaseHealthService {
      * Returns true if the database is SQLite.
      */
     private boolean isSQLite() {
-        return databaseManager.getConnectionProvider() instanceof org.fourz.RVNKLore.data.connection.SQLiteConnectionProvider;
+        return databaseManager.getConnectionProvider() instanceof org.fourz.RVNKLore.data.connection.provider.SQLiteConnectionProvider;
     }
 
     /**

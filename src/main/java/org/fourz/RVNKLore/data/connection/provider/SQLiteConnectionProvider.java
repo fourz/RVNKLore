@@ -1,4 +1,4 @@
-package org.fourz.RVNKLore.data.connection;
+package org.fourz.RVNKLore.data.connection.provider;
 
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.debug.LogManager;
@@ -104,9 +104,9 @@ public class SQLiteConnectionProvider implements ConnectionProvider {
             try (Statement statement = connection.createStatement()) {
                 statement.execute("SELECT 1");
                 if (!initialized) {
-                    logger.debug("SQLite connection established successfully to " + databaseFile.getAbsolutePath());
+                    logger.debug("SQLite connection established: " + databaseFile.getName());
                 } else {
-                    logger.debug("SQLite connection re-established successfully");
+                    logger.debug("SQLite connection re-established");
                 }
             }
 
