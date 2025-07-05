@@ -1,4 +1,3 @@
-
 package org.fourz.RVNKLore.data;
 
 import java.util.List;
@@ -25,6 +24,7 @@ import org.fourz.RVNKLore.data.repository.LoreEntryRepository;
 import org.fourz.RVNKLore.data.repository.SubmissionRepository;
 import org.fourz.RVNKLore.data.repository.PlayerRepository;
 import org.fourz.RVNKLore.data.service.DatabaseHealthService;
+import org.fourz.RVNKLore.data.service.QueryService;
 import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.data.dto.PlayerDTO;
 import org.fourz.RVNKLore.data.dto.NameChangeRecordDTO;
@@ -66,6 +66,7 @@ public class DatabaseManager {
     private LoreEntryRepository loreEntryRepository;
     private SubmissionRepository submissionRepository;
     private DatabaseHealthService healthService;
+    private QueryService queryService;
     private volatile boolean schemaValidated = false;
 
     /**
@@ -145,6 +146,7 @@ public class DatabaseManager {
         collectionRepository = new CollectionRepository(plugin, this);
         loreEntryRepository = new LoreEntryRepository(plugin, this);
         submissionRepository = new SubmissionRepository(plugin, this);
+        this.queryService = new QueryService(connectionProvider, logger);
 
         // Establish the database connection for SQLite (MySQL uses connection pool)
         try {
@@ -432,49 +434,10 @@ public class DatabaseManager {
         return queryExecutor;
     }
 
-    /**
-     * Executes a query with a custom result mapper.
-     */
-    private <T> CompletableFuture<T> executeQueryWithMapper(QueryBuilder query, ResultSetMapper<T> mapper) {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
-        }
-
-        return CompletableFuture.supplyAsync(() -> {
-            try (var conn = connectionProvider.getConnection();
-                 var stmt = conn.prepareStatement(query.build())) {
-                
-                // Set parameters
-                Object[] params = query.getParameters();
-                for (int i = 0; i < params.length; i++) {
-                    stmt.setObject(i + 1, params[i]);
-                }
-
-                // Execute and map
-                try (var rs = stmt.executeQuery()) {
-                    return mapper.map(rs);
-                }
-            } catch (SQLException e) {
-                logger.error("Error executing query with mapper", e);
-                throw new CompletionException(e);
-            }
-        });
+    /** expose the new service for repos or callers */
+    public QueryService getQueryService() {
+        return queryService;
     }
-
-    @FunctionalInterface
-    private interface ResultSetMapper<T> {
-        T map(ResultSet rs) throws SQLException;
-    }
-
-    /**
-     * Executes a query with a custom result mapper.
-     */
-    public <T> CompletableFuture<T> executeQuery(QueryBuilder query, ResultSetMapper<T> mapper) {
-        return executeQueryWithMapper(query, mapper);
-    }    /**
-
 
     /**
      * Get the LoreEntry repository instance.
