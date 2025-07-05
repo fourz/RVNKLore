@@ -73,7 +73,7 @@ public class LoreListSubCommand implements SubCommand {
         if (sender.hasPermission("rvnklore.admin")) {
             // Admins can see all entries including unapproved ones
             if (finalType != null) {
-                entriesFuture = databaseManager.getLoreEntriesByType(finalType.name());
+                entriesFuture = databaseManager.getLoreEntryRepository().getLoreEntriesByType(finalType.name());
             } else {
                 entriesFuture = databaseManager.getAllLoreEntries();
             }

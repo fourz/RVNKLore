@@ -198,23 +198,6 @@ public class DatabaseManager {
         // Delegate to LoreEntryRepository
         return loreEntryRepository.getAllLoreEntries();
     }
-    
-    /**
-     * Get lore entries by type.
-     *
-     * @param type The type of lore entries to retrieve
-     * @return A future containing a list of lore entry DTOs
-     */
-    public CompletableFuture<List<LoreEntryDTO>> getLoreEntriesByType(String type) {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
-        }
-        
-        // Delegate to LoreEntryRepository
-        return loreEntryRepository.getLoreEntriesByType(type);
-    }
       /**
      * Save a lore entry.
      *

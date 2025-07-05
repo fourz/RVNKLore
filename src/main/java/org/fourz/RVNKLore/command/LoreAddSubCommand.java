@@ -94,9 +94,9 @@ public class LoreAddSubCommand implements org.fourz.RVNKLore.command.subcommand.
             dto.setNbtData("{}");
         }
         // Async save
-        databaseManager.saveLoreEntry(dto).thenAccept(id -> {
-            if (id > 0) {
-                player.sendMessage(ChatColor.GREEN + "&a✓ Lore entry added successfully! ID: " + id);
+        databaseManager.getLoreEntryRepository().addLoreEntry(dto).thenAccept(success -> {
+            if (success) {
+                player.sendMessage(ChatColor.GREEN + "&a✓ Lore entry added successfully!");
                 player.sendMessage(ChatColor.YELLOW + "&7   Your submission will be reviewed by a staff member.");
             } else {
                 player.sendMessage(ChatColor.RED + "&c✖ Failed to add lore entry. Please check console for errors.");

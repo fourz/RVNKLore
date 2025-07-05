@@ -70,8 +70,9 @@ public class LoreRegisterCitySubCommand implements SubCommand {
             }
             
             // Async: Get all city entries for distance check
-            databaseManager.getLoreEntriesByType(LoreType.CITY.name()).thenAccept(cityEntries -> {                Location playerLoc = player.getLocation();
-                
+            databaseManager.getLoreEntryRepository().getLoreEntriesByType(LoreType.CITY.name()).thenAccept(cityEntries -> {
+                Location playerLoc = player.getLocation();
+
                 // Check minimum distance to other cities
                 boolean tooClose = false;
                 String closestCityName = null;
