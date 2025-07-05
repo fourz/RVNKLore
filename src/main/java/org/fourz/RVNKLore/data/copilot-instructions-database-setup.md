@@ -13,6 +13,16 @@
 - Instantiated by DatabaseManager during initialization
 - Called after connection provider and query builders are set up
 - Should execute asynchronously to avoid blocking the main thread
+- **Repository Access Pattern:**
+  - All data access (CRUD, queries) should be performed through the appropriate repository class (e.g., `LoreEntryRepository`, `SubmissionRepository`, `ItemRepository`).
+  - `DatabaseManager` should only provide access to repositories via `getXRepository()` methods, not direct data access methods.
+  - Client code should obtain the repository from `DatabaseManager` and call repository methods directly:
+    ```java
+    LoreEntryRepository repo = databaseManager.getLoreEntryRepository();
+    repo.getLoreEntryById(id);
+    ```
+  - Do **not** add pass-through data access methods to `DatabaseManager` (e.g., `getLoreEntry(int id)` should be removed in favor of direct repository access).
+  - This pattern enforces single responsibility and keeps `DatabaseManager` focused on connection, transaction, and schema management.
 
 ## Schema Requirements
 - Use the SchemaQueryBuilder interface for all schema operations
@@ -35,6 +45,7 @@
 - All operations should be performed asynchronously
 - Use CompletableFuture for async operations
 - Return appropriate futures for client code to handle
+- Repositories should expose async methods for all data access.
 
 ## Schema Standards
 - IDs: Primary keys should be named "id" (except for junction tables)
@@ -46,3 +57,4 @@
 ## Note
 - Do not create data migration methods unless explicitly asked
 - Assume no data in the database when making schema changes
+- Follow the repository-access pattern for all data access (see above).

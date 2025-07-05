@@ -31,41 +31,37 @@ The system follows established design patterns:
 
 ### 1. DatabaseManager
 
-The `DatabaseManager` serves as the centralized hub for all database operations, implementing the facade pattern to provide a clean API for the rest of the plugin.
+The `DatabaseManager` acts as the central hub for database connection, transaction, and schema management. It is **not** responsible for direct data access or CRUD operations. Instead, it provides access to repository instances for each table/entity.
 
 ```java
 public class DatabaseManager {
     private final RVNKLore plugin;
-    private final LogManager logger;
-    private ConnectionProvider connectionProvider;
-    private final DatabaseType databaseType;
-    private QueryBuilder queryBuilder;
-    private DefaultQueryExecutor queryExecutor;
-    private SchemaQueryBuilder schemaQueryBuilder;
-    
-    // Repository references
-    private ItemRepository itemRepository;
-    private PlayerRepository playerRepository;
-    private CollectionRepository collectionRepository;
-    private LoreEntryRepository loreEntryRepository;
-    private SubmissionRepository submissionRepository;
-    
-    // Async operations
-    public CompletableFuture<LoreEntryDTO> getLoreEntry(String id) { /*...*/ }
-    public CompletableFuture<List<ItemPropertiesDTO>> getItemsByType(String type) { /*...*/ }
-    
-    // Database management
-    public void initialize() { /*...*/ }
+    // ...
+    public LoreEntryRepository getLoreEntryRepository() { /*...*/ }
+    public SubmissionRepository getSubmissionRepository() { /*...*/ }
+    public ItemRepository getItemRepository() { /*...*/ }
+    // ...
     public void shutdown() { /*...*/ }
 }
 ```
 
 **Key Responsibilities:**
 - Initialize and manage database connections
-- Coordinate database operations across repositories
-- Provide asynchronous data access methods
+- Provide access to repository instances via `getXRepository()` methods
+- Manage database schema setup and validation (delegated to DatabaseSetup)
 - Handle database type selection (MySQL/SQLite)
-- Manage database schema setup and validation
+- Coordinate transaction boundaries and resource cleanup
+
+**Repository-Access Pattern:**
+- All data access (CRUD, queries) is performed through the appropriate repository class (e.g., `LoreEntryRepository`, `SubmissionRepository`, `ItemRepository`).
+- `DatabaseManager` should **not** provide pass-through data access methods (e.g., `getLoreEntry(int id)` is removed in favor of `getLoreEntryRepository().getLoreEntryById(id)`).
+- Client code should obtain the repository from `DatabaseManager` and call repository methods directly:
+    ```java
+    LoreEntryRepository repo = databaseManager.getLoreEntryRepository();
+    repo.getLoreEntryById(id);
+    ```
+
+This pattern enforces single responsibility and keeps `DatabaseManager` focused on connection, transaction, and schema management.
 
 ### 2. Connection Management
 
@@ -202,18 +198,17 @@ public class ItemPropertiesDTO {
 
 ### 6. Repository Layer
 
-Repositories handle table-specific database operations:
+Repositories handle all table-specific database operations and are the **only** entry point for CRUD and query logic. Each repository is responsible for a single table or closely related set of tables.
 
 ```java
 public class LoreEntryRepository {
     private final RVNKLore plugin;
     private final LogManager logger;
     private final DatabaseManager databaseManager;
-    
-    // CRUD operations for lore entries
-    public CompletableFuture<Boolean> addLoreEntry(LoreEntryDTO entry) { /*...*/ }
+    // CRUD/query methods
     public CompletableFuture<LoreEntryDTO> getLoreEntryById(String id) { /*...*/ }
     public CompletableFuture<List<LoreEntryDTO>> getLoreEntriesByType(String type) { /*...*/ }
+    // ...other CRUD/query methods...
 }
 ```
 
@@ -222,6 +217,20 @@ public class LoreEntryRepository {
 - Custom queries for specific business needs
 - Data validation before persistence
 - Mapping between DTOs and domain objects (where appropriate)
+- All data access is asynchronous and returns `CompletableFuture`
+
+**Usage Example:**
+```java
+LoreEntryRepository repo = databaseManager.getLoreEntryRepository();
+repo.getLoreEntryById(id).thenAccept(entry -> {
+    // handle entry
+});
+```
+
+**Best Practices:**
+- Do not add data access methods to `DatabaseManager`—always use the repository directly.
+- Use DTOs for all data transfer between repositories and domain logic.
+- All repository methods should be asynchronous.
 
 ## Class Relationship Diagram
 

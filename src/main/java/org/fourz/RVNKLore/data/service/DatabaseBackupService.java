@@ -1,9 +1,10 @@
-package org.fourz.RVNKLore.data;
+package org.fourz.RVNKLore.data.service;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.RVNKLore.data.DatabaseManager;
 import org.fourz.RVNKLore.data.connection.provider.ConnectionProvider;
 import org.fourz.RVNKLore.data.connection.provider.SQLiteConnectionProvider;
 import org.fourz.RVNKLore.data.dto.LoreEntryDTO;
