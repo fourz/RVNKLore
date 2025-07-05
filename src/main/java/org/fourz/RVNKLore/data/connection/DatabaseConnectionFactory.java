@@ -1,4 +1,4 @@
-package org.fourz.RVNKLore.data;
+package org.fourz.RVNKLore.data.connection;
 
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.debug.Debug;

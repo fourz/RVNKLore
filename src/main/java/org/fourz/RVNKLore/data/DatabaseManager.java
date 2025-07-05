@@ -1,7 +1,5 @@
 package org.fourz.RVNKLore.data;
 
-import java.util.List;
-
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.data.config.DatabaseConfig;
 import org.fourz.RVNKLore.data.connection.ConnectionProvider;
@@ -25,7 +23,6 @@ import org.fourz.RVNKLore.data.service.QueryService;
 import org.fourz.RVNKLore.debug.LogManager;
 
 import java.sql.*;
-import java.util.UUID;
 import java.util.concurrent.*;
 
 /**
@@ -200,8 +197,7 @@ public class DatabaseManager {
     public void reload() {
         schemaValidated = false;
         reconnect();
-        // Force schema validation on reload
-        validateSchemaIfNeeded();
+        // Schema validation is handled by DatabaseSetup.validateSchema() and initializeTables()
     }
 
     public CompletableFuture<Void> reloadAsync() {
@@ -376,26 +372,4 @@ public class DatabaseManager {
     }
 
     // Private Helpers
-    
-    private void validateSchemaIfNeeded() {
-        if (!schemaValidated) {
-            try {
-                logger.info("Validating database schema...");
-                
-                boolean tablesExist = databaseSetup.validateSchema().join();
-                
-                if (!tablesExist) {
-                    logger.info("Schema validation failed, creating tables...");
-                    databaseSetup.initializeTables().join();
-                    logger.info("Database schema setup complete");
-                }
-                
-                schemaValidated = true;
-                logger.info("Database validation complete - all tables exist");
-            } catch (Exception e) {
-                logger.error("Database schema validation failed", e);
-                throw new RuntimeException("Database schema validation failed", e);
-            }
-        }
-    }
 }
