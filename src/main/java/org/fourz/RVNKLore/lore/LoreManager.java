@@ -117,7 +117,7 @@ public class LoreManager {
             return CompletableFuture.completedFuture(cachedEntry);
         }
 
-        return databaseManager.getLoreEntry(Integer.parseInt(id))
+        return databaseManager.getLoreEntryRepository().getLoreEntryById(Integer.parseInt(id))
             .thenApply(dto -> {
                 if (dto != null) {
                     LoreEntry entry = LoreEntry.fromDTO(dto);
@@ -297,7 +297,7 @@ public class LoreManager {
         }
 
         // If not in cache or expired, load from database
-        return databaseManager.getLoreEntryById(id)
+        return databaseManager.getLoreEntryRepository().getLoreEntryById(id)
             .thenApply(dto -> {
                 if (dto == null) {
                     return null;

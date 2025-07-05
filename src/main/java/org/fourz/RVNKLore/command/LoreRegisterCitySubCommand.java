@@ -59,7 +59,7 @@ public class LoreRegisterCitySubCommand implements SubCommand {
           player.sendMessage(ChatColor.YELLOW + "⚙ Checking if city exists and validating location...");
         
         // Async: Check if city already exists
-        databaseManager.searchLoreEntries(cityName).thenAccept(results -> {
+        databaseManager.getLoreEntryRepository().searchLoreEntries(cityName).thenAccept(results -> {
             // Check if any existing entry has the exact name match
             boolean nameExists = results.stream()
                 .anyMatch(entry -> entry.getName().equalsIgnoreCase(cityName));

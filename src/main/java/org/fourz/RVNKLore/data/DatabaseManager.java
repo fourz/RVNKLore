@@ -782,79 +782,8 @@ public class DatabaseManager {
     public CompletableFuture<List<LoreEntryDTO>> getLoreEntriesByTypeAndApproved(String type, boolean approved) {
         return loreEntryRepository.getLoreEntriesByTypeAndApproved(type, approved);
     }
-      /**
-     * Search lore entries by text in their name or description.
-     *
-     * @param searchText The text to search for
-     * @return A future containing a list of matching lore entry DTOs
-     */
-    public CompletableFuture<List<LoreEntryDTO>> searchLoreEntries(String searchText) {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
-        }
-        return loreEntryRepository.searchLoreEntries(searchText);
-    }
 
-    /**
-     * Find recent lore entries, sorted by creation date.
-     *
-     * @param count The maximum number of entries to return
-     * @return A future containing a list of recent lore entry DTOs
-     */
-    public CompletableFuture<List<LoreEntryDTO>> findRecentLoreEntries(int count) {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
-        }
-        return loreEntryRepository.findRecentLoreEntries(count);
-    }
 
-    /**
-     * Find pending (unapproved) lore entries.
-     *
-     * @return A future containing a list of pending lore entry DTOs
-     */
-    public CompletableFuture<List<LoreEntryDTO>> findPendingLoreEntries() {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
-        }
-        return loreEntryRepository.findPendingLoreEntries();
-    }
-
-    /**
-     * Get a lore entry by UUID.
-     *
-     * @param uuid The UUID of the lore entry
-     * @return A future containing the lore entry DTO, or null if not found
-     */
-    public CompletableFuture<LoreEntryDTO> getLoreEntryById(UUID uuid) {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
-        }
-        return loreEntryRepository.getLoreEntryById(uuid);
-    }
-
-    /**
-     * Find lore entries by submitter name.
-     *
-     * @param submitter The name of the submitter
-     * @return A future containing a list of lore entry DTOs
-     */
-    public CompletableFuture<List<LoreEntryDTO>> findLoreEntriesBySubmitter(String submitter) {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
-        }
-        return loreEntryRepository.findLoreEntriesBySubmitter(submitter);
-    }
 
     /**
      * Find lore entries in a specific world.
@@ -913,21 +842,6 @@ public class DatabaseManager {
         });
     }
 
-    /**
-     * Get a LoreEntry domain object by UUID.
-     * Convenience method that retrieves the DTO and converts it to a domain object.
-     *
-     * @param uuid The UUID of the lore entry
-     * @return A future containing the LoreEntry domain object, or null if not found
-     */
-    public CompletableFuture<LoreEntry> getLoreEntryDomain(UUID uuid) {
-        return getLoreEntryById(uuid).thenApply(dto -> {
-            if (dto == null) {
-                return null;
-            }
-            return LoreEntry.fromDTO(dto);
-        });
-    }
 
     /**
      * Get all lore entries by approval status.

@@ -133,4 +133,35 @@ The following methods in `DatabaseManager` are direct pass-throughs to `LoreEntr
     3.  Run the `Reload Server` task and test the `/lore add ...` command.
 
 ---
+
+## Phase 4: LoreEntryRepository Domain Conversion Methods
+
+The following methods in `DatabaseManager` convert DTOs to domain objects and are direct pass-throughs to `LoreEntryRepository`.
+
+### 4.1 `getLoreEntryDomain(UUID uuid)`
+
+-   **Description**: This method retrieves a LoreEntryDTO by UUID and converts it to a LoreEntry domain object.
+-   **Risk**: Low. Pure conversion logic.
+-   **Call Sites**:
+    -   `c:\tools\RVNKLore\src\main\java\org\fourz\RVNKLore\lore\LoreManager.java`
+    -   `c:\tools\RVNKLore\src\main\java\org\fourz\RVNKLore\command\LoreGetSubCommand.java`
+-   **Refactor Steps**:
+    1.  Move the domain conversion method to `LoreEntryRepository` as `getLoreEntryDomain(UUID uuid)`.
+    2.  Update all call sites to use `plugin.getDatabaseManager().getLoreEntryRepository().getLoreEntryDomain(uuid)`.
+    3.  Remove the `getLoreEntryDomain(UUID uuid)` method from `DatabaseManager.java`.
+    4.  Build and test `/lore get <uuid>` and any LoreManager usages.
+
+### 4.2 `getLoreEntryDomain(int id)`
+
+-   **Description**: This method retrieves a LoreEntryDTO by int ID and converts it to a LoreEntry domain object.
+-   **Risk**: Low.
+-   **Call Sites**:
+    -   `c:\tools\RVNKLore\src\main\java\org\fourz\RVNKLore\lore\LoreManager.java`
+-   **Refactor Steps**:
+    1.  Move the domain conversion method to `LoreEntryRepository` as `getLoreEntryDomain(int id)`.
+    2.  Update all call sites to use `plugin.getDatabaseManager().getLoreEntryRepository().getLoreEntryDomain(id)`.
+    3.  Remove the `getLoreEntryDomain(int id)` method from `DatabaseManager.java`.
+    4.  Build and test LoreManager usages.
+
+---
 *This plan will be expanded as more methods are evaluated.*

@@ -53,7 +53,7 @@ public class LoreApproveSubCommand implements SubCommand {
         // If not a full UUID, try to find by partial ID
         if (idInput.length() >= 4) {
             // Search by partial ID or name
-            databaseManager.searchLoreEntries(idInput)
+            databaseManager.getLoreEntryRepository().searchLoreEntries(idInput)
                 .thenAccept(entries -> {
                     List<LoreEntryDTO> unapprovedEntries = new ArrayList<>();
                     for (LoreEntryDTO entry : entries) {
@@ -98,7 +98,7 @@ public class LoreApproveSubCommand implements SubCommand {
      * @return true if the command was processed
      */
     private boolean processApprovalByUuid(CommandSender sender, UUID uuid) {
-        databaseManager.getLoreEntryById(uuid)
+        databaseManager.getLoreEntryRepository().getLoreEntryById(uuid)
             .thenAccept(entry -> {
                 if (entry == null) {
                     sender.sendMessage(ChatColor.RED + "✖ No lore entry found with ID: " + uuid);
@@ -167,15 +167,12 @@ public class LoreApproveSubCommand implements SubCommand {
 
             // Only search if at least 3 characters provided
             if (partial.length() >= 3) {
-                databaseManager.searchLoreEntries(partial)
+                databaseManager.getLoreEntryRepository().searchLoreEntries(partial)
                     .thenAccept(entries -> {
                         for (LoreEntryDTO entry : entries) {
-                            if (!entry.isApproved()) {                                UUID uuid = entry.getUuid();
-                                if (uuid != null) {
-                                    String uuidStr = uuid.toString();
-                                    String shortId = uuidStr.length() >= 8 ? uuidStr.substring(0, 8) : uuidStr;
-                                    completions.add(shortId);
-                                }
+                            if (!entry.isApproved()) {                                
+                                UUID uuid = entry.getUuid();
+                                completions.add(uuid.toString());
                             }
                         }
                     })

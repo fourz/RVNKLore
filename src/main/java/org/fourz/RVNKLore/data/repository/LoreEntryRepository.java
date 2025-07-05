@@ -444,6 +444,34 @@ public class LoreEntryRepository {
             });
     }
 
+    /**
+     * Get a LoreEntry domain object by database ID.
+     * Retrieves the DTO and converts it to a domain object.
+     *
+     * @param id The database ID
+     * @return CompletableFuture of LoreEntry or null
+     */
+    public CompletableFuture<LoreEntry> getLoreEntryDomain(int id) {
+        return getLoreEntryById(id).thenApply(dto -> {
+            if (dto == null) return null;
+            return LoreEntry.fromDTO(dto);
+        });
+    }
+
+    /**
+     * Get a LoreEntry domain object by UUID.
+     * Retrieves the DTO and converts it to a domain object.
+     *
+     * @param uuid The UUID of the lore entry
+     * @return CompletableFuture of LoreEntry or null
+     */
+    public CompletableFuture<LoreEntry> getLoreEntryDomain(UUID uuid) {
+        return getLoreEntryById(uuid).thenApply(dto -> {
+            if (dto == null) return null;
+            return LoreEntry.fromDTO(dto);
+        });
+    }
+
     private LoreEntryDTO mapResultSetToDTO(ResultSet rs) throws SQLException {
         LoreEntryDTO dto = new LoreEntryDTO();
         dto.setId(rs.getInt("id"));

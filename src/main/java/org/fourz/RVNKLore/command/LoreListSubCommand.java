@@ -80,9 +80,9 @@ public class LoreListSubCommand implements SubCommand {
         } else {
             // Regular users only see approved entries
             if (finalType != null) {
-                entriesFuture = databaseManager.getLoreEntriesByTypeAndApproved(finalType.name(), true);
+                entriesFuture = databaseManager.getLoreEntryRepository().getLoreEntriesByTypeAndApproved(finalType.name(), true);
             } else {
-                entriesFuture = databaseManager.getLoreEntriesByApproved(true);
+                entriesFuture = databaseManager.getLoreEntryRepository().getLoreEntriesByApproved(true);
             }
         }
         

@@ -89,7 +89,7 @@ public class LoreItemInfoSubCommand implements SubCommand {    private final Log
         try {            // First try as full UUID
             try {
                 UUID uuid = UUID.fromString(itemNameOrId);
-                databaseManager.getLoreEntryById(uuid).thenAccept(entryDTO -> {
+                databaseManager.getLoreEntryRepository().getLoreEntryById(uuid).thenAccept(entryDTO -> {
                     if (entryDTO != null) {
                         // Convert DTO to domain object
                         org.fourz.RVNKLore.lore.LoreEntry loreEntry = entryDTO.toLoreEntry();
