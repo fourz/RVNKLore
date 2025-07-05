@@ -400,36 +400,6 @@ public class DatabaseManager {
       // PLAYER OPERATIONS
 
     /**
-     * Get a player by UUID.
-     *
-     * @param uuid The UUID of the player
-     * @return A future containing the PlayerDTO, or null if not found
-     */
-    public CompletableFuture<PlayerDTO> getPlayerByUuid(UUID uuid) {
-        return playerRepository.getPlayerByUuid(uuid);
-    }
-
-    /**
-     * Get players by name.
-     *
-     * @param name The name of the player
-     * @return A future containing a list of PlayerDTOs
-     */
-    public CompletableFuture<List<PlayerDTO>> getPlayersByName(String name) {
-        return playerRepository.getPlayersByName(name);
-    }
-
-    /**
-     * Save a player.
-     *
-     * @param dto The PlayerDTO to save
-     * @return A future containing the saved player UUID
-     */
-    public CompletableFuture<UUID> savePlayer(PlayerDTO dto) {
-        return playerRepository.savePlayer(dto);
-    }
-
-    /**
      * Delete a player by UUID.
      *
      * @param uuid The UUID of the player to delete
