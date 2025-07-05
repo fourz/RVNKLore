@@ -53,7 +53,7 @@ public class LoreItemListSubCommand implements SubCommand {
         final int finalPage = page;
         
         // Use async database method to get all items
-        databaseManager.getAllItems().thenAccept(itemDTOs -> {
+        databaseManager.getItemRepository().getAllItems().thenAccept(itemDTOs -> {
             // Convert DTOs to domain objects for display
             List<ItemProperties> items = new ArrayList<>();
             for (ItemPropertiesDTO dto : itemDTOs) {

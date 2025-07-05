@@ -1,3 +1,75 @@
+## Phase 5: SubmissionRepository and LoreEntryRepository Methods
+
+The following methods in `DatabaseManager` are direct pass-throughs to their respective repositories and should be refactored to be called directly on the repository.
+
+### 5.1 `getLoreEntry(int id)`
+
+- **Description**: This method forwards the call directly to `loreEntryRepository.getLoreEntryById(id)`.
+- **Risk**: Low. Simple read operation.
+- **Call Sites**:
+    - Any code calling `databaseManager.getLoreEntry(int)` (search for usages)
+- **Refactor Steps**:
+    1. Change all call sites from `databaseManager.getLoreEntry(id)` to `databaseManager.getLoreEntryRepository().getLoreEntryById(id)`.
+    2. Remove the `getLoreEntry(int id)` method from `DatabaseManager.java`.
+    3. Build and test to ensure get functionality works as expected.
+
+### 5.2 `searchLoreEntriesInSubmissions(String keyword)`
+
+- **Description**: This method forwards the call directly to `submissionRepository.searchLoreEntriesInSubmissions(keyword)`.
+- **Risk**: Low. Simple search operation.
+- **Call Sites**:
+    - Any code calling `databaseManager.searchLoreEntriesInSubmissions(keyword)` (search for usages)
+- **Refactor Steps**:
+    1. Change all call sites from `databaseManager.searchLoreEntriesInSubmissions(keyword)` to `databaseManager.getSubmissionRepository().searchLoreEntriesInSubmissions(keyword)`.
+    2. Remove the `searchLoreEntriesInSubmissions(String keyword)` method from `DatabaseManager.java`.
+    3. Build and test to ensure search functionality works as expected.
+
+### 5.3 `getLoreSubmission(int id)`
+
+- **Description**: This method forwards the call directly to `submissionRepository.getLoreSubmission(id)`.
+- **Risk**: Low. Simple read operation.
+- **Call Sites**:
+    - Any code calling `databaseManager.getLoreSubmission(id)` (search for usages)
+- **Refactor Steps**:
+    1. Change all call sites from `databaseManager.getLoreSubmission(id)` to `databaseManager.getSubmissionRepository().getLoreSubmission(id)`.
+    2. Remove the `getLoreSubmission(int id)` method from `DatabaseManager.java`.
+    3. Build and test to ensure get functionality works as expected.
+
+### 5.4 `getCurrentSubmission(int entryId)`
+
+- **Description**: This method forwards the call directly to `submissionRepository.getCurrentSubmission(entryId)`.
+- **Risk**: Low. Simple read operation.
+- **Call Sites**:
+    - Any code calling `databaseManager.getCurrentSubmission(int)` (search for usages)
+- **Refactor Steps**:
+    1. Change all call sites from `databaseManager.getCurrentSubmission(entryId)` to `databaseManager.getSubmissionRepository().getCurrentSubmission(entryId)`.
+    2. Remove the `getCurrentSubmission(int entryId)` method from `DatabaseManager.java`.
+    3. Build and test to ensure get functionality works as expected.
+
+### 5.5 `getSubmissionsForEntry(int entryId)`
+
+- **Description**: This method forwards the call directly to `submissionRepository.getSubmissionsForEntry(entryId)`.
+- **Risk**: Low. Simple read operation.
+- **Call Sites**:
+    - Any code calling `databaseManager.getSubmissionsForEntry(int)` (search for usages)
+- **Refactor Steps**:
+    1. Change all call sites from `databaseManager.getSubmissionsForEntry(entryId)` to `databaseManager.getSubmissionRepository().getSubmissionsForEntry(entryId)`.
+    2. Remove the `getSubmissionsForEntry(int entryId)` method from `DatabaseManager.java`.
+    3. Build and test to ensure get functionality works as expected.
+
+### 5.6 `saveLoreSubmission(LoreSubmissionDTO dto)`
+
+- **Description**: This method forwards the call directly to `submissionRepository.saveLoreSubmission(dto)`.
+- **Risk**: Low. Simple save operation.
+- **Call Sites**:
+    - Any code calling `databaseManager.saveLoreSubmission(...)` (search for usages)
+- **Refactor Steps**:
+    1. Change all call sites from `databaseManager.saveLoreSubmission(dto)` to `databaseManager.getSubmissionRepository().saveLoreSubmission(dto)`.
+    2. Remove the `saveLoreSubmission(LoreSubmissionDTO dto)` method from `DatabaseManager.java`.
+    3. Build and test to ensure save functionality works as expected.
+
+---
+
 # RVNKLore Database Architecture Refactor - Repository Access
 
 **Last Updated**: July 5, 2025
@@ -39,141 +111,42 @@ This refactor will proceed on a method-by-method basis to ensure incremental, ma
 
 ---
 
-## Phase 1: PlayerRepository Methods
+## Phase 6: LoreEntryRepository Query Methods
 
-The following methods in `DatabaseManager` are direct pass-throughs to `PlayerRepository`.
+The following methods in `DatabaseManager` are direct pass-throughs to `LoreEntryRepository` query methods and should be refactored to be called directly on the repository.
 
-### 1.1 `getPlayersByName(String name)`
+### 6.1 `findNearbyLoreEntries(Location location, double radius)`
 
--   **Description**: This method forwards the call directly to `playerRepository.getPlayersByName(name)`.
--   **Risk**: Low. This is a simple read operation.
--   **Call Sites**:
-    -   `c:\tools\RVNKLore\src\main\java\org\fourz\RVNKLore\command\LoreDebugSubCommand.java`
--   **Refactor Steps**:
-    1.  In `LoreDebugSubCommand`, change the call from `plugin.getDatabaseManager().getPlayersByName(...)` to `plugin.getDatabaseManager().getPlayerRepository().getPlayersByName(...)`.
-    2.  Remove the `getPlayersByName(String name)` method from `DatabaseManager.java`.
-    3.  Run the `Reload Server` task and test the `/lore debug player ...` command to verify functionality.
-
-### 1.2 `getPlayerByUuid(UUID uuid)`
-
--   **Description**: This method forwards the call directly to `playerRepository.getPlayerByUuid(uuid)`.
--   **Risk**: Low.
--   **Call Sites**:
-    -   `c:\tools\RVNKLore\src\main\java\org\fourz\RVNKLore\command\LoreDebugSubCommand.java`
--   **Refactor Steps**:
-    1.  In `LoreDebugSubCommand`, change the call from `plugin.getDatabaseManager().getPlayerByUuid(...)` to `plugin.getDatabaseManager().getPlayerRepository().getPlayerByUuid(...)`.
-    2.  Remove the `getPlayerByUuid(UUID uuid)` method from `DatabaseManager.java`.
-    3.  Run the `Reload Server` task and test the relevant debug command.
-
-### 1.3 `savePlayer(PlayerDTO dto)`
-
--   **Description**: This method forwards the call directly to `playerRepository.savePlayer(dto)`.
--   **Risk**: Low.
--   **Call Sites**:
-    -   `c:\tools\RVNKLore\src\main\java\org\fourz\RVNKLore\data\service\PlayerJoinListener.java`
--   **Refactor Steps**:
-    1.  In `PlayerJoinListener`, change the call to `plugin.getDatabaseManager().getPlayerRepository().savePlayer(...)`.
-    2.  Remove the `savePlayer(PlayerDTO dto)` method from `DatabaseManager.java`.
-    3.  Run the `Restart Server` task and verify player join logic works correctly.
-
----
-
-## Phase 2: ItemRepository Methods
-
-The following methods in `DatabaseManager` are direct pass-throughs to `ItemRepository`.
-
-### 2.1 `getItemsByType(String type)`
-
--   **Description**: This method forwards the call directly to `itemRepository.getItemsByType(type)`.
--   **Risk**: Low.
--   **Call Sites**:
-    -   `c:\tools\RVNKLore\src\main\java\org\fourz\RVNKLore\lore\item\ItemManager.java`
--   **Refactor Steps**:
-    1.  In `ItemManager`, change the call to `plugin.getDatabaseManager().getItemRepository().getItemsByType(...)`.
-    2.  Remove the `getItemsByType(String type)` method from `DatabaseManager.java`.
-    3.  Run the `Reload Server` task and test functionality that lists items by type.
-
-### 2.2 `saveItem(ItemPropertiesDTO dto)`
-
--   **Description**: This method forwards the call directly to `itemRepository.saveItem(dto)`.
--   **Risk**: Low.
--   **Call Sites**:
-    -   `c:\tools\RVNKLore\src\main\java\org\fourz\RVNKLore\lore\item\ItemManager.java`
--   **Refactor Steps**:
-    1.  In `ItemManager`, change the call to `plugin.getDatabaseManager().getItemRepository().saveItem(...)`.
-    2.  Remove the `saveItem(ItemPropertiesDTO dto)` method from `DatabaseManager.java`.
-    3.  Run the `Reload Server` task and test item saving functionality.
-
----
-
-
-## Phase 3: LoreEntryRepository Methods
-
-The following methods in `DatabaseManager` are direct pass-throughs to `LoreEntryRepository` and should be refactored to be called directly on the repository.
-
-### 3.1 `deleteLoreEntry(int id)`
-
-- **Description**: This method forwards the call directly to `loreEntryRepository.deleteLoreEntry(id)`.
-- **Risk**: Low. Simple delete operation.
-- **Call Sites**:
-    - Any code calling `databaseManager.deleteLoreEntry(...)` (search for usages)
-- **Refactor Steps**:
-    1. Change all call sites from `databaseManager.deleteLoreEntry(id)` to `databaseManager.getLoreEntryRepository().deleteLoreEntry(id)`.
-    2. Remove the `deleteLoreEntry(int id)` method from `DatabaseManager.java`.
-    3. Build and test to ensure delete functionality works as expected.
-
-### 3.2 `saveLoreEntry(LoreEntryDTO dto)`
-
-- **Description**: This method forwards the call directly to `loreEntryRepository.saveLoreEntry(dto)`.
-- **Risk**: Low. Simple save operation.
-- **Call Sites**:
-    - Any code calling `databaseManager.saveLoreEntry(...)` (search for usages)
-- **Refactor Steps**:
-    1. Change all call sites from `databaseManager.saveLoreEntry(dto)` to `databaseManager.getLoreEntryRepository().saveLoreEntry(dto)`.
-    2. Remove the `saveLoreEntry(LoreEntryDTO dto)` method from `DatabaseManager.java`.
-    3. Build and test to ensure save functionality works as expected.
-
-### 3.3 `getAllLoreEntries()`
-
-- **Description**: This method forwards the call directly to `loreEntryRepository.getAllLoreEntries()`.
+- **Description**: This method forwards the call directly to `loreEntryRepository.findNearbyLoreEntries(location, radius)`.
 - **Risk**: Low. Simple read operation.
 - **Call Sites**:
-    - Any code calling `databaseManager.getAllLoreEntries()` (search for usages)
+    - Any code calling `databaseManager.findNearbyLoreEntries(location, radius)` (search for usages)
 - **Refactor Steps**:
-    1. Change all call sites from `databaseManager.getAllLoreEntries()` to `databaseManager.getLoreEntryRepository().getAllLoreEntries()`.
-    2. Remove the `getAllLoreEntries()` method from `DatabaseManager.java`.
-    3. Build and test to ensure list functionality works as expected.
+    1. Change all call sites from `databaseManager.findNearbyLoreEntries(location, radius)` to `databaseManager.getLoreEntryRepository().findNearbyLoreEntries(location, radius)`.
+    2. Remove the `findNearbyLoreEntries(Location, double)` method from `DatabaseManager.java`.
+    3. Build and test to ensure functionality works as expected.
 
----
+### 6.2 `findLoreEntriesInWorld(String worldName)`
 
-## Phase 4: LoreEntryRepository Domain Conversion Methods
+- **Description**: This method forwards the call directly to `loreEntryRepository.findLoreEntriesInWorld(worldName)`.
+- **Risk**: Low. Simple read operation.
+- **Call Sites**:
+    - Any code calling `databaseManager.findLoreEntriesInWorld(worldName)` (search for usages)
+- **Refactor Steps**:
+    1. Change all call sites from `databaseManager.findLoreEntriesInWorld(worldName)` to `databaseManager.getLoreEntryRepository().findLoreEntriesInWorld(worldName)`.
+    2. Remove the `findLoreEntriesInWorld(String)` method from `DatabaseManager.java`.
+    3. Build and test to ensure functionality works as expected.
 
-The following methods in `DatabaseManager` convert DTOs to domain objects and are direct pass-throughs to `LoreEntryRepository`.
+### 6.3 `getLoreEntriesByTypeAndApproved(String type, boolean approved)`
 
-### 4.1 `getLoreEntryDomain(UUID uuid)`
-
--   **Description**: This method retrieves a LoreEntryDTO by UUID and converts it to a LoreEntry domain object.
--   **Risk**: Low. Pure conversion logic.
--   **Call Sites**:
-    -   `c:\tools\RVNKLore\src\main\java\org\fourz\RVNKLore\lore\LoreManager.java`
-    -   `c:\tools\RVNKLore\src\main\java\org\fourz\RVNKLore\command\LoreGetSubCommand.java`
--   **Refactor Steps**:
-    1.  Move the domain conversion method to `LoreEntryRepository` as `getLoreEntryDomain(UUID uuid)`.
-    2.  Update all call sites to use `plugin.getDatabaseManager().getLoreEntryRepository().getLoreEntryDomain(uuid)`.
-    3.  Remove the `getLoreEntryDomain(UUID uuid)` method from `DatabaseManager.java`.
-    4.  Build and test `/lore get <uuid>` and any LoreManager usages.
-
-### 4.2 `getLoreEntryDomain(int id)`
-
--   **Description**: This method retrieves a LoreEntryDTO by int ID and converts it to a LoreEntry domain object.
--   **Risk**: Low.
--   **Call Sites**:
-    -   `c:\tools\RVNKLore\src\main\java\org\fourz\RVNKLore\lore\LoreManager.java`
--   **Refactor Steps**:
-    1.  Move the domain conversion method to `LoreEntryRepository` as `getLoreEntryDomain(int id)`.
-    2.  Update all call sites to use `plugin.getDatabaseManager().getLoreEntryRepository().getLoreEntryDomain(id)`.
-    3.  Remove the `getLoreEntryDomain(int id)` method from `DatabaseManager.java`.
-    4.  Build and test LoreManager usages.
+- **Description**: This method forwards the call directly to `loreEntryRepository.getLoreEntriesByTypeAndApproved(type, approved)`.
+- **Risk**: Low. Simple read operation.
+- **Call Sites**:
+    - Any code calling `databaseManager.getLoreEntriesByTypeAndApproved(type, approved)` (search for usages)
+- **Refactor Steps**:
+    1. Change all call sites from `databaseManager.getLoreEntriesByTypeAndApproved(type, approved)` to `databaseManager.getLoreEntryRepository().getLoreEntriesByTypeAndApproved(type, approved)`.
+    2. Remove the `getLoreEntriesByTypeAndApproved(String, boolean)` method from `DatabaseManager.java`.
+    3. Build and test to ensure functionality works as expected.
 
 ---
 *This plan will be expanded as more methods are evaluated.*

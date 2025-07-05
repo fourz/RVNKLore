@@ -138,7 +138,7 @@ public class LoreManager {
      * Asynchronously finds lore entries near a location.
      */
     public CompletableFuture<List<LoreEntry>> findNearbyLore(Location location, double radius) {
-        return databaseManager.findNearbyLoreEntries(location, radius)
+        return databaseManager.getLoreEntryRepository().findNearbyLoreEntries(location, radius)
             .thenApply(dtoList -> {
                 List<LoreEntry> entries = new ArrayList<>();
                 for (LoreEntryDTO dto : dtoList) {
@@ -167,7 +167,7 @@ public class LoreManager {
         dto.setApprovalStatus("PENDING");
         dto.setSubmissionDate(new Timestamp(System.currentTimeMillis()));
 
-        return databaseManager.saveLoreSubmission(dto)
+        return databaseManager.getSubmissionRepository().saveLoreSubmission(dto)
             .thenApply(id -> {
                 if (id != null && id > 0) {
                     logger.info("Successfully submitted lore for approval: " + id);
@@ -189,7 +189,7 @@ public class LoreManager {
      * @return A future that completes with true if approval was successful
      */
     public CompletableFuture<Boolean> approveLoreSubmission(int submissionId, String approverUuid) {
-        return databaseManager.approveLoreSubmission(submissionId, approverUuid)
+        return databaseManager.getSubmissionRepository().approveLoreSubmission(submissionId, approverUuid)
             .thenApply(success -> {
                 if (success) {
                     logger.info("Successfully approved lore submission: " + submissionId);

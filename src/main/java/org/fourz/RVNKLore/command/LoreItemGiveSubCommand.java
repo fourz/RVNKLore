@@ -64,7 +64,7 @@ public class LoreItemGiveSubCommand implements SubCommand {
         }
         
         // Look up the item by name from the database
-        databaseManager.getAllItems().thenAccept(items -> {
+        databaseManager.getItemRepository().getAllItems().thenAccept(items -> {
             ItemPropertiesDTO matchedItem = null;
             for (ItemPropertiesDTO item : items) {
                 if (item.getDisplayName().equalsIgnoreCase(itemName)) {
@@ -115,7 +115,7 @@ public class LoreItemGiveSubCommand implements SubCommand {
         }
         
         if (args.length == 1 && databaseManager != null) {
-            databaseManager.getAllItems().thenAccept(items -> {
+            databaseManager.getItemRepository().getAllItems().thenAccept(items -> {
                 for (ItemPropertiesDTO item : items) {
                     completions.add(item.getDisplayName());
                 }

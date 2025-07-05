@@ -436,7 +436,7 @@ public class ItemManager {
             return CompletableFuture.completedFuture(result);
         }
 
-        return plugin.getDatabaseManager().getAllItems()
+        return plugin.getDatabaseManager().getItemRepository().getAllItems()
             .thenApply(dtos -> {
                 List<ItemProperties> result = new ArrayList<>();
                 for (ItemPropertiesDTO dto : dtos) {

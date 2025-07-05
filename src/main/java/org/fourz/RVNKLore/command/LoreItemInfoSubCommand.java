@@ -49,7 +49,7 @@ public class LoreItemInfoSubCommand implements SubCommand {    private final Log
             }
             
             // List all items using async database method
-            databaseManager.getAllItems().thenAccept(items -> {
+            databaseManager.getItemRepository().getAllItems().thenAccept(items -> {
                 List<String> itemNames = new ArrayList<>();
                 for (ItemPropertiesDTO item : items) {
                     itemNames.add(item.getDisplayName());
@@ -146,7 +146,7 @@ public class LoreItemInfoSubCommand implements SubCommand {    private final Log
      * Tries to display an item by its name
      */
     private void displayItemByName(CommandSender sender, String itemName) {
-        databaseManager.getAllItems().thenAccept(items -> {
+        databaseManager.getItemRepository().getAllItems().thenAccept(items -> {
             ItemPropertiesDTO matchedItem = null;
             for (ItemPropertiesDTO item : items) {
                 if (item.getDisplayName().equalsIgnoreCase(itemName)) {

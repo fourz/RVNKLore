@@ -1,9 +1,9 @@
+
 package org.fourz.RVNKLore.data;
 
 import java.util.List;
 
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.config.ConfigManager;
 import org.fourz.RVNKLore.data.config.DatabaseConfig;
 import org.fourz.RVNKLore.data.connection.ConnectionProvider;
 import org.fourz.RVNKLore.data.connection.MySQLConnectionProvider;
@@ -43,6 +43,14 @@ import java.util.concurrent.*;
  * implementations retrieve their configuration settings directly from ConfigManager.
  */
 public class DatabaseManager {    
+
+    /**
+     * Gets the SubmissionRepository instance.
+     * @return The SubmissionRepository instance
+     */
+    public SubmissionRepository getSubmissionRepository() {
+        return this.submissionRepository;
+    }
     private final RVNKLore plugin;
     private final LogManager logger;
     private final DatabaseConfig databaseConfig;
@@ -165,267 +173,6 @@ public class DatabaseManager {
             logger.error("Failed to initialize database: " + e.getMessage(), e);
         }
     }
-
-    // LORE ENTRY OPERATIONS
-      /**
-     * Get a lore entry by ID.
-     *
-     * @param id The ID of the lore entry
-     * @return A future containing the lore entry DTO, or null if not found
-     */
-    public CompletableFuture<LoreEntryDTO> getLoreEntry(int id) {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
-        }
-        
-        // Delegate to LoreEntryRepository
-        return loreEntryRepository.getLoreEntryById(id);
-    }
-    // ...existing code...
-    // ...existing code...
-    // ...existing code...
-      /**
-     * Search lore entries by keyword in submissions.
-     *
-     * @param keyword The keyword to search for
-     * @return A future containing a list of matching lore entry DTOs
-     */
-    public CompletableFuture<List<LoreEntryDTO>> searchLoreEntriesInSubmissions(String keyword) {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
-        }
-        return submissionRepository.searchLoreEntriesInSubmissions(keyword);
-    }
-    
-    // LORE SUBMISSION OPERATIONS
-    
-    /**
-     * Get a lore submission by ID.
-     *
-     * @param id The ID of the submission
-     * @return A future containing the lore submission DTO, or null if not found
-     */
-    public CompletableFuture<LoreSubmissionDTO> getLoreSubmission(int id) {
-        // Delegate to SubmissionRepository
-        return submissionRepository.getLoreSubmission(id);
-    }
-
-    /**
-     * Get the current version of a lore submission for an entry.
-     *
-     * @param entryId The ID of the lore entry
-     * @return A future containing the lore submission DTO, or null if not found
-     */
-    public CompletableFuture<LoreSubmissionDTO> getCurrentSubmission(int entryId) {
-        // Delegate to SubmissionRepository
-        return submissionRepository.getCurrentSubmission(entryId);
-    }
-    
-    /**
-     * Get all submissions for a lore entry.
-     *
-     * @param entryId The ID of the lore entry
-     * @return A future containing a list of lore submission DTOs
-     */
-    public CompletableFuture<List<LoreSubmissionDTO>> getSubmissionsForEntry(int entryId) {
-        // Delegate to SubmissionRepository
-        return submissionRepository.getSubmissionsForEntry(entryId);
-    }
-    
-    /**
-     * Save a lore submission.
-     *
-     * @param dto The lore submission DTO to save
-     * @return A future containing the saved lore submission ID
-     */
-    public CompletableFuture<Integer> saveLoreSubmission(LoreSubmissionDTO dto) {
-        // Delegate to SubmissionRepository
-        return submissionRepository.saveLoreSubmission(dto);
-    }
-      /**
-     * Approve a lore submission.
-     *
-     * @param submissionId The ID of the submission to approve
-     * @param approverUuid The UUID of the staff member approving the submission
-     * @return A future containing true if the submission was approved, false otherwise
-     */
-    public CompletableFuture<Boolean> approveSubmission(int submissionId, String approverUuid) {
-        // Delegate to SubmissionRepository
-        return submissionRepository.approveSubmission(submissionId, approverUuid);
-    }
-    
-    /**
-     * Approves a lore submission and creates the associated lore entry.
-     */
-    public CompletableFuture<Boolean> approveLoreSubmission(int submissionId, String approverUuid) {
-        // Delegate to SubmissionRepository
-        return submissionRepository.approveLoreSubmission(submissionId, approverUuid);
-    }
-      /**
-     * Updates a lore submission's approval status and related fields.
-     */
-    public CompletableFuture<Boolean> updateLoreSubmission(LoreSubmissionDTO submission) {
-        // Delegate to SubmissionRepository
-        return submissionRepository.saveLoreSubmission(submission)
-            .thenApply(id -> id > 0);
-    }
-    
-    /**
-     * Search for lore submissions by keyword.
-     *
-     * @param keyword The keyword to search for
-     * @return A future containing a list of matching lore submissions
-     */
-    public CompletableFuture<List<LoreSubmissionDTO>> searchLoreSubmissions(String keyword) {
-        // Delegate to SubmissionRepository
-        return submissionRepository.searchLoreSubmissions(keyword);
-    }
-    
-    // ITEM OPERATIONS
-    
-    /**
-     * Get an item by ID.
-     *
-     * @param id The ID of the item
-     * @return A future containing the item properties DTO, or null if not found
-     */
-    public CompletableFuture<ItemPropertiesDTO> getItem(int id) {
-        return itemRepository.getItemById(id);
-    }
-    
-    /**
-     * Get an item by lore entry ID.
-     *
-     * @param loreEntryId The lore entry ID
-     * @return A future containing the item properties DTO, or null if not found
-     */
-    public CompletableFuture<ItemPropertiesDTO> getItemByLoreEntry(int loreEntryId) {
-        return itemRepository.getItemByLoreEntry(loreEntryId);
-    }
-    
-    /**
-     * Get items by type.
-     *
-     * @param type The item type
-     * @return A future containing a list of item properties DTOs
-     */
-    public CompletableFuture<List<ItemPropertiesDTO>> getItemsByType(String type) {
-        return itemRepository.getItemsByType(type);
-    }
-    
-    /**
-     * Save an item with robust error handling and logging.
-     *
-     * @param dto The item properties DTO to save
-     * @return A future containing the saved item ID, or failed future on error
-     */
-    public CompletableFuture<Integer> saveItem(ItemPropertiesDTO dto) {
-        return itemRepository.saveItem(dto);
-    }
-
-    /**
-     * Delete an item.
-     *
-     * @param id The ID of the item to delete
-     * @return A future containing true if the item was deleted, false otherwise
-     */
-    public CompletableFuture<Boolean> deleteItem(int id) {
-        return itemRepository.deleteItem(id);
-    }
-      // PLAYER OPERATIONS
-
-    /**
-     * Delete a player by UUID.
-     *
-     * @param uuid The UUID of the player to delete
-     * @return A future containing true if the player was deleted, false otherwise
-     */
-    public CompletableFuture<Boolean> deletePlayer(UUID uuid) {
-        return playerRepository.deletePlayer(uuid);
-    }
-      /**
-     * Save player metadata.
-     *
-     * @param dto The PlayerDTO containing player data
-     * @return CompletableFuture<Boolean> indicating success
-     */
-    public CompletableFuture<Boolean> savePlayerMetadata(PlayerDTO dto) {
-        if (!validateConnection()) {
-            return CompletableFuture.completedFuture(false);
-        }
-        return playerRepository.savePlayerMetadata(dto);
-    }
-
-    /**
-     * Check if a player exists by UUID.
-     *
-     * @param playerUuid The player's UUID
-     * @return CompletableFuture<Boolean> indicating existence
-     */
-    public CompletableFuture<Boolean> playerExists(UUID playerUuid) {
-        if (!validateConnection()) {
-            return CompletableFuture.completedFuture(false);
-        }
-        return playerRepository.playerExists(playerUuid);
-    }
-
-    /**
-     * Get the stored player name for a UUID.
-     *
-     * @param playerUuid The player's UUID
-     * @return CompletableFuture<String> with the player name or null
-     */
-    public CompletableFuture<String> getStoredPlayerName(UUID playerUuid) {
-        if (!validateConnection()) {
-            return CompletableFuture.completedFuture(null);
-        }
-        return playerRepository.getStoredPlayerName(playerUuid);
-    }
-
-    /**
-     * Get all lore entries for a player.
-     *
-     * @param playerUuid The player's UUID
-     * @return CompletableFuture<List<PlayerDTO>>
-     */
-    public CompletableFuture<List<PlayerDTO>> getPlayerLoreEntries(UUID playerUuid) {
-        if (!validateConnection()) {
-            return CompletableFuture.completedFuture(List.of());
-        }
-        return playerRepository.getPlayerLoreEntries(playerUuid);
-    }
-
-    /**
-     * Get player lore entries by type.
-     *
-     * @param playerUuid The player's UUID
-     * @param entryType The entry type
-     * @return CompletableFuture<List<PlayerDTO>>
-     */
-    public CompletableFuture<List<PlayerDTO>> getPlayerLoreEntriesByType(UUID playerUuid, String entryType) {
-        if (!validateConnection()) {
-            return CompletableFuture.completedFuture(List.of());
-        }
-        return playerRepository.getPlayerLoreEntriesByType(playerUuid, entryType);
-    }
-
-    /**
-     * Get name change history for a player.
-     *
-     * @param playerUuid The player's UUID
-     * @return CompletableFuture<List<NameChangeRecordDTO>>
-     */
-    public CompletableFuture<List<NameChangeRecordDTO>> getNameChangeHistory(UUID playerUuid) {
-        if (!validateConnection()) {
-            return CompletableFuture.completedFuture(List.of());
-        }
-        return playerRepository.getNameChangeHistory(playerUuid);
-    }
-    
     /**
      * Check if the database connection is valid
      */
@@ -728,91 +475,6 @@ public class DatabaseManager {
         return executeQueryWithMapper(query, mapper);
     }    /**
 
-    /**
-     * Get all lore entries by type and approval status.
-     * 
-     * @param type The type of lore entries to retrieve
-     * @param approved Whether to retrieve only approved entries
-     * @return A CompletableFuture containing a list of matching lore entries
-     */
-    public CompletableFuture<List<LoreEntryDTO>> getLoreEntriesByTypeAndApproved(String type, boolean approved) {
-        return loreEntryRepository.getLoreEntriesByTypeAndApproved(type, approved);
-    }
-
-
-
-    /**
-     * Find lore entries in a specific world.
-     *
-     * @param worldName The name of the world
-     * @return A future containing a list of lore entry DTOs in the world
-     */
-    public CompletableFuture<List<LoreEntryDTO>> findLoreEntriesInWorld(String worldName) {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
-        }
-        return loreEntryRepository.findLoreEntriesInWorld(worldName);
-    }
-
-    /**
-     * Find nearby lore entries within a radius of a location.
-     *
-     * @param location The base location to search from
-     * @param radius The radius in blocks to search within
-     * @return A future containing a list of nearby lore entry DTOs
-     */
-    public CompletableFuture<List<LoreEntryDTO>> findNearbyLoreEntries(org.bukkit.Location location, double radius) {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
-        }
-        return loreEntryRepository.findNearbyLoreEntries(location, radius);
-    }
-
-    /**
-     * Get all items from the database.
-     * Retrieves all items, sorted by creation date in descending order.
-     *
-     * @return A future containing a list of all item properties DTOs
-     */
-    public CompletableFuture<List<ItemPropertiesDTO>> getAllItems() {
-        return itemRepository.getAllItems();
-    }
-    
-    /**
-     * Get a LoreEntry domain object by ID.
-     * Convenience method that retrieves the DTO and converts it to a domain object.
-     *
-     * @param id The ID of the lore entry
-     * @return A future containing the LoreEntry domain object, or null if not found
-     */
-    public CompletableFuture<LoreEntry> getLoreEntryDomain(int id) {
-        return getLoreEntry(id).thenApply(dto -> {
-            if (dto == null) {
-                return null;
-            }
-            return LoreEntry.fromDTO(dto);
-        });
-    }
-
-
-    /**
-     * Get all lore entries by approval status.
-     *
-     * @param approved Whether to retrieve only approved entries
-     * @return A CompletableFuture containing a list of matching lore entries
-     */
-    public CompletableFuture<List<LoreEntryDTO>> getLoreEntriesByApproved(boolean approved) {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
-        }
-        return loreEntryRepository.getLoreEntriesByApproved(approved);
-    }
 
     /**
      * Get the LoreEntry repository instance.
