@@ -7,9 +7,6 @@ import org.fourz.RVNKLore.data.config.DatabaseConfig;
 import org.fourz.RVNKLore.data.connection.ConnectionProvider;
 import org.fourz.RVNKLore.data.connection.MySQLConnectionProvider;
 import org.fourz.RVNKLore.data.connection.SQLiteConnectionProvider;
-import org.fourz.RVNKLore.data.dto.ItemPropertiesDTO;
-import org.fourz.RVNKLore.data.dto.LoreEntryDTO;
-import org.fourz.RVNKLore.data.dto.LoreSubmissionDTO;
 import org.fourz.RVNKLore.data.query.DefaultQueryExecutor;
 import org.fourz.RVNKLore.data.query.MySQLQueryBuilder;
 import org.fourz.RVNKLore.data.query.QueryBuilder;
@@ -26,9 +23,6 @@ import org.fourz.RVNKLore.data.repository.PlayerRepository;
 import org.fourz.RVNKLore.data.service.DatabaseHealthService;
 import org.fourz.RVNKLore.data.service.QueryService;
 import org.fourz.RVNKLore.debug.LogManager;
-import org.fourz.RVNKLore.data.dto.PlayerDTO;
-import org.fourz.RVNKLore.data.dto.NameChangeRecordDTO;
-import org.fourz.RVNKLore.lore.LoreEntry;
 
 import java.sql.*;
 import java.util.UUID;
@@ -37,20 +31,8 @@ import java.util.concurrent.*;
 /**
  * Central hub for all database operations.
  * Handles connection management, query execution, and transaction management.
- *
- * COPILOT INSTRUCTIONS EXCEPTIONS NOTE: The ConfigManager class is the exception to the DTO configuration pattern.
- * Database settings are accessed directly from ConfigManager, and the ConnectionProvider
- * implementations retrieve their configuration settings directly from ConfigManager.
  */
 public class DatabaseManager {    
-
-    /**
-     * Gets the SubmissionRepository instance.
-     * @return The SubmissionRepository instance
-     */
-    public SubmissionRepository getSubmissionRepository() {
-        return this.submissionRepository;
-    }
     private final RVNKLore plugin;
     private final LogManager logger;
     private final DatabaseConfig databaseConfig;
@@ -69,10 +51,7 @@ public class DatabaseManager {
     private QueryService queryService;
     private volatile boolean schemaValidated = false;
 
-    /**
-     * Database types supported by the plugin.
-     */
-    
+    // Constructor
     /**
      * Create a new DatabaseManager instance.
      * 
@@ -99,7 +78,7 @@ public class DatabaseManager {
         // Step 3: Initialization is now explicit; do not call initialize() here
         // Step 4: Do not call initializeConnection() here
     }
-    
+
     /**
      * Creates the appropriate connection provider based on database type.
      */
@@ -113,23 +92,13 @@ public class DatabaseManager {
     }
 
     /**
-     * Initializes the database manager and all core components.
-     *
-     * This method is the single entry point for all database startup logic. It ensures:
-     *   - The correct QueryBuilder and SchemaQueryBuilder are selected for the configured database type.
-     *   - The QueryExecutor and all repositories are created.
-     *   - The database connection is established (for SQLite) or the pool is ready (for MySQL).
-     *   - The DatabaseHealthService is started for ongoing connection monitoring.
-     *   - The schema is created and validated exactly once at startup.
-     *
-     * By centralizing schema setup and validation here, we prevent duplicate validation/logging,
-     * which can occur if validation is called from multiple places (e.g., both DatabaseSetup and DatabaseManager).
-     * This ensures the log message 'Database validation complete - all tables exist' appears only once.
+     * Initializes the database manager and core components. Sets up appropriate builders,
+     * creates repositories, and validates the schema.
      */
     public void initialize() {
         logger.info("Initializing database manager...");
 
-        // Select the correct query and schema builders for the configured database type
+        // Select query builders based on database type
         if (databaseType == DatabaseType.MYSQL) {
             queryBuilder = new MySQLQueryBuilder();
             schemaQueryBuilder = new MySQLSchemaQueryBuilder();
@@ -138,7 +107,7 @@ public class DatabaseManager {
             schemaQueryBuilder = new SQLiteSchemaQueryBuilder();
         }
 
-        // Create the query executor and initialize repositories
+        // Initialize components and repositories
         queryExecutor = new DefaultQueryExecutor(plugin, connectionProvider);
         databaseSetup.initialize(schemaQueryBuilder, queryExecutor);
         itemRepository = new ItemRepository(plugin, this);
@@ -148,22 +117,21 @@ public class DatabaseManager {
         submissionRepository = new SubmissionRepository(plugin, this);
         this.queryService = new QueryService(connectionProvider, logger);
 
-        // Establish the database connection for SQLite (MySQL uses connection pool)
         try {
+            // Initialize SQLite connection if needed
             if (databaseType == DatabaseType.SQLITE) {
                 ((SQLiteConnectionProvider) connectionProvider).initializeConnection();
             }
 
-            // Start the health check service
             healthService = new DatabaseHealthService(this, plugin);
             healthService.start();
 
-            // Run schema setup and validation only once at startup
+            // Run schema validation
             if (!schemaValidated) {
                 try {
                     databaseSetup.initializeTables().join();
                     logger.info("Database schema setup complete");
-                    validateTables();
+                    databaseSetup.validateSchema().join();
                     schemaValidated = true;
                     logger.info("Database validation complete - all tables exist");
                 } catch (Exception e) {
@@ -175,6 +143,9 @@ public class DatabaseManager {
             logger.error("Failed to initialize database: " + e.getMessage(), e);
         }
     }
+
+    // Core Database Operations
+    
     /**
      * Check if the database connection is valid
      */
@@ -220,22 +191,6 @@ public class DatabaseManager {
         } catch (Exception e) {
             logger.error("Reconnection failed with error", e);
             throw new RuntimeException("Failed to reconnect to database", e);
-        }
-    }
-
-    /**
-     * Initialize the database connection and setup
-     */
-    /**
-     * Initialize the database and validate schema
-     */
-    private void initializeInternal() {
-        try {
-            initializeConnection();
-            // Schema validation is now handled by validateSchemaIfNeeded()
-        } catch (Exception e) {
-            logger.error("Failed to initialize database", e);
-            throw new RuntimeException("Failed to initialize database", e);
         }
     }
 
@@ -297,6 +252,8 @@ public class DatabaseManager {
         }
     }
 
+    // Health Service Management
+    
     /**
      * Start the database health check service.
      */
@@ -317,90 +274,13 @@ public class DatabaseManager {
         }
     }
 
-    /**
-     * Find lore entries specific to a player by their UUID.
-     *
-     * @param playerUuid The player's UUID
-     * @return A future containing a list of player-specific lore entry DTOs
-     */
-    public CompletableFuture<List<LoreEntryDTO>> findPlayerSpecificLoreEntries(UUID playerUuid) {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(new SQLException("Database connection is not valid"));
-        }
-        
-        QueryBuilder query = queryBuilder.select("*")
-            .from("lore_entry")
-            .where("is_approved = ?", true)
-            .where("metadata @> ?", String.format("{\"player_uuid\": \"%s\"}", playerUuid.toString()));
-        
-        return queryExecutor.executeQueryList(query, LoreEntryDTO.class);
-    }
-  /**
-     * Validate that all required database tables exist.
-     * Only run this at startup or explicit reload.
-     */
-    private void validateTables() {
-        logger.info("Validating database tables...");
-        try {
-            // Check if essential tables exist
-            boolean playerTableExists = tableExists("player");
-            boolean loreEntryTableExists = tableExists("lore_entry");
-            boolean loreSubmissionTableExists = tableExists("lore_submission");
-            boolean itemPropertiesTableExists = tableExists("item_properties");
-            boolean loreCollectionTableExists = tableExists("lore_collection");
-            
-            // Log validation results at DEBUG level only
-            logger.debug("Table validation results:");
-            logger.debug("- player: " + (playerTableExists ? "exists" : "missing"));
-            logger.debug("- lore_entry: " + (loreEntryTableExists ? "exists" : "missing"));
-            logger.debug("- lore_submission: " + (loreSubmissionTableExists ? "exists" : "missing"));
-            logger.debug("- item_properties: " + (itemPropertiesTableExists ? "exists" : "missing"));
-            logger.debug("- lore_collection: " + (loreCollectionTableExists ? "exists" : "missing"));
-            
-            // If any essential table is missing, initialize tables
-            if (!playerTableExists || !loreEntryTableExists || !loreSubmissionTableExists || 
-                !itemPropertiesTableExists || !loreCollectionTableExists) {
-                logger.warning("Some essential tables are missing. Initializing database tables...");
-                databaseSetup.initializeTables()
-                    .thenRun(() -> logger.info("Database tables initialized successfully after validation"))
-                    .exceptionally(e -> {
-                        logger.error("Failed to initialize database tables after validation", e);
-                        return null;
-                    });
-            } else {
-                logger.info("Database validation complete - all tables exist");
-            }
-        } catch (SQLException e) {
-            logger.error("Database table validation failed", e);
-        }
-    }
-
-    /**
-     * Check if a table exists in the database.
-     *
-     * @param tableName The name of the table to check
-     * @return True if the table exists, false otherwise
-     * @throws SQLException if an SQL error occurs
-     */
-    private boolean tableExists(String tableName) throws SQLException {
-        try (Connection connection = connectionProvider.getConnection()) {
-            DatabaseMetaData metaData = connection.getMetaData();
-            
-            // Get table metadata
-            try (ResultSet tables = metaData.getTables(
-                    connection.getCatalog(), 
-                    connection.getSchema(), 
-                    tableName, 
-                    new String[]{"TABLE"})) {
-                
-                return tables.next();
-            }
-        }
-    }
-
     public ConnectionProvider getConnectionProvider() {
         return this.connectionProvider;
     }
+
+    public LoreEntryRepository getLoreEntryRepository() {
+        return this.loreEntryRepository;
+    }    
     
     public ItemRepository getItemRepository() {
         return this.itemRepository;
@@ -412,6 +292,10 @@ public class DatabaseManager {
     
     public CollectionRepository getCollectionRepository() {
         return this.collectionRepository;
+    }
+
+    public SubmissionRepository getSubmissionRepository() {
+        return this.submissionRepository;
     }
 
     /**
@@ -439,14 +323,7 @@ public class DatabaseManager {
         return queryService;
     }
 
-    /**
-     * Get the LoreEntry repository instance.
-     *
-     * @return The LoreEntryRepository instance
-     */
-    public LoreEntryRepository getLoreEntryRepository() {
-        return this.loreEntryRepository;
-    }
+
     
     /**
      * Checks if the database connection is valid.
@@ -498,50 +375,16 @@ public class DatabaseManager {
         return null;
     }
 
-    /**
-     * Initializes the database connection and validates the schema if needed.
-     */
-    private void initializeConnection() {
-        try {
-            logger.debug("Initializing database connection...");
-            
-            // For SQLite, we need to initialize the connection explicitly
-            if (databaseType == DatabaseType.MYSQL) {
-                // For MySQL, connection pooling is handled by the provider
-                logger.debug("Using MySQL connection pool");
-            } else {
-                // For SQLite, we initialize the connection here once
-                logger.debug("Initializing SQLite connection");
-                ((SQLiteConnectionProvider) connectionProvider).initializeConnection();
-            }
-            
-            // Initialize health service
-            healthService = new DatabaseHealthService(this, plugin);
-            healthService.start();
-            
-            // Validate schema if not already done
-            validateSchemaIfNeeded();
-            
-        } catch (Exception e) {
-            logger.error("Failed to initialize database connection: " + e.getMessage(), e);
-            throw new RuntimeException("Failed to initialize database connection", e);
-        }
-    }
+    // Private Helpers
     
-    /**
-     * Validates the database schema if it hasn't been validated yet.
-     * This should only be called during initialization or explicit reload.
-     */
     private void validateSchemaIfNeeded() {
         if (!schemaValidated) {
             try {
                 logger.info("Validating database schema...");
                 
-                // First, do a lightweight check to see if tables exist
                 boolean tablesExist = databaseSetup.validateSchema().join();
                 
                 if (!tablesExist) {
-                    // Tables don't exist or are incomplete, create them
                     logger.info("Schema validation failed, creating tables...");
                     databaseSetup.initializeTables().join();
                     logger.info("Database schema setup complete");
