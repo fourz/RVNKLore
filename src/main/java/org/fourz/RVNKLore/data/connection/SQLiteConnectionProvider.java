@@ -61,7 +61,7 @@ public class SQLiteConnectionProvider implements ConnectionProvider {
             // Load the SQLite JDBC driver
             Class.forName("org.sqlite.JDBC");
             if (!initialized) {
-                logger.info("Initializing SQLite connection...");
+                logger.debug("Initializing SQLite connection...");
             } else {
                 logger.debug("Re-initializing SQLite connection...");
             }
@@ -104,7 +104,7 @@ public class SQLiteConnectionProvider implements ConnectionProvider {
             try (Statement statement = connection.createStatement()) {
                 statement.execute("SELECT 1");
                 if (!initialized) {
-                    logger.info("SQLite connection established successfully to " + databaseFile.getAbsolutePath());
+                    logger.debug("SQLite connection established successfully to " + databaseFile.getAbsolutePath());
                 } else {
                     logger.debug("SQLite connection re-established successfully");
                 }
