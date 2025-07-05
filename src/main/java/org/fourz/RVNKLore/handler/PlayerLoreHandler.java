@@ -75,7 +75,7 @@ public class PlayerLoreHandler implements LoreHandler {
             metadata.put("previous_name", oldName);
             metadata.put("name_change_date", String.valueOf(System.currentTimeMillis()));
             dto.setMetadata(metadata);
-            databaseManager.saveLoreEntry(dto).thenAccept(id -> {
+            databaseManager.getLoreEntryRepository().saveLoreEntry(dto).thenAccept(id -> {
                 if (id > 0) {
                     logger.info("Player name change lore entry created for: " + player.getName());
                     player.sendMessage(ChatColor.GOLD + "Your name change has been recorded in the annals of history!");
@@ -111,7 +111,7 @@ public class PlayerLoreHandler implements LoreHandler {
             metadata.put("player_name", player.getName());
             metadata.put("first_join_date", String.valueOf(System.currentTimeMillis()));
             dto.setMetadata(metadata);
-            databaseManager.saveLoreEntry(dto).thenAccept(id -> {
+            databaseManager.getLoreEntryRepository().saveLoreEntry(dto).thenAccept(id -> {
                 if (id > 0) {
                     logger.info("Player lore entry created for: " + player.getName());
                 } else {

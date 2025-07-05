@@ -185,12 +185,7 @@ public class LoreEntryRepository {
      * @return CompletableFuture of true if deleted, false otherwise
      */
     public CompletableFuture<Boolean> deleteLoreEntry(int id) {
-        QueryBuilder query = databaseManager.getQueryBuilder()
-            .deleteFrom("lore_entry")
-            .where("id = ?", id);
-        
-        return databaseManager.getQueryExecutor().executeUpdate(query)
-            .thenApply(rowsAffected -> rowsAffected > 0)
+        return databaseManager.getLoreEntryRepository().deleteLoreEntry(id)
             .exceptionally(e -> {
                 logger.error("Error deleting lore entry with ID: " + id, e);
                 return false;
@@ -291,7 +286,7 @@ public class LoreEntryRepository {
      * @return CompletableFuture containing the count of all lore entries
      */    public CompletableFuture<Integer> getEntryCount() {
         // Use the getAllLoreEntries method and count the results
-        return databaseManager.getAllLoreEntries()
+        return databaseManager.getLoreEntryRepository().getAllLoreEntries()
             .thenApply(entries -> entries != null ? entries.size() : 0)
             .exceptionally(e -> {
                 logger.error("Error getting entry count", e);

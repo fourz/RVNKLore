@@ -143,7 +143,7 @@ public class LoreRegisterCitySubCommand implements SubCommand {
                 }
                 
                 // Async: Save to database
-                databaseManager.saveLoreEntry(dto).thenAccept(id -> {
+                databaseManager.getLoreEntryRepository().saveLoreEntry(dto).thenAccept(id -> {
                     if (id > 0) {
                         player.sendMessage(ChatColor.GREEN + "✓ City '" + cityName + "' has been registered in the lore books!");
                         player.sendMessage(ChatColor.YELLOW + "   It will be reviewed by the lore keepers before being made public.");

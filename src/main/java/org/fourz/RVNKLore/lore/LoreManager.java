@@ -66,7 +66,7 @@ public class LoreManager {
      * Asynchronously loads all lore entries from the database and updates the cache.
      */
     public CompletableFuture<Void> loadAllLoreEntries() {
-        return databaseManager.getAllLoreEntries()
+        return databaseManager.getLoreEntryRepository().getAllLoreEntries()
             .thenAccept(dtoList -> {
                 cache.clear();
                 cacheTimestamps.clear();
@@ -89,7 +89,7 @@ public class LoreManager {
      */
     public CompletableFuture<Boolean> addLoreEntry(LoreEntry entry) {
         LoreEntryDTO dto = LoreEntryDTO.fromLoreEntry(entry);
-        return databaseManager.saveLoreEntry(dto)
+        return databaseManager.getLoreEntryRepository().saveLoreEntry(dto)
             .thenApply(id -> {
                 if (id != null && id > 0) {
                     entry.setNumericId(id);

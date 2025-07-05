@@ -167,7 +167,7 @@ public class DiagnosticUtil {
     private void addLoreDiagnosticsAsync(List<String> results) {
         results.add("\n----- Lore Status -----");
         try {
-            List<LoreEntryDTO> allEntries = plugin.getDatabaseManager().getAllLoreEntries().get();
+            List<LoreEntryDTO> allEntries = plugin.getDatabaseManager().getLoreEntryRepository().getAllLoreEntries().get();
             long approvedEntries = allEntries.stream().filter(LoreEntryDTO::isApproved).count();
             results.add("Total Lore Entries: " + allEntries.size());
             results.add("Approved Entries: " + approvedEntries);

@@ -183,53 +183,9 @@ public class DatabaseManager {
         // Delegate to LoreEntryRepository
         return loreEntryRepository.getLoreEntryById(id);
     }
-      /**
-     * Get all lore entries.
-     *
-     * @return A future containing a list of lore entry DTOs
-     */
-    public CompletableFuture<List<LoreEntryDTO>> getAllLoreEntries() {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
-        }
-        
-        // Delegate to LoreEntryRepository
-        return loreEntryRepository.getAllLoreEntries();
-    }
-      /**
-     * Save a lore entry.
-     *
-     * @param dto The lore entry DTO to save
-     * @return A future containing the saved lore entry ID
-     */
-    public CompletableFuture<Integer> saveLoreEntry(LoreEntryDTO dto) {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
-        }
-        
-        // Delegate to LoreEntryRepository
-        return loreEntryRepository.saveLoreEntry(dto);
-    }
-      /**
-     * Delete a lore entry.
-     *
-     * @param id The ID of the lore entry to delete
-     * @return A future containing true if the entry was deleted, false otherwise
-     */
-    public CompletableFuture<Boolean> deleteLoreEntry(int id) {
-        if (!validateConnection()) {
-            return CompletableFuture.failedFuture(
-                new SQLException("Database connection is not valid")
-            );
-        }
-        
-        // Delegate to LoreEntryRepository
-        return loreEntryRepository.deleteLoreEntry(id);
-    }
+    // ...existing code...
+    // ...existing code...
+    // ...existing code...
       /**
      * Search lore entries by keyword in submissions.
      *

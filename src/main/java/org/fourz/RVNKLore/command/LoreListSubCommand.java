@@ -75,14 +75,14 @@ public class LoreListSubCommand implements SubCommand {
             if (finalType != null) {
                 entriesFuture = databaseManager.getLoreEntryRepository().getLoreEntriesByType(finalType.name());
             } else {
-                entriesFuture = databaseManager.getAllLoreEntries();
+                entriesFuture = databaseManager.getLoreEntryRepository().getAllLoreEntries();
             }
         } else {
             // Regular users only see approved entries
             if (finalType != null) {
                 entriesFuture = databaseManager.getLoreEntryRepository().getLoreEntriesByTypeAndApproved(finalType.name(), true);
             } else {
-                entriesFuture = databaseManager.getLoreEntryRepository().getLoreEntriesByApproved(true);
+                entriesFuture = databaseManager.getLoreEntryRepository().getAllLoreEntries().thenApply(list -> list.stream().filter(LoreEntryDTO::isApproved).collect(Collectors.toList()));
             }
         }
         

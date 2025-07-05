@@ -105,7 +105,7 @@ public class LoreItemInfoSubCommand implements SubCommand {    private final Log
                 return true;
             } catch (IllegalArgumentException e) {
                 // Not a valid full UUID, try with short UUID (first 8 characters)
-                if (itemNameOrId.length() >= 8) {                    databaseManager.getAllLoreEntries().thenAccept(entriesDTO -> {
+                if (itemNameOrId.length() >= 8) {                    databaseManager.getLoreEntryRepository().getAllLoreEntries().thenAccept(entriesDTO -> {
                         boolean found = false;
                         for (org.fourz.RVNKLore.data.dto.LoreEntryDTO entryDTO : entriesDTO) {
                             // Get UUID string and check first 8 chars

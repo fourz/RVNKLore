@@ -132,7 +132,7 @@ public class LoreApproveSubCommand implements SubCommand {
         entry.setApproved(true);
         
         // Save the changes
-        databaseManager.saveLoreEntry(entry)
+        databaseManager.getLoreEntryRepository().saveLoreEntry(entry)
             .thenAccept(id -> {
                 if (id > 0) {
                     sender.sendMessage(ChatColor.GREEN + "✓ Lore entry approved successfully!");

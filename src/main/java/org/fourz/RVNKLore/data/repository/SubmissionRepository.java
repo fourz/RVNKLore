@@ -281,7 +281,7 @@ public class SubmissionRepository {
                 entryDto.setApproved(true);
                 
                 // Save both changes
-                return databaseManager.saveLoreEntry(entryDto)
+                return databaseManager.getLoreEntryRepository().saveLoreEntry(entryDto)
                     .thenCompose(loreId -> {
                         if (loreId != null && loreId > 0) {
                             return updateExistingSubmission(submissionDto)

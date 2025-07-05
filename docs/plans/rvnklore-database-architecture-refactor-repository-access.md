@@ -106,31 +106,43 @@ The following methods in `DatabaseManager` are direct pass-throughs to `ItemRepo
 
 ---
 
+
 ## Phase 3: LoreEntryRepository Methods
 
-The following methods in `DatabaseManager` are direct pass-throughs to `LoreEntryRepository`.
+The following methods in `DatabaseManager` are direct pass-throughs to `LoreEntryRepository` and should be refactored to be called directly on the repository.
 
-### 3.1 `getLoreEntriesByType(String type)`
+### 3.1 `deleteLoreEntry(int id)`
 
--   **Description**: This method forwards the call directly to `loreEntryRepository.getLoreEntriesByType(type)`.
--   **Risk**: Low.
--   **Call Sites**:
-    -   `c:\tools\RVNKLore\src\main\java\org\fourz\RVNKLore\command\LoreListSubCommand.java`
--   **Refactor Steps**:
-    1.  In `LoreListSubCommand`, change the call to `plugin.getDatabaseManager().getLoreEntryRepository().getLoreEntriesByType(...)`.
-    2.  Remove the `getLoreEntriesByType(String type)` method from `DatabaseManager.java`.
-    3.  Run the `Reload Server` task and test the `/lore list <type>` command.
+- **Description**: This method forwards the call directly to `loreEntryRepository.deleteLoreEntry(id)`.
+- **Risk**: Low. Simple delete operation.
+- **Call Sites**:
+    - Any code calling `databaseManager.deleteLoreEntry(...)` (search for usages)
+- **Refactor Steps**:
+    1. Change all call sites from `databaseManager.deleteLoreEntry(id)` to `databaseManager.getLoreEntryRepository().deleteLoreEntry(id)`.
+    2. Remove the `deleteLoreEntry(int id)` method from `DatabaseManager.java`.
+    3. Build and test to ensure delete functionality works as expected.
 
-### 3.2 `addLoreEntry(LoreEntryDTO entryDto)`
+### 3.2 `saveLoreEntry(LoreEntryDTO dto)`
 
--   **Description**: This method forwards the call directly to `loreEntryRepository.addLoreEntry(entryDto)`.
--   **Risk**: Low.
--   **Call Sites**:
-    -   `c:\tools\RVNKLore\src\main\java\org\fourz\RVNKLore\command\LoreAddSubCommand.java`
--   **Refactor Steps**:
-    1.  In `LoreAddSubCommand`, change the call to `plugin.getDatabaseManager().getLoreEntryRepository().addLoreEntry(...)`.
-    2.  Remove the `addLoreEntry(LoreEntryDTO entryDto)` method from `DatabaseManager.java`.
-    3.  Run the `Reload Server` task and test the `/lore add ...` command.
+- **Description**: This method forwards the call directly to `loreEntryRepository.saveLoreEntry(dto)`.
+- **Risk**: Low. Simple save operation.
+- **Call Sites**:
+    - Any code calling `databaseManager.saveLoreEntry(...)` (search for usages)
+- **Refactor Steps**:
+    1. Change all call sites from `databaseManager.saveLoreEntry(dto)` to `databaseManager.getLoreEntryRepository().saveLoreEntry(dto)`.
+    2. Remove the `saveLoreEntry(LoreEntryDTO dto)` method from `DatabaseManager.java`.
+    3. Build and test to ensure save functionality works as expected.
+
+### 3.3 `getAllLoreEntries()`
+
+- **Description**: This method forwards the call directly to `loreEntryRepository.getAllLoreEntries()`.
+- **Risk**: Low. Simple read operation.
+- **Call Sites**:
+    - Any code calling `databaseManager.getAllLoreEntries()` (search for usages)
+- **Refactor Steps**:
+    1. Change all call sites from `databaseManager.getAllLoreEntries()` to `databaseManager.getLoreEntryRepository().getAllLoreEntries()`.
+    2. Remove the `getAllLoreEntries()` method from `DatabaseManager.java`.
+    3. Build and test to ensure list functionality works as expected.
 
 ---
 
