@@ -15,7 +15,7 @@ import java.util.concurrent.CompletableFuture;
  * Handles database table creation and initialization operations.
  * Responsible for setting up the database schema during plugin startup.
  */
-public class DatabaseSetup {   
+public class DatabaseSetup {
     private final RVNKLore plugin;
     private final LogManager logger;
     private final ConnectionProvider connectionProvider;
@@ -33,6 +33,21 @@ public class DatabaseSetup {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "DatabaseSetup");
         this.connectionProvider = connectionProvider;
+        ensureSQLiteFileIfNeeded();
+    }
+
+    /**
+     * Ensures the SQLite database file exists if using SQLite.
+     * This is called during DatabaseSetup construction.
+     */
+    private void ensureSQLiteFileIfNeeded() {
+        if (connectionProvider instanceof org.fourz.RVNKLore.data.connection.provider.SQLiteConnectionProvider) {
+            org.fourz.RVNKLore.data.connection.provider.SQLiteConnectionProvider sqlite =
+                (org.fourz.RVNKLore.data.connection.provider.SQLiteConnectionProvider) connectionProvider;
+            // This is idempotent and safe to call
+            sqlite.ensureDatabaseFileExists();
+            logger.debug("Ensured SQLite database file exists during DatabaseSetup initialization");
+        }
     }
 
     /**

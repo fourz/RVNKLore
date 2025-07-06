@@ -29,8 +29,8 @@ public class SQLiteConnectionProvider implements ConnectionProvider {
 
     /**
      * Create a new SQLite connection provider.
-     * This constructor ensures the database file exists upon creation,
-     * which guarantees that file-related errors are caught early.
+     * Note: This constructor only initializes fields. Call ensureDatabaseFileExists() 
+     * before attempting any connection operations.
      *
      * @param plugin The RVNKLore plugin instance
      */
@@ -41,8 +41,19 @@ public class SQLiteConnectionProvider implements ConnectionProvider {
         // Get SQLite settings directly from ConfigManager
         this.settings = plugin.getConfigManager().getSQLiteSettings();
         
-        // Setup database file
+        // Initialize database file reference (but don't create yet)
         File dataFolder = new File(plugin.getDataFolder(), "database");
+        this.databaseFile = new File(dataFolder, settings.get("database").toString());
+    }
+
+    /**
+     * Ensures the database directory and file exist and are accessible.
+     * This method is idempotent and can be safely called multiple times.
+     */
+    public void ensureDatabaseFileExists() {
+        File dataFolder = this.databaseFile.getParentFile();
+        
+        // Create database directory if needed
         if (!dataFolder.exists()) {
             boolean created = dataFolder.mkdirs();
             if (created) {
@@ -51,19 +62,8 @@ public class SQLiteConnectionProvider implements ConnectionProvider {
                 logger.error("Failed to create database directory: " + dataFolder.getAbsolutePath(), null);
             }
         }
-        
-        this.databaseFile = new File(dataFolder, (String) settings.get("database"));
-        
-        // Ensure the database file exists immediately
-        ensureDatabaseFileExists();
-    }
-    
-    /**
-     * Ensures the database file exists by creating it if necessary.
-     * This is called during construction to guarantee the file exists
-     * before any connection attempts.
-     */
-    private void ensureDatabaseFileExists() {
+
+        // Create the database file if needed
         if (!databaseFile.exists()) {
             try {
                 boolean created = databaseFile.createNewFile();
@@ -221,31 +221,28 @@ public class SQLiteConnectionProvider implements ConnectionProvider {
 
 
     /**
-     * Checks if the SQLite connection is valid by performing a basic check.
-     * This method is optimized for SQLite's behavior and avoids using JDBC's isValid()
-     * which can be unreliable with SQLite.
-     *
-     * @return true if the connection exists and isn't closed
+     * Checks if the SQLite connection is valid (open and not closed).
+     * This is the only check needed for SQLite health.
      */
     private boolean isValid() {
-        // No lock here since this is a private method called from locked methods
-        if (connection == null) {
-            return false;
-        }
+        return connection != null && !isClosedQuietly();
+    }
+
+    /**
+     * Helper to check if the connection is closed, suppressing exceptions.
+     */
+    private boolean isClosedQuietly() {
         try {
-            return !connection.isClosed();
+            return connection == null || connection.isClosed();
         } catch (SQLException e) {
             lastConnectionError = e.getMessage();
             logger.debug("Connection validity check failed: " + e.getMessage());
-            return false;
+            return true;
         }
     }
 
     /**
-     * Checks if the SQLite connection is healthy, which is equivalent
-     * to checking if the connection exists and isn't closed for SQLite.
-     *
-     * @return true if the connection appears healthy
+     * Checks if the SQLite connection is healthy (open and not closed).
      */
     @Override
     public boolean isHealthy() {
@@ -259,9 +256,7 @@ public class SQLiteConnectionProvider implements ConnectionProvider {
 
     /**
      * Validates the SQLite connection by checking its state and attempting a test query.
-     * This is a more thorough check than isHealthy() but still optimized for SQLite behavior.
-     *
-     * @return true if the connection is valid and can execute a test query
+     * DRY/KISS: Only checks if the connection is open and can execute a simple query.
      */
     @Override
     public boolean validateConnection() {
@@ -270,8 +265,6 @@ public class SQLiteConnectionProvider implements ConnectionProvider {
             if (!isValid()) {
                 return false;
             }
-            
-            // Perform a lightweight test query to confirm the connection is working
             try (Statement statement = connection.createStatement()) {
                 statement.execute("SELECT 1");
                 return true;
@@ -280,10 +273,6 @@ public class SQLiteConnectionProvider implements ConnectionProvider {
                 logger.debug("Validation query failed: " + e.getMessage());
                 return false;
             }
-        } catch (Exception e) {
-            lastConnectionError = e.getMessage();
-            logger.debug("Connection validation failed with exception: " + e.getMessage());
-            return false;
         } finally {
             connectionLock.unlock();
         }

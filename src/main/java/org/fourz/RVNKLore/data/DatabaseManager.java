@@ -4,6 +4,10 @@ import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.data.config.DatabaseConfig;
 import org.fourz.RVNKLore.data.connection.DatabaseConnection;
 import org.fourz.RVNKLore.data.connection.provider.ConnectionProvider;
+import org.fourz.RVNKLore.data.connection.provider.MySQLConnectionProvider;
+import org.fourz.RVNKLore.data.connection.provider.SQLiteConnectionProvider;
+import org.fourz.RVNKLore.data.connection.SQLiteConnection;
+import org.fourz.RVNKLore.data.connection.MySQLConnection;
 import org.fourz.RVNKLore.data.query.DefaultQueryExecutor;
 import org.fourz.RVNKLore.data.query.MySQLQueryBuilder;
 import org.fourz.RVNKLore.data.query.QueryBuilder;
@@ -66,11 +70,11 @@ public class DatabaseManager {
         this.databaseType = databaseConfig.getType();
         // Step 1: Create connection provider
         if (databaseType == DatabaseType.MYSQL) {
-            this.connectionProvider = new org.fourz.RVNKLore.data.connection.provider.MySQLConnectionProvider(plugin);
-            this.databaseConnection = new org.fourz.RVNKLore.data.connection.MySQLConnection(plugin);
+            this.connectionProvider = new MySQLConnectionProvider(plugin);
+            this.databaseConnection = new MySQLConnection(plugin);
         } else {
-            this.connectionProvider = new org.fourz.RVNKLore.data.connection.provider.SQLiteConnectionProvider(plugin);
-            this.databaseConnection = new org.fourz.RVNKLore.data.connection.SQLiteConnection(plugin);
+            this.connectionProvider = new SQLiteConnectionProvider(plugin);
+            this.databaseConnection = new SQLiteConnection(plugin);
         }
         // Step 2: Create DatabaseSetup with connection provider
         this.databaseSetup = new DatabaseSetup(plugin, connectionProvider);
