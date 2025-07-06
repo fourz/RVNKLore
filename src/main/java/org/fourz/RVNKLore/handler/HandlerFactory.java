@@ -65,13 +65,12 @@ public class HandlerFactory {
             initializing = true;
             debug.debug("Initializing HandlerFactory");
             
-            // First register handler classes - this doesn't create instances yet
-            registerDefaultHandlers();
+            // Register all handler implementations
+            registerAllHandlers();
             
-            // Then pre-create the core handler instances without involving LoreManager
-            preCreateCoreHandlers();
+            // Create core handlers immediately
+            initializeCoreHandlers();
             
-            // Mark as initialized BEFORE we leave the method to prevent reentry
             initialized = true;
             debug.debug("HandlerFactory initialization complete");
         } catch (Exception e) {
@@ -82,16 +81,16 @@ public class HandlerFactory {
     }
     
     /**
-     * Register the default handler implementations
+     * Register all handler implementations
      */
-    private void registerDefaultHandlers() {
+    private void registerAllHandlers() {
         if (!handlerClasses.isEmpty()) {
             debug.debug("Handler classes already registered, skipping registration");
             return;
         }
         
         try {
-            // Core handlers - only register the ones we have actual implementations for
+            // Core handlers
             handlerClasses.put("GENERIC", DefaultLoreHandler.class);
             handlerClasses.put("PLAYER", PlayerLoreHandler.class);
             handlerClasses.put("CITY", CityLoreHandler.class);
@@ -99,11 +98,9 @@ public class HandlerFactory {
             handlerClasses.put("PATH", PathLoreHandler.class);
             handlerClasses.put("FACTION", FactionLoreHandler.class);
             handlerClasses.put("ITEM", ItemLoreHandler.class);
-            
-            // Replace individual head handlers with the unified CommonHeadHandler
             handlerClasses.put("HEAD", CommonHeadHandler.class);
             
-            // Event-specific handlers
+            // Event handlers - these implement Listener
             handlerClasses.put("PLAYER_JOIN", PlayerJoinLoreHandler.class);
             handlerClasses.put("PLAYER_DEATH", PlayerDeathLoreHandler.class);
             handlerClasses.put("ENCHANTED_ITEM", EnchantedItemLoreHandler.class);
@@ -111,7 +108,7 @@ public class HandlerFactory {
             // Sign handlers
             handlerClasses.put("SIGN_LANDMARK", org.fourz.RVNKLore.handler.sign.HandlerSignLandmark.class);
             
-            // Check for missing handlers but don't log warnings yet - will use default
+            // Register default handler for any unhandled types
             for (LoreType type : LoreType.values()) {
                 if (!handlerClasses.containsKey(type.name())) {
                     handlerClasses.put(type.name(), DefaultLoreHandler.class);
@@ -125,38 +122,22 @@ public class HandlerFactory {
     }
     
     /**
-     * Pre-create essential handlers without triggering initialization chains
+     * Initialize core handlers that need to be available immediately
      */
-    private void preCreateCoreHandlers() {
-        debug.debug("Pre-creating core handlers");
+    private void initializeCoreHandlers() {
+        debug.debug("Initializing core handlers");
+        
+        // Core handlers that should always be available
         LoreType[] coreTypes = {
-            LoreType.GENERIC, LoreType.PLAYER, LoreType.CITY, 
-            LoreType.LANDMARK, LoreType.FACTION
+            LoreType.GENERIC,
+            LoreType.PLAYER,
+            LoreType.CITY,
+            LoreType.LANDMARK,
+            LoreType.FACTION
         };
         
         for (LoreType type : coreTypes) {
-            if (!handlerCache.containsKey(type)) {
-                try {
-                    Class<? extends LoreHandler> handlerClass = handlerClasses.get(type.name());
-                    if (handlerClass == null) {
-                        debug.debug("No handler class for " + type + ", using default");
-                        handlerClass = DefaultLoreHandler.class;
-                    }
-                    
-                    // Direct instantiation without initialization to avoid circular dependencies
-                    LoreHandler handler = handlerClass.getConstructor(RVNKLore.class).newInstance(plugin);
-                    handlerCache.put(type, handler);
-                    
-                    // Register as listener but don't initialize yet
-                    if (!registeredListeners.contains(handler)) {
-                        PluginManager pm = plugin.getServer().getPluginManager();
-                        pm.registerEvents(handler, plugin);
-                        registeredListeners.add(handler);
-                    }
-                } catch (Exception e) {
-                    debug.error("Failed to pre-create handler for " + type, e);
-                }
-            }
+            getHandler(type); // This will create, cache, and register the handler
         }
     }
     
@@ -208,12 +189,20 @@ public class HandlerFactory {
         
         try {
             LoreHandler handler = handlerClass.getConstructor(RVNKLore.class).newInstance(plugin);
+            
+            // Register event listener if this handler implements Listener
+            if (handler instanceof org.bukkit.event.Listener) {
+                registerEventListener(handler);
+            }
+            
+            // Initialize the handler
             try {
                 handler.initialize();
             } catch (Exception e) {
                 debug.error("Handler initialization failed for type: " + type, e);
                 // Continue with the handler even if initialization failed
             }
+            
             debug.debug("Created handler for lore type: " + type + " using " + handlerClass.getSimpleName());
             return handler;
         } catch (Exception e) {
