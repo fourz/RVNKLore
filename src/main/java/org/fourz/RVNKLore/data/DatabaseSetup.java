@@ -202,21 +202,15 @@ public class DatabaseSetup {
      */
     private void createLoreEntryTable() throws SQLException {
         String createTable = schemaQueryBuilder.createTable("lore_entry")
-                .column("id", "INTEGER", "PRIMARY KEY " + schemaQueryBuilder.getAutoIncrementSyntax())
-                .column("title", "VARCHAR(100)", "NOT NULL")
-                .column("content", "TEXT", "NOT NULL")
-                .column("author_id", "VARCHAR(36)", "NOT NULL")
-                .column("creation_date", "TIMESTAMP", "NOT NULL")
-                .column("last_modified", "TIMESTAMP", "NOT NULL")
+                .column("id", "VARCHAR(36)", "PRIMARY KEY")
+                .column("entry_type", "VARCHAR(50)", "NOT NULL")
+                .column("name", "VARCHAR(100)", "NOT NULL")
+                .column("description", "TEXT", "NOT NULL")
+                .column("created_at", "TIMESTAMP", "NOT NULL")
+                .column("submitted_by", "VARCHAR(36)", "NULL")
                 .column("is_approved", "BOOLEAN", "DEFAULT FALSE")
-                .column("approver_id", "VARCHAR(36)", "NULL")
-                .column("approval_date", "TIMESTAMP", "NULL")
-                .column("entity_type", "VARCHAR(50)", "NOT NULL")
-                .column("entity_id", "VARCHAR(100)", "NOT NULL")
-                .column("is_deleted", "BOOLEAN", "DEFAULT FALSE")
-                .foreignKey("author_id", "player", "id")
-                .foreignKey("approver_id", "player", "id")
-                .index("entity_type_id_idx", "entity_type, entity_id")
+                .column("metadata", "TEXT", "NULL")
+                .foreignKey("submitted_by", "player", "id")
                 .build();
 
         executeStatement(createTable);
