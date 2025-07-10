@@ -203,18 +203,28 @@ public class DatabaseSetup {
      */
     private void createLoreEntryTable() throws SQLException {
         String createTable = schemaQueryBuilder.createTable("lore_entry")
-                .column("id", "VARCHAR(36)", "PRIMARY KEY")
+                .column("id", "INTEGER", "PRIMARY KEY " + schemaQueryBuilder.getAutoIncrementSyntax())
+                .column("uuid", "VARCHAR(36)", "UNIQUE") // Add UUID column
                 .column("entry_type", "VARCHAR(50)", "NOT NULL")
                 .column("name", "VARCHAR(100)", "NOT NULL")
                 .column("description", "TEXT", "NOT NULL")
-                .column("created_at", "TIMESTAMP", "NOT NULL")
+                .column("created_at", "TIMESTAMP", "NOT NULL DEFAULT CURRENT_TIMESTAMP")
                 .column("submitted_by", "VARCHAR(36)", "NULL")
                 .column("is_approved", "BOOLEAN", "DEFAULT FALSE")
                 .column("metadata", "TEXT", "NULL")
+                .column("updated_at", "TIMESTAMP", "NULL")
+                .column("world", "VARCHAR(100)", "NULL")
+                .column("x", "DOUBLE", "NULL")
+                .column("y", "DOUBLE", "NULL")
+                .column("z", "DOUBLE", "NULL")
                 .foreignKey("submitted_by", "player", "id")
                 .build();
 
         executeStatement(createTable);
+
+        // Add unique constraint for name and type combination
+        String addUniqueConstraint = "CREATE UNIQUE INDEX IF NOT EXISTS uq_lore_entry_name_type ON lore_entry (name, entry_type)";
+        executeStatement(addUniqueConstraint);
     }
 
     /**
