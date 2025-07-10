@@ -14,7 +14,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Main command handler for the /lore command.
@@ -39,30 +38,32 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
      */
     private void registerSubCommands() {
         logger.debug("Registering subcommands...");
-        
-        // Create placeholder subcommands
-        registerPlaceholderCommand("add", "rvnklore.lore.add", "Add a new lore entry");
+
+        // Register real subcommands
+        subCommands.put("add", new LoreAddSubCommand(plugin));
+        subCommands.put("list", new LoreListSubCommand(plugin));
+        subCommands.put("approve", new LoreApproveSubCommand(plugin, true));  // For approval
+        subCommands.put("reject", new LoreApproveSubCommand(plugin, false));  // For rejection
+
+        // Register placeholder subcommands for others
         registerPlaceholderCommand("edit", "rvnklore.lore.edit", "Edit a lore entry");
         registerPlaceholderCommand("delete", "rvnklore.lore.delete", "Delete a lore entry");
         registerPlaceholderCommand("info", "rvnklore.lore.info", "View lore entry information");
-        registerPlaceholderCommand("list", "rvnklore.lore.list", "List lore entries");
         registerPlaceholderCommand("search", "rvnklore.lore.search", "Search lore entries");
-        registerPlaceholderCommand("approve", "rvnklore.lore.approve", "Approve a lore entry");
-        registerPlaceholderCommand("reject", "rvnklore.lore.reject", "Reject a lore entry");
         registerPlaceholderCommand("nearby", "rvnklore.lore.nearby", "Find nearby lore entries");
         registerPlaceholderCommand("submit", "rvnklore.lore.submit", "Submit a lore entry");
         registerPlaceholderCommand("item", "rvnklore.lore.item", "Item management commands");
-        
+
         // Add aliases
-        registerAlias("create", "add"); // Alias for add
-        registerAlias("new", "add");    // Alias for add
-        registerAlias("update", "edit"); // Alias for edit
-        registerAlias("modify", "edit"); // Alias for edit
-        registerAlias("remove", "delete"); // Alias for delete
-        registerAlias("view", "info"); // Alias for info
-        registerAlias("get", "info");  // Alias for info
-        registerAlias("find", "search"); // Alias for search
-        
+        registerAlias("create", "add");
+        registerAlias("new", "add");
+        registerAlias("update", "edit");
+        registerAlias("modify", "edit");
+        registerAlias("remove", "delete");
+        registerAlias("view", "info");
+        registerAlias("get", "info");
+        registerAlias("find", "search");
+
         logger.debug("Registered " + subCommands.size() + " subcommands successfully");
     }
 
@@ -151,27 +152,35 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
         List<String> completions = new ArrayList<>();
 
         if (args.length == 1) {
-            // Complete subcommand names
+            // First argument - suggest available subcommands based on permissions
             String partial = args[0].toLowerCase();
-            for (String subCommand : subCommands.keySet()) {
-                if (subCommands.get(subCommand).hasPermission(sender) && 
-                    subCommand.startsWith(partial)) {
-                    completions.add(subCommand);
+            for (Map.Entry<String, SubCommand> entry : subCommands.entrySet()) {
+                boolean hasPerm = entry.getValue().hasPermission(sender);
+                // logger.debug("TabComplete: checking permission for subcommand '" + entry.getKey() + "' for sender '" + sender.getName() + "': " + hasPerm);
+                if (hasPerm && entry.getKey().toLowerCase().startsWith(partial)) {
+                    completions.add(entry.getKey());
                 }
             }
         } else if (args.length > 1) {
-            // Pass to subcommand for completion
+            // Delegate to subcommand for further tab completions
             String subCommandName = args[0].toLowerCase();
             SubCommand subCommand = subCommands.get(subCommandName);
-            
-            if (subCommand != null && subCommand.hasPermission(sender)) {
-                String[] subCommandArgs = new String[args.length - 1];
-                System.arraycopy(args, 1, subCommandArgs, 0, args.length - 1);
-                
-                List<String> subCommandCompletions = subCommand.getTabCompletions(sender, subCommandArgs);
-                if (subCommandCompletions != null) {
-                    completions.addAll(subCommandCompletions);
+
+            if (subCommand != null) {
+                boolean hasPerm = subCommand.hasPermission(sender);
+                // logger.debug("TabComplete: checking permission for subcommand '" + subCommandName + "' for sender '" + sender.getName() + "': " + hasPerm);
+                if (hasPerm) {
+                    // Remove the first argument and pass the rest to the subcommand
+                    String[] subArgs = new String[args.length - 1];
+                    System.arraycopy(args, 1, subArgs, 0, args.length - 1);
+
+                    List<String> subCompletions = subCommand.getTabCompletions(sender, subArgs);
+                    if (subCompletions != null) {
+                        completions.addAll(subCompletions);
+                    }
                 }
+            } else {
+                // logger.debug("TabComplete: subcommand '" + subCommandName + "' not found for sender '" + sender.getName() + "'");
             }
         }
 

@@ -30,8 +30,15 @@ public class LoreAddSubCommand implements org.fourz.RVNKLore.command.subcommand.
 
     @Override
     public boolean execute(CommandSender sender, String[] args) {
+        // Strict permission check (LuckPerms strict: no wildcards, must match exactly)
+        if (!sender.hasPermission("rvnklore.command.add")) {
+            sender.sendMessage(ChatColor.RED + "✖ You don't have permission to use this command.");
+            sender.sendMessage(ChatColor.GRAY + "   Required: rvnklore.command.add");
+            return true;
+        }
+
         if (!(sender instanceof Player)) {
-            sender.sendMessage(ChatColor.RED + "&c✖ This command can only be used by players.");
+            sender.sendMessage(ChatColor.RED + "✖ This command can only be used by players.");
             return true;
         }
 
@@ -39,7 +46,7 @@ public class LoreAddSubCommand implements org.fourz.RVNKLore.command.subcommand.
 
         // Require at least type and name
         if (args.length < 2) {
-            player.sendMessage(ChatColor.RED + "&c▶ Usage: /lore add <type> <name>");
+            player.sendMessage(ChatColor.RED + "▶ Usage: /lore add <type> <name>");
             return true;
         }
 
@@ -53,8 +60,8 @@ public class LoreAddSubCommand implements org.fourz.RVNKLore.command.subcommand.
         try {
             type = LoreType.valueOf(typeStr);
         } catch (IllegalArgumentException e) {
-            player.sendMessage(ChatColor.RED + "&c✖ Invalid lore type: " + typeStr);
-            player.sendMessage(ChatColor.RED + "&c▶ Valid types: " +
+            player.sendMessage(ChatColor.RED + "✖ Invalid lore type: " + typeStr);
+            player.sendMessage(ChatColor.RED + "▶ Valid types: " +
                     Arrays.stream(LoreType.values()).map(LoreType::name).collect(Collectors.joining(", ")));
             return true;
         }
@@ -63,8 +70,8 @@ public class LoreAddSubCommand implements org.fourz.RVNKLore.command.subcommand.
         if (type == LoreType.ITEM) {
             if (player.getInventory().getItemInMainHand() == null ||
                 player.getInventory().getItemInMainHand().getType() == org.bukkit.Material.AIR) {
-                player.sendMessage(ChatColor.RED + "&c✖ You must be holding the item you want to register as lore in your main hand.");
-                player.sendMessage(ChatColor.RED + "&c▶ Hold the item and run the command again.");
+                player.sendMessage(ChatColor.RED + "✖ You must be holding the item you want to register as lore in your main hand.");
+                player.sendMessage(ChatColor.RED + "▶ Hold the item and run the command again.");
                 return true;
             }
         }
@@ -96,13 +103,13 @@ public class LoreAddSubCommand implements org.fourz.RVNKLore.command.subcommand.
         // Async save
         databaseManager.getLoreEntryRepository().addLoreEntry(dto).thenAccept(success -> {
             if (success) {
-                player.sendMessage(ChatColor.GREEN + "&a✓ Lore entry added successfully!");
-                player.sendMessage(ChatColor.YELLOW + "&7   Your submission will be reviewed by a staff member.");
+                player.sendMessage(ChatColor.GREEN + "✓ Lore entry added successfully!");
+                player.sendMessage(ChatColor.YELLOW + "   Your submission will be reviewed by a staff member.");
             } else {
-                player.sendMessage(ChatColor.RED + "&c✖ Failed to add lore entry. Please check console for errors.");
+                player.sendMessage(ChatColor.RED + "✖ Failed to add lore entry. Please check console for errors.");
             }
         }).exceptionally(e -> {
-            player.sendMessage(ChatColor.RED + "&c✖ An error occurred while adding lore entry. Please check console for details.");
+            player.sendMessage(ChatColor.RED + "✖ An error occurred while adding lore entry. Please check console for details.");
             return null;
         });
         return true;

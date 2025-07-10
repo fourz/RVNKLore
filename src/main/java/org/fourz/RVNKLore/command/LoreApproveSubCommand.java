@@ -14,37 +14,40 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Subcommand for approving lore entries
- * Usage: /lore approve <id>
+ * Subcommand for approving or rejecting lore entries
+ * Usage: /lore approve <id> [reason] or /lore reject <id> [reason]
  */
 public class LoreApproveSubCommand implements SubCommand {
     private final RVNKLore plugin;
     private final LogManager logger;
     private final DatabaseManager databaseManager;
+    private final boolean isApproved; // true for approve, false for reject
 
-    public LoreApproveSubCommand(RVNKLore plugin) {
+    public LoreApproveSubCommand(RVNKLore plugin, boolean isApproved) {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "LoreApproveSubCommand");
         this.databaseManager = plugin.getDatabaseManager();
+        this.isApproved = isApproved;
     }
 
     @Override
     public boolean execute(CommandSender sender, String[] args) {
         if (args.length < 1) {
-            sender.sendMessage(ChatColor.RED + "▶ Usage: /lore approve <id>");
+            sender.sendMessage(ChatColor.RED + "▶ Usage: /lore " + (isApproved ? "approve" : "reject") + " <id> [reason]");
             return true;
         }
 
         String idInput = args[0];
+        String reason = args.length > 1 ? String.join(" ", java.util.Arrays.copyOfRange(args, 1, args.length)) : null;
         
         // Notify user that we're processing their request
-        sender.sendMessage(ChatColor.GOLD + "⚙ Processing approval request...");
+        sender.sendMessage(ChatColor.GOLD + "⚙ Processing " + (isApproved ? "approval" : "rejection") + " request...");
         
         // Try to match by full UUID first
         if (idInput.length() == 36) {
             try {
                 UUID uuid = UUID.fromString(idInput);
-                return processApprovalByUuid(sender, uuid);
+                return processApprovalByUuid(sender, uuid, reason);
             } catch (IllegalArgumentException ignored) {
                 // Not a valid UUID, continue with other matching methods
             }
@@ -55,23 +58,24 @@ public class LoreApproveSubCommand implements SubCommand {
             // Search by partial ID or name
             databaseManager.getLoreEntryRepository().searchLoreEntries(idInput)
                 .thenAccept(entries -> {
-                    List<LoreEntryDTO> unapprovedEntries = new ArrayList<>();
+                    List<LoreEntryDTO> pendingEntries = new ArrayList<>();
                     for (LoreEntryDTO entry : entries) {
-                        if (!entry.isApproved()) {
-                            unapprovedEntries.add(entry);
+                        if (entry.isApproved() != isApproved) {
+                            pendingEntries.add(entry);
                         }
                     }
-                    if (unapprovedEntries.isEmpty()) {
-                        sender.sendMessage(ChatColor.RED + "✖ No unapproved lore entries found matching: " + idInput);
+                    if (pendingEntries.isEmpty()) {
+                        sender.sendMessage(ChatColor.RED + "✖ No " + (isApproved ? "unapproved" : "approved") + 
+                            " lore entries found matching: " + idInput);
                         return;
                     }
-                    if (unapprovedEntries.size() == 1) {
-                        LoreEntryDTO entry = unapprovedEntries.get(0);
-                        processApprovalByDto(sender, entry);
+                    if (pendingEntries.size() == 1) {
+                        LoreEntryDTO entry = pendingEntries.get(0);
+                        processApprovalByDto(sender, entry, reason);
                         return;
                     }
-                    sender.sendMessage(ChatColor.YELLOW + "⚠ Multiple unapproved entries match your query. Please be more specific:");
-                    for (LoreEntryDTO entry : unapprovedEntries) {
+                    sender.sendMessage(ChatColor.YELLOW + "⚠ Multiple entries match your query. Please be more specific:");
+                    for (LoreEntryDTO entry : pendingEntries) {
                         UUID uuid = entry.getUuid();
                         String shortId = uuid != null ? uuid.toString().substring(0, 8) : "unknown";
                         sender.sendMessage(ChatColor.WHITE + shortId + " - " +
@@ -81,7 +85,7 @@ public class LoreApproveSubCommand implements SubCommand {
                 })
                 .exceptionally(e -> {
                     logger.error("Error searching for lore entries", e);
-                    sender.sendMessage(ChatColor.RED + "✖ An error occurred while searching for lore entries. Please check the console for details.");
+                    sender.sendMessage(ChatColor.RED + "✖ An error occurred while searching for lore entries");
                     return null;
                 });
         } else {
@@ -97,7 +101,7 @@ public class LoreApproveSubCommand implements SubCommand {
      * @param uuid The UUID of the lore entry to approve
      * @return true if the command was processed
      */
-    private boolean processApprovalByUuid(CommandSender sender, UUID uuid) {
+    private boolean processApprovalByUuid(CommandSender sender, UUID uuid, String reason) {
         databaseManager.getLoreEntryRepository().getLoreEntryById(uuid)
             .thenAccept(entry -> {
                 if (entry == null) {
@@ -105,7 +109,7 @@ public class LoreApproveSubCommand implements SubCommand {
                     return;
                 }
                 
-                processApprovalByDto(sender, entry);
+                processApprovalByDto(sender, entry, reason);
             })
             .exceptionally(e -> {
                 logger.error("Error fetching lore entry", e);
@@ -122,35 +126,43 @@ public class LoreApproveSubCommand implements SubCommand {
      * @param sender The command sender
      * @param entry The lore entry DTO to approve
      */
-    private void processApprovalByDto(CommandSender sender, LoreEntryDTO entry) {
-        if (entry.isApproved()) {
-            sender.sendMessage(ChatColor.YELLOW + "⚠ This lore entry is already approved.");
+    private void processApprovalByDto(CommandSender sender, LoreEntryDTO entry, String reason) {
+        if (entry.isApproved() == isApproved) {
+            sender.sendMessage(ChatColor.YELLOW + "⚠ This lore entry is already " + 
+                (isApproved ? "approved" : "rejected") + ".");
             return;
         }
         
-        // Update the entry to approved state
-        entry.setApproved(true);
+        // Update the entry approval state
+        entry.setApproved(isApproved);
         
         // Save the changes
         databaseManager.getLoreEntryRepository().saveLoreEntry(entry)
             .thenAccept(id -> {
                 if (id > 0) {
-                    sender.sendMessage(ChatColor.GREEN + "✓ Lore entry approved successfully!");
+                    sender.sendMessage(ChatColor.GREEN + "✓ Lore entry " + 
+                        (isApproved ? "approved" : "rejected") + " successfully!" +
+                        (reason != null ? "\n" + ChatColor.GRAY + "Reason: " + reason : ""));
                     
-                    // Log the approval
-                    logger.info("Lore entry " + entry.getUuid() + " (" + entry.getName() + ") approved by " + sender.getName());
+                    // Log the action
+                    logger.info("Lore entry " + entry.getUuid() + " (" + entry.getName() + ") " + 
+                        (isApproved ? "approved" : "rejected") + " by " + sender.getName() + 
+                        (reason != null ? " with reason: " + reason : ""));
                 } else {
-                    sender.sendMessage(ChatColor.RED + "✖ Failed to approve lore entry. Please check console for errors.");
+                    sender.sendMessage(ChatColor.RED + "✖ Failed to " + 
+                        (isApproved ? "approve" : "reject") + " lore entry");
                 }
             })
             .exceptionally(e -> {
-                logger.error("Error approving lore entry", e);
-                sender.sendMessage(ChatColor.RED + "✖ An error occurred while approving the lore entry. Please check the console for details.");
+                logger.error("Error processing lore entry", e);
+                sender.sendMessage(ChatColor.RED + "✖ An error occurred while processing the lore entry");
                 return null;
             });
-    }    @Override
+    }
+
+    @Override
     public String getDescription() {
-        return "Approves a lore entry for public viewing";
+        return isApproved ? "Approves a lore entry for public viewing" : "Rejects a lore entry submission";
     }
 
     @Override

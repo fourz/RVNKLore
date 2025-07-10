@@ -49,6 +49,9 @@ public class RVNKLore extends JavaPlugin {
         handlerFactory.initialize(); // This will register PlayerJoinLoreHandler
         logger.info("HandlerFactory initialized and event handlers registered");
 
+        // Register CommandManager (registers all plugin commands)
+        this.commandManager = new CommandManager(this);
+
         // Register shutdown hook
         registerShutdownHook();
 
