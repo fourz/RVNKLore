@@ -12,6 +12,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * Manages periodic health checks for the database connection.
  * Provides automatic reconnection with exponential backoff.
+ *
+ * <p>
+ * This service is responsible ONLY for monitoring connection health and attempting reconnection.
+ * It does NOT handle file creation, schema validation, or any database setup logic.
+ * File creation is handled by SQLiteConnectionProvider, and schema by DatabaseSetup.
+ * </p>
  */
 public class DatabaseHealthService {
     private final ScheduledExecutorService scheduler;
@@ -95,64 +101,65 @@ public class DatabaseHealthService {
 
     /**
      * Check database health and attempt reconnection if needed.
-     * This method only checks connection health and attempts reconnection - file creation
-     * and initialization are handled by DatabaseSetup and the connection provider.
+     * This method only checks connection health and attempts reconnection.
+     * File creation and schema validation are handled elsewhere.
      */
     private void performHealthCheck() {
-        boolean isConnectionValid = databaseManager.validateConnection();
-        
-        if (isConnectionValid) {
-            if (reconnectAttempts.get() > 0 || wasInvalid) {
-                logger.info("Database connection is healthy");
-                reconnectAttempts.set(0);
-                wasInvalid = false;
-            }
-            return;
-        }
-
-        // Connection is invalid
-        wasInvalid = true;
-        int attempts = reconnectAttempts.get();
-        
-        if (attempts >= MAX_RECONNECT_ATTEMPTS) {
-            // Throttle error logging
-            long now = System.currentTimeMillis();
-            if (now - lastLogTime > LOG_THROTTLE_MS) {
-                lastLogTime = now;
-                logger.error("Maximum reconnection attempts reached. Manual intervention required.", 
-                            new RuntimeException("Max reconnection attempts exceeded"));
-            }
-            return;
-        }
-
-        // Attempt reconnection with exponential backoff
-        long backoffSeconds = (long) Math.pow(2, attempts);
-        logger.warning("Database connection invalid. Attempting reconnect in " + backoffSeconds + 
-                      " seconds. (Attempt " + (attempts + 1) + "/" + MAX_RECONNECT_ATTEMPTS + ")");
-        
         try {
-            Thread.sleep(backoffSeconds * 1000);
-            boolean reconnected = databaseManager.reconnect();
+            // First check if connection provider is healthy (basic check)
+            boolean isConnectionHealthy = databaseManager.getConnectionProvider().isHealthy();
             
-            if (reconnected && databaseManager.validateConnection()) {
-                logger.info("Database connection restored successfully");
-                reconnectAttempts.set(0);
-                wasInvalid = false;
-            } else {
-                reconnectAttempts.incrementAndGet();
-                // Just close the invalid connection - reconnection will be handled in next health check
-                try {
-                    databaseManager.getConnectionProvider().getConnection().close();
-                } catch (Exception e) {
-                    logger.error("Failed to close invalid connection", e);
-                }
+            if (!isConnectionHealthy) {
+                logger.warning("Database connection is unhealthy, will attempt validation");
             }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            logger.error("Reconnection attempt interrupted", e);
+            
+            // Always do full validation regardless of basic health check
+            boolean isConnectionValid = databaseManager.validateConnection();
+            
+            if (isConnectionValid) {
+                if (reconnectAttempts.get() > 0 || wasInvalid) {
+                    logger.info("Database connection is now healthy");
+                    reconnectAttempts.set(0);
+                    wasInvalid = false;
+                }
+                return;
+            }
+
+            // Connection is invalid
+            wasInvalid = true;
+            int attempts = reconnectAttempts.incrementAndGet();
+            
+            if (attempts >= MAX_RECONNECT_ATTEMPTS) {
+                // Throttle error logging
+                long now = System.currentTimeMillis();
+                if (now - lastLogTime > LOG_THROTTLE_MS) {
+                    lastLogTime = now;
+                    logger.error("Maximum reconnection attempts reached. Manual intervention required.", 
+                                new RuntimeException("Max reconnection attempts exceeded"));
+                }
+                return;
+            }
+
+            // Attempt reconnection with exponential backoff
+            int backoffSeconds = Math.min(30, (int) Math.pow(2, attempts - 1));
+            logger.warning("Database connection invalid. Attempting reconnect in " + backoffSeconds + 
+                          " seconds. (Attempt " + attempts + "/" + MAX_RECONNECT_ATTEMPTS + ")");
+            
+            try {
+                Thread.sleep(backoffSeconds * 1000);
+                boolean reconnected = databaseManager.reconnect();
+                
+                if (reconnected && databaseManager.validateConnection()) {
+                    logger.info("Database connection restored successfully");
+                    reconnectAttempts.set(0);
+                    wasInvalid = false;
+                }
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                logger.error("Reconnection attempt interrupted", ie);
+            }
         } catch (Exception e) {
-            reconnectAttempts.incrementAndGet();
-            logger.error("Error during reconnection attempt", e);
+            logger.error("Error during database health check", e);
         }
     }
 }

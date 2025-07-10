@@ -17,6 +17,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * Manages a single SQLite connection with thread safety.
  * Optimized for SQLite-specific behaviors including file creation and connection validation.
  */
+
 public class SQLiteConnectionProvider implements ConnectionProvider {
     private final RVNKLore plugin;
     private final LogManager logger;
@@ -29,56 +30,43 @@ public class SQLiteConnectionProvider implements ConnectionProvider {
 
     /**
      * Create a new SQLite connection provider.
-     * Note: This constructor only initializes fields. Call ensureDatabaseFileExists() 
-     * before attempting any connection operations.
+     * This constructor ensures the database file exists but does not initialize
+     * the connection. The connection will be initialized on first use.
      *
      * @param plugin The RVNKLore plugin instance
      */
     public SQLiteConnectionProvider(RVNKLore plugin) {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "SQLiteConnectionProvider");
-        
-        // Get SQLite settings directly from ConfigManager
         this.settings = plugin.getConfigManager().getSQLiteSettings();
-        
-        // Initialize database file reference (but don't create yet)
-        File dataFolder = new File(plugin.getDataFolder(), "database");
-        this.databaseFile = new File(dataFolder, settings.get("database").toString());
+        // Place lore.db in the plugin root folder (KISS principle)
+        String dbName = settings.get("database").toString();
+        this.databaseFile = new File(plugin.getDataFolder(), dbName);
+        // Ensure the file exists immediately in the constructor
+        ensureFileExists();
     }
 
     /**
-     * Ensures the database directory and file exist and are accessible.
-     * This method is idempotent and can be safely called multiple times.
+     * Ensures the database file exists by creating it if necessary.
+     * This is called from the constructor to guarantee file existence before any operations.
+     * @throws RuntimeException if the file cannot be created
      */
-    public void ensureDatabaseFileExists() {
-        File dataFolder = this.databaseFile.getParentFile();
-        
-        // Create database directory if needed
-        if (!dataFolder.exists()) {
-            boolean created = dataFolder.mkdirs();
-            if (created) {
-                logger.info("Created database directory: " + dataFolder.getAbsolutePath());
-            } else {
-                logger.error("Failed to create database directory: " + dataFolder.getAbsolutePath(), null);
+    private void ensureFileExists() {
+        try {
+            File parent = databaseFile.getParentFile();
+            if (!parent.exists() && !parent.mkdirs()) {
+                throw new RuntimeException("Cannot create plugin data folder: " + parent);
             }
-        }
-
-        // Create the database file if needed
-        if (!databaseFile.exists()) {
-            try {
-                boolean created = databaseFile.createNewFile();
-                if (created) {
-                    logger.info("Created SQLite database file: " + databaseFile.getAbsolutePath());
-                } else {
-                    logger.warning("Could not create SQLite database file (it may already exist): " + databaseFile.getAbsolutePath());
-                }
-            } catch (Exception e) {
-                logger.error("Error creating SQLite database file: " + databaseFile.getAbsolutePath(), e);
+            if (!databaseFile.exists() && !databaseFile.createNewFile()) {
+                throw new RuntimeException("Cannot create database file: " + databaseFile);
             }
-        } else {
-            logger.debug("SQLite database file already exists: " + databaseFile.getAbsolutePath());
+            logger.info("SQLite database file ready: " + databaseFile.getAbsolutePath());
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to ensure SQLite database file exists", e);
         }
     }
+
+
 
     /**
      * Initialize the SQLite connection.
@@ -87,23 +75,22 @@ public class SQLiteConnectionProvider implements ConnectionProvider {
      */
     public synchronized void initializeConnection() {
         if (initialized && isValid()) {
-            logger.debug("SQLite connection already initialized and valid, skipping initialization");
             return;
         }
 
         connectionLock.lock();
         try {
+            // Double-check after acquiring the lock
+            if (initialized && isValid()) {
+                return;
+            }
+            
+            // Close any existing connection
+            closeExistingConnection();
+            
             // Load the SQLite JDBC driver
             Class.forName("org.sqlite.JDBC");
-            if (!initialized) {
-                logger.debug("Initializing SQLite connection...");
-            } else {
-                logger.debug("Re-initializing SQLite connection...");
-            }
-
-            // Ensure database file exists
-            ensureDatabaseFileExists();
-
+            
             // Configure connection properties
             Properties properties = new Properties();
             properties.setProperty("foreign_keys", "true");
@@ -115,27 +102,25 @@ public class SQLiteConnectionProvider implements ConnectionProvider {
 
             // Get the connection
             String url = "jdbc:sqlite:" + databaseFile.getAbsolutePath();
-            if (connection == null || !isValid()) {
-                connection = DriverManager.getConnection(url, properties);
-                // Configure SQLite connection
-                connection.setAutoCommit(false);
-                // Additional PRAGMA settings
-                try (Statement statement = connection.createStatement()) {
-                    statement.execute("PRAGMA foreign_keys = ON");
-                    statement.execute("PRAGMA cache_size = -4000");
-                    statement.execute("PRAGMA temp_store = MEMORY");
-                    connection.commit();
-                }
+            
+            // Create new connection
+            connection = DriverManager.getConnection(url, properties);
+            
+            // Configure SQLite connection
+            connection.setAutoCommit(false);
+            
+            // Additional PRAGMA settings
+            try (Statement statement = connection.createStatement()) {
+                statement.execute("PRAGMA foreign_keys = ON");
+                statement.execute("PRAGMA cache_size = -4000");
+                statement.execute("PRAGMA temp_store = MEMORY");
+                connection.commit();
             }
 
             // Test connection
             try (Statement statement = connection.createStatement()) {
                 statement.execute("SELECT 1");
-                if (!initialized) {
-                    logger.info("SQLite connection established: " + databaseFile.getName());
-                } else {
-                    logger.debug("SQLite connection re-established");
-                }
+                logger.info("SQLite connection established: " + databaseFile.getName());
             }
 
             initialized = true;
@@ -144,16 +129,48 @@ public class SQLiteConnectionProvider implements ConnectionProvider {
             lastConnectionError = "SQLite JDBC driver not found";
             logger.error("SQLite JDBC driver not found", e);
             connection = null;
+            initialized = false;
         } catch (SQLException e) {
             lastConnectionError = e.getMessage();
-            logger.error("Failed to initialize SQLite connection", e);
+            logger.error("Failed to initialize SQLite connection: " + e.getMessage(), e);
             connection = null;
+            initialized = false;
         } catch (Exception e) {
             lastConnectionError = e.getMessage();
-            logger.error("Error initializing SQLite database", e);
+            logger.error("Error initializing SQLite database: " + e.getMessage(), e);
             connection = null;
+            initialized = false;
         } finally {
             connectionLock.unlock();
+        }
+    }
+    
+    /**
+     * Close any existing connection before creating a new one.
+     */
+    private void closeExistingConnection() {
+        if (connection != null) {
+            try {
+                if (!connection.isClosed()) {
+                    // Try to commit any pending transactions
+                    if (!connection.getAutoCommit()) {
+                        try {
+                            connection.commit();
+                        } catch (SQLException e) {
+                            try {
+                                connection.rollback();
+                            } catch (SQLException ex) {
+                                // Just continue
+                            }
+                        }
+                    }
+                    connection.close();
+                }
+            } catch (SQLException e) {
+                logger.warning("Error closing existing connection: " + e.getMessage());
+            } finally {
+                connection = null;
+            }
         }
     }
 
@@ -161,10 +178,13 @@ public class SQLiteConnectionProvider implements ConnectionProvider {
     public Connection getConnection() throws SQLException {
         connectionLock.lock();
         try {
-            if (connection == null || connection.isClosed()) {
+            // Ensure we have a valid connection
+            if (!isValid()) {
                 initializeConnection();
+                
                 if (connection == null) {
-                    throw new SQLException("Failed to initialize SQLite connection");
+                    throw new SQLException("Failed to initialize SQLite connection: " + 
+                        (lastConnectionError != null ? lastConnectionError : "Unknown error"));
                 }
             }
             return connection;
@@ -175,8 +195,6 @@ public class SQLiteConnectionProvider implements ConnectionProvider {
 
     /**
      * Closes the SQLite connection and releases resources.
-     * This method ensures that all connections are properly closed,
-     * transactions are committed or rolled back, and resources are released.
      */
     @Override
     public void close() {
@@ -193,7 +211,6 @@ public class SQLiteConnectionProvider implements ConnectionProvider {
                             logger.warning("Failed to commit transactions before closing: " + e.getMessage());
                             try {
                                 connection.rollback();
-                                logger.debug("Rolled back pending transactions");
                             } catch (SQLException rollbackEx) {
                                 logger.warning("Failed to rollback transactions: " + rollbackEx.getMessage());
                             }
@@ -202,14 +219,13 @@ public class SQLiteConnectionProvider implements ConnectionProvider {
                     
                     // Close the connection
                     if (!connection.isClosed()) {
-                        logger.info("Closing SQLite connection: " + databaseFile.getName());
                         connection.close();
+                        logger.info("Closed SQLite connection: " + databaseFile.getName());
                     }
                 } catch (SQLException e) {
                     lastConnectionError = e.getMessage();
                     logger.error("Error closing SQLite connection", e);
                 } finally {
-                    // Ensure connection is nullified even if close throws an exception
                     connection = null;
                     initialized = false;
                 }
@@ -221,34 +237,41 @@ public class SQLiteConnectionProvider implements ConnectionProvider {
 
 
     /**
-     * Checks if the SQLite connection is valid (open and not closed).
-     * This is the only check needed for SQLite health.
+     * Checks if the SQLite connection is valid.
+     * This performs a basic check to see if the connection exists and is not closed.
      */
     private boolean isValid() {
-        return connection != null && !isClosedQuietly();
-    }
-
-    /**
-     * Helper to check if the connection is closed, suppressing exceptions.
-     */
-    private boolean isClosedQuietly() {
+        if (connection == null) {
+            return false;
+        }
+        
         try {
-            return connection == null || connection.isClosed();
+            return !connection.isClosed();
         } catch (SQLException e) {
             lastConnectionError = e.getMessage();
             logger.debug("Connection validity check failed: " + e.getMessage());
-            return true;
+            return false;
         }
     }
 
     /**
-     * Checks if the SQLite connection is healthy (open and not closed).
+     * Checks if the SQLite connection is healthy.
+     * This is a lightweight check that verifies the connection exists and is not closed.
      */
     @Override
     public boolean isHealthy() {
         connectionLock.lock();
         try {
-            return isValid();
+            if (!isValid()) {
+                try {
+                    logger.debug("Connection invalid during health check, attempting to reinitialize");
+                    initializeConnection();
+                    return isValid();
+                } catch (Exception e) {
+                    return false;
+                }
+            }
+            return true;
         } finally {
             connectionLock.unlock();
         }
@@ -256,26 +279,30 @@ public class SQLiteConnectionProvider implements ConnectionProvider {
 
     /**
      * Validates the SQLite connection by checking its state and attempting a test query.
-     * DRY/KISS: Only checks if the connection is open and can execute a simple query.
+     * This is a more thorough check than isHealthy() as it actually runs a query.
      */
     @Override
     public boolean validateConnection() {
         connectionLock.lock();
         try {
             if (!isValid()) {
+                initializeConnection();
+            }
+            
+            if (connection == null) {
                 return false;
             }
+            
             try (Statement statement = connection.createStatement()) {
                 statement.execute("SELECT 1");
                 return true;
             } catch (SQLException e) {
                 lastConnectionError = e.getMessage();
-                logger.debug("Validation query failed: " + e.getMessage());
                 return false;
             }
         } finally {
             connectionLock.unlock();
-        }
+        }        
     }
 
     /**
@@ -297,39 +324,33 @@ public class SQLiteConnectionProvider implements ConnectionProvider {
     }
     
     /**
-     * Get connection statistics for monitoring and debugging purposes.
-     * This provides information about the SQLite connection state and database file.
+     * Get connection statistics for monitoring purposes.
      *
      * @return A string containing connection statistics
      */
     public String getConnectionStats() {
         connectionLock.lock();
         try {
-            if (connection == null) {
-                return "Database: " + databaseFile.getName() + ", Status: Not initialized";
-            }
+            boolean connected = isValid();
+            boolean queryWorks = false;
             
-            boolean validConnection = isValid();
-            boolean canExecuteQuery = false;
-            
-            if (validConnection) {
+            if (connected) {
                 try (Statement statement = connection.createStatement()) {
                     statement.execute("SELECT 1");
-                    canExecuteQuery = true;
+                    queryWorks = true;
                 } catch (SQLException e) {
-                    // If query fails, mark as unable to execute
+                    // Query failed
                 }
             }
             
-            boolean fileExists = databaseFile.exists();
-            long fileSize = fileExists ? databaseFile.length() : 0;
+            long fileSize = databaseFile.exists() ? databaseFile.length() : 0;
             
             return String.format(
                 "Database: %s, Size: %d KB, Connected: %s, Can query: %s",
                 databaseFile.getName(),
                 fileSize / 1024,
-                validConnection ? "Yes" : "No",
-                canExecuteQuery ? "Yes" : "No"
+                connected ? "Yes" : "No",
+                queryWorks ? "Yes" : "No"
             );
         } finally {
             connectionLock.unlock();

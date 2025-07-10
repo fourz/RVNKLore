@@ -25,7 +25,6 @@ import org.fourz.RVNKLore.data.service.DatabaseHealthService;
 import org.fourz.RVNKLore.data.service.QueryService;
 import org.fourz.RVNKLore.debug.LogManager;
 
-import java.sql.*;
 import java.util.concurrent.*;
 
 /**
@@ -68,27 +67,69 @@ public class DatabaseManager {
         this.logger = LogManager.getInstance(plugin, "DatabaseManager");
         this.databaseConfig = new DatabaseConfig(plugin.getConfigManager());
         this.databaseType = databaseConfig.getType();
-        // Step 1: Create connection provider
-        if (databaseType == DatabaseType.MYSQL) {
-            this.connectionProvider = new MySQLConnectionProvider(plugin);
-            this.databaseConnection = new MySQLConnection(plugin);
-        } else {
-            this.connectionProvider = new SQLiteConnectionProvider(plugin);
-            this.databaseConnection = new SQLiteConnection(plugin);
-        }
-        // Step 2: Create DatabaseSetup with connection provider
-        this.databaseSetup = new DatabaseSetup(plugin, connectionProvider);
-        // Step 3: Initialization is now explicit; do not call initialize() here
+        
+        // Constructor only initializes essential fields
+        // All initialization is deferred to initialize() for consistency
     }
-
+    
     /**
-     * Initializes the database manager and core components. Sets up appropriate builders,
-     * creates repositories, and validates the schema.
+     * Initializes the database manager and all components in a clear, sequential order.
+     * This is the single entry point for complete database initialization.
      */
     public void initialize() {
         logger.info("Initializing database manager...");
-
-        // Select query builders based on database type
+        try {
+            // Step 1: Create connection provider (file creation happens in SQLiteConnectionProvider constructor)
+            createConnectionProvider();
+            
+            // Step 2: Setup database components
+            setupQueryBuilders();
+            setupDatabaseSetup();
+            
+            // Step 3: Start health monitoring early to catch any connection issues
+            startHealthMonitoring();
+            
+            // Step 4: Initialize repositories and services
+            setupRepositoriesAndServices();
+            
+            // Step 5: Perform schema validation and setup
+            setupAndValidateSchema();
+            
+            logger.info("Database manager initialized successfully.");
+        } catch (Exception e) {
+            logger.error("Failed to initialize database: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Creates the appropriate connection provider based on database type.
+     * For SQLite, this ensures the database file exists in the constructor.
+     */
+    private void createConnectionProvider() {
+        logger.info("Creating connection provider for " + databaseType + "...");
+        if (databaseType == DatabaseType.MYSQL) {
+            this.connectionProvider = new MySQLConnectionProvider(plugin);
+            this.databaseConnection = new MySQLConnection(plugin);
+            logger.info("MySQL connection provider created");
+        } else {
+            this.connectionProvider = new SQLiteConnectionProvider(plugin);
+            this.databaseConnection = new SQLiteConnection(plugin);
+            logger.info("SQLite connection provider created with file ready");
+        }
+    }
+    
+    /**
+     * Sets up the database setup component.
+     */
+    private void setupDatabaseSetup() {
+        this.databaseSetup = new DatabaseSetup(plugin, connectionProvider);
+        logger.debug("Database setup component created");
+    }
+    
+    /**
+     * Sets up query builders based on the database type.
+     */
+    private void setupQueryBuilders() {
         if (databaseType == DatabaseType.MYSQL) {
             queryBuilder = new MySQLQueryBuilder();
             schemaQueryBuilder = new MySQLSchemaQueryBuilder();
@@ -96,8 +137,12 @@ public class DatabaseManager {
             queryBuilder = new SQLiteQueryBuilder();
             schemaQueryBuilder = new SQLiteSchemaQueryBuilder();
         }
+    }
 
-        // Initialize components and repositories
+    /**
+     * Sets up repositories and core services.
+     */
+    private void setupRepositoriesAndServices() {
         queryExecutor = new DefaultQueryExecutor(plugin, connectionProvider);
         databaseSetup.initialize(schemaQueryBuilder, queryExecutor);
         itemRepository = new ItemRepository(plugin, this);
@@ -106,25 +151,29 @@ public class DatabaseManager {
         loreEntryRepository = new LoreEntryRepository(plugin, this);
         submissionRepository = new SubmissionRepository(plugin, this);
         this.queryService = new QueryService(connectionProvider, logger);
+    }
 
-        try {
-            // For SQLite, initialize connection explicitly
-            if (databaseType == DatabaseType.SQLITE) {
-                ((org.fourz.RVNKLore.data.connection.provider.SQLiteConnectionProvider) connectionProvider).initializeConnection();
+    /**
+     * Starts the database health monitoring service.
+     */
+    private void startHealthMonitoring() {
+        healthService = new DatabaseHealthService(this, plugin);
+        healthService.start();
+    }
+
+    /**
+     * Sets up and validates the database schema.
+     */
+    private void setupAndValidateSchema() {
+        if (!schemaValidated) {
+            logger.info("Performing full schema initialization/validation");
+            boolean initializationResult = databaseSetup.performFullInitialization().join();
+            if (initializationResult) {
+                schemaValidated = true;
+                logger.info("Database schema validation successful");
+            } else {
+                throw new RuntimeException("Database schema initialization/validation failed");
             }
-            healthService = new DatabaseHealthService(this, plugin);
-            healthService.start();
-            // Run complete database initialization through DatabaseSetup
-            if (!schemaValidated) {
-                boolean initializationResult = databaseSetup.performFullInitialization().join();
-                if (initializationResult) {
-                    schemaValidated = true;
-                } else {
-                    throw new RuntimeException("Database initialization failed");
-                }
-            }
-        } catch (Exception e) {
-            logger.error("Failed to initialize database: " + e.getMessage(), e);
         }
     }
 
