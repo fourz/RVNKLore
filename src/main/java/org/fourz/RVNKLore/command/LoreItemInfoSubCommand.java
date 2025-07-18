@@ -11,7 +11,6 @@ import org.fourz.RVNKLore.debug.LogManager;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Handles the /lore item info <item_name> command.

@@ -1,6 +1,6 @@
 # RVNKLore Database Architecture
 
-*Last Updated: June 22, 2025*
+*Last Updated: July 10, 2025*
 
 This document provides a detailed overview of the RVNKLore plugin's database architecture, including class relationships, design patterns, and implementation details.
 
@@ -31,39 +31,79 @@ The system follows established design patterns:
 
 ### 1. DatabaseManager
 
-The `DatabaseManager` acts as the central hub for database connection, transaction, and schema management. It is **not** responsible for direct data access or CRUD operations. Instead, it provides access to repository instances for each table/entity.
+The `DatabaseManager` now acts as a true central hub for database operations with more focused responsibilities:
+
+- Connection lifecycle management
+- Repository instance provisioning
+- Schema validation coordination
+- Health monitoring
+- Transaction management
 
 ```java
 public class DatabaseManager {
     private final RVNKLore plugin;
-    // ...
-    public LoreEntryRepository getLoreEntryRepository() { /*...*/ }
-    public SubmissionRepository getSubmissionRepository() { /*...*/ }
-    public ItemRepository getItemRepository() { /*...*/ }
-    // ...
-    public void shutdown() { /*...*/ }
+    private final LogManager logger;
+    private final DatabaseConfig databaseConfig;
+    private final DatabaseType databaseType;
+    private ConnectionProvider connectionProvider;
+    private DatabaseSetup databaseSetup;
+    private QueryBuilder queryBuilder;
+    private QueryExecutor queryExecutor;
+    // ...repository fields...
+    
+    public void initialize() {
+        // Sequential initialization:
+        // 1. Create connection provider
+        // 2. Setup query builders
+        // 3. Start health monitoring
+        // 4. Initialize repositories
+        // 5. Validate schema
+    }
 }
 ```
 
-**Key Responsibilities:**
-- Initialize and manage database connections
-- Provide access to repository instances via `getXRepository()` methods
-- Manage database schema setup and validation (delegated to DatabaseSetup)
-- Handle database type selection (MySQL/SQLite)
-- Coordinate transaction boundaries and resource cleanup
+### 2. DatabaseConfig
 
-**Repository-Access Pattern:**
-- All data access (CRUD, queries) is performed through the appropriate repository class (e.g., `LoreEntryRepository`, `SubmissionRepository`, `ItemRepository`).
-- `DatabaseManager` should **not** provide pass-through data access methods (e.g., `getLoreEntry(int id)` is removed in favor of `getLoreEntryRepository().getLoreEntryById(id)`).
-- Client code should obtain the repository from `DatabaseManager` and call repository methods directly:
-    ```java
-    LoreEntryRepository repo = databaseManager.getLoreEntryRepository();
-    repo.getLoreEntryById(id);
-    ```
+New dedicated configuration class that encapsulates database settings:
 
-This pattern enforces single responsibility and keeps `DatabaseManager` focused on connection, transaction, and schema management.
+```java
+public class DatabaseConfig {
+    private final DatabaseType type;
+    private final String host;
+    private final int port;
+    private final String database;
+    private final String username;
+    private final String password;
+    private final boolean useSSL;
 
-### 2. Connection Management
+    public DatabaseConfig(ConfigManager configManager) {
+        // Read config from already loaded ConfigManager
+        // No direct file operations
+    }
+}
+```
+
+### 3. DatabaseSetup 
+
+Enhanced schema management with clear initialization sequence:
+
+```java
+public class DatabaseSetup {
+    private final RVNKLore plugin;
+    private final LogManager logger;
+    private final ConnectionProvider connectionProvider;
+    private SchemaQueryBuilder schemaQueryBuilder;
+    private QueryExecutor queryExecutor;
+    
+    public CompletableFuture<Boolean> performFullInitialization() {
+        // 1. Initialize tables
+        // 2. Validate schema
+        // 3. Report results
+    }
+}
+```
+
+### 4. Connection Management
 
 Connection management is handled through the `ConnectionProvider` interface, with specific implementations for each database type:
 
@@ -96,7 +136,7 @@ public class MySQLConnectionProvider implements ConnectionProvider {
 3. Connection health monitoring via `DatabaseHealthService`
 4. Graceful shutdown during plugin disable
 
-### 3. Query Building
+### 5. Query Building
 
 The `QueryBuilder` interface and its implementations provide a clean abstraction for SQL dialect differences:
 
@@ -133,7 +173,7 @@ public interface SchemaQueryBuilder {
 }
 ```
 
-### 4. Query Execution
+### 6. Query Execution
 
 Query execution is managed through the `QueryExecutor` interface and its `DefaultQueryExecutor` implementation:
 
@@ -159,7 +199,7 @@ public class DefaultQueryExecutor implements QueryExecutor {
 - Comprehensive error handling and logging
 - Transaction support for multi-statement operations
 
-### 5. Data Transfer Objects (DTOs)
+### 7. Data Transfer Objects (DTOs)
 
 DTOs provide a clean data transfer mechanism between database and domain layers:
 
@@ -196,7 +236,7 @@ public class ItemPropertiesDTO {
 3. Updated by domain logic
 4. Passed back to `QueryExecutor` for database persistence
 
-### 6. Repository Layer
+### 8. Repository Layer
 
 Repositories handle all table-specific database operations and are the **only** entry point for CRUD and query logic. Each repository is responsible for a single table or closely related set of tables.
 
@@ -266,8 +306,8 @@ repo.getLoreEntryById(id).thenAccept(entry -> {
 │                 │  │                 │        │         │HealthService    │
 │MySQLQueryBuilder│  │MySQLSchemaBuilder│        │         └─────────────────┘
 └─────────────────┘  └─────────────────┘        │
-┌─────────────────┐  ┌─────────────────┐        │
-│                 │  │                 │        │ used by
+┌─────────────────┐  ┌─────────────────┐        │ used by
+│                 │  │                 │        │
 │SQLiteQueryBuilder│ │SQLiteSchemaBuilder│       │
 └─────────────────┘  └─────────────────┘        │
                                                 │
@@ -392,23 +432,21 @@ CREATE TABLE lore_collection_entry (
 
 ## Implementation Status
 
-As of June 22, 2025, the database architecture implementation is as follows:
+As of July 11, 2025:
 
 | Component | Status | Notes |
 |-----------|--------|-------|
-| DatabaseManager | ✅ Complete | Central hub for all database operations |
-| ConnectionProvider | ✅ Complete | Both MySQL and SQLite implementations |
-| QueryBuilder | ✅ Complete | Fluent API for SQL generation |
-| SchemaQueryBuilder | ✅ Complete | Database schema management |
-| QueryExecutor | ✅ Complete | Asynchronous query execution with DTO mapping |
-| DTOs | ✅ Complete | Full set of DTOs for all entities |
+| DatabaseConfig | ✅ Complete | Configuration encapsulation |
+| DatabaseManager | ✅ Complete | Central hub implementation |
+| ConnectionProvider | ✅ Complete | Both MySQL and SQLite providers |
+| DatabaseSetup | ✅ Complete | Schema management and validation |
+| QueryBuilder | ✅ Complete | SQL generation abstraction |
+| QueryExecutor | ✅ Complete | Async query execution |
+| DTOs | ✅ Complete | Clean data transfer objects |
 | Repositories | ✅ Complete | Table-specific repositories |
-| DatabaseHealthService | ✅ Complete | Connection monitoring and recovery |
-| DatabaseSetup | ✅ Complete | Schema creation and validation |
-| Transaction Support | ✅ Complete | ACID-compliant transaction handling |
-| Caching System | 🟡 Partial | Basic caching implemented, optimization ongoing |
-| Async Query Batching | 🟡 Partial | Implemented for common operations |
-| Migration Tools | 🟠 Planned | Data migration between schema versions |
+| Health Service | ✅ Complete | Connection monitoring |
+| Transaction Support | ✅ Complete | ACID compliance |
+| Schema Migration | 🚫 Removed | Migrations handled externally |
 
 ## Key Design Decisions
 
