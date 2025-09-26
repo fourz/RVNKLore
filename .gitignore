@@ -2,3 +2,5 @@
 .vscode/
 target/
 BuildTools/
+shared-backup/
+docs
