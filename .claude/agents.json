@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0.0",
+  "project": "rvnklore",
+  "active": [
+    "archon-manager",
+    "documentation-specialist",
+    "git-workflow-manager"
+  ],
+  "inactive": [],
+  "skills": {
+    "active": [
+      "archon-task-workflow",
+      "documentation-standards"
+    ],
+    "inactive": []
+  }
+}
