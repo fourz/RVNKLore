@@ -12,8 +12,10 @@ import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.data.DatabaseConnection;
 import org.fourz.RVNKLore.data.FallbackTracker;
 import org.fourz.RVNKLore.debug.LogManager;
-import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
+import org.json.simple.JSONObject;
+import org.json.simple.parser.JSONParser;
+import org.json.simple.parser.ParseException;
 
 /**
  * Repository for player-related database operations
@@ -26,12 +28,14 @@ public class PlayerRepository implements IPlayerRepository {
     private final LogManager logger;
     private final DatabaseConnection dbConnection;
     private final FallbackTracker fallbackTracker;
-    
+    private final JSONParser jsonParser;
+
     public PlayerRepository(RVNKLore plugin, DatabaseConnection dbConnection) {
         this.plugin = plugin;
         this.dbConnection = dbConnection;
         this.logger = LogManager.getInstance(plugin, "PlayerRepository");
         this.fallbackTracker = new FallbackTracker(plugin);
+        this.jsonParser = new JSONParser();
     }
     
     /**
@@ -87,24 +91,13 @@ public class PlayerRepository implements IPlayerRepository {
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
                     String content = rs.getString("content");
-                    
-                    // Extract player_name from the JSON content
-                    // This is a simple extraction method for demonstration
-                    // In a real implementation, use a JSON parser
-                    int nameIndex = content.indexOf("\"player_name\":\"");
-                    if (nameIndex != -1) {
-                        nameIndex += 15; // Length of "player_name":"
-                        int endIndex = content.indexOf("\"", nameIndex);
-                        if (endIndex != -1) {
-                            return content.substring(nameIndex, endIndex);
-                        }
-                    }
+                    return extractJsonValue(content, "player_name");
                 }
             }
         } catch (SQLException e) {
             logger.error("Error getting stored player name: " + playerUuid, e);
         }
-        
+
         return null;
     }
     
@@ -231,19 +224,24 @@ public class PlayerRepository implements IPlayerRepository {
     }
     
     /**
-     * Simple helper to extract a value from a JSON string
-     * In a real implementation, use a proper JSON parser
+     * Extract a string value from a JSON string using JSONParser.
+     *
+     * @param json The JSON string to parse
+     * @param key The key to extract
+     * @return The string value, or null if not found or parse error
      */
     private String extractJsonValue(String json, String key) {
-        int keyIndex = json.indexOf("\"" + key + "\":\"");
-        if (keyIndex != -1) {
-            keyIndex += key.length() + 4; // Length of "key":"
-            int endIndex = json.indexOf("\"", keyIndex);
-            if (endIndex != -1) {
-                return json.substring(keyIndex, endIndex);
-            }
+        if (json == null || json.isEmpty() || key == null) {
+            return null;
         }
-        return null;
+        try {
+            JSONObject jsonObj = (JSONObject) jsonParser.parse(json);
+            Object value = jsonObj.get(key);
+            return value != null ? value.toString() : null;
+        } catch (ParseException e) {
+            logger.warning("Failed to parse JSON for key '" + key + "': " + e.getMessage());
+            return null;
+        }
     }
 
     /**

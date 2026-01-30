@@ -59,68 +59,67 @@ public class ItemRepository implements IItemRepository {
     
     /**
      * Initialize required database tables
-     */    private void initializeTables() {
-        try {
-            Connection conn = dbConnection.getConnection();
-              // Create lore_item table if it doesn't exist
-            String createItemTable = "CREATE TABLE IF NOT EXISTS lore_item (" +
-                    "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                    "name VARCHAR(64) NOT NULL, " +
-                    "item_type VARCHAR(32) NOT NULL, " +
-                    "rarity VARCHAR(32) NOT NULL, " +
-                    "material VARCHAR(64) NOT NULL, " +
-                    "is_obtainable BOOLEAN DEFAULT 1, " +
-                    "custom_model_data INTEGER, " +
-                    "item_properties TEXT, " +
-                    "created_by VARCHAR(64), " +
-                    "nbt_data TEXT, " +
-                    "lore_entry_id CHAR(36) NOT NULL, " +
-                    "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
-                    "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
-                    "CONSTRAINT uq_lore_item_entry UNIQUE (lore_entry_id), " +
-                    "FOREIGN KEY (lore_entry_id) REFERENCES lore_entry(id) ON DELETE CASCADE" +
-                    ")";
-            
-            // Create collection table if it doesn't exist
-            String createCollectionTable = "CREATE TABLE IF NOT EXISTS collection ("+
-                    "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                    "name VARCHAR(64) NOT NULL UNIQUE, " +
-                    "description TEXT, " +
-                    "theme VARCHAR(32), " +
-                    "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
-                    "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
-                    ")";
-                    
-            // Create collection_item table for managing relationships
-            String createCollectionItemTable = "CREATE TABLE IF NOT EXISTS collection_item (" +
-                    "collection_id INTEGER, " +
-                    "item_id INTEGER, " +
-                    "sequence_number INTEGER DEFAULT 0, " +
-                    "item_config TEXT, " +
-                    "PRIMARY KEY (collection_id, item_id), " +
-                    "FOREIGN KEY (collection_id) REFERENCES collection(id) ON DELETE CASCADE, " +
-                    "FOREIGN KEY (item_id) REFERENCES lore_item(id) ON DELETE CASCADE" +
-                    ")";
-                    
-            // Create player_collection_progress table for tracking player progress
-            String createPlayerProgressTable = "CREATE TABLE IF NOT EXISTS player_collection_progress (" +
-                    "player_id VARCHAR(36), " +  // UUIDs as strings
-                    "collection_id INTEGER, " +
-                    "progress REAL DEFAULT 0.0, " +
-                    "last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
-                    "completed_at TIMESTAMP, " +
-                    "PRIMARY KEY (player_id, collection_id), " +
-                    "FOREIGN KEY (collection_id) REFERENCES collection(id) ON DELETE CASCADE" +
-                    ")";
-            
-            // Execute the table creation statements
-            try (Statement stmt = conn.createStatement()) {
-                stmt.execute(createItemTable);
-                stmt.execute(createCollectionTable);
-                stmt.execute(createCollectionItemTable);
-                stmt.execute(createPlayerProgressTable);
-                logger.info("Item database tables created/verified");
-            }
+     */
+    private void initializeTables() {
+        // Create lore_item table if it doesn't exist
+        String createItemTable = "CREATE TABLE IF NOT EXISTS lore_item (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "name VARCHAR(64) NOT NULL, " +
+                "item_type VARCHAR(32) NOT NULL, " +
+                "rarity VARCHAR(32) NOT NULL, " +
+                "material VARCHAR(64) NOT NULL, " +
+                "is_obtainable BOOLEAN DEFAULT 1, " +
+                "custom_model_data INTEGER, " +
+                "item_properties TEXT, " +
+                "created_by VARCHAR(64), " +
+                "nbt_data TEXT, " +
+                "lore_entry_id CHAR(36) NOT NULL, " +
+                "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                "CONSTRAINT uq_lore_item_entry UNIQUE (lore_entry_id), " +
+                "FOREIGN KEY (lore_entry_id) REFERENCES lore_entry(id) ON DELETE CASCADE" +
+                ")";
+
+        // Create collection table if it doesn't exist
+        String createCollectionTable = "CREATE TABLE IF NOT EXISTS collection ("+
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "name VARCHAR(64) NOT NULL UNIQUE, " +
+                "description TEXT, " +
+                "theme VARCHAR(32), " +
+                "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
+                ")";
+
+        // Create collection_item table for managing relationships
+        String createCollectionItemTable = "CREATE TABLE IF NOT EXISTS collection_item (" +
+                "collection_id INTEGER, " +
+                "item_id INTEGER, " +
+                "sequence_number INTEGER DEFAULT 0, " +
+                "item_config TEXT, " +
+                "PRIMARY KEY (collection_id, item_id), " +
+                "FOREIGN KEY (collection_id) REFERENCES collection(id) ON DELETE CASCADE, " +
+                "FOREIGN KEY (item_id) REFERENCES lore_item(id) ON DELETE CASCADE" +
+                ")";
+
+        // Create player_collection_progress table for tracking player progress
+        String createPlayerProgressTable = "CREATE TABLE IF NOT EXISTS player_collection_progress (" +
+                "player_id VARCHAR(36), " +  // UUIDs as strings
+                "collection_id INTEGER, " +
+                "progress REAL DEFAULT 0.0, " +
+                "last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                "completed_at TIMESTAMP, " +
+                "PRIMARY KEY (player_id, collection_id), " +
+                "FOREIGN KEY (collection_id) REFERENCES collection(id) ON DELETE CASCADE" +
+                ")";
+
+        // Execute table creation with proper connection management
+        try (Connection conn = dbConnection.getConnection();
+             Statement stmt = conn.createStatement()) {
+            stmt.execute(createItemTable);
+            stmt.execute(createCollectionTable);
+            stmt.execute(createCollectionItemTable);
+            stmt.execute(createPlayerProgressTable);
+            logger.info("Item database tables created/verified");
         } catch (SQLException e) {
             logger.error("Failed to initialize item database tables", e);
         }
@@ -370,7 +369,8 @@ public class ItemRepository implements IItemRepository {
      * @param properties The item properties to save
      * @return The ID of the new item, or -1 if insert failed
      */
-    @SuppressWarnings({"rawtypes", "unchecked"})
+    // SuppressWarnings: json-simple JSONObject lacks generics - library limitation
+    @SuppressWarnings({"unchecked"})
     public int insertItem(ItemProperties properties) {
         String sql = "INSERT INTO lore_item (name, item_type, rarity, material, " +
                     "is_obtainable, custom_model_data, item_properties, created_by, nbt_data, lore_entry_id) " +
@@ -429,7 +429,8 @@ public class ItemRepository implements IItemRepository {
      * @param properties The updated item properties
      * @return True if the update was successful
      */
-    @SuppressWarnings({"rawtypes", "unchecked"})
+    // SuppressWarnings: json-simple JSONObject lacks generics - library limitation
+    @SuppressWarnings({"unchecked"})
     public boolean updateItem(int itemId, ItemProperties properties) {
         String sql = "UPDATE lore_item SET " +
                     "name = ?, item_type = ?, rarity = ?, " +
@@ -836,6 +837,7 @@ public class ItemRepository implements IItemRepository {
      * @param rs The result set to convert
      * @return The item properties, or null if conversion failed
      */
+    // SuppressWarnings: json-simple JSONObject lacks generics - library limitation
     @SuppressWarnings("unchecked")
     private ItemProperties resultSetToItemProperties(ResultSet rs) {
         try {
