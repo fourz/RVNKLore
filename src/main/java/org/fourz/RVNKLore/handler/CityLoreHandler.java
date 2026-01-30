@@ -6,7 +6,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
 
@@ -91,7 +91,7 @@ public class CityLoreHandler implements LoreHandler {
 
     private boolean containsInvalidCharacters(String text) {
         // Check for illegal formatting codes or characters
-        return text.contains("§") || 
+        return text.contains("Â§") || 
                text.matches(".*[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F].*");
     }
 

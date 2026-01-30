@@ -6,8 +6,7 @@ import org.fourz.RVNKLore.handler.HandlerFactory;
 import org.fourz.RVNKLore.lore.LoreManager;
 import org.fourz.RVNKLore.config.ConfigManager;
 import org.fourz.RVNKLore.data.DatabaseManager;
-import org.fourz.RVNKLore.debug.Debug;
-import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.command.CommandManager;
 import org.fourz.RVNKLore.service.ILoreService;
 import org.fourz.RVNKLore.service.IItemService;
@@ -175,6 +174,9 @@ public class RVNKLore extends JavaPlugin {
         // Unregister from RVNKCore first
         unregisterFromRVNKCore();
 
+        // Clear LogManager instances to prevent memory leaks
+        LogManager.clearLoggers(this);
+
         if (utilityManager != null) {
             utilityManager.cleanup();
             utilityManager = null;
@@ -217,10 +219,6 @@ public class RVNKLore extends JavaPlugin {
     }    
     public LogManager getLogManager() {
         return logger;
-    }
-
-    public Debug getDebugger() {
-        return logger != null ? logger.getDebug() : null;
     }
 
     public ConfigManager getConfigManager() {

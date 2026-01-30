@@ -1,28 +1,27 @@
 package org.fourz.RVNKLore.data;
 
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.Debug;
 import org.fourz.RVNKLore.exception.LoreException;
 import org.fourz.RVNKLore.exception.LoreException.LoreExceptionType;
+import org.fourz.rvnkcore.util.log.LogManager;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.logging.Level;
 
 /**
  * Helper class for database operations with improved error handling
  */
 public class DatabaseHelper {
     private final RVNKLore plugin;
-    private final Debug debug;
+    private final LogManager logger;
     private final DatabaseManager databaseManager;
-    
+
     public DatabaseHelper(RVNKLore plugin) {
         this.plugin = plugin;
         this.databaseManager = plugin.getDatabaseManager();
-        this.debug = Debug.createDebugger(plugin, "DatabaseHelper", Level.FINE);
+        this.logger = LogManager.getInstance(plugin, "DatabaseHelper");
     }
     
     /**
@@ -40,7 +39,7 @@ public class DatabaseHelper {
             try {
                 // Check if connection is valid
                 if (!databaseManager.isConnected()) {
-                    debug.warning("Database connection lost, attempting to reconnect...");
+                    logger.warning("Database connection lost, attempting to reconnect...");
                     boolean reconnected = databaseManager.reconnect();
                     if (!reconnected) {
                         throw new SQLException("Failed to reconnect to database");
@@ -52,7 +51,7 @@ public class DatabaseHelper {
                 
             } catch (SQLException e) {
                 retryCount++;
-                debug.warning("Database operation failed (attempt " + retryCount + "/" + maxRetries + "): " + e.getMessage());
+                logger.warning("Database operation failed (attempt " + retryCount + "/" + maxRetries + "): " + e.getMessage());
                 
                 // If we've reached max retries, throw an exception
                 if (retryCount >= maxRetries) {

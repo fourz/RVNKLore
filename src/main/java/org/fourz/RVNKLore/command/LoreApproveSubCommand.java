@@ -3,7 +3,7 @@ package org.fourz.RVNKLore.command;
 import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.lore.LoreEntry;
 
 import java.util.ArrayList;
@@ -24,7 +24,7 @@ public class LoreApproveSubCommand implements SubCommand {
     }    @Override
     public boolean execute(CommandSender sender, String[] args) {
         if (args.length < 1) {
-            sender.sendMessage(ChatColor.RED + "▶ Usage: /lore approve <id>");
+            sender.sendMessage(ChatColor.RED + "â–¶ Usage: /lore approve <id>");
             return true;
         }
 
@@ -67,7 +67,7 @@ public class LoreApproveSubCommand implements SubCommand {
         }
 
         if (matchedEntry == null) {
-            sender.sendMessage(ChatColor.RED + "✖ No valid unapproved lore entry found matching: " + idInput);
+            sender.sendMessage(ChatColor.RED + "âœ– No valid unapproved lore entry found matching: " + idInput);
             return true;
         }
 
@@ -85,24 +85,24 @@ public class LoreApproveSubCommand implements SubCommand {
         LoreEntry entry = plugin.getLoreManager().getLoreEntrySync(id);
         
         if (entry == null) {
-            sender.sendMessage(ChatColor.RED + "✖ No lore entry found with ID: " + id);
+            sender.sendMessage(ChatColor.RED + "âœ– No lore entry found with ID: " + id);
             return true;
         }
         
         if (entry.isApproved()) {
-            sender.sendMessage(ChatColor.YELLOW + "⚠ This lore entry is already approved.");
+            sender.sendMessage(ChatColor.YELLOW + "âš  This lore entry is already approved.");
             return true;
         }
         
         boolean success = plugin.getLoreManager().approveLoreEntrySync(id);
         
         if (success) {
-            sender.sendMessage(ChatColor.GREEN + "✓ Lore entry approved successfully!");
+            sender.sendMessage(ChatColor.GREEN + "âœ“ Lore entry approved successfully!");
             
             // Log the approval
             logger.info("Lore entry " + id + " (" + entry.getName() + ") approved by " + sender.getName());
         } else {
-            sender.sendMessage(ChatColor.RED + "✖ Failed to approve lore entry. Please check console for errors.");
+            sender.sendMessage(ChatColor.RED + "âœ– Failed to approve lore entry. Please check console for errors.");
         }
         
         return true;

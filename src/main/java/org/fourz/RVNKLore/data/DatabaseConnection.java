@@ -1,26 +1,24 @@
 package org.fourz.RVNKLore.data;
 
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.Debug;
+import org.fourz.rvnkcore.util.log.LogManager;
 
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.logging.Level;
 
 /**
  * Abstract base class for database connections
  */
 public abstract class DatabaseConnection {
     protected final RVNKLore plugin;
-    protected final Debug debug;
+    protected final LogManager logger;
     protected Connection connection;
     protected String lastConnectionError = null;
-    
+
     public DatabaseConnection(RVNKLore plugin) {
         this.plugin = plugin;
-        Level logLevel = plugin.getConfigManager().getLogLevel();
-        this.debug = Debug.createDebugger(plugin, "DatabaseConnection", logLevel);
+        this.logger = LogManager.getInstance(plugin, "DatabaseConnection");
     }
     
     /**
@@ -31,7 +29,7 @@ public abstract class DatabaseConnection {
     /**
      * Create necessary database tables
      */    public void createTables() throws SQLException {
-        debug.debug("Creating database tables...");
+        logger.debug("Creating database tables...");
         
         // --- Core Lore Schema Tables ---
         String createLoreEntryTable = "CREATE TABLE IF NOT EXISTS lore_entry (" +
@@ -154,10 +152,23 @@ public abstract class DatabaseConnection {
                 "reward_data TEXT, " +
                 "is_claimed BOOLEAN DEFAULT 0" +
             ")";
+
+            // Collection-item relationship table for managing item sequences in collections
+            String createCollectionItemTable = "CREATE TABLE IF NOT EXISTS collection_item (" +
+                "collection_id INTEGER NOT NULL, " +
+                "item_id INTEGER NOT NULL, " +
+                "sequence_number INTEGER DEFAULT 0, " +
+                "item_config TEXT, " +
+                "PRIMARY KEY (collection_id, item_id), " +
+                "FOREIGN KEY (collection_id) REFERENCES collection(id) ON DELETE CASCADE, " +
+                "FOREIGN KEY (item_id) REFERENCES lore_item(id) ON DELETE CASCADE" +
+            ")";
+
             stmt.execute(createCollectionTable);
             stmt.execute(createPlayerCollectionProgressTable);
             stmt.execute(createCollectionRewardTable);
-            debug.debug("Database tables created/verified");
+            stmt.execute(createCollectionItemTable);
+            logger.debug("Database tables created/verified");
         }
     }
     
@@ -168,9 +179,9 @@ public abstract class DatabaseConnection {
         if (connection != null) {
             try {
                 connection.close();
-                debug.debug("Database connection closed");
+                logger.debug("Database connection closed");
             } catch (SQLException e) {
-                debug.error("Failed to close database connection", e);
+                logger.error("Failed to close database connection", e);
             }
         }
     }
@@ -189,7 +200,7 @@ public abstract class DatabaseConnection {
             }
             return false;
         } catch (SQLException e) {
-            debug.error("Database connection check failed", e);
+            logger.error("Database connection check failed", e);
             return false;
         }
     }
@@ -198,7 +209,7 @@ public abstract class DatabaseConnection {
      * Reconnect to the database
      */
     public boolean reconnect() {
-        debug.warning("Attempting to reconnect to database...");
+        logger.warning("Attempting to reconnect to database...");
         
         try {
             lastConnectionError = null;
@@ -212,15 +223,15 @@ public abstract class DatabaseConnection {
             
             boolean connected = isConnected();
             if (connected) {
-                debug.info("Successfully reconnected to database");
+                logger.info("Successfully reconnected to database");
             } else {
-                debug.warning("Failed to reconnect to database");
+                logger.warning("Failed to reconnect to database");
             }
             
             return connected;
         } catch (Exception e) {
             lastConnectionError = e.getMessage();
-            debug.error("Failed to reconnect to database", e);
+            logger.error("Failed to reconnect to database", e);
             return false;
         }
     }

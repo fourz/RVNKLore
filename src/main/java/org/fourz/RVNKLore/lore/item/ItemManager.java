@@ -5,7 +5,7 @@ import org.bukkit.inventory.ItemStack;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.data.DatabaseConnection;
 import org.fourz.RVNKLore.data.ItemRepository;
-import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.lore.item.enchant.EnchantManager;
 import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
 import org.fourz.RVNKLore.lore.item.cosmetic.CosmeticsManager;

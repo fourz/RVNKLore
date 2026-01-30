@@ -3,7 +3,7 @@ package org.fourz.RVNKLore.lore;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.rvnkcore.util.log.LogManager;
 
 import java.util.ArrayList;
 import java.util.List;

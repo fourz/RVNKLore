@@ -2,7 +2,7 @@ package org.fourz.RVNKLore.data;
 
 import org.bukkit.Material;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.exception.LoreException;
 import org.fourz.RVNKLore.lore.item.ItemProperties;
 import org.fourz.RVNKLore.lore.item.ItemType;
@@ -58,72 +58,44 @@ public class ItemRepository implements IItemRepository {
     }
     
     /**
-     * Initialize required database tables
+     * Verify required database tables exist.
+     *
+     * Note: Table creation is handled by DatabaseConnection.createTables().
+     * This method only verifies the tables exist to fail-fast if schema is missing.
+     * See docs/standard/rvnklore-schema.md for authoritative schema reference.
      */
     private void initializeTables() {
-        // Create lore_item table if it doesn't exist
-        String createItemTable = "CREATE TABLE IF NOT EXISTS lore_item (" +
-                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                "name VARCHAR(64) NOT NULL, " +
-                "item_type VARCHAR(32) NOT NULL, " +
-                "rarity VARCHAR(32) NOT NULL, " +
-                "material VARCHAR(64) NOT NULL, " +
-                "is_obtainable BOOLEAN DEFAULT 1, " +
-                "custom_model_data INTEGER, " +
-                "item_properties TEXT, " +
-                "created_by VARCHAR(64), " +
-                "nbt_data TEXT, " +
-                "lore_entry_id CHAR(36) NOT NULL, " +
-                "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
-                "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
-                "CONSTRAINT uq_lore_item_entry UNIQUE (lore_entry_id), " +
-                "FOREIGN KEY (lore_entry_id) REFERENCES lore_entry(id) ON DELETE CASCADE" +
-                ")";
+        // Required tables for ItemRepository operations
+        String[] requiredTables = {"lore_item", "collection", "collection_item", "player_collection_progress"};
 
-        // Create collection table if it doesn't exist
-        String createCollectionTable = "CREATE TABLE IF NOT EXISTS collection ("+
-                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                "name VARCHAR(64) NOT NULL UNIQUE, " +
-                "description TEXT, " +
-                "theme VARCHAR(32), " +
-                "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
-                "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
-                ")";
-
-        // Create collection_item table for managing relationships
-        String createCollectionItemTable = "CREATE TABLE IF NOT EXISTS collection_item (" +
-                "collection_id INTEGER, " +
-                "item_id INTEGER, " +
-                "sequence_number INTEGER DEFAULT 0, " +
-                "item_config TEXT, " +
-                "PRIMARY KEY (collection_id, item_id), " +
-                "FOREIGN KEY (collection_id) REFERENCES collection(id) ON DELETE CASCADE, " +
-                "FOREIGN KEY (item_id) REFERENCES lore_item(id) ON DELETE CASCADE" +
-                ")";
-
-        // Create player_collection_progress table for tracking player progress
-        String createPlayerProgressTable = "CREATE TABLE IF NOT EXISTS player_collection_progress (" +
-                "player_id VARCHAR(36), " +  // UUIDs as strings
-                "collection_id INTEGER, " +
-                "progress REAL DEFAULT 0.0, " +
-                "last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
-                "completed_at TIMESTAMP, " +
-                "PRIMARY KEY (player_id, collection_id), " +
-                "FOREIGN KEY (collection_id) REFERENCES collection(id) ON DELETE CASCADE" +
-                ")";
-
-        // Execute table creation - don't close Connection (shared SQLite connection)
         try {
             Connection conn = dbConnection.getConnection();
-            try (Statement stmt = conn.createStatement()) {
-                stmt.execute(createItemTable);
-                stmt.execute(createCollectionTable);
-                stmt.execute(createCollectionItemTable);
-                stmt.execute(createPlayerProgressTable);
-                logger.info("Item database tables created/verified");
+            for (String tableName : requiredTables) {
+                if (!tableExists(conn, tableName)) {
+                    logger.warning("Required table '" + tableName + "' does not exist. " +
+                            "Ensure DatabaseConnection.createTables() is called before ItemRepository initialization.");
+                }
             }
+            logger.info("Item database tables verified");
         } catch (SQLException e) {
-            logger.error("Failed to initialize item database tables", e);
+            logger.error("Failed to verify item database tables", e);
+        }
+    }
+
+    /**
+     * Check if a table exists in the database.
+     *
+     * @param conn The database connection
+     * @param tableName The name of the table to check
+     * @return true if the table exists
+     */
+    private boolean tableExists(Connection conn, String tableName) throws SQLException {
+        String sql = "SELECT name FROM sqlite_master WHERE type='table' AND name=?";
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, tableName);
+            try (ResultSet rs = stmt.executeQuery()) {
+                return rs.next();
+            }
         }
     }
     

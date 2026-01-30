@@ -10,7 +10,7 @@ import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.handler.DefaultLoreHandler;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
-import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.rvnkcore.util.log.LogManager;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;

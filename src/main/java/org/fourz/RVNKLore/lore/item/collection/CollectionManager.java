@@ -4,7 +4,7 @@ import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.lore.item.ItemProperties;
 import org.fourz.RVNKLore.lore.item.cosmetic.HeadCollection;
 import org.fourz.RVNKLore.data.ItemRepository;
@@ -207,11 +207,11 @@ public class CollectionManager implements ICollectionService {
             if (collectionId != null) {
                 ItemCollection collection = getCollectionSync(collectionId);
                 if (collection != null) {
-                    lore.add("§7Collection: §a" + collection.getName());
+                    lore.add("Â§7Collection: Â§a" + collection.getName());
                 }
             }
             if (properties.getRarityLevel() != null) {
-                lore.add("§7Rarity: §e" + properties.getRarityLevel());
+                lore.add("Â§7Rarity: Â§e" + properties.getRarityLevel());
             }
             meta.setLore(lore);            
             meta.setCustomModelData(properties.getCustomModelData());            

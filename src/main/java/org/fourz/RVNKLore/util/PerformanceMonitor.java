@@ -1,13 +1,11 @@
 package org.fourz.RVNKLore.util;
 
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.Debug;
+import org.fourz.rvnkcore.util.log.LogManager;
 
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.logging.Level;
 import java.util.stream.Collectors;
 
 /**
@@ -16,13 +14,13 @@ import java.util.stream.Collectors;
  */
 public class PerformanceMonitor {
     private final RVNKLore plugin;
-    private final Debug debug;
+    private final LogManager logger;
     private final Map<String, OperationStats> operationStats = new ConcurrentHashMap<>();
     private boolean enabled = false;
-    
+
     public PerformanceMonitor(RVNKLore plugin) {
         this.plugin = plugin;
-        this.debug = Debug.createDebugger(plugin, "PerformanceMonitor", Level.FINE);
+        this.logger = LogManager.getInstance(plugin, "PerformanceMonitor");
     }
     
     /**
@@ -30,7 +28,7 @@ public class PerformanceMonitor {
      */
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
-        debug.debug("Performance monitoring " + (enabled ? "enabled" : "disabled"));
+        logger.debug("Performance monitoring " + (enabled ? "enabled" : "disabled"));
     }
     
     /**
@@ -98,7 +96,7 @@ public class PerformanceMonitor {
      */
     public void reset() {
         operationStats.clear();
-        debug.debug("Performance statistics reset");
+        logger.debug("Performance statistics reset");
     }
     
     /**

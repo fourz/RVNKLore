@@ -2,7 +2,7 @@ package org.fourz.RVNKLore.lore;
 
 import org.bukkit.Location;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.handler.LoreHandler;
 import org.fourz.RVNKLore.lore.item.ItemManager;
 import org.fourz.RVNKLore.service.ILoreService;

@@ -25,13 +25,13 @@ public class MySQLConnection extends DatabaseConnection {
     
     @Override
     public void initialize() throws SQLException, ClassNotFoundException {
-        debug.debug("Initializing MySQL connection...");
+        logger.debug("Initializing MySQL connection...");
         lastConnectionError = null;
         
         Class.forName("com.mysql.jdbc.Driver");
         String url = "jdbc:mysql://" + host + ":" + port + "/" + database + "?useSSL=false";
         connection = DriverManager.getConnection(url, username, password);
-        debug.debug("Connected to MySQL database");
+        logger.debug("Connected to MySQL database");
     }
     
     @Override
@@ -61,7 +61,7 @@ public class MySQLConnection extends DatabaseConnection {
             
             return info.toString();
         } catch (SQLException e) {
-            debug.error("Failed to get database info", e);
+            logger.error("Failed to get database info", e);
             return "Error retrieving MySQL info: " + e.getMessage();
         }
     }
@@ -75,7 +75,7 @@ public class MySQLConnection extends DatabaseConnection {
         try {
             return connection.isReadOnly();
         } catch (SQLException e) {
-            debug.error("Error checking if database is read-only", e);
+            logger.error("Error checking if database is read-only", e);
             return true; // Assume read-only in case of error
         }
     }

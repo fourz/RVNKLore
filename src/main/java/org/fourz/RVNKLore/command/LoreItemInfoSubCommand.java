@@ -2,7 +2,7 @@ package org.fourz.RVNKLore.command;
 
 import org.bukkit.command.CommandSender;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.lore.item.ItemManager;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.command.output.DisplayFactory;
@@ -41,7 +41,7 @@ public class LoreItemInfoSubCommand implements SubCommand {
     public boolean execute(CommandSender sender, String[] args) {
         if (args.length == 0) {
             if (itemManager == null) {
-                sender.sendMessage(org.bukkit.ChatColor.RED + "✖ Item system is not available. Please try again later.");
+                sender.sendMessage(org.bukkit.ChatColor.RED + "âœ– Item system is not available. Please try again later.");
                 logger.error("ItemManager is null when trying to list items", null);
                 return true;
             }
@@ -50,13 +50,13 @@ public class LoreItemInfoSubCommand implements SubCommand {
             return true;
         }
         if (args.length > 1) {
-            sender.sendMessage(org.bukkit.ChatColor.RED + "▶ Usage: /lore item info <item_name>");
+            sender.sendMessage(org.bukkit.ChatColor.RED + "â–¶ Usage: /lore item info <item_name>");
             sender.sendMessage(org.bukkit.ChatColor.GRAY + "   Display information about a registered item");
             return true;
         }
         String itemNameOrId = args[0];
         if (itemManager == null) {
-            sender.sendMessage(org.bukkit.ChatColor.RED + "✖ Item system is not available. Please try again later.");
+            sender.sendMessage(org.bukkit.ChatColor.RED + "âœ– Item system is not available. Please try again later.");
             logger.error("ItemManager is null when trying to get item info: " + itemNameOrId, null);
             return true;
         }

@@ -3,7 +3,7 @@ package org.fourz.RVNKLore.lore.submission;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.data.DatabaseConnection;
 import org.fourz.RVNKLore.data.dto.LoreSubmissionDTO;
-import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.lore.LoreSubmission;
 import org.fourz.RVNKLore.service.ISubmissionService;
 

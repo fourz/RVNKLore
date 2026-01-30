@@ -4,7 +4,7 @@ import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
 import org.fourz.RVNKLore.lore.item.collection.CollectionTheme;
 import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
@@ -37,12 +37,12 @@ public class LoreCollectionAddSubCommand implements SubCommand {
     @Override
     public boolean execute(CommandSender sender, String[] args) {
         if (!hasPermission(sender)) {
-            sender.sendMessage(ChatColor.RED + "✖ You don't have permission to use this command");
+            sender.sendMessage(ChatColor.RED + "âœ– You don't have permission to use this command");
             return true;
         }
 
         if (args.length < 3) {
-            sender.sendMessage(ChatColor.RED + "▶ Usage: /lore collection add <id> <theme> <name> [description]");
+            sender.sendMessage(ChatColor.RED + "â–¶ Usage: /lore collection add <id> <theme> <name> [description]");
             sender.sendMessage(ChatColor.GRAY + "   Create a new collection with the given ID, theme, and name");
             sender.sendMessage(ChatColor.GRAY + "   Valid themes: " + String.join(", ", getThemeNames()));
             return true;
@@ -55,13 +55,13 @@ public class LoreCollectionAddSubCommand implements SubCommand {
 
         // Validate collection ID (no spaces, alphanumeric + underscore only)
         if (!collectionId.matches("^[a-z0-9_]+$")) {
-            sender.sendMessage(ChatColor.RED + "✖ Invalid collection ID. Use only lowercase letters, numbers, and underscores.");
+            sender.sendMessage(ChatColor.RED + "âœ– Invalid collection ID. Use only lowercase letters, numbers, and underscores.");
             return true;
         }
 
         // Check if collection already exists
         if (collectionManager.getCollection(collectionId) != null) {
-            sender.sendMessage(ChatColor.RED + "✖ A collection with ID '" + collectionId + "' already exists.");
+            sender.sendMessage(ChatColor.RED + "âœ– A collection with ID '" + collectionId + "' already exists.");
             return true;
         }
 
@@ -70,7 +70,7 @@ public class LoreCollectionAddSubCommand implements SubCommand {
         try {
             theme = CollectionTheme.valueOf(themeStr);
         } catch (IllegalArgumentException e) {
-            sender.sendMessage(ChatColor.RED + "✖ Invalid theme: " + themeStr);
+            sender.sendMessage(ChatColor.RED + "âœ– Invalid theme: " + themeStr);
             sender.sendMessage(ChatColor.GRAY + "   Valid themes: " + String.join(", ", getThemeNames()));
             return true;
         }
@@ -79,7 +79,7 @@ public class LoreCollectionAddSubCommand implements SubCommand {
             // Create and validate the collection
             ItemCollection collection = collectionManager.createCollectionSync(collectionId, name, description);
             if (collection == null) {
-                sender.sendMessage(ChatColor.RED + "✖ Failed to create collection: validation error");
+                sender.sendMessage(ChatColor.RED + "âœ– Failed to create collection: validation error");
                 return true;
             }
 
@@ -88,17 +88,17 @@ public class LoreCollectionAddSubCommand implements SubCommand {
             boolean saved = collectionManager.saveCollectionSync(collection);
             
             if (saved) {
-                sender.sendMessage(ChatColor.GREEN + "✓ Created collection: " + name + " (" + collectionId + ")");
+                sender.sendMessage(ChatColor.GREEN + "âœ“ Created collection: " + name + " (" + collectionId + ")");
                 sender.sendMessage(ChatColor.GRAY + "   Theme: " + theme.getDisplayName());
                 sender.sendMessage(ChatColor.GRAY + "   Use '/lore collection view " + collectionId + "' to see details.");
             } else {
-                sender.sendMessage(ChatColor.RED + "✖ Failed to save collection to database.");
+                sender.sendMessage(ChatColor.RED + "âœ– Failed to save collection to database.");
             }
             
             return true;
         } catch (Exception e) {
             logger.error("Error creating collection: " + collectionId, e);
-            sender.sendMessage(ChatColor.RED + "✖ An error occurred while creating the collection.");
+            sender.sendMessage(ChatColor.RED + "âœ– An error occurred while creating the collection.");
             return true;
         }
     }

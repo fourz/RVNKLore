@@ -11,7 +11,7 @@ import java.util.UUID;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.data.DatabaseConnection;
 import org.fourz.RVNKLore.data.FallbackTracker;
-import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.lore.LoreType;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;

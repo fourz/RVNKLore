@@ -17,19 +17,19 @@ public class SQLiteConnection extends DatabaseConnection {
     
     @Override
     public void initialize() throws SQLException, ClassNotFoundException {
-        debug.debug("Initializing SQLite connection...");
+        logger.debug("Initializing SQLite connection...");
         lastConnectionError = null;
-        
+
         Class.forName("org.sqlite.JDBC");
         String url = "jdbc:sqlite:" + dbPath;
         connection = DriverManager.getConnection(url);
-        
+
         // Enable foreign keys support
         try (Statement stmt = connection.createStatement()) {
             stmt.execute("PRAGMA foreign_keys = ON");
         }
-        
-        debug.debug("Connected to SQLite database");
+
+        logger.debug("Connected to SQLite database");
     }
     
     @Override
@@ -59,7 +59,7 @@ public class SQLiteConnection extends DatabaseConnection {
             
             return info.toString();
         } catch (SQLException e) {
-            debug.error("Failed to get database info", e);
+            logger.error("Failed to get database info", e);
             return "Error retrieving SQLite info: " + e.getMessage();
         }
     }
@@ -79,7 +79,7 @@ public class SQLiteConnection extends DatabaseConnection {
                 return false; // If we get here, it's not read-only
             }
         } catch (SQLException e) {
-            debug.debug("Database appears to be read-only: " + e.getMessage());
+            logger.debug("Database appears to be read-only: " + e.getMessage());
             return true;
         }
     }

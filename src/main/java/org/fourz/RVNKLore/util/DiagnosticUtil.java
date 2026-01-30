@@ -3,7 +3,7 @@ package org.fourz.RVNKLore.util;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.Plugin;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.handler.HandlerFactory;
 import org.fourz.RVNKLore.handler.LoreHandler;
 import org.fourz.RVNKLore.lore.LoreEntry;

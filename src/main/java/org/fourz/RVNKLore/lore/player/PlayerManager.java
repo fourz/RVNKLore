@@ -4,7 +4,7 @@ import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
 
@@ -24,12 +24,25 @@ import java.util.UUID;
 public class PlayerManager {
     private final RVNKLore plugin;
     private final LogManager logger;
-    private final PlayerRepository playerRepository;
-    
+    private final IPlayerRepository playerRepository;
+
+    /**
+     * Create PlayerManager with default PlayerRepository implementation.
+     */
     public PlayerManager(RVNKLore plugin) {
+        this(plugin, new PlayerRepository(plugin, plugin.getDatabaseManager().getDatabaseConnection()));
+    }
+
+    /**
+     * Create PlayerManager with injected repository (for testing/DI).
+     *
+     * @param plugin The plugin instance
+     * @param playerRepository The player repository implementation
+     */
+    public PlayerManager(RVNKLore plugin, IPlayerRepository playerRepository) {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "PlayerManager");
-        this.playerRepository = new PlayerRepository(plugin, plugin.getDatabaseManager().getDatabaseConnection());
+        this.playerRepository = playerRepository;
     }
     
     /**
@@ -211,7 +224,7 @@ public class PlayerManager {
      * @return true if the entry was created successfully, false otherwise
      */
     public boolean createNameChangeLoreEntry(Player player, String oldName) {
-        logger.info("Creating name change lore entry: " + oldName + " → " + player.getName());
+        logger.info("Creating name change lore entry: " + oldName + " â†’ " + player.getName());
         
         try {
             // Create a guaranteed unique entry name with UUID and timestamp
@@ -244,9 +257,9 @@ public class PlayerManager {
             if (success) {
                 // Notify the player
                 player.sendMessage(ChatColor.GOLD + "Your name change has been recorded in the annals of history!");
-                logger.info("Name change lore entry created: " + oldName + " → " + player.getName());
+                logger.info("Name change lore entry created: " + oldName + " â†’ " + player.getName());
             } else {
-                logger.warning("Failed to create name change lore entry: " + oldName + " → " + player.getName());
+                logger.warning("Failed to create name change lore entry: " + oldName + " â†’ " + player.getName());
             }
             
             return success;

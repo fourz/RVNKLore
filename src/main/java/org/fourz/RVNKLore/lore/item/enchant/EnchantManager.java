@@ -5,7 +5,7 @@ import org.bukkit.enchantments.Enchantment;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.lore.item.ItemProperties;
 
 import java.util.Map;
@@ -138,7 +138,7 @@ public class EnchantManager {
         String currentName = meta.getDisplayName();
         if (currentName != null && !currentName.isEmpty()) {
             String tierColor = getTierColor(tier);
-            if (!currentName.startsWith("§")) {
+            if (!currentName.startsWith("Â§")) {
                 meta.setDisplayName(tierColor + currentName);
             }
         }
@@ -155,17 +155,17 @@ public class EnchantManager {
     private String getTierColor(EnchantmentTier tier) {
         switch (tier) {
             case COMMON:
-                return "§f"; // White
+                return "Â§f"; // White
             case UNCOMMON:
-                return "§a"; // Green
+                return "Â§a"; // Green
             case RARE:
-                return "§9"; // Blue
+                return "Â§9"; // Blue
             case EPIC:
-                return "§5"; // Purple
+                return "Â§5"; // Purple
             case LEGENDARY:
-                return "§6"; // Gold
+                return "Â§6"; // Gold
             default:
-                return "§7"; // Gray
+                return "Â§7"; // Gray
         }
     }
     
