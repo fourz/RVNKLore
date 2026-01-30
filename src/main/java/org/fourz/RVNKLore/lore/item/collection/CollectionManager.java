@@ -440,13 +440,22 @@ public class CollectionManager implements ICollectionService {
     }
     
     /**
+     * Update a player's progress for a collection (async interface method).
+     * Implements ICollectionService.updatePlayerProgress().
+     */
+    @Override
+    public CompletableFuture<Boolean> updatePlayerProgress(UUID playerId, String collectionId, double progress) {
+        return CompletableFuture.supplyAsync(() -> updatePlayerProgressSync(playerId, collectionId, progress));
+    }
+    
+    /**
      * Handle collection completion events and rewards
      * 
      * @param playerId The player who completed the collection
      * @param collectionId The completed collection
      */
     private void handleCollectionCompletion(UUID playerId, String collectionId) {
-        ItemCollection collection = getCollection(collectionId);
+        ItemCollection collection = getCollectionSync(collectionId);
         if (collection == null) {
             logger.warning("Cannot handle completion for unknown collection: " + collectionId);
             return;
@@ -463,19 +472,19 @@ public class CollectionManager implements ICollectionService {
     }
 
     /**
-     * Grant collection rewards to a player
+     * Grant collection rewards to a player (sync internal method)
      * 
      * @param playerId The player's UUID
      * @param collectionId The collection identifier
      * @return True if rewards were successfully granted
      */
-    public boolean grantCollectionReward(UUID playerId, String collectionId) {
-        if (getPlayerProgress(playerId, collectionId) < 1.0) {
+    public boolean grantCollectionRewardSync(UUID playerId, String collectionId) {
+        if (getPlayerProgressSync(playerId, collectionId) < 1.0) {
             logger.warning("Cannot grant rewards - collection not completed by player " + playerId);
             return false;
         }
         
-        ItemCollection collection = getCollection(collectionId);
+        ItemCollection collection = getCollectionSync(collectionId);
         if (collection == null) {
             logger.warning("Cannot grant rewards for unknown collection: " + collectionId);
             return false;
@@ -487,6 +496,15 @@ public class CollectionManager implements ICollectionService {
         logger.info("Granted collection rewards to player " + playerId + " for collection: " + collectionId);
         return true;
     }
+    
+    /**
+     * Grant collection rewards to a player (async interface method).
+     * Implements ICollectionService.grantCollectionReward().
+     */
+    @Override
+    public CompletableFuture<Boolean> grantCollectionReward(UUID playerId, String collectionId) {
+        return CompletableFuture.supplyAsync(() -> grantCollectionRewardSync(playerId, collectionId));
+    }
 
     /**
      * Emit collection change events for other systems to listen to
@@ -495,6 +513,7 @@ public class CollectionManager implements ICollectionService {
      * @param collection The collection that changed
      * @param changeType The type of change
      */
+    @SuppressWarnings("unused")
     private void fireCollectionChangeEvent(ItemCollection collection, ChangeType changeType) {
         // Placeholder for event system integration
         logger.debug("Collection change event: " + changeType + " for " + collection.getId());
@@ -508,14 +527,14 @@ public class CollectionManager implements ICollectionService {
     }
 
     /**
-     * Get all collections, optionally filtered by theme.
+     * Get all collections, optionally filtered by theme (sync internal method).
      * 
      * @param themeId The theme ID to filter by, or null for all
      * @return Map of collection IDs to ItemCollection
      */
-    public Map<String, ItemCollection> getCollectionsByTheme(String themeId) {
+    public Map<String, ItemCollection> getCollectionsByThemeSync(String themeId) {
         if (themeId == null) {
-            return getAllCollections();
+            return getAllCollectionsSync();
         }
         Map<String, ItemCollection> filtered = new HashMap<>();
         for (Map.Entry<String, ItemCollection> entry : collections.entrySet()) {
@@ -524,6 +543,24 @@ public class CollectionManager implements ICollectionService {
             }
         }
         return filtered;
+    }
+    
+    /**
+     * Get all collections, optionally filtered by theme (async interface method).
+     * Implements ICollectionService.getCollectionsByTheme().
+     */
+    @Override
+    public CompletableFuture<Map<String, ItemCollection>> getCollectionsByTheme(String themeId) {
+        return CompletableFuture.supplyAsync(() -> getCollectionsByThemeSync(themeId));
+    }
+    
+    /**
+     * Check if the service is in fallback mode due to errors.
+     * Implements ICollectionService.isInFallbackMode().
+     */
+    @Override
+    public boolean isInFallbackMode() {
+        return fallbackMode;
     }
 
     /**
