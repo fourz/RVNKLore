@@ -31,7 +31,7 @@ import java.util.Map;
  * - Item metadata storage and retrieval
  * - JSON property serialization/deserialization
  */
-public class ItemRepository {
+public class ItemRepository implements IItemRepository {
     private final RVNKLore plugin;
     private final LogManager logger;
     private final DatabaseConnection dbConnection;

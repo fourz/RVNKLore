@@ -20,7 +20,7 @@ import java.util.*;
  * This repository manages the creation, retrieval, and updating of lore entries
  * using the lore_entry, lore_submission, and specialized tables (e.g., lore_item).
  */
-public class LoreEntryRepository {
+public class LoreEntryRepository implements ILoreEntryRepository {
     @SuppressWarnings("unused")
     private final RVNKLore plugin;
     private final LogManager logger;

@@ -20,7 +20,7 @@ import org.fourz.RVNKLore.lore.LoreType;
  * This repository manages player lore entries, name changes, and provides
  * utilities for checking player existence and history in the lore system.
  */
-public class PlayerRepository {
+public class PlayerRepository implements IPlayerRepository {
     private final RVNKLore plugin;
     private final LogManager logger;
     private final DatabaseConnection dbConnection;
