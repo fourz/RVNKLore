@@ -49,8 +49,8 @@ public class LoreItemListSubCommand implements SubCommand {
             }
         }
 
-        itemManager.refreshCache();
-        List<ItemProperties> items = itemManager.getAllItemsWithProperties();
+        itemManager.refreshCacheForCommands();
+        List<ItemProperties> items = itemManager.getAllItemsWithPropertiesForCommands();
         items.sort(Comparator.comparing(ItemProperties::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())).reversed());
 
         // All pagination logic is now handled by DisplayFactory

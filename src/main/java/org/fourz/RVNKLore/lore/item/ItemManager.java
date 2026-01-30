@@ -1,5 +1,6 @@
 package org.fourz.RVNKLore.lore.item;
 
+import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.data.DatabaseConnection;
@@ -9,17 +10,25 @@ import org.fourz.RVNKLore.lore.item.enchant.EnchantManager;
 import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
 import org.fourz.RVNKLore.lore.item.cosmetic.CosmeticsManager;
 import org.fourz.RVNKLore.lore.item.custommodeldata.CustomModelDataManager;
+import org.fourz.RVNKLore.service.IItemService;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Base manager class for all item-related functionality in the lore system.
  * Acts as a central orchestrator for enchantments, cosmetics, collections, and model data.
+ * Implements IItemService for RVNKCore ServiceRegistry integration.
  */
-public class ItemManager {
+public class ItemManager implements IItemService {
+
+    // Fallback mode flag for IItemService contract
+    private boolean fallbackMode = false;
     private final RVNKLore plugin;
     private final LogManager logger;
     
@@ -110,44 +119,44 @@ public class ItemManager {
     }
     
     /**
-     * Give a lore item to a player.
-     * 
+     * Give a lore item to a player (synchronous internal method).
+     *
      * @param itemName Name of the item to give
      * @param player Player to receive the item
      * @return True if item was given successfully, false otherwise
      */
-    public boolean giveItemToPlayer(String itemName, org.bukkit.entity.Player player) {
+    private boolean giveItemToPlayerSync(String itemName, org.bukkit.entity.Player player) {
         if (player == null) {
             logger.error("Cannot give item - player is null", null);
             return false;
         }
-        
-        ItemStack item = createLoreItem(itemName);
+
+        ItemStack item = createLoreItemByNameInternal(itemName);
         if (item == null) {
             return false;
         }
-        
+
         player.getInventory().addItem(item);
         return true;
     }
     
     /**
      * Display detailed information about an item to a CommandSender.
-     * 
+     *
      * @param itemName The name of the item to show information for
      * @param sender The CommandSender to show information to
      * @return True if item was found and info displayed, false otherwise
      */
     public boolean displayItemInfo(String itemName, org.bukkit.command.CommandSender sender) {
-        ItemStack item = createLoreItem(itemName);
+        ItemStack item = createLoreItemByNameInternal(itemName);
         if (item == null) {
             return false;
         }
-        
+
         org.bukkit.inventory.meta.ItemMeta meta = item.getItemMeta();
         sender.sendMessage(org.bukkit.ChatColor.GOLD + "===== Item Info: " + itemName + " =====");
         sender.sendMessage(org.bukkit.ChatColor.YELLOW + "Material: " + item.getType());
-        
+
         if (meta != null) {
             if (meta.hasDisplayName()) {
                 sender.sendMessage(org.bukkit.ChatColor.YELLOW + "Display Name: " + meta.getDisplayName());
@@ -160,27 +169,28 @@ public class ItemManager {
             }
             if (meta.hasCustomModelData()) {
                 sender.sendMessage(org.bukkit.ChatColor.YELLOW + "Custom Model Data: " + meta.getCustomModelData());
-            }            if (meta.hasEnchants()) {
+            }
+            if (meta.hasEnchants()) {
                 sender.sendMessage(org.bukkit.ChatColor.YELLOW + "Enchantments:");
                 for (Map.Entry<org.bukkit.enchantments.Enchantment, Integer> entry : meta.getEnchants().entrySet()) {
                     String enchantName = entry.getKey().toString().replace("Enchantment[", "").replace("]", "");
-                    sender.sendMessage(org.bukkit.ChatColor.GRAY + "  " + 
+                    sender.sendMessage(org.bukkit.ChatColor.GRAY + "  " +
                             formatEnchantmentName(enchantName) + " " + entry.getValue());
                 }
             }
         }
-        
+
         return true;
     }
-    
+
     /**
      * Display a list of all available items to a CommandSender.
-     * 
+     *
      * @param sender The CommandSender to show available items to
      */
     public void displayAvailableItems(org.bukkit.command.CommandSender sender) {
         sender.sendMessage(org.bukkit.ChatColor.GOLD + "Available Items:");
-        List<String> allItems = getAllItemNames();
+        List<String> allItems = getAllItemNamesSync();
         
         if (allItems.isEmpty()) {
             sender.sendMessage(org.bukkit.ChatColor.GRAY + "   No items available.");
@@ -215,9 +225,9 @@ public class ItemManager {
     }
     
     /**
-     * Create a generic lore item with basic properties.
+     * Create a generic lore item with basic properties (synchronous internal method).
      */
-    public ItemStack createLoreItem(ItemType type, String name, ItemProperties properties) {
+    private ItemStack createLoreItemInternal(ItemType type, String name, ItemProperties properties) {
         switch (type) {
             case ENCHANTED:
                 return enchantManager.createEnchantedItem(properties);
@@ -268,9 +278,9 @@ public class ItemManager {
     }
 
     /**
-     * Returns a list of all registered item names for tab completion and lookup.
+     * Returns a list of all registered item names for tab completion and lookup (synchronous).
      */
-    public List<String> getAllItemNames() {
+    private List<String> getAllItemNamesSync() {
         List<String> names = new ArrayList<>();
         
         if (itemRepository != null && cacheInitialized) {
@@ -290,19 +300,20 @@ public class ItemManager {
     }
 
     /**
-     * Create a lore item by name. If multiple items exist with the same name, returns the first found.
+     * Create a lore item by name (synchronous internal method).
+     * If multiple items exist with the same name, returns the first found.
      */
-    public ItemStack createLoreItem(String itemName) {
+    private ItemStack createLoreItemByNameInternal(String itemName) {
         String key = itemName.toLowerCase();
         if (itemRepository != null && cacheInitialized && itemNameCache.containsKey(key)) {
             ItemProperties props = itemNameCache.get(key).get(0);
-            return createLoreItem(props.getItemType(), itemName, props);
+            return createLoreItemInternal(props.getItemType(), itemName, props);
         }
         if (itemRepository != null) {
             List<ItemProperties> propsList = itemRepository.getAllItemsByName(itemName);
             if (!propsList.isEmpty()) {
                 itemNameCache.put(key, propsList);
-                return createLoreItem(propsList.get(0).getItemType(), itemName, propsList.get(0));
+                return createLoreItemInternal(propsList.get(0).getItemType(), itemName, propsList.get(0));
             }
         }
         if (cosmeticItem != null) {
@@ -321,7 +332,7 @@ public class ItemManager {
         }
         return null;
     }
-    
+
     /**
      * Initialize or refresh the item cache from database
      */
@@ -361,9 +372,9 @@ public class ItemManager {
     }
     
     /**
-     * Refresh the item cache, reloading all data from the database.
+     * Refresh the item cache synchronously (internal use, called from async wrapper).
      */
-    public void refreshCache() {
+    private void refreshCacheSync() {
         plugin.getServer().getScheduler().runTaskAsynchronously(plugin, this::initializeCache);
     }
     
@@ -418,13 +429,13 @@ public class ItemManager {
     }
 
     /**
-     * Get all items with their properties, including creation timestamp for sorting
+     * Get all items with their properties (synchronous internal method).
      *
      * @return A list of ItemProperties for all items
      */
-    public List<ItemProperties> getAllItemsWithProperties() {
+    private List<ItemProperties> getAllItemsWithPropertiesSync() {
         List<ItemProperties> result = new ArrayList<>();
-        
+
         if (itemRepository != null && cacheInitialized) {
             for (List<ItemProperties> list : itemNameCache.values()) {
                 result.addAll(list);
@@ -450,19 +461,19 @@ public class ItemManager {
                 }
             }
         }
-        
+
         return result;
     }
-    
+
     /**
-     * Register a lore item with a reference to its lore entry ID.
+     * Register a lore item with a reference to its lore entry ID (synchronous internal method).
      * This method should be called by LoreManager when a lore entry of type ITEM is created.
      *
      * @param loreEntryId The UUID of the lore entry in the lore_entry table
      * @param properties The properties of the item to register
      * @return true if the item was registered successfully, false otherwise
      */
-    public boolean registerLoreItem(java.util.UUID loreEntryId, ItemProperties properties) {
+    private boolean registerLoreItemSync(java.util.UUID loreEntryId, ItemProperties properties) {
         if (loreEntryId == null || properties == null) {
             logger.warning("Cannot register lore item with null ID or properties");
             return false;
@@ -497,5 +508,132 @@ public class ItemManager {
             return true;
         }
         return false;
+    }
+
+    // ============================================================
+    // PUBLIC SYNC METHODS FOR COMMAND COMPATIBILITY
+    // These methods are for internal plugin use (commands, display)
+    // External plugins should use the IItemService async interface
+    // ============================================================
+
+    /**
+     * Create a lore item by name (synchronous, for command use).
+     * If multiple items exist with the same name, returns the first found.
+     *
+     * @param itemName The name of the item to create
+     * @return The created ItemStack, or null if not found
+     */
+    public ItemStack createLoreItemSync(String itemName) {
+        return createLoreItemByNameInternal(itemName);
+    }
+
+    /**
+     * Returns a list of all registered item names (synchronous, for tab completion).
+     *
+     * @return List of all item names
+     */
+    public List<String> getAllItemNamesForCommands() {
+        return getAllItemNamesSync();
+    }
+
+    /**
+     * Get all items with their properties (synchronous, for command display).
+     *
+     * @return A list of ItemProperties for all items
+     */
+    public List<ItemProperties> getAllItemsWithPropertiesForCommands() {
+        return getAllItemsWithPropertiesSync();
+    }
+
+    /**
+     * Refresh the item cache (public method for commands).
+     */
+    public void refreshCacheForCommands() {
+        refreshCacheSync();
+    }
+
+    // ============================================================
+    // IItemService ASYNC IMPLEMENTATIONS
+    // ============================================================
+
+    /**
+     * {@inheritDoc}
+     * Async wrapper for createLoreItem(String).
+     */
+    @Override
+    public CompletableFuture<Optional<ItemStack>> createLoreItem(String itemName) {
+        return CompletableFuture.supplyAsync(() -> {
+            ItemStack item = createLoreItemByNameInternal(itemName);
+            return Optional.ofNullable(item);
+        });
+    }
+
+    /**
+     * {@inheritDoc}
+     * Async wrapper for createLoreItem(ItemType, String, ItemProperties).
+     */
+    @Override
+    public CompletableFuture<ItemStack> createLoreItem(ItemType type, String name, ItemProperties properties) {
+        return CompletableFuture.supplyAsync(() -> createLoreItemInternal(type, name, properties));
+    }
+
+    /**
+     * {@inheritDoc}
+     * Async wrapper for giveItemToPlayer.
+     */
+    @Override
+    public CompletableFuture<Boolean> giveItemToPlayer(String itemName, Player player) {
+        return CompletableFuture.supplyAsync(() -> giveItemToPlayerSync(itemName, player));
+    }
+
+    /**
+     * {@inheritDoc}
+     * Async wrapper for getAllItemNames.
+     */
+    @Override
+    public CompletableFuture<List<String>> getAllItemNames() {
+        return CompletableFuture.supplyAsync(this::getAllItemNamesSync);
+    }
+
+    /**
+     * {@inheritDoc}
+     * Async wrapper for getAllItemsWithProperties.
+     */
+    @Override
+    public CompletableFuture<List<ItemProperties>> getAllItemsWithProperties() {
+        return CompletableFuture.supplyAsync(this::getAllItemsWithPropertiesSync);
+    }
+
+    /**
+     * {@inheritDoc}
+     * Async wrapper for registerLoreItem.
+     */
+    @Override
+    public CompletableFuture<Boolean> registerLoreItem(UUID loreEntryId, ItemProperties properties) {
+        return CompletableFuture.supplyAsync(() -> registerLoreItemSync(loreEntryId, properties));
+    }
+
+    /**
+     * {@inheritDoc}
+     * Async cache refresh.
+     */
+    @Override
+    public CompletableFuture<Void> refreshCache() {
+        return CompletableFuture.runAsync(this::initializeCache);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public boolean isInFallbackMode() {
+        return fallbackMode;
+    }
+
+    /**
+     * Set fallback mode status.
+     */
+    protected void setFallbackMode(boolean fallbackMode) {
+        this.fallbackMode = fallbackMode;
     }
 }

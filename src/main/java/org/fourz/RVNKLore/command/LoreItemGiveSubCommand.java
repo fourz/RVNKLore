@@ -61,7 +61,7 @@ public class LoreItemGiveSubCommand implements SubCommand {
             return true;
         }
         // Use ItemManager for item lookup and giving
-        org.bukkit.inventory.ItemStack item = itemManager.createLoreItem(itemName);
+        org.bukkit.inventory.ItemStack item = itemManager.createLoreItemSync(itemName);
         if (item == null) {
             sender.sendMessage(ChatColor.RED + "✖ Item not found: " + itemName);
             return true;
@@ -80,7 +80,7 @@ public class LoreItemGiveSubCommand implements SubCommand {
     public List<String> getTabCompletions(CommandSender sender, String[] args) {
         List<String> completions = new ArrayList<>();
         if (args.length == 1) {
-            completions.addAll(itemManager.getAllItemNames());
+            completions.addAll(itemManager.getAllItemNamesForCommands());
         } else if (args.length == 2) {
             // Suggest online player names for the second argument
             org.bukkit.Bukkit.getOnlinePlayers().forEach(p -> completions.add(p.getName()));

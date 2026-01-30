@@ -45,7 +45,7 @@ public class LoreItemInfoSubCommand implements SubCommand {
                 logger.error("ItemManager is null when trying to list items", null);
                 return true;
             }
-            List<String> allItems = itemManager.getAllItemNames();
+            List<String> allItems = itemManager.getAllItemNamesForCommands();
             DisplayFactory.displayPaginatedList(sender, "Available Items", allItems, 1, 50, s -> org.bukkit.ChatColor.YELLOW + " - " + s);
             return true;
         }
@@ -75,7 +75,7 @@ public class LoreItemInfoSubCommand implements SubCommand {
         }
 
         // Fallback: try to display as item by name
-        org.bukkit.inventory.ItemStack item = itemManager.createLoreItem(itemNameOrId);
+        org.bukkit.inventory.ItemStack item = itemManager.createLoreItemSync(itemNameOrId);
         return DisplayFactory.displayItem(sender, item, itemNameOrId);
     }
 
@@ -88,7 +88,7 @@ public class LoreItemInfoSubCommand implements SubCommand {
     public List<String> getTabCompletions(CommandSender sender, String[] args) {
         List<String> completions = new ArrayList<>();
         if (args.length == 1) {
-            completions.addAll(itemManager.getAllItemNames());
+            completions.addAll(itemManager.getAllItemNamesForCommands());
         }
         return completions;
     }
