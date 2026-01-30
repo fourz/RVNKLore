@@ -26,12 +26,14 @@ public class LoreEntryRepository implements ILoreEntryRepository {
     private final LogManager logger;
     private final DatabaseConnection dbConnection;
     private final JSONParser jsonParser;
+    private final FallbackTracker fallbackTracker;
     
     public LoreEntryRepository(RVNKLore plugin, DatabaseConnection dbConnection) {
         this.plugin = plugin;
         this.dbConnection = dbConnection;
         this.logger = LogManager.getInstance(plugin, "LoreEntryRepository");
         this.jsonParser = new JSONParser();
+        this.fallbackTracker = new FallbackTracker(plugin);
     }
     
     /**
@@ -601,5 +603,16 @@ public class LoreEntryRepository implements ILoreEntryRepository {
             logger.error("Transaction error when approving lore entry: " + entryId, e);
             return false;
         }
+    }
+
+    /**
+     * Check if the repository is operating in fallback mode.
+     * Delegates to the FallbackTracker which manages failure counting and recovery.
+     *
+     * @return true if in fallback mode due to database connectivity issues
+     */
+    @Override
+    public boolean isInFallbackMode() {
+        return fallbackTracker.isInFallbackMode();
     }
 }

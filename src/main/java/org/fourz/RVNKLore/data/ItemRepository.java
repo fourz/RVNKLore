@@ -36,6 +36,7 @@ public class ItemRepository implements IItemRepository {
     private final LogManager logger;
     private final DatabaseConnection dbConnection;
     private final DatabaseHelper dbHelper;
+    private final FallbackTracker fallbackTracker;
     
     /**
      * Create a new ItemRepository instance
@@ -48,6 +49,7 @@ public class ItemRepository implements IItemRepository {
         this.logger = LogManager.getInstance(plugin, "ItemRepository");
         this.dbConnection = dbConnection;
         this.dbHelper = new DatabaseHelper(plugin);
+        this.fallbackTracker = new FallbackTracker(plugin);
         
         // Initialize database tables
         initializeTables();
@@ -1174,5 +1176,16 @@ public class ItemRepository implements IItemRepository {
             logger.error("Failed to get item by lore entry ID: " + loreEntryId, e);
             return null;
         }
+    }
+
+    /**
+     * Check if the repository is operating in fallback mode.
+     * Delegates to the FallbackTracker which manages failure counting and recovery.
+     *
+     * @return true if in fallback mode due to database connectivity issues
+     */
+    @Override
+    public boolean isInFallbackMode() {
+        return fallbackTracker.isInFallbackMode();
     }
 }

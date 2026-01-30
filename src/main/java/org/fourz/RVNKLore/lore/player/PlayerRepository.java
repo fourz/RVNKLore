@@ -10,6 +10,7 @@ import java.util.UUID;
 
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.data.DatabaseConnection;
+import org.fourz.RVNKLore.data.FallbackTracker;
 import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
@@ -24,11 +25,13 @@ public class PlayerRepository implements IPlayerRepository {
     private final RVNKLore plugin;
     private final LogManager logger;
     private final DatabaseConnection dbConnection;
+    private final FallbackTracker fallbackTracker;
     
     public PlayerRepository(RVNKLore plugin, DatabaseConnection dbConnection) {
         this.plugin = plugin;
         this.dbConnection = dbConnection;
         this.logger = LogManager.getInstance(plugin, "PlayerRepository");
+        this.fallbackTracker = new FallbackTracker(plugin);
     }
     
     /**
@@ -241,5 +244,16 @@ public class PlayerRepository implements IPlayerRepository {
             }
         }
         return null;
+    }
+
+    /**
+     * Check if the repository is operating in fallback mode.
+     * Delegates to the FallbackTracker which manages failure counting and recovery.
+     *
+     * @return true if in fallback mode due to database connectivity issues
+     */
+    @Override
+    public boolean isInFallbackMode() {
+        return fallbackTracker.isInFallbackMode();
     }
 }

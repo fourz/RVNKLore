@@ -57,4 +57,12 @@ public interface IPlayerRepository {
      * @return List of previous names, from oldest to newest
      */
     List<NameChangeRecord> getNameChangeHistory(UUID playerUuid);
+
+    /**
+     * Check if the repository is operating in fallback mode.
+     * Fallback mode indicates degraded operation due to database connectivity issues.
+     *
+     * @return true if in fallback mode, false otherwise
+     */
+    boolean isInFallbackMode();
 }
