@@ -1,8 +1,8 @@
 general:
   # Valid log levels: OFF, SEVERE, WARNING, INFO, DEBUG, FINE
   # DEBUG and FINE are equivalent and both enable debug logging
-  # Default: INFO
-  logLevel: INFO
+  # Default: WARNING (quiet mode - set INFO for verbose operational logs)
+  logLevel: WARNING
 
 lore:
   nearbyRadius: 50.0
