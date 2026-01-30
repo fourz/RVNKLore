@@ -205,7 +205,7 @@ public class CollectionManager implements ICollectionService {
             }
             String collectionId = properties.getCollectionId();
             if (collectionId != null) {
-                ItemCollection collection = getCollection(collectionId);
+                ItemCollection collection = getCollectionSync(collectionId);
                 if (collection != null) {
                     lore.add("§7Collection: §a" + collection.getName());
                 }
@@ -286,7 +286,7 @@ public class CollectionManager implements ICollectionService {
     }
 
     public Integer getItemCount(String collectionId) {
-        ItemCollection collection = getCollection(collectionId);
+        ItemCollection collection = getCollectionSync(collectionId);
         return collection != null ? collection.getItemCount() : 0;
     }
 

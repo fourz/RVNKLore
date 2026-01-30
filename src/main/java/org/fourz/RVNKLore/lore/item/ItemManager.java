@@ -292,7 +292,7 @@ public class ItemManager implements IItemService {
                 }
             }
             if (collectionManager != null) {
-                names.addAll(collectionManager.getAllCollections().keySet());
+                names.addAll(collectionManager.getAllCollectionsSync().keySet());
             }
         }
         
@@ -323,7 +323,7 @@ public class ItemManager implements IItemService {
             }
         }
         if (collectionManager != null) {
-            var collection = collectionManager.getCollection(itemName);
+            var collection = collectionManager.getCollectionSync(itemName);
             if (collection != null) {
                 var props = new ItemProperties(org.bukkit.Material.PAPER, collection.getName());
                 props.setCollectionId(collection.getId());
@@ -452,7 +452,7 @@ public class ItemManager implements IItemService {
                 }
             }
             if (collectionManager != null) {
-                for (var entry : collectionManager.getAllCollections().entrySet()) {
+                for (var entry : collectionManager.getAllCollectionsSync().entrySet()) {
                     ItemProperties props = new ItemProperties(org.bukkit.Material.PAPER, entry.getValue().getName());
                     props.setItemType(ItemType.COLLECTION);
                     props.setCollectionId(entry.getKey());

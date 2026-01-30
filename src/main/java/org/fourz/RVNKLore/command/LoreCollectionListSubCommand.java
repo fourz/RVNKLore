@@ -56,13 +56,13 @@ public class LoreCollectionListSubCommand implements SubCommand {
                 listThemes(player);
                 return true;
             }
-            for (ItemCollection collection : collectionManager.getAllCollections().values()) {
+            for (ItemCollection collection : collectionManager.getAllCollectionsSync().values()) {
                 if (theme.name().equalsIgnoreCase(collection.getThemeId())) {
                     collectionsToShow.add(collection);
                 }
             }
         } else {
-            collectionsToShow.addAll(collectionManager.getAllCollections().values());
+            collectionsToShow.addAll(collectionManager.getAllCollectionsSync().values());
         }
 
         // Sort newest to oldest
@@ -78,7 +78,7 @@ public class LoreCollectionListSubCommand implements SubCommand {
         player.sendMessage(ChatColor.YELLOW + "⚙ " + ChatColor.BOLD + "Available Themes");
         player.sendMessage("");
         for (CollectionTheme theme : CollectionTheme.values()) {
-            int count = (int) collectionManager.getAllCollections().values().stream()
+            int count = (int) collectionManager.getAllCollectionsSync().values().stream()
                     .filter(c -> theme.name().equalsIgnoreCase(c.getThemeId()))
                     .count();
             if (count > 0) {

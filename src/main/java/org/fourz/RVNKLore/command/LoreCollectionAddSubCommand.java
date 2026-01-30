@@ -77,15 +77,15 @@ public class LoreCollectionAddSubCommand implements SubCommand {
 
         try {
             // Create and validate the collection
-            ItemCollection collection = collectionManager.createCollection(collectionId, name, description);
+            ItemCollection collection = collectionManager.createCollectionSync(collectionId, name, description);
             if (collection == null) {
                 sender.sendMessage(ChatColor.RED + "✖ Failed to create collection: validation error");
                 return true;
             }
-            
+
             // Set theme and save to database
             collection.setThemeId(theme.name().toLowerCase());
-            boolean saved = collectionManager.saveCollection(collection);
+            boolean saved = collectionManager.saveCollectionSync(collection);
             
             if (saved) {
                 sender.sendMessage(ChatColor.GREEN + "✓ Created collection: " + name + " (" + collectionId + ")");

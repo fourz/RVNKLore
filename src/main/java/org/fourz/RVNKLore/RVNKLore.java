@@ -15,6 +15,8 @@ import org.fourz.RVNKLore.service.ICollectionService;
 import org.fourz.RVNKLore.service.ISubmissionService;
 import org.fourz.RVNKLore.util.UtilityManager;
 import org.fourz.RVNKLore.lore.item.ItemManager;
+import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
+import org.fourz.RVNKLore.lore.submission.SubmissionManager;
 import org.fourz.RVNKLore.lore.player.PlayerManager;
 
 public class RVNKLore extends JavaPlugin {
@@ -27,6 +29,7 @@ public class RVNKLore extends JavaPlugin {
     private UtilityManager utilityManager;
     private ItemManager itemManager;
     private PlayerManager playerManager;
+    private SubmissionManager submissionManager;
     private int healthCheckTaskId = -1;
     private Thread shutdownHook;
     private boolean shuttingDown = false;
@@ -79,7 +82,8 @@ public class RVNKLore extends JavaPlugin {
             // Initialize ItemManager through LoreManager
             this.itemManager = loreManager.getItemManager();
             
-
+            // Initialize SubmissionManager for lore submission workflow
+            this.submissionManager = new SubmissionManager(this);
             
             // Remove direct CosmeticManager initialization (now handled by ItemManager)
             // cosmeticManager = new CosmeticManager(this);
@@ -313,9 +317,18 @@ public class RVNKLore extends JavaPlugin {
             registerMethod.invoke(serviceRegistry, IItemService.class, itemManager);
             logger.info("Registered IItemService with RVNKCore");
 
-            // ICollectionService and ISubmissionService can be added when implementations exist
-            // registerMethod.invoke(serviceRegistry, ICollectionService.class, collectionManager);
-            // registerMethod.invoke(serviceRegistry, ISubmissionService.class, submissionManager);
+            // Register CollectionService (via ItemManager's CollectionManager)
+            CollectionManager collectionManager = itemManager.getCollectionManager();
+            if (collectionManager != null) {
+                registerMethod.invoke(serviceRegistry, ICollectionService.class, collectionManager);
+                logger.info("Registered ICollectionService with RVNKCore");
+            }
+
+            // Register SubmissionService
+            if (submissionManager != null) {
+                registerMethod.invoke(serviceRegistry, ISubmissionService.class, submissionManager);
+                logger.info("Registered ISubmissionService with RVNKCore");
+            }
 
             rvnkCoreAvailable = true;
             rvnkCoreInstance = coreInstance;
@@ -348,6 +361,8 @@ public class RVNKLore extends JavaPlugin {
             java.lang.reflect.Method unregisterMethod = registryClass.getMethod("unregisterService", Class.class);
 
             // Unregister services in reverse order
+            unregisterMethod.invoke(serviceRegistry, ISubmissionService.class);
+            unregisterMethod.invoke(serviceRegistry, ICollectionService.class);
             unregisterMethod.invoke(serviceRegistry, IItemService.class);
             unregisterMethod.invoke(serviceRegistry, ILoreService.class);
 
