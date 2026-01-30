@@ -89,6 +89,7 @@ public class DatabaseBackupService {
     /**
      * Export lore entries to a file
      */
+    @SuppressWarnings("unchecked") // JSONObject from json-simple doesn't support generics
     private boolean exportLoreEntriesToFile(List<LoreEntry> entries, String filePath) {
         try {
             logger.debug("Exporting " + entries.size() + " lore entries to file: " + filePath);

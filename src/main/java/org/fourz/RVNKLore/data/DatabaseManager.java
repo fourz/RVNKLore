@@ -148,31 +148,34 @@ public class DatabaseManager {
     
     /**
      * Export all lore entries to JSON format
-     * 
+     *
      * @return JSON string containing all lore entries
      */
+    @SuppressWarnings("unchecked") // JSONObject from json-simple doesn't support generics
     public String exportLoreEntriesToJson() {
         List<LoreEntry> entries = getAllLoreEntries();
         List<JSONObject> jsonEntries = new ArrayList<>();
-        
+
         for (LoreEntry entry : entries) {
             jsonEntries.add(entry.toJson());
         }
-        
+
         JSONObject result = new JSONObject();
         result.put("lore_entries", jsonEntries);
-        
+
         Gson gson = new GsonBuilder().setPrettyPrinting().create();
         return gson.toJson(result);
     }
     
     /**
      * Export lore entries to a file
-     * 
+     *
      * @param entries The lore entries to export
      * @param filePath The file to export to
      * @return true if successful, false otherwise
-     */    public boolean exportLoreEntriesToFile(List<LoreEntry> entries, String filePath) {
+     */
+    @SuppressWarnings("unchecked") // JSONObject from json-simple doesn't support generics
+    public boolean exportLoreEntriesToFile(List<LoreEntry> entries, String filePath) {
         try {
             logger.debug("Exporting " + entries.size() + " lore entries to file: " + filePath);
             
