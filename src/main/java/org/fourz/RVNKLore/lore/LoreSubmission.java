@@ -10,7 +10,7 @@ import java.sql.Timestamp;
  */
 public class LoreSubmission {
     private int id;
-    private int entryId;
+    private String entryId;
     private String slug;
     private String visibility;
     private String status;
@@ -45,13 +45,13 @@ public class LoreSubmission {
     /**
      * Constructor for creating a new submission with basic properties
      */
-    public LoreSubmission(int entryId, String submitterUuid, String content) {
+    public LoreSubmission(String entryId, String submitterUuid, String content) {
         this();
         this.entryId = entryId;
         this.submitterUuid = submitterUuid;
         this.createdBy = submitterUuid;
         this.content = content;
-        
+
         // Generate a slug from the current timestamp to ensure uniqueness
         this.slug = "lore-" + entryId + "-" + System.currentTimeMillis();
     }
@@ -59,7 +59,7 @@ public class LoreSubmission {
     /**
      * Full constructor for creating a submission with all properties
      */
-    public LoreSubmission(int id, int entryId, String slug, String visibility, 
+    public LoreSubmission(int id, String entryId, String slug, String visibility,
                          String status, String submitterUuid, String createdBy,
                          Timestamp submissionDate, String approvalStatus, String approvedBy,
                          Timestamp approvedAt, int viewCount, Timestamp lastViewedAt,
@@ -86,27 +86,28 @@ public class LoreSubmission {
     }
 
     /**
-     * Constructor for creating from DTO
+     * Constructor for creating from DTO.
+     * Note: LoreSubmissionDTO is a Java record, so accessor methods use field names (e.g., id() not getId()).
      */
     public LoreSubmission(LoreSubmissionDTO dto) {
-        this.id = dto.getId();
-        this.entryId = dto.getEntryId();
-        this.slug = dto.getSlug();
-        this.visibility = dto.getVisibility();
-        this.status = dto.getStatus();
-        this.submitterUuid = dto.getSubmitterUuid();
-        this.createdBy = dto.getCreatedBy();
-        this.submissionDate = dto.getSubmissionDate();
-        this.approvalStatus = dto.getApprovalStatus();
-        this.approvedBy = dto.getApprovedBy();
-        this.approvedAt = dto.getApprovedAt();
-        this.viewCount = dto.getViewCount();
-        this.lastViewedAt = dto.getLastViewedAt();
-        this.createdAt = dto.getCreatedAt();
-        this.updatedAt = dto.getUpdatedAt();
-        this.contentVersion = dto.getContentVersion();
+        this.id = dto.id();
+        this.entryId = dto.entryId();
+        this.slug = dto.slug();
+        this.visibility = dto.visibility();
+        this.status = dto.status();
+        this.submitterUuid = dto.submitterUuid();
+        this.createdBy = dto.createdBy();
+        this.submissionDate = dto.submissionDate();
+        this.approvalStatus = dto.approvalStatus();
+        this.approvedBy = dto.approvedBy();
+        this.approvedAt = dto.approvedAt();
+        this.viewCount = dto.viewCount();
+        this.lastViewedAt = dto.lastViewedAt();
+        this.createdAt = dto.createdAt();
+        this.updatedAt = dto.updatedAt();
+        this.contentVersion = dto.contentVersion();
         this.isCurrentVersion = dto.isCurrentVersion();
-        this.content = dto.getContent();
+        this.content = dto.content();
     }
 
     // Getters and setters
@@ -118,11 +119,11 @@ public class LoreSubmission {
         this.id = id;
     }
 
-    public int getEntryId() {
+    public String getEntryId() {
         return entryId;
     }
 
-    public void setEntryId(int entryId) {
+    public void setEntryId(String entryId) {
         this.entryId = entryId;
     }
 

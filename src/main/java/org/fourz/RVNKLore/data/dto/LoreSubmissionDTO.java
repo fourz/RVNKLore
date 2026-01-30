@@ -1,101 +1,50 @@
 package org.fourz.RVNKLore.data.dto;
 
-import java.sql.Timestamp;
 import org.fourz.RVNKLore.lore.LoreSubmission;
 
-/**
- * Data Transfer Object for LoreSubmission.
- * Used to transfer lore submission data between database and domain layers.
- */
-public class LoreSubmissionDTO {
-    private int id;
-    private int entryId;
-    private String slug;
-    private String visibility;
-    private String status;
-    private String submitterUuid;
-    private String createdBy;
-    private Timestamp submissionDate;
-    private String approvalStatus;
-    private String approvedBy;
-    private Timestamp approvedAt;
-    private int viewCount;
-    private Timestamp lastViewedAt;
-    private Timestamp createdAt;
-    private Timestamp updatedAt;
-    private int contentVersion;
-    private boolean isCurrentVersion;
-    private String content;
+import java.sql.Timestamp;
+import java.util.Objects;
 
-    public LoreSubmissionDTO() {}
-    
-    public LoreSubmissionDTO(int id, int entryId, String slug, String visibility, 
-                           String status, String submitterUuid, String createdBy,
-                           Timestamp submissionDate, String approvalStatus, String approvedBy,
-                           Timestamp approvedAt, int viewCount, Timestamp lastViewedAt,
-                           Timestamp createdAt, Timestamp updatedAt, int contentVersion,
-                           boolean isCurrentVersion, String content) {
-        this.id = id;
-        this.entryId = entryId;
-        this.slug = slug;
-        this.visibility = visibility;
-        this.status = status;
-        this.submitterUuid = submitterUuid;
-        this.createdBy = createdBy;
-        this.submissionDate = submissionDate;
-        this.approvalStatus = approvalStatus;
-        this.approvedBy = approvedBy;
-        this.approvedAt = approvedAt;
-        this.viewCount = viewCount;
-        this.lastViewedAt = lastViewedAt;
-        this.createdAt = createdAt;
-        this.updatedAt = updatedAt;
-        this.contentVersion = contentVersion;
-        this.isCurrentVersion = isCurrentVersion;
-        this.content = content;
-    }    public int getId() { return id; }
-    public void setId(int id) { this.id = id; }
-    public int getEntryId() { return entryId; }
-    public void setEntryId(int entryId) { this.entryId = entryId; }
-    public String getSlug() { return slug; }
-    public void setSlug(String slug) { this.slug = slug; }
-    public String getVisibility() { return visibility; }
-    public void setVisibility(String visibility) { this.visibility = visibility; }
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
-    public String getSubmitterUuid() { return submitterUuid; }
-    public void setSubmitterUuid(String submitterUuid) { this.submitterUuid = submitterUuid; }
-    public String getCreatedBy() { return createdBy; }
-    public void setCreatedBy(String createdBy) { this.createdBy = createdBy; }
-    public Timestamp getSubmissionDate() { return submissionDate; }
-    public void setSubmissionDate(Timestamp submissionDate) { this.submissionDate = submissionDate; }
-    public String getApprovalStatus() { return approvalStatus; }
-    public void setApprovalStatus(String approvalStatus) { this.approvalStatus = approvalStatus; }
-    public String getApprovedBy() { return approvedBy; }
-    public void setApprovedBy(String approvedBy) { this.approvedBy = approvedBy; }
-    public Timestamp getApprovedAt() { return approvedAt; }
-    public void setApprovedAt(Timestamp approvedAt) { this.approvedAt = approvedAt; }
-    public int getViewCount() { return viewCount; }
-    public void setViewCount(int viewCount) { this.viewCount = viewCount; }
-    public Timestamp getLastViewedAt() { return lastViewedAt; }
-    public void setLastViewedAt(Timestamp lastViewedAt) { this.lastViewedAt = lastViewedAt; }
-    public Timestamp getCreatedAt() { return createdAt; }
-    public void setCreatedAt(Timestamp createdAt) { this.createdAt = createdAt; }
-    public Timestamp getUpdatedAt() { return updatedAt; }
-    public void setUpdatedAt(Timestamp updatedAt) { this.updatedAt = updatedAt; }
-    public int getContentVersion() { return contentVersion; }
-    public void setContentVersion(int contentVersion) { this.contentVersion = contentVersion; }
-    public boolean isCurrentVersion() { return isCurrentVersion; }
-    public void setCurrentVersion(boolean currentVersion) { this.isCurrentVersion = currentVersion; }
-    public String getContent() { return content; }
-    public void setContent(String content) { this.content = content; }
+/**
+ * Data Transfer Object for LoreSubmission using Java Record.
+ * Immutable and thread-safe for cross-plugin data transfer via RVNKCore.
+ */
+public record LoreSubmissionDTO(
+    int id,
+    String entryId,
+    String slug,
+    String visibility,
+    String status,
+    String submitterUuid,
+    String createdBy,
+    Timestamp submissionDate,
+    String approvalStatus,
+    String approvedBy,
+    Timestamp approvedAt,
+    int viewCount,
+    Timestamp lastViewedAt,
+    Timestamp createdAt,
+    Timestamp updatedAt,
+    int contentVersion,
+    boolean isCurrentVersion,
+    String content
+) {
+    /**
+     * Compact constructor with validation.
+     */
+    public LoreSubmissionDTO {
+        Objects.requireNonNull(entryId, "entryId cannot be null");
+    }
 
     /**
-     * Converts a LoreSubmission domain object to a DTO.
+     * Factory method from LoreSubmission domain object.
+     *
+     * @param submission The domain entity to convert
+     * @return A new LoreSubmissionDTO, or null if submission is null
      */
-    public static LoreSubmissionDTO fromLoreSubmission(LoreSubmission submission) {
+    public static LoreSubmissionDTO from(LoreSubmission submission) {
         if (submission == null) return null;
-        
+
         return new LoreSubmissionDTO(
             submission.getId(),
             submission.getEntryId(),
@@ -120,8 +69,140 @@ public class LoreSubmissionDTO {
 
     /**
      * Converts this DTO to a LoreSubmission domain object.
+     *
+     * @return A new LoreSubmission populated with DTO values
      */
-    public LoreSubmission toLoreSubmission() {
+    public LoreSubmission toEntity() {
         return new LoreSubmission(this);
+    }
+
+    /**
+     * Builder for constructing LoreSubmissionDTO with optional fields.
+     */
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    /**
+     * Builder class for LoreSubmissionDTO.
+     */
+    public static class Builder {
+        private int id;
+        private String entryId;
+        private String slug;
+        private String visibility = "PUBLIC";
+        private String status = "PENDING";
+        private String submitterUuid;
+        private String createdBy;
+        private Timestamp submissionDate = new Timestamp(System.currentTimeMillis());
+        private String approvalStatus = "PENDING";
+        private String approvedBy;
+        private Timestamp approvedAt;
+        private int viewCount = 0;
+        private Timestamp lastViewedAt;
+        private Timestamp createdAt = new Timestamp(System.currentTimeMillis());
+        private Timestamp updatedAt = new Timestamp(System.currentTimeMillis());
+        private int contentVersion = 1;
+        private boolean isCurrentVersion = true;
+        private String content;
+
+        public Builder id(int id) {
+            this.id = id;
+            return this;
+        }
+
+        public Builder entryId(String entryId) {
+            this.entryId = entryId;
+            return this;
+        }
+
+        public Builder slug(String slug) {
+            this.slug = slug;
+            return this;
+        }
+
+        public Builder visibility(String visibility) {
+            this.visibility = visibility;
+            return this;
+        }
+
+        public Builder status(String status) {
+            this.status = status;
+            return this;
+        }
+
+        public Builder submitterUuid(String submitterUuid) {
+            this.submitterUuid = submitterUuid;
+            return this;
+        }
+
+        public Builder createdBy(String createdBy) {
+            this.createdBy = createdBy;
+            return this;
+        }
+
+        public Builder submissionDate(Timestamp submissionDate) {
+            this.submissionDate = submissionDate;
+            return this;
+        }
+
+        public Builder approvalStatus(String approvalStatus) {
+            this.approvalStatus = approvalStatus;
+            return this;
+        }
+
+        public Builder approvedBy(String approvedBy) {
+            this.approvedBy = approvedBy;
+            return this;
+        }
+
+        public Builder approvedAt(Timestamp approvedAt) {
+            this.approvedAt = approvedAt;
+            return this;
+        }
+
+        public Builder viewCount(int viewCount) {
+            this.viewCount = viewCount;
+            return this;
+        }
+
+        public Builder lastViewedAt(Timestamp lastViewedAt) {
+            this.lastViewedAt = lastViewedAt;
+            return this;
+        }
+
+        public Builder createdAt(Timestamp createdAt) {
+            this.createdAt = createdAt;
+            return this;
+        }
+
+        public Builder updatedAt(Timestamp updatedAt) {
+            this.updatedAt = updatedAt;
+            return this;
+        }
+
+        public Builder contentVersion(int contentVersion) {
+            this.contentVersion = contentVersion;
+            return this;
+        }
+
+        public Builder isCurrentVersion(boolean isCurrentVersion) {
+            this.isCurrentVersion = isCurrentVersion;
+            return this;
+        }
+
+        public Builder content(String content) {
+            this.content = content;
+            return this;
+        }
+
+        public LoreSubmissionDTO build() {
+            return new LoreSubmissionDTO(
+                id, entryId, slug, visibility, status, submitterUuid, createdBy,
+                submissionDate, approvalStatus, approvedBy, approvedAt,
+                viewCount, lastViewedAt, createdAt, updatedAt,
+                contentVersion, isCurrentVersion, content
+            );
+        }
     }
 }
