@@ -112,14 +112,16 @@ public class ItemRepository implements IItemRepository {
                 "FOREIGN KEY (collection_id) REFERENCES collection(id) ON DELETE CASCADE" +
                 ")";
 
-        // Execute table creation with proper connection management
-        try (Connection conn = dbConnection.getConnection();
-             Statement stmt = conn.createStatement()) {
-            stmt.execute(createItemTable);
-            stmt.execute(createCollectionTable);
-            stmt.execute(createCollectionItemTable);
-            stmt.execute(createPlayerProgressTable);
-            logger.info("Item database tables created/verified");
+        // Execute table creation - don't close Connection (shared SQLite connection)
+        try {
+            Connection conn = dbConnection.getConnection();
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute(createItemTable);
+                stmt.execute(createCollectionTable);
+                stmt.execute(createCollectionItemTable);
+                stmt.execute(createPlayerProgressTable);
+                logger.info("Item database tables created/verified");
+            }
         } catch (SQLException e) {
             logger.error("Failed to initialize item database tables", e);
         }
