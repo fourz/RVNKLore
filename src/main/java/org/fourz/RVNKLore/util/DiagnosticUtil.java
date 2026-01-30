@@ -109,7 +109,7 @@ public class DiagnosticUtil {
             if (connected) {
                 String dbType = plugin.getConfigManager().getStorageType();
                 results.add("Database Type: " + dbType.toUpperCase());
-                int totalEntries = plugin.getLoreManager().getAllLoreEntries().size();
+                int totalEntries = plugin.getLoreManager().getAllLoreEntriesSync().size();
                 results.add("Total Entries in Cache: " + totalEntries);
                 try {
                     String dbInfo = plugin.getDatabaseManager().getDatabaseInfo();
@@ -146,12 +146,12 @@ public class DiagnosticUtil {
     private void addLoreDiagnostics(List<String> results) {
         results.add("\n----- Lore Status -----");
         LoreManager loreManager = plugin.getLoreManager();
-        int totalEntries = loreManager.getAllLoreEntries().size();
-        int approvedEntries = loreManager.getApprovedLoreEntries().size();
+        int totalEntries = loreManager.getAllLoreEntriesSync().size();
+        int approvedEntries = loreManager.getApprovedLoreEntriesSync().size();
         results.add("Total Lore Entries: " + totalEntries);
         results.add("Approved Entries: " + approvedEntries);
         int invalidEntries = 0;
-        for (LoreEntry entry : loreManager.getAllLoreEntries()) {
+        for (LoreEntry entry : loreManager.getAllLoreEntriesSync()) {
             if (!entry.isValid()) {
                 invalidEntries++;
                 logger.debug("Invalid lore entry: " + entry.getId() + " - " + entry.getName());
@@ -164,7 +164,7 @@ public class DiagnosticUtil {
         }
         results.add("\nEntries by Type:");
         for (LoreType type : LoreType.values()) {
-            int count = loreManager.getLoreEntriesByType(type).size();
+            int count = loreManager.getLoreEntriesByTypeSync(type).size();
             if (count > 0) {
                 results.add("  " + type + ": " + count);
             }

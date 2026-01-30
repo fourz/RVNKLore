@@ -34,13 +34,13 @@ public class LoreApproveSubCommand implements SubCommand {
         // Try to match by full UUID
         try {
             UUID id = UUID.fromString(idInput);
-            matchedEntry = plugin.getLoreManager().getLoreEntry(id);
+            matchedEntry = plugin.getLoreManager().getLoreEntrySync(id);
         } catch (IllegalArgumentException ignored) {}
 
         // Try to match by short UUID (first 8 chars)
         if (matchedEntry == null && idInput.length() >= 8) {
             String shortUuidPart = idInput.substring(0, 8);
-            for (LoreEntry entry : plugin.getLoreManager().findLoreEntries(shortUuidPart)) {
+            for (LoreEntry entry : plugin.getLoreManager().findLoreEntriesSync(shortUuidPart)) {
                 if (!entry.isApproved()) {
                     String entryShortId = entry.getId().toString().substring(0, 8);
                     if (entryShortId.equalsIgnoreCase(shortUuidPart)) {
@@ -55,7 +55,7 @@ public class LoreApproveSubCommand implements SubCommand {
         if (matchedEntry == null && idInput.length() >= 8) {
             String[] parts = idInput.split(" ", 2);
             String shortId = parts[0].trim();
-            for (LoreEntry entry : plugin.getLoreManager().findLoreEntries(shortId)) {
+            for (LoreEntry entry : plugin.getLoreManager().findLoreEntriesSync(shortId)) {
                 if (!entry.isApproved()) {
                     String entryShortId = entry.getId().toString().substring(0, 8);
                     if (entryShortId.equalsIgnoreCase(shortId)) {
@@ -82,7 +82,7 @@ public class LoreApproveSubCommand implements SubCommand {
      * @return true if the command was processed
      */
     private boolean processApproval(CommandSender sender, UUID id) {
-        LoreEntry entry = plugin.getLoreManager().getLoreEntry(id);
+        LoreEntry entry = plugin.getLoreManager().getLoreEntrySync(id);
         
         if (entry == null) {
             sender.sendMessage(ChatColor.RED + "&c✖ No lore entry found with ID: " + id);
@@ -94,7 +94,7 @@ public class LoreApproveSubCommand implements SubCommand {
             return true;
         }
         
-        boolean success = plugin.getLoreManager().approveLoreEntry(id);
+        boolean success = plugin.getLoreManager().approveLoreEntrySync(id);
         
         if (success) {
             sender.sendMessage(ChatColor.GREEN + "&a✓ Lore entry approved successfully!");
@@ -126,7 +126,7 @@ public class LoreApproveSubCommand implements SubCommand {
             String partial = args[0].toLowerCase();
 
             if (partial.length() >= 2) {
-                for (LoreEntry entry : plugin.getLoreManager().findLoreEntries(partial)) {
+                for (LoreEntry entry : plugin.getLoreManager().findLoreEntriesSync(partial)) {
                     if (!entry.isApproved()) {
                         String uuid = entry.getId().toString();
                         String shortId = uuid.substring(0, 8);
@@ -143,7 +143,7 @@ public class LoreApproveSubCommand implements SubCommand {
         } else if (args.length > 1) {
             // if a short uuid is prodided, show details
             String shortUuidPart = args[0].trim();  
-            for (LoreEntry entry : plugin.getLoreManager().findLoreEntries(shortUuidPart)) {
+            for (LoreEntry entry : plugin.getLoreManager().findLoreEntriesSync(shortUuidPart)) {
                 if (!entry.isApproved()) {
                     String entryShortId = entry.getId().toString().substring(0, 8);
                     if (entryShortId.equalsIgnoreCase(shortUuidPart)) {                        // Stage 2: If they typed a short ID, show details

@@ -181,7 +181,7 @@ public class LoreDebugSubCommand implements SubCommand {
         if (args.length == 2 && args[0].equalsIgnoreCase("check")) {
             // Return a few lore entry IDs for convenience
             List<String> entryIds = new ArrayList<>();
-            plugin.getLoreManager().getAllLoreEntries().stream()
+            plugin.getLoreManager().getAllLoreEntriesSync().stream()
                 .limit(5)
                 .forEach(entry -> entryIds.add(entry.getId()));
             return entryIds;

@@ -83,7 +83,7 @@ public class LoreAddSubCommand implements SubCommand {
             entry.setNbtData("{}");
         }
         // Add the entry
-        boolean success = plugin.getLoreManager().addLoreEntry(entry);
+        boolean success = plugin.getLoreManager().addLoreEntrySync(entry);
         if (success) {
             player.sendMessage(ChatColor.GREEN + "&a✓ Lore entry added successfully! ID: " + entry.getId());
             player.sendMessage(ChatColor.YELLOW + "&7   Your submission will be reviewed by a staff member.");

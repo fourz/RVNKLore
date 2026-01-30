@@ -74,7 +74,7 @@ public class PlayerLoreHandler implements LoreHandler {
             
             // Save to database - automatically approved since this is server-generated
             entry.setApproved(true);
-            boolean success = plugin.getLoreManager().addLoreEntry(entry);
+            boolean success = plugin.getLoreManager().addLoreEntrySync(entry);
             
             if (success) {
                 logger.info("Player name change lore entry created for: " + player.getName());
@@ -109,7 +109,7 @@ public class PlayerLoreHandler implements LoreHandler {
             
             // Save to database - automatically approved since this is server-generated
             entry.setApproved(true);
-            boolean success = plugin.getLoreManager().addLoreEntry(entry);
+            boolean success = plugin.getLoreManager().addLoreEntrySync(entry);
             
             if (success) {
                 logger.info("Player lore entry created for: " + player.getName());

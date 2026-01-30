@@ -1,5 +1,6 @@
 package org.fourz.RVNKLore;
 
+import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.fourz.RVNKLore.handler.HandlerFactory;
 import org.fourz.RVNKLore.lore.LoreManager;
@@ -8,6 +9,10 @@ import org.fourz.RVNKLore.data.DatabaseManager;
 import org.fourz.RVNKLore.debug.Debug;
 import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.command.CommandManager;
+import org.fourz.RVNKLore.service.ILoreService;
+import org.fourz.RVNKLore.service.IItemService;
+import org.fourz.RVNKLore.service.ICollectionService;
+import org.fourz.RVNKLore.service.ISubmissionService;
 import org.fourz.RVNKLore.util.UtilityManager;
 import org.fourz.RVNKLore.lore.item.ItemManager;
 import org.fourz.RVNKLore.lore.player.PlayerManager;
@@ -25,7 +30,13 @@ public class RVNKLore extends JavaPlugin {
     private int healthCheckTaskId = -1;
     private Thread shutdownHook;
     private boolean shuttingDown = false;
-    private final Object shutdownLock = new Object();@Override
+    private final Object shutdownLock = new Object();
+
+    // RVNKCore integration
+    private boolean rvnkCoreAvailable = false;
+    private Object rvnkCoreInstance = null;
+
+    @Override
     public void onEnable() {
         // Initialize logger first
         logger = LogManager.getInstance(this, "RVNKLore");
@@ -76,9 +87,13 @@ public class RVNKLore extends JavaPlugin {
             
             // Finally initialize command system
             commandManager = new CommandManager(this);
-              // Start periodic health check
+
+            // Register with RVNKCore ServiceRegistry if available
+            registerWithRVNKCore();
+
+            // Start periodic health check
             startHealthCheck();
-            
+
             logger.info("RVNKLore has been enabled!");
         } catch (Exception e) {
             logger.error("Failed to initialize plugin", e);
@@ -153,6 +168,9 @@ public class RVNKLore extends JavaPlugin {
     }
 
     private void cleanupManagers() {
+        // Unregister from RVNKCore first
+        unregisterFromRVNKCore();
+
         if (utilityManager != null) {
             utilityManager.cleanup();
             utilityManager = null;
@@ -236,7 +254,7 @@ public class RVNKLore extends JavaPlugin {
     
     /**
      * Get the player manager for player lore operations
-     * 
+     *
      * @return The player manager
      */
     public PlayerManager getPlayerManager() {
@@ -246,5 +264,100 @@ public class RVNKLore extends JavaPlugin {
             playerManager.initialize();
         }
         return playerManager;
+    }
+
+    /**
+     * Checks if RVNKCore integration is available.
+     * @return true if RVNKCore is loaded and services are registered
+     */
+    public boolean isRVNKCoreAvailable() {
+        return rvnkCoreAvailable;
+    }
+
+    /**
+     * Registers services with RVNKCore ServiceRegistry if available.
+     * Uses reflection to avoid hard dependency on RVNKCore classes.
+     */
+    private void registerWithRVNKCore() {
+        Plugin rvnkCorePlugin = getServer().getPluginManager().getPlugin("RVNKCore");
+        if (rvnkCorePlugin == null || !rvnkCorePlugin.isEnabled()) {
+            logger.info("RVNKCore not found - running in standalone mode");
+            return;
+        }
+
+        try {
+            // Get RVNKCore instance via static getInstance() method
+            Class<?> rvnkCoreClass = Class.forName("org.fourz.rvnkcore.RVNKCore");
+            Object coreInstance = rvnkCoreClass.getMethod("getInstance").invoke(null);
+            if (coreInstance == null) {
+                logger.warning("RVNKCore instance is null - services not registered");
+                return;
+            }
+
+            // Get the ServiceRegistry from RVNKCore
+            Object serviceRegistry = rvnkCoreClass.getMethod("getServiceRegistry").invoke(coreInstance);
+            if (serviceRegistry == null) {
+                logger.warning("RVNKCore ServiceRegistry is null - services not registered");
+                return;
+            }
+
+            // Get the registerService method
+            Class<?> registryClass = serviceRegistry.getClass();
+            java.lang.reflect.Method registerMethod = registryClass.getMethod("registerService", Class.class, Object.class);
+
+            // Register our services
+            // Note: LoreManager implements ILoreService, ItemManager implements IItemService, etc.
+            registerMethod.invoke(serviceRegistry, ILoreService.class, loreManager);
+            logger.info("Registered ILoreService with RVNKCore");
+
+            registerMethod.invoke(serviceRegistry, IItemService.class, itemManager);
+            logger.info("Registered IItemService with RVNKCore");
+
+            // ICollectionService and ISubmissionService can be added when implementations exist
+            // registerMethod.invoke(serviceRegistry, ICollectionService.class, collectionManager);
+            // registerMethod.invoke(serviceRegistry, ISubmissionService.class, submissionManager);
+
+            rvnkCoreAvailable = true;
+            rvnkCoreInstance = coreInstance;
+            logger.info("RVNKCore integration enabled - services registered");
+
+        } catch (ClassNotFoundException e) {
+            logger.info("RVNKCore classes not found - running in standalone mode");
+        } catch (Exception e) {
+            logger.warning("Failed to register with RVNKCore: " + e.getMessage());
+            logger.warning("Running in standalone mode");
+        }
+    }
+
+    /**
+     * Unregisters services from RVNKCore ServiceRegistry.
+     */
+    private void unregisterFromRVNKCore() {
+        if (!rvnkCoreAvailable || rvnkCoreInstance == null) {
+            return;
+        }
+
+        try {
+            Class<?> rvnkCoreClass = rvnkCoreInstance.getClass();
+            Object serviceRegistry = rvnkCoreClass.getMethod("getServiceRegistry").invoke(rvnkCoreInstance);
+            if (serviceRegistry == null) {
+                return;
+            }
+
+            Class<?> registryClass = serviceRegistry.getClass();
+            java.lang.reflect.Method unregisterMethod = registryClass.getMethod("unregisterService", Class.class);
+
+            // Unregister services in reverse order
+            unregisterMethod.invoke(serviceRegistry, IItemService.class);
+            unregisterMethod.invoke(serviceRegistry, ILoreService.class);
+
+            logger.info("Services unregistered from RVNKCore");
+
+        } catch (Exception e) {
+            logger.warning("Failed to unregister from RVNKCore: " + e.getMessage());
+        }
+
+        rvnkCoreAvailable = false;
+        rvnkCoreInstance = null;
     }
 }

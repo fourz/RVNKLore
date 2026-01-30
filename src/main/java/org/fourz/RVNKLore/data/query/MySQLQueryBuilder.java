@@ -7,10 +7,10 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * MySQL-specific implementation of QueryBuilder.
+ * MySQL-specific implementation of IQueryBuilder.
  * Handles MySQL dialect and upsert syntax.
  */
-public class MySQLQueryBuilder implements QueryBuilder {
+public class MySQLQueryBuilder implements IQueryBuilder {
     private enum QueryType {
         SELECT, INSERT, UPDATE, DELETE
     }
@@ -35,20 +35,20 @@ public class MySQLQueryBuilder implements QueryBuilder {
     }
 
     @Override
-    public QueryBuilder select(String... columns) {
+    public IQueryBuilder select(String... columns) {
         this.queryType = QueryType.SELECT;
         this.columns.addAll(Arrays.asList(columns));
         return this;
     }
 
     @Override
-    public QueryBuilder from(String table) {
+    public IQueryBuilder from(String table) {
         this.table = table;
         return this;
     }
 
     @Override
-    public QueryBuilder where(String condition, Object... params) {
+    public IQueryBuilder where(String condition, Object... params) {
         if (whereClause.length() > 0) {
             whereClause.append(" AND ");
         }
@@ -59,7 +59,7 @@ public class MySQLQueryBuilder implements QueryBuilder {
     }
 
     @Override
-    public QueryBuilder and(String condition, Object... params) {
+    public IQueryBuilder and(String condition, Object... params) {
         if (!hasWhere) {
             return where(condition, params);
         }
@@ -69,7 +69,7 @@ public class MySQLQueryBuilder implements QueryBuilder {
     }
 
     @Override
-    public QueryBuilder or(String condition, Object... params) {
+    public IQueryBuilder or(String condition, Object... params) {
         if (!hasWhere) {
             return where(condition, params);
         }
@@ -79,7 +79,7 @@ public class MySQLQueryBuilder implements QueryBuilder {
     }
 
     @Override
-    public QueryBuilder orderBy(String column, boolean ascending) {
+    public IQueryBuilder orderBy(String column, boolean ascending) {
         if (orderByClause.length() > 0) {
             orderByClause.append(", ");
         }
@@ -88,7 +88,7 @@ public class MySQLQueryBuilder implements QueryBuilder {
     }
 
     @Override
-    public QueryBuilder groupBy(String... columns) {
+    public IQueryBuilder groupBy(String... columns) {
         if (groupByClause.length() > 0) {
             groupByClause.append(", ");
         }
@@ -97,7 +97,7 @@ public class MySQLQueryBuilder implements QueryBuilder {
     }
 
     @Override
-    public QueryBuilder having(String condition, Object... params) {
+    public IQueryBuilder having(String condition, Object... params) {
         if (havingClause.length() > 0) {
             havingClause.append(" AND ");
         }
@@ -107,32 +107,32 @@ public class MySQLQueryBuilder implements QueryBuilder {
     }
 
     @Override
-    public QueryBuilder limit(int limit) {
+    public IQueryBuilder limit(int limit) {
         this.limitValue = limit;
         return this;
     }
 
     @Override
-    public QueryBuilder offset(int offset) {
+    public IQueryBuilder offset(int offset) {
         this.offsetValue = offset;
         return this;
     }
 
     @Override
-    public QueryBuilder insertInto(String table) {
+    public IQueryBuilder insertInto(String table) {
         this.queryType = QueryType.INSERT;
         this.table = table;
         return this;
     }
 
     @Override
-    public QueryBuilder columns(String... columns) {
+    public IQueryBuilder columns(String... columns) {
         this.columns.addAll(Arrays.asList(columns));
         return this;
     }
 
     @Override
-    public QueryBuilder values(Object... values) {
+    public IQueryBuilder values(Object... values) {
         List<Object> valuesList = Arrays.asList(values);
         insertValues.add(valuesList);
         parameters.addAll(valuesList);
@@ -140,34 +140,34 @@ public class MySQLQueryBuilder implements QueryBuilder {
     }
 
     @Override
-    public QueryBuilder update(String table) {
+    public IQueryBuilder update(String table) {
         this.queryType = QueryType.UPDATE;
         this.table = table;
         return this;
     }
 
     @Override
-    public QueryBuilder set(String column, Object value) {
+    public IQueryBuilder set(String column, Object value) {
         updateValues.put(column, value);
         parameters.add(value);
         return this;
     }
 
     @Override
-    public QueryBuilder deleteFrom(String table) {
+    public IQueryBuilder deleteFrom(String table) {
         this.queryType = QueryType.DELETE;
         this.table = table;
         return this;
     }
 
     @Override
-    public QueryBuilder join(String table, String condition) {
+    public IQueryBuilder join(String table, String condition) {
         joinClause.append(" JOIN ").append(table).append(" ON ").append(condition);
         return this;
     }
 
     @Override
-    public QueryBuilder leftJoin(String table, String condition) {
+    public IQueryBuilder leftJoin(String table, String condition) {
         joinClause.append(" LEFT JOIN ").append(table).append(" ON ").append(condition);
         return this;
     }
@@ -300,9 +300,9 @@ public class MySQLQueryBuilder implements QueryBuilder {
      * This is MySQL-specific functionality.
      * 
      * @param updateColumns The columns to update on duplicate key
-     * @return This QueryBuilder for chaining
+     * @return This IQueryBuilder for chaining
      */
-    public QueryBuilder onDuplicateKeyUpdate(String... updateColumns) {
+    public IQueryBuilder onDuplicateKeyUpdate(String... updateColumns) {
         if (queryType != QueryType.INSERT) {
             throw new IllegalStateException("ON DUPLICATE KEY UPDATE can only be used with INSERT queries");
         }

@@ -59,15 +59,15 @@ public class LoreListSubCommand implements SubCommand {
         // Get lore entries
         List<LoreEntry> entries;
         if (type != null) {
-            entries = plugin.getLoreManager().getLoreEntriesByType(type);
+            entries = plugin.getLoreManager().getLoreEntriesByTypeSync(type);
         } else {
-            entries = plugin.getLoreManager().getApprovedLoreEntries();
+            entries = plugin.getLoreManager().getApprovedLoreEntriesSync();
         }
 
         // If sender is an admin, include unapproved entries
         if (sender.hasPermission("rvnklore.admin")) {
             entries = type != null ? 
-                    plugin.getLoreManager().getLoreEntriesByType(type) : 
+                    plugin.getLoreManager().getLoreEntriesByTypeSync(type) : 
                     new ArrayList<>(plugin.getDatabaseManager().getAllLoreEntries());
         } else {
             // Filter out unapproved entries for non-admins            

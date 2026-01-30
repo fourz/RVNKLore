@@ -120,7 +120,7 @@ public class LoreItemSubCommand implements SubCommand {
             } else if ("info".equals(subCommandName)) {
                 // Tab completion for /lore item info <short uuid>
                 List<String> completions = new ArrayList<>();
-                for (org.fourz.RVNKLore.lore.LoreEntry entry : plugin.getLoreManager().getAllLoreEntries()) {
+                for (org.fourz.RVNKLore.lore.LoreEntry entry : plugin.getLoreManager().getAllLoreEntriesSync()) {
                     String shortId = entry.getId().toString().substring(0, 8);
                     completions.add(shortId);
                 }

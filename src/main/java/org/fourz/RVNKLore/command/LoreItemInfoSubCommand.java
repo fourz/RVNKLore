@@ -63,7 +63,7 @@ public class LoreItemInfoSubCommand implements SubCommand {
 
         // Try to match by UUID or short UUID for LoreEntry
        LoreEntry matched = null;
-        for (LoreEntry entry : plugin.getLoreManager().getAllLoreEntries()) {
+        for (LoreEntry entry : plugin.getLoreManager().getAllLoreEntriesSync()) {
             String uuid = entry.getId().toString();
             if (uuid.equalsIgnoreCase(itemNameOrId) || uuid.substring(0, 8).equalsIgnoreCase(itemNameOrId)) {
                 matched = entry;

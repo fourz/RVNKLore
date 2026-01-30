@@ -39,7 +39,7 @@ public class LoreGetSubCommand implements SubCommand {
             return true;
         }
         
-        LoreEntry entry = plugin.getLoreManager().getLoreEntry(id);
+        LoreEntry entry = plugin.getLoreManager().getLoreEntrySync(id);
         
         if (entry == null) {
             sender.sendMessage(ChatColor.RED + "&c✖ No lore entry found with ID: " + idStr);

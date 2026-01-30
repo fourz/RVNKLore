@@ -75,6 +75,14 @@
             <version>7.3.0</version>
             <scope>provided</scope>
         </dependency>
+        <!-- RVNKCore - Local JAR dependency (bundled with RVNKTools) -->
+        <dependency>
+            <groupId>org.fourz</groupId>
+            <artifactId>rvnkcore</artifactId>
+            <version>1.3.0-alpha</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/lib/rvnkcore-1.3.0-alpha.jar</systemPath>
+        </dependency>
     </dependencies>
     <build>
         <plugins>
