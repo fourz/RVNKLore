@@ -53,8 +53,7 @@ public class LoreEntryRepository implements ILoreEntryRepository {
     @Override
     public CompletableFuture<Boolean> addLoreEntry(LoreEntry entry) {
         return CompletableFuture.supplyAsync(() -> {
-            try {
-                Connection conn = dbConnection.getConnection();
+            try (Connection conn = dbConnection.getConnection()) {
                 conn.setAutoCommit(false);
 
                 try {
@@ -104,8 +103,7 @@ public class LoreEntryRepository implements ILoreEntryRepository {
     @Override
     public CompletableFuture<Boolean> updateLoreEntry(LoreEntry entry) {
         return CompletableFuture.supplyAsync(() -> {
-            try {
-                Connection conn = dbConnection.getConnection();
+            try (Connection conn = dbConnection.getConnection()) {
                 conn.setAutoCommit(false);
 
                 try {
@@ -172,8 +170,7 @@ public class LoreEntryRepository implements ILoreEntryRepository {
     @Override
     public CompletableFuture<Boolean> deleteLoreEntry(UUID id) {
         return CompletableFuture.supplyAsync(() -> {
-            try {
-                Connection conn = dbConnection.getConnection();
+            try (Connection conn = dbConnection.getConnection()) {
                 conn.setAutoCommit(false);
 
                 try {
@@ -429,8 +426,7 @@ public class LoreEntryRepository implements ILoreEntryRepository {
     @Override
     public CompletableFuture<Boolean> approveLoreEntry(String entryId, String approvedBy) {
         return CompletableFuture.supplyAsync(() -> {
-            try {
-                Connection conn = dbConnection.getConnection();
+            try (Connection conn = dbConnection.getConnection()) {
                 conn.setAutoCommit(false);
 
                 try {
