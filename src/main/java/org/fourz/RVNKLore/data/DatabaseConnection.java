@@ -209,20 +209,17 @@ public abstract class DatabaseConnection {
     }
     
     /**
-     * Check if the database connection is active and valid
+     * Check if the database connection is active and valid.
+     * Uses JDBC Connection.isValid() for lightweight validation instead of
+     * executing SELECT 1, which can interfere with concurrent operations on SQLite.
      */
     public boolean isConnected() {
         try {
-            if (connection != null && !connection.isClosed()) {
-                // Test the connection with a simple query
-                try (Statement stmt = connection.createStatement()) {
-                    stmt.execute("SELECT 1");
-                    return true;
-                }
-            }
-            return false;
+            // Use JDBC standard isValid() - more reliable than SELECT 1
+            // especially for SQLite single-connection scenario
+            return connection != null && !connection.isClosed() && connection.isValid(2);
         } catch (SQLException e) {
-            logger.error("Database connection check failed", e);
+            logger.debug("Database connection check failed: " + e.getMessage());
             return false;
         }
     }
@@ -259,9 +256,22 @@ public abstract class DatabaseConnection {
     }
     
     /**
-     * Get the active database connection
+     * Get the active database connection.
+     * Validates connection state and attempts reconnection if closed.
+     * This is critical for async operations where the connection may
+     * become stale between scheduling and execution.
+     *
+     * @return A valid database connection
+     * @throws IllegalStateException if unable to establish connection
      */
-    public Connection getConnection() {
+    public synchronized Connection getConnection() {
+        if (!isConnected()) {
+            logger.debug("Connection unavailable, attempting reconnect...");
+            if (!reconnect()) {
+                throw new IllegalStateException("Database connection unavailable and reconnect failed: "
+                    + (lastConnectionError != null ? lastConnectionError : "unknown error"));
+            }
+        }
         return connection;
     }
     

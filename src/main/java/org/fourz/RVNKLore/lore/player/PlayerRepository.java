@@ -57,19 +57,24 @@ public class PlayerRepository implements IPlayerRepository {
                          "AND s.is_current_version = TRUE " +
                          "AND s.content LIKE ?";
 
-            try (Connection conn = dbConnection.getConnection();
-                 PreparedStatement stmt = conn.prepareStatement(sql)) {
+            try {
+                Connection conn = dbConnection.getConnection();
+                try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                    stmt.setString(1, LoreType.PLAYER.name());
+                    stmt.setString(2, "%\"player_uuid\":\"" + playerUuid.toString() + "\"%");
 
-                stmt.setString(1, LoreType.PLAYER.name());
-                stmt.setString(2, "%\"player_uuid\":\"" + playerUuid.toString() + "\"%");
-
-                try (ResultSet rs = stmt.executeQuery()) {
-                    if (rs.next()) {
-                        return rs.getInt(1) > 0;
+                    try (ResultSet rs = stmt.executeQuery()) {
+                        if (rs.next()) {
+                            return rs.getInt(1) > 0;
+                        }
                     }
                 }
             } catch (SQLException e) {
                 logger.error("Error checking if player exists: " + playerUuid, e);
+                fallbackTracker.recordFailure();
+            } catch (IllegalStateException e) {
+                logger.error("Database unavailable checking player exists: " + playerUuid, e);
+                fallbackTracker.recordFailure();
             }
 
             return false;
@@ -91,21 +96,26 @@ public class PlayerRepository implements IPlayerRepository {
                          "AND s.is_current_version = TRUE " +
                          "AND s.content LIKE ?";
 
-            try (Connection conn = dbConnection.getConnection();
-                 PreparedStatement stmt = conn.prepareStatement(sql)) {
+            try {
+                Connection conn = dbConnection.getConnection();
+                try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                    stmt.setString(1, LoreType.PLAYER.name());
+                    stmt.setString(2, "%\"player_uuid\":\"" + playerUuid.toString() + "\"%");
 
-                stmt.setString(1, LoreType.PLAYER.name());
-                stmt.setString(2, "%\"player_uuid\":\"" + playerUuid.toString() + "\"%");
-
-                try (ResultSet rs = stmt.executeQuery()) {
-                    if (rs.next()) {
-                        String content = rs.getString("content");
-                        String playerName = extractJsonValue(content, "player_name");
-                        return Optional.ofNullable(playerName);
+                    try (ResultSet rs = stmt.executeQuery()) {
+                        if (rs.next()) {
+                            String content = rs.getString("content");
+                            String playerName = extractJsonValue(content, "player_name");
+                            return Optional.ofNullable(playerName);
+                        }
                     }
                 }
             } catch (SQLException e) {
                 logger.error("Error getting stored player name: " + playerUuid, e);
+                fallbackTracker.recordFailure();
+            } catch (IllegalStateException e) {
+                logger.error("Database unavailable getting stored player name: " + playerUuid, e);
+                fallbackTracker.recordFailure();
             }
 
             return Optional.empty();
@@ -128,19 +138,24 @@ public class PlayerRepository implements IPlayerRepository {
                          "AND s.is_current_version = TRUE " +
                          "AND s.content LIKE ?";
 
-            try (Connection conn = dbConnection.getConnection();
-                 PreparedStatement stmt = conn.prepareStatement(sql)) {
+            try {
+                Connection conn = dbConnection.getConnection();
+                try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                    stmt.setString(1, LoreType.PLAYER.name());
+                    stmt.setString(2, "%\"player_uuid\":\"" + playerUuid.toString() + "\"%");
 
-                stmt.setString(1, LoreType.PLAYER.name());
-                stmt.setString(2, "%\"player_uuid\":\"" + playerUuid.toString() + "\"%");
-
-                try (ResultSet rs = stmt.executeQuery()) {
-                    while (rs.next()) {
-                        entryIds.add(rs.getString("id"));
+                    try (ResultSet rs = stmt.executeQuery()) {
+                        while (rs.next()) {
+                            entryIds.add(rs.getString("id"));
+                        }
                     }
                 }
             } catch (SQLException e) {
                 logger.error("Error getting player lore entries: " + playerUuid, e);
+                fallbackTracker.recordFailure();
+            } catch (IllegalStateException e) {
+                logger.error("Database unavailable getting player lore entries: " + playerUuid, e);
+                fallbackTracker.recordFailure();
             }
 
             return entryIds;
@@ -165,20 +180,25 @@ public class PlayerRepository implements IPlayerRepository {
                          "AND s.content LIKE ? " +
                          "AND s.content LIKE ?";
 
-            try (Connection conn = dbConnection.getConnection();
-                 PreparedStatement stmt = conn.prepareStatement(sql)) {
+            try {
+                Connection conn = dbConnection.getConnection();
+                try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                    stmt.setString(1, LoreType.PLAYER.name());
+                    stmt.setString(2, "%\"player_uuid\":\"" + playerUuid.toString() + "\"%");
+                    stmt.setString(3, "%\"entry_type\":\"" + entryType + "\"%");
 
-                stmt.setString(1, LoreType.PLAYER.name());
-                stmt.setString(2, "%\"player_uuid\":\"" + playerUuid.toString() + "\"%");
-                stmt.setString(3, "%\"entry_type\":\"" + entryType + "\"%");
-
-                try (ResultSet rs = stmt.executeQuery()) {
-                    while (rs.next()) {
-                        entryIds.add(rs.getString("id"));
+                    try (ResultSet rs = stmt.executeQuery()) {
+                        while (rs.next()) {
+                            entryIds.add(rs.getString("id"));
+                        }
                     }
                 }
             } catch (SQLException e) {
                 logger.error("Error getting player lore entries by type: " + playerUuid + ", " + entryType, e);
+                fallbackTracker.recordFailure();
+            } catch (IllegalStateException e) {
+                logger.error("Database unavailable getting player lore entries by type: " + playerUuid, e);
+                fallbackTracker.recordFailure();
             }
 
             return entryIds;
@@ -215,29 +235,34 @@ public class PlayerRepository implements IPlayerRepository {
                          "AND s.content LIKE ? " +
                          "ORDER BY s.created_at ASC";
 
-            try (Connection conn = dbConnection.getConnection();
-                 PreparedStatement stmt = conn.prepareStatement(sql)) {
+            try {
+                Connection conn = dbConnection.getConnection();
+                try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                    stmt.setString(1, LoreType.PLAYER.name());
+                    stmt.setString(2, "%\"player_uuid\":\"" + playerUuid.toString() + "\"%");
+                    stmt.setString(3, "%\"entry_type\":\"name_change\"%");
 
-                stmt.setString(1, LoreType.PLAYER.name());
-                stmt.setString(2, "%\"player_uuid\":\"" + playerUuid.toString() + "\"%");
-                stmt.setString(3, "%\"entry_type\":\"name_change\"%");
+                    try (ResultSet rs = stmt.executeQuery()) {
+                        while (rs.next()) {
+                            String content = rs.getString("content");
 
-                try (ResultSet rs = stmt.executeQuery()) {
-                    while (rs.next()) {
-                        String content = rs.getString("content");
+                            // Extract previous_name and player_name from the JSON content
+                            String previousName = extractJsonValue(content, "previous_name");
+                            String newName = extractJsonValue(content, "player_name");
+                            long timestamp = rs.getTimestamp("created_at").getTime();
 
-                        // Extract previous_name and player_name from the JSON content
-                        String previousName = extractJsonValue(content, "previous_name");
-                        String newName = extractJsonValue(content, "player_name");
-                        long timestamp = rs.getTimestamp("created_at").getTime();
-
-                        if (previousName != null && newName != null) {
-                            nameChanges.add(new NameChangeRecord(previousName, newName, timestamp));
+                            if (previousName != null && newName != null) {
+                                nameChanges.add(new NameChangeRecord(previousName, newName, timestamp));
+                            }
                         }
                     }
                 }
             } catch (SQLException e) {
                 logger.error("Error getting name change history: " + playerUuid, e);
+                fallbackTracker.recordFailure();
+            } catch (IllegalStateException e) {
+                logger.error("Database unavailable getting name change history: " + playerUuid, e);
+                fallbackTracker.recordFailure();
             }
 
             return nameChanges;
