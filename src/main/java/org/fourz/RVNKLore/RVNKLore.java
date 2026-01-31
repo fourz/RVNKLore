@@ -12,6 +12,7 @@ import org.fourz.RVNKLore.service.ILoreService;
 import org.fourz.RVNKLore.service.IItemService;
 import org.fourz.RVNKLore.service.ICollectionService;
 import org.fourz.RVNKLore.service.ISubmissionService;
+import org.fourz.RVNKLore.service.IPlayerService;
 import org.fourz.RVNKLore.util.UtilityManager;
 import org.fourz.RVNKLore.lore.item.ItemManager;
 import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
@@ -42,29 +43,29 @@ public class RVNKLore extends JavaPlugin {
     public void onEnable() {
         // Initialize logger first
         logger = LogManager.getInstance(this, "RVNKLore");
-        
+
         // Initialize ConfigManager first to get the log level
         configManager = new ConfigManager(this);
-        
+
         // Initialize debug in ConfigManager
         configManager.initDebugLogging();
-        
+
         registerShutdownHook();
-        
+
         logger.info("Initializing RVNKLore...");
-        
+
         try {
             // First try to initialize the database
             databaseManager = new DatabaseManager(this);
-            
+
             // Check database connection
             if (!databaseManager.isConnected()) {
                 throw new Exception("Database connection failed. Plugin cannot function without storage.");
             }
-            
+
             // Create handler factory but don't initialize it yet
             handlerFactory = new HandlerFactory(this);
-            
+
             // Initialize utility manager for diagnostics
             utilityManager = UtilityManager.getInstance(this);
               // First initialize the handler factory completely before LoreManager needs it
@@ -80,14 +81,14 @@ public class RVNKLore extends JavaPlugin {
 
             // Initialize ItemManager through LoreManager
             this.itemManager = loreManager.getItemManager();
-            
+
             // Initialize SubmissionManager for lore submission workflow
             this.submissionManager = new SubmissionManager(this);
-            
+
             // Remove direct CosmeticManager initialization (now handled by ItemManager)
             // cosmeticManager = new CosmeticManager(this);
             // cosmeticManager.initialize();
-            
+
             // Finally initialize command system
             commandManager = new CommandManager(this);
 
@@ -115,14 +116,14 @@ public class RVNKLore extends JavaPlugin {
         });
         Runtime.getRuntime().addShutdownHook(shutdownHook);
     }
-    
+
     private void startHealthCheck() {        healthCheckTaskId = getServer().getScheduler().scheduleSyncRepeatingTask(this, () -> {
             // Check database connection
             if (databaseManager != null && !databaseManager.isConnected()) {
                 logger.warning("Database connection lost, attempting reconnect");
                 databaseManager.reconnect();
             }
-            
+
             // Log any accumulated errors
             // int errorCount = Debug.getErrorCount();
             // if (errorCount > 0) {
@@ -146,21 +147,21 @@ public class RVNKLore extends JavaPlugin {
         }
 
         logger.info("RVNKLore is shutting down...");
-        
+
         try {
             // Cancel health check task if running
             if (healthCheckTaskId != -1) {
                 getServer().getScheduler().cancelTask(healthCheckTaskId);
                 healthCheckTaskId = -1;
             }
-            
+
             // Remove shutdown hook to prevent duplicate cleanup
             try {
                 Runtime.getRuntime().removeShutdownHook(shutdownHook);
             } catch (IllegalStateException e) {
                 // JVM is already shutting down, ignore
             }
-            
+
             cleanupManagers();
         } catch (Exception e) {
             logger.error("Failed to cleanup managers", e);
@@ -181,7 +182,7 @@ public class RVNKLore extends JavaPlugin {
             utilityManager.cleanup();
             utilityManager = null;
         }
-        
+
         if (handlerFactory != null) {
             handlerFactory.unregisterAllHandlers();
             handlerFactory = null;
@@ -207,7 +208,7 @@ public class RVNKLore extends JavaPlugin {
         if (configManager != null) {
             configManager = null;
         }
-        
+
         if (databaseManager != null) {
             databaseManager.close();
             databaseManager = null;
@@ -216,7 +217,7 @@ public class RVNKLore extends JavaPlugin {
 
     public LoreManager getLoreManager() {
         return loreManager;
-    }    
+    }
     public LogManager getLogManager() {
         return logger;
     }
@@ -224,18 +225,18 @@ public class RVNKLore extends JavaPlugin {
     public ConfigManager getConfigManager() {
         return configManager;
     }
-    
+
     public CommandManager getCommandManager() {
         return commandManager;
     }
-    
+
     public DatabaseManager getDatabaseManager() {
         return databaseManager;
     }
-    
+
     /**
      * Get the handler factory for this plugin
-     * 
+     *
      * @return The handler factory
      */    public HandlerFactory getHandlerFactory() {
         if (handlerFactory == null) {
@@ -253,7 +254,7 @@ public class RVNKLore extends JavaPlugin {
     public UtilityManager getUtilityManager() {
         return utilityManager;
     }
-    
+
     /**
      * Get the player manager for player lore operations
      *
@@ -328,6 +329,12 @@ public class RVNKLore extends JavaPlugin {
                 logger.info("Registered ISubmissionService with RVNKCore");
             }
 
+            // Register PlayerService
+            if (playerManager != null) {
+                registerMethod.invoke(serviceRegistry, IPlayerService.class, playerManager);
+                logger.info("Registered IPlayerService with RVNKCore");
+            }
+
             rvnkCoreAvailable = true;
             rvnkCoreInstance = coreInstance;
             logger.info("RVNKCore integration enabled - services registered");
@@ -359,6 +366,7 @@ public class RVNKLore extends JavaPlugin {
             java.lang.reflect.Method unregisterMethod = registryClass.getMethod("unregisterService", Class.class);
 
             // Unregister services in reverse order
+            unregisterMethod.invoke(serviceRegistry, IPlayerService.class);
             unregisterMethod.invoke(serviceRegistry, ISubmissionService.class);
             unregisterMethod.invoke(serviceRegistry, ICollectionService.class);
             unregisterMethod.invoke(serviceRegistry, IItemService.class);
