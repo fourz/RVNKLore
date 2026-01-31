@@ -319,7 +319,7 @@ public class CollectionManager implements ICollectionService {
             return;
         }
         ItemRepository repository = new ItemRepository(plugin, plugin.getDatabaseManager().getDatabaseConnection());
-        List<ItemCollection> loadedCollections = repository.loadAllCollections();
+        List<ItemCollection> loadedCollections = repository.loadAllCollections().join();
         for (ItemCollection collection : loadedCollections) {
             collections.put(collection.getId(), collection);
             logger.info("Loaded collection from database: " + collection.getName());
@@ -347,7 +347,7 @@ public class CollectionManager implements ICollectionService {
         
         try {
             ItemRepository repository = new ItemRepository(plugin, plugin.getDatabaseManager().getDatabaseConnection());
-            boolean saved = repository.saveCollection(collection);
+            boolean saved = repository.saveCollection(collection).join();
             
             if (saved) {
                 logger.info("Successfully saved collection: " + collection.getId());
@@ -393,7 +393,7 @@ public class CollectionManager implements ICollectionService {
         }
         
         ItemRepository repository = new ItemRepository(plugin, plugin.getDatabaseManager().getDatabaseConnection());
-        return repository.getPlayerCollectionProgress(playerId.toString(), collectionId);
+        return repository.getPlayerCollectionProgress(playerId.toString(), collectionId).join();
     }
     
     /**
@@ -425,7 +425,7 @@ public class CollectionManager implements ICollectionService {
         }
         
         ItemRepository repository = new ItemRepository(plugin, plugin.getDatabaseManager().getDatabaseConnection());
-        boolean updated = repository.updatePlayerCollectionProgress(playerId.toString(), collectionId, progress);
+        boolean updated = repository.updatePlayerCollectionProgress(playerId.toString(), collectionId, progress).join();
         
         if (updated) {
             logger.info("Updated progress for player " + playerId + " in collection " + collectionId + ": " + String.format("%.1f%%", progress * 100));
@@ -573,7 +573,7 @@ public class CollectionManager implements ICollectionService {
             return;
         }
         ItemRepository repository = new ItemRepository(plugin, plugin.getDatabaseManager().getDatabaseConnection());
-        List<ItemCollection> loadedCollections = repository.loadAllCollections();
+        List<ItemCollection> loadedCollections = repository.loadAllCollections().join();
         collections.clear();
         for (ItemCollection collection : loadedCollections) {
             collections.put(collection.getId(), collection);
@@ -581,3 +581,7 @@ public class CollectionManager implements ICollectionService {
         logger.info("Reloaded " + loadedCollections.size() + " collections from database");
     }
 }
+
+
+
+

@@ -77,7 +77,7 @@ public class DatabaseBackupService {
         try {
             // Create JSON backup using the repository
             LoreEntryRepository repository = new LoreEntryRepository(plugin, connection);
-            List<LoreEntry> allEntries = repository.getAllLoreEntries();
+            List<LoreEntry> allEntries = repository.getAllLoreEntries().join();
             
             return exportLoreEntriesToFile(allEntries, backupPath);
         } catch (Exception e) {
@@ -122,3 +122,7 @@ public class DatabaseBackupService {
         }
     }
 }
+
+
+
+

@@ -310,7 +310,7 @@ public class ItemManager implements IItemService {
             return createLoreItemInternal(props.getItemType(), itemName, props);
         }
         if (itemRepository != null) {
-            List<ItemProperties> propsList = itemRepository.getAllItemsByName(itemName);
+            List<ItemProperties> propsList = itemRepository.getAllItemsByName(itemName).join();
             if (!propsList.isEmpty()) {
                 itemNameCache.put(key, propsList);
                 return createLoreItemInternal(propsList.get(0).getItemType(), itemName, propsList.get(0));
@@ -349,7 +349,7 @@ public class ItemManager implements IItemService {
             collectionCache.clear();
             
             // Load all items
-            List<ItemProperties> allItems = itemRepository.getAllItems();
+            List<ItemProperties> allItems = itemRepository.getAllItems().join();
             for (ItemProperties item : allItems) {
                 String key = item.getDisplayName().toLowerCase();
                 itemNameCache.computeIfAbsent(key, k -> new ArrayList<>()).add(item);
@@ -359,9 +359,9 @@ public class ItemManager implements IItemService {
             }
             
             // Load all collections
-            Map<Integer, String> collections = itemRepository.getAllCollections();
+            Map<Integer, String> collections = itemRepository.getAllCollections().join();
             for (Integer collectionId : collections.keySet()) {
-                collectionCache.put(collectionId, itemRepository.getItemsByCollection(collectionId));
+                collectionCache.put(collectionId, itemRepository.getItemsByCollection(collectionId).join());
             }
             
             cacheInitialized = true;
@@ -484,7 +484,7 @@ public class ItemManager implements IItemService {
         // Store in database
         if (itemRepository != null) {
             try {
-                int itemId = itemRepository.insertItem(properties);
+                int itemId = itemRepository.insertItem(properties).join();
                 if (itemId > 0) {
                     // Add to name cache
                     String key = properties.getDisplayName().toLowerCase();
@@ -637,3 +637,4 @@ public class ItemManager implements IItemService {
         this.fallbackMode = fallbackMode;
     }
 }
+

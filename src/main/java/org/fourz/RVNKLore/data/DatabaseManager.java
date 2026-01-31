@@ -14,12 +14,17 @@ import java.sql.Connection;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.logging.Level;
 
 /**
  * Manages database connections and operations for the lore system.
  * Acts as a facade for the various database components.
+ *
+ * NOTE: This class provides synchronous wrappers around async repository methods
+ * for backward compatibility. Direct use of repository interfaces is recommended
+ * for new code requiring async operations.
  */
 public class DatabaseManager {
     private final RVNKLore plugin;
@@ -32,35 +37,38 @@ public class DatabaseManager {
     private volatile boolean connectionValid = false;
     private int reconnectAttempts = 0;
     private static final int MAX_RECONNECT_ATTEMPTS = 5;
-    
+
     /**
      * Create a new DatabaseManager instance
-     * 
+     *
      * @param plugin The RVNKLore plugin instance
-     */    public DatabaseManager(RVNKLore plugin) {
+     */
+    public DatabaseManager(RVNKLore plugin) {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "DatabaseManager");
-        
+
         // Initialize components
         this.connectionFactory = new DatabaseConnectionFactory(plugin);
         initializeDatabase();
         this.databaseHelper = new DatabaseHelper(plugin);
     }
-    
+
     /**
      * Initialize the database connection and related components
-     */    private void initializeDatabase() {
+     */
+    private void initializeDatabase() {
         logger.debug("Initializing database...");
         try {
             // Create and initialize the connection
             connection = connectionFactory.createConnection();
             connection.initialize();
             connection.createTables();
-            
+
             // Initialize repositories and services using the connection
             loreRepository = new LoreEntryRepository(plugin, connection);
             backupService = new DatabaseBackupService(plugin, connection);
-              connectionValid = true;
+
+            connectionValid = true;
             reconnectAttempts = 0;
             logger.debug("Database initialized successfully");
         } catch (Exception e) {
@@ -68,84 +76,94 @@ public class DatabaseManager {
             logger.error("Failed to initialize database", e);
         }
     }
-    
+
     /**
      * Add a new lore entry to the database
-     * 
+     *
      * @param entry The lore entry to add
      * @return true if successful, false otherwise
-     */    public boolean addLoreEntry(LoreEntry entry) {
+     */
+    public boolean addLoreEntry(LoreEntry entry) {
         if (!validateConnection()) {
             logger.warning("Database connection invalid, cannot add lore entry");
             return false;
         }
-        return loreRepository.addLoreEntry(entry);
+        // Synchronous wrapper for async operation
+        return loreRepository.addLoreEntry(entry).join();
     }
-    
+
     /**
      * Update an existing lore entry in the database
-     * 
+     *
      * @param entry The lore entry to update
      * @return true if successful, false otherwise
-     */    public boolean updateLoreEntry(LoreEntry entry) {
+     */
+    public boolean updateLoreEntry(LoreEntry entry) {
         if (!validateConnection()) {
             logger.warning("Database connection invalid, cannot update lore entry");
             return false;
         }
-        return loreRepository.updateLoreEntry(entry);
+        // Synchronous wrapper for async operation
+        return loreRepository.updateLoreEntry(entry).join();
     }
-    
+
     /**
      * Get all lore entries from the database
-     * 
+     *
      * @return A list of all lore entries
      */
     public List<LoreEntry> getAllLoreEntries() {
-        return loreRepository.getAllLoreEntries();
+        // Synchronous wrapper for async operation
+        return loreRepository.getAllLoreEntries().join();
     }
-    
+
     /**
      * Get lore entries by type
-     * 
+     *
      * @param type The type of lore entries to retrieve
      * @return A list of matching lore entries
      */
     public List<LoreEntry> getLoreEntriesByType(LoreType type) {
-        return loreRepository.getLoreEntriesByType(type);
+        // Synchronous wrapper for async operation
+        return loreRepository.getLoreEntriesByType(type).join();
     }
-    
+
     /**
      * Delete a lore entry by ID
-     * 
+     *
      * @param id The UUID of the entry to delete
      * @return true if successful, false otherwise
-     */    public boolean deleteLoreEntry(UUID id) {
+     */
+    public boolean deleteLoreEntry(UUID id) {
         if (!validateConnection()) {
             logger.warning("Database connection invalid, cannot delete lore entry");
             return false;
         }
-        return loreRepository.deleteLoreEntry(id);
+        // Synchronous wrapper for async operation
+        return loreRepository.deleteLoreEntry(id).join();
     }
-    
+
     /**
      * Search lore entries by keyword in name or description
-     * 
+     *
      * @param keyword The keyword to search for
      * @return A list of matching lore entries
      */
     public List<LoreEntry> searchLoreEntries(String keyword) {
-        return loreRepository.searchLoreEntries(keyword);
+        // Synchronous wrapper for async operation
+        return loreRepository.searchLoreEntries(keyword).join();
     }
-    
+
     /**
      * Get the number of entries in the database
-     * 
+     *
      * @return The total number of lore entries
      */
     public int getEntryCount() {
-        return loreRepository.getEntryCount();
+        // Synchronous wrapper for async operation
+        return loreRepository.getEntryCount().join();
     }
-    
+
     /**
      * Export all lore entries to JSON format
      *
@@ -166,7 +184,7 @@ public class DatabaseManager {
         Gson gson = new GsonBuilder().setPrettyPrinting().create();
         return gson.toJson(result);
     }
-    
+
     /**
      * Export lore entries to a file
      *
@@ -178,26 +196,27 @@ public class DatabaseManager {
     public boolean exportLoreEntriesToFile(List<LoreEntry> entries, String filePath) {
         try {
             logger.debug("Exporting " + entries.size() + " lore entries to file: " + filePath);
-            
+
             File file = new File(filePath);
             file.getParentFile().mkdirs();
-            
+
             List<JSONObject> jsonEntries = new ArrayList<>();
             for (LoreEntry entry : entries) {
                 jsonEntries.add(entry.toJson());
             }
-            
+
             JSONObject result = new JSONObject();
             result.put("lore_entries", jsonEntries);
             result.put("exported_at", new Date().toString());
             result.put("entry_count", entries.size());
-            
+
             Gson gson = new GsonBuilder().setPrettyPrinting().create();
             String jsonContent = gson.toJson(result);
-              try (FileWriter writer = new FileWriter(file)) {
+
+            try (FileWriter writer = new FileWriter(file)) {
                 writer.write(jsonContent);
             }
-            
+
             logger.info("Exported " + entries.size() + " lore entries to " + filePath);
             return true;
         } catch (Exception e) {
@@ -205,29 +224,29 @@ public class DatabaseManager {
             return false;
         }
     }
-    
+
     /**
      * Execute database backup
-     * 
+     *
      * @param backupPath the path where to store the backup
      * @return true if successful, false otherwise
      */
     public boolean backupDatabase(String backupPath) {
         return backupService.backupDatabase(backupPath);
     }
-    
+
     /**
      * Check if the database connection is active and valid
-     * 
+     *
      * @return True if connected, false otherwise
      */
     public boolean isConnected() {
         return connection != null && connection.isConnected();
     }
-    
+
     /**
      * Reconnect to the database if the connection is lost
-     * 
+     *
      * @return true if the connection was reestablished, false otherwise
      */
     public boolean reconnect() {
@@ -237,7 +256,7 @@ public class DatabaseManager {
         initializeDatabase();
         return isConnected();
     }
-    
+
     /**
      * Close the database connection
      */
@@ -246,61 +265,61 @@ public class DatabaseManager {
             connection.close();
         }
     }
-    
+
     /**
      * Get the active database connection
-     * 
+     *
      * @return The database connection
      */
     public Connection getConnection() {
         return connection != null ? connection.getConnection() : null;
     }
-    
+
     /**
      * Get information about the connected database
-     * 
+     *
      * @return A string with database metadata information
      */
     public String getDatabaseInfo() {
         return connection != null ? connection.getDatabaseInfo() : "No database connection";
     }
-    
+
     /**
      * Check if the database is in read-only mode
-     * 
+     *
      * @return true if the database is read-only, false otherwise
      */
     public boolean isReadOnly() {
         return connection == null || connection.isReadOnly();
     }
-    
+
     /**
      * Get the last connection error message
-     * 
+     *
      * @return The last connection error message, or null if none
      */
     public String getLastConnectionError() {
         return connection != null ? connection.getLastConnectionError() : "No database connection";
     }
-    
+
     /**
      * Get the database helper instance
-     * 
+     *
      * @return The database helper
      */
     public DatabaseHelper getDatabaseHelper() {
         return databaseHelper;
     }
-    
+
     /**
      * Get the database connection object
-     * 
+     *
      * @return The DatabaseConnection instance
      */
     public DatabaseConnection getDatabaseConnection() {
         return connection;
     }
-    
+
     /**
      * Validates and attempts to fix database connection if needed
      */
@@ -308,11 +327,12 @@ public class DatabaseManager {
         if (connectionValid && isConnected()) {
             return true;
         }
-          if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+
+        if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
             logger.error("Maximum reconnection attempts reached. Database operations disabled.", null);
             return false;
         }
-        
+
         logger.warning("Database connection invalid, attempting reconnect");
         boolean reconnected = reconnect();
         if (reconnected) {

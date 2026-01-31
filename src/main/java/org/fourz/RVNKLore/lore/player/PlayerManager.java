@@ -59,7 +59,7 @@ public class PlayerManager {
      * @return true if the player has a lore entry, false otherwise
      */
     public boolean playerExists(UUID playerUuid) {
-        return playerRepository.playerExists(playerUuid);
+        return playerRepository.playerExists(playerUuid).join();
     }
     
     /**
@@ -69,7 +69,7 @@ public class PlayerManager {
      * @return The player's name, or null if not found
      */
     public String getStoredPlayerName(UUID playerUuid) {
-        return playerRepository.getStoredPlayerName(playerUuid);
+        return playerRepository.getStoredPlayerName(playerUuid).join().orElse(null);
     }
     
     /**
@@ -276,7 +276,7 @@ public class PlayerManager {
      * @return List of name change records, empty if none found
      */
     public List<NameChangeRecord> getNameChangeHistory(UUID playerUuid) {
-        return playerRepository.getNameChangeHistory(playerUuid);
+        return playerRepository.getNameChangeHistory(playerUuid).join();
     }
     
     /**
@@ -297,3 +297,6 @@ public class PlayerManager {
             (int)location.getZ());
     }
 }
+
+
+
