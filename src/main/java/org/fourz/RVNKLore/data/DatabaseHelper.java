@@ -5,10 +5,13 @@ import org.fourz.RVNKLore.exception.LoreException;
 import org.fourz.RVNKLore.exception.LoreException.LoreExceptionType;
 import org.fourz.rvnkcore.util.log.LogManager;
 
+import org.fourz.RVNKLore.data.dialect.SQLDialect;
+
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 
 /**
  * Helper class for database operations with improved error handling
@@ -108,7 +111,7 @@ public class DatabaseHelper {
     
     /**
      * Execute an update with proper resource management and error handling
-     * 
+     *
      * @param sql The SQL update statement
      * @param paramSetter A consumer that sets parameters on the prepared statement
      * @return The number of rows affected
@@ -122,9 +125,53 @@ public class DatabaseHelper {
                 if (paramSetter != null) {
                     paramSetter.setParameters(stmt);
                 }
-                
+
                 // Execute update
                 return stmt.executeUpdate();
+            }
+        });
+    }
+
+    /**
+     * Execute an INSERT and return the generated key (auto-increment ID).
+     * Uses dialect-specific approach:
+     * - SQLite: Uses RETURNING clause with executeQuery()
+     * - MySQL: Uses RETURN_GENERATED_KEYS flag with executeUpdate()
+     *
+     * @param baseInsertSql The INSERT SQL WITHOUT RETURNING clause
+     * @param idColumn The name of the auto-increment column
+     * @param paramSetter A consumer that sets parameters on the prepared statement
+     * @return The generated ID, or -1 if insert failed
+     * @throws LoreException If the insert fails
+     */
+    public int executeInsertWithGeneratedKey(String baseInsertSql, String idColumn,
+            PreparedStatementSetter paramSetter) throws LoreException {
+        SQLDialect dialect = databaseManager.getDatabaseConnection().getDialect();
+
+        return executeWithRetry(() -> {
+            Connection conn = databaseManager.getConnection();
+
+            if (dialect.requiresGeneratedKeysFlag()) {
+                // MySQL approach: use getGeneratedKeys()
+                try (PreparedStatement stmt = conn.prepareStatement(baseInsertSql,
+                        Statement.RETURN_GENERATED_KEYS)) {
+                    if (paramSetter != null) {
+                        paramSetter.setParameters(stmt);
+                    }
+                    stmt.executeUpdate();
+                    return dialect.extractGeneratedId(stmt, null, idColumn);
+                }
+            } else {
+                // SQLite approach: use RETURNING clause
+                String sqlWithReturning = dialect.wrapInsertForGeneratedKey(baseInsertSql, idColumn);
+                try (PreparedStatement stmt = conn.prepareStatement(sqlWithReturning)) {
+                    if (paramSetter != null) {
+                        paramSetter.setParameters(stmt);
+                    }
+                    try (ResultSet rs = stmt.executeQuery()) {
+                        return dialect.extractGeneratedId(stmt, rs, idColumn);
+                    }
+                }
             }
         });
     }

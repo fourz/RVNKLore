@@ -1,17 +1,20 @@
 package org.fourz.RVNKLore.data;
 
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.data.dialect.SQLDialect;
 
 import java.sql.*;
 
 /**
- * SQLite implementation of database connection
+ * SQLite implementation of database connection.
+ *
+ * <p>Uses the SQLiteDialect for database-specific SQL generation.
  */
 public class SQLiteConnection extends DatabaseConnection {
     private final String dbPath;
-    
-    public SQLiteConnection(RVNKLore plugin) {
-        super(plugin);
+
+    public SQLiteConnection(RVNKLore plugin, SQLDialect dialect) {
+        super(plugin, dialect);
         this.dbPath = plugin.getDataFolder().getAbsolutePath() + "/lore.db";
     }
     

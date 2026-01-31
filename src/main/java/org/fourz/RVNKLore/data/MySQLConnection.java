@@ -1,11 +1,14 @@
 package org.fourz.RVNKLore.data;
 
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.data.dialect.SQLDialect;
 
 import java.sql.*;
 
 /**
- * MySQL implementation of database connection
+ * MySQL implementation of database connection.
+ *
+ * <p>Uses the MySQLDialect for database-specific SQL generation.
  */
 public class MySQLConnection extends DatabaseConnection {
     private final String host;
@@ -13,9 +16,9 @@ public class MySQLConnection extends DatabaseConnection {
     private final String database;
     private final String username;
     private final String password;
-    
-    public MySQLConnection(RVNKLore plugin) {
-        super(plugin);
+
+    public MySQLConnection(RVNKLore plugin, SQLDialect dialect) {
+        super(plugin, dialect);
         this.host = plugin.getConfig().getString("storage.mysql.host", "localhost");
         this.port = plugin.getConfig().getInt("storage.mysql.port", 3306);
         this.database = plugin.getConfig().getString("storage.mysql.database", "minecraft");

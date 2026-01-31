@@ -1,6 +1,7 @@
 package org.fourz.RVNKLore.data;
 
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.data.dialect.SQLDialect;
 import org.fourz.rvnkcore.util.log.LogManager;
 
 import java.sql.Connection;
@@ -8,17 +9,30 @@ import java.sql.SQLException;
 import java.sql.Statement;
 
 /**
- * Abstract base class for database connections
+ * Abstract base class for database connections.
+ *
+ * <p>Each connection holds a reference to its SQL dialect, which provides
+ * database-specific SQL generation for cross-platform compatibility.
  */
 public abstract class DatabaseConnection {
     protected final RVNKLore plugin;
     protected final LogManager logger;
+    protected final SQLDialect dialect;
     protected Connection connection;
     protected String lastConnectionError = null;
 
-    public DatabaseConnection(RVNKLore plugin) {
+    public DatabaseConnection(RVNKLore plugin, SQLDialect dialect) {
         this.plugin = plugin;
+        this.dialect = dialect;
         this.logger = LogManager.getInstance(plugin, "DatabaseConnection");
+    }
+
+    /**
+     * Get the SQL dialect for this connection.
+     * @return The SQLDialect instance
+     */
+    public SQLDialect getDialect() {
+        return dialect;
     }
     
     /**
@@ -27,35 +41,43 @@ public abstract class DatabaseConnection {
     public abstract void initialize() throws SQLException, ClassNotFoundException;
     
     /**
-     * Create necessary database tables
-     */    public void createTables() throws SQLException {
-        logger.debug("Creating database tables...");
-        
+     * Create necessary database tables.
+     * Uses dialect-aware DDL for MySQL/SQLite compatibility.
+     */
+    public void createTables() throws SQLException {
+        logger.debug("Creating database tables using " + dialect.getName() + " dialect...");
+
+        // Helper variables for dialect-specific types
+        String autoIncPK = dialect.getAutoIncrementPK();
+        String boolType = dialect.getBooleanType();
+        String timestampDefault = dialect.getTimestampType(true);
+        String timestampNullable = dialect.getTimestampType(false);
+
         // --- Core Lore Schema Tables ---
         String createLoreEntryTable = "CREATE TABLE IF NOT EXISTS lore_entry (" +
-                "id CHAR(36) PRIMARY KEY, " + // switch to UUID primary key
+                "id CHAR(36) PRIMARY KEY, " +
                 "entry_type VARCHAR(50) NOT NULL, " +
                 "name VARCHAR(100) NOT NULL, " +
                 "CONSTRAINT uq_lore_entry_name_type UNIQUE (name, entry_type)" +
                 ")";
-                
+
         String createLoreSubmissionTable = "CREATE TABLE IF NOT EXISTS lore_submission (" +
-                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                "entry_id CHAR(36) NOT NULL, " + // align with UUID key
+                "id " + autoIncPK + ", " +
+                "entry_id CHAR(36) NOT NULL, " +
                 "slug VARCHAR(150) NOT NULL, " +
                 "visibility VARCHAR(20) NOT NULL DEFAULT 'PUBLIC', " +
                 "status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE', " +
                 "submitter_uuid CHAR(36) NOT NULL, " +
-                "submission_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, " +
+                "submission_date " + timestampDefault + ", " +
                 "approval_status VARCHAR(20) NOT NULL DEFAULT 'PENDING', " +
                 "approved_by CHAR(36), " +
-                "approved_at TIMESTAMP, " +
+                "approved_at " + timestampNullable + ", " +
                 "view_count INTEGER NOT NULL DEFAULT 0, " +
-                "last_viewed_at TIMESTAMP, " +
-                "created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, " +
-                "updated_at TIMESTAMP, " +
+                "last_viewed_at " + timestampNullable + ", " +
+                "created_at " + timestampDefault + ", " +
+                "updated_at " + timestampNullable + ", " +
                 "content_version INTEGER NOT NULL DEFAULT 1, " +
-                "is_current_version BOOLEAN NOT NULL DEFAULT FALSE, " +
+                "is_current_version " + boolType + " NOT NULL DEFAULT FALSE, " +
                 "content TEXT, " +
                 "CONSTRAINT uq_lore_submission_entry_version UNIQUE (entry_id, content_version), " +
                 "CONSTRAINT uq_lore_submission_slug UNIQUE (slug), " +
@@ -64,23 +86,23 @@ public abstract class DatabaseConnection {
                 "FOREIGN KEY (entry_id) REFERENCES lore_entry(id) ON DELETE CASCADE" +
                 ")";
         String createLoreItemTable = "CREATE TABLE IF NOT EXISTS lore_item (" +
-                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "id " + autoIncPK + ", " +
                 "name VARCHAR(64) NOT NULL, " +
                 "short_uuid VARCHAR(12), " +
-                "lore_entry_id CHAR(36) NOT NULL, " + // make non-null and align type
+                "lore_entry_id CHAR(36) NOT NULL, " +
                 "material VARCHAR(50) NOT NULL, " +
                 "item_type VARCHAR(50) NOT NULL, " +
                 "rarity VARCHAR(20) NOT NULL, " +
-                "is_obtainable BOOLEAN DEFAULT 1, " +
+                "is_obtainable " + boolType + " DEFAULT 1, " +
                 "custom_model_data INTEGER, " +
                 "season_id INTEGER, " +
-                "is_vote_reward BOOLEAN NOT NULL DEFAULT FALSE, " +
+                "is_vote_reward " + boolType + " NOT NULL DEFAULT FALSE, " +
                 "item_properties TEXT, " +
                 "drop_settings TEXT, " +
                 "created_by VARCHAR(64), " +
                 "nbt_data TEXT, " +
-                "created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, " +
-                "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                "created_at " + timestampDefault + ", " +
+                "updated_at " + timestampDefault + ", " +
                 "CONSTRAINT uq_lore_item_entry UNIQUE (lore_entry_id), " +
                 "FOREIGN KEY (lore_entry_id) REFERENCES lore_entry(id) ON DELETE CASCADE" +
                 ")";
@@ -121,23 +143,23 @@ public abstract class DatabaseConnection {
                 "y DOUBLE, " +
                 "z DOUBLE, " +
                 "submitted_by VARCHAR(36) NOT NULL, " +
-                "approved BOOLEAN DEFAULT 0, " +
-                "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
+                "approved " + boolType + " DEFAULT 0, " +
+                "created_at " + timestampDefault +
                 ")");
             stmt.execute(createMetadataTable);
-            
+
             // --- Collection System Tables ---
             String createCollectionTable = "CREATE TABLE IF NOT EXISTS collection (" +
-                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "id " + autoIncPK + ", " +
                 "collection_id TEXT UNIQUE NOT NULL, " +
                 "name TEXT NOT NULL, " +
                 "description TEXT, " +
                 "theme_id TEXT, " +
-                "is_active BOOLEAN DEFAULT 1, " +
+                "is_active " + boolType + " DEFAULT 1, " +
                 "created_at INTEGER NOT NULL" +
             ")";
             String createPlayerCollectionProgressTable = "CREATE TABLE IF NOT EXISTS player_collection_progress (" +
-                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "id " + autoIncPK + ", " +
                 "player_id TEXT NOT NULL, " +
                 "collection_id TEXT NOT NULL, " +
                 "progress REAL DEFAULT 0.0, " +
@@ -146,11 +168,11 @@ public abstract class DatabaseConnection {
                 "UNIQUE(player_id, collection_id)" +
             ")";
             String createCollectionRewardTable = "CREATE TABLE IF NOT EXISTS collection_reward (" +
-                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "id " + autoIncPK + ", " +
                 "collection_id TEXT NOT NULL, " +
                 "reward_type TEXT NOT NULL, " +
                 "reward_data TEXT, " +
-                "is_claimed BOOLEAN DEFAULT 0" +
+                "is_claimed " + boolType + " DEFAULT 0" +
             ")";
 
             // Collection-item relationship table for managing item sequences in collections
