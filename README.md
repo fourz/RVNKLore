@@ -2,6 +2,21 @@
 
 A comprehensive lore and history plugin for Minecraft servers that allows players and staff to document the stories, landmarks, characters, and events that shape your server's world.
 
+## Build Status
+
+**Current Status**: Compilation errors present - requires async refactoring
+
+The plugin currently has compilation errors in `LoreEntryRepository.java` due to interface/implementation mismatch. The repository interface expects async methods returning `CompletableFuture<T>`, but the implementation returns synchronous types. This needs to be resolved before the plugin can be built.
+
+### Required Fixes
+- Update `LoreEntryRepository` methods to return `CompletableFuture` types
+- Wrap synchronous operations in async execution
+- Update all callers to handle async responses
+
+### Dependencies
+- **RVNKCore**: Uses `provided` scope - JAR must be in server plugins folder at runtime
+- The lib/rvnkcore-1.3.0-alpha.jar file is for IDE reference only
+
 ## Features
 
 - **Multiple Lore Types**: Supports various categories of lore including landmarks, cities, player characters, items, events, quests, enchantments, and more
@@ -232,8 +247,11 @@ The plugin uses standardized classification systems for various entity types:
 To build RVNKLore from source:
 
 1. Clone the repository
-2. Run `mvn clean package` to build the JAR
-3. The compiled JAR will be in the `target` directory
+2. Ensure RVNKCore JAR is available in lib/ folder
+3. Run `mvn clean package` to build the JAR
+4. The compiled JAR will be in the `target` directory
+
+Note: Currently the build will fail due to async method signature mismatches. See Build Status section above.
 
 ### API for Developers
 
