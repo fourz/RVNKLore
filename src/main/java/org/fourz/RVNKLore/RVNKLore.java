@@ -20,6 +20,7 @@ import org.fourz.RVNKLore.lore.submission.SubmissionManager;
 import org.fourz.RVNKLore.lore.player.PlayerManager;
 import org.fourz.RVNKLore.api.LoreApiInitializer;
 import org.fourz.RVNKLore.discovery.DiscoveryManager;
+import org.fourz.RVNKLore.achievement.AchievementManager;
 
 public class RVNKLore extends JavaPlugin {
     private LoreManager loreManager;
@@ -34,6 +35,7 @@ public class RVNKLore extends JavaPlugin {
     private SubmissionManager submissionManager;
     private LoreApiInitializer apiInitializer;
     private DiscoveryManager discoveryManager;
+    private AchievementManager achievementManager;
     private int healthCheckTaskId = -1;
     private Thread shutdownHook;
     private boolean shuttingDown = false;
@@ -92,6 +94,10 @@ public class RVNKLore extends JavaPlugin {
             // Initialize DiscoveryManager for lore discovery events
             this.discoveryManager = new DiscoveryManager(this);
             this.discoveryManager.initialize();
+
+            // Initialize AchievementManager for collection achievements
+            this.achievementManager = new AchievementManager(this);
+            this.achievementManager.initialize();
 
             // Remove direct CosmeticManager initialization (now handled by ItemManager)
             // cosmeticManager = new CosmeticManager(this);
@@ -235,6 +241,11 @@ public class RVNKLore extends JavaPlugin {
             discoveryManager = null;
         }
 
+        if (achievementManager != null) {
+            achievementManager.shutdown();
+            achievementManager = null;
+        }
+
         if (itemManager != null) {
             itemManager.shutdown();
             itemManager = null;
@@ -320,6 +331,20 @@ public class RVNKLore extends JavaPlugin {
             discoveryManager.initialize();
         }
         return discoveryManager;
+    }
+
+    /**
+     * Get the achievement manager for collection achievements
+     *
+     * @return The achievement manager
+     */
+    public AchievementManager getAchievementManager() {
+        if (achievementManager == null) {
+            logger.warning("Achievement manager requested but was null. Creating new instance.");
+            achievementManager = new AchievementManager(this);
+            achievementManager.initialize();
+        }
+        return achievementManager;
     }
 
     /**

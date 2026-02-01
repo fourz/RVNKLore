@@ -55,6 +55,11 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
 
         // Register the /lore book command for lore book management
         commands.put("book", new LoreBookSubCommand(plugin));
+
+        // Register the /lore achievement command for achievement management
+        if (plugin.getAchievementManager() != null) {
+            commands.put("achievement", new LoreAchievementSubCommand(plugin, plugin.getAchievementManager()));
+        }
         
         // Add all commands to the subCommands map
         commands.forEach(this::registerSubCommand);
