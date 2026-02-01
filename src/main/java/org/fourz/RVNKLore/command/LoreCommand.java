@@ -52,6 +52,9 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
             commands.put("item", new LoreItemSubCommand(plugin));
             // Remove /lore itemgive registration
         }
+
+        // Register the /lore book command for lore book management
+        commands.put("book", new LoreBookSubCommand(plugin));
         
         // Add all commands to the subCommands map
         commands.forEach(this::registerSubCommand);
@@ -113,6 +116,9 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
                 } else if ("collection".equals(entry.getKey())) {
                     sender.sendMessage(ChatColor.YELLOW + "/lore collection <view|claim> <collection_id>" +
                         ChatColor.WHITE + " - View or claim collection progress/rewards");
+                } else if ("book".equals(entry.getKey())) {
+                    sender.sendMessage(ChatColor.YELLOW + "/lore book <give|list> ..." +
+                        ChatColor.WHITE + " - Create and manage lore books");
                 } else if ("give".equals(entry.getKey())) {
                     sender.sendMessage(ChatColor.DARK_GRAY + "/lore give ... [DEPRECATED, use /lore itemgive]" +
                         ChatColor.GRAY + " - Deprecated: use /lore itemgive");
