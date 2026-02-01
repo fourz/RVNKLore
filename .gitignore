@@ -2,4 +2,4 @@
 .vscode/
 target/
 BuildTools/
-.github/
+.github/logs/
