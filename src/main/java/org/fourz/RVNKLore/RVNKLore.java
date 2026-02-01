@@ -18,6 +18,7 @@ import org.fourz.RVNKLore.lore.item.ItemManager;
 import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
 import org.fourz.RVNKLore.lore.submission.SubmissionManager;
 import org.fourz.RVNKLore.lore.player.PlayerManager;
+import org.fourz.RVNKLore.api.LoreApiInitializer;
 
 public class RVNKLore extends JavaPlugin {
     private LoreManager loreManager;
@@ -30,6 +31,7 @@ public class RVNKLore extends JavaPlugin {
     private ItemManager itemManager;
     private PlayerManager playerManager;
     private SubmissionManager submissionManager;
+    private LoreApiInitializer apiInitializer;
     private int healthCheckTaskId = -1;
     private Thread shutdownHook;
     private boolean shuttingDown = false;
@@ -94,6 +96,9 @@ public class RVNKLore extends JavaPlugin {
 
             // Register with RVNKCore ServiceRegistry if available
             registerWithRVNKCore();
+
+            // Initialize REST API if RVNKCore is available
+            initializeRestApi();
 
             // Start periodic health check
             startHealthCheck();
@@ -171,7 +176,30 @@ public class RVNKLore extends JavaPlugin {
         }
     }
 
+    /**
+     * Initializes the REST API layer if RVNKCore is available.
+     */
+    private void initializeRestApi() {
+        if (!rvnkCoreAvailable) {
+            logger.debug("Skipping REST API initialization - RVNKCore not available");
+            return;
+        }
+
+        apiInitializer = new LoreApiInitializer(this);
+        if (apiInitializer.initialize()) {
+            logger.info("REST API layer initialized successfully");
+        } else {
+            logger.debug("REST API initialization skipped or failed");
+        }
+    }
+
     private void cleanupManagers() {
+        // Shutdown REST API first
+        if (apiInitializer != null) {
+            apiInitializer.shutdown();
+            apiInitializer = null;
+        }
+
         // Unregister from RVNKCore first
         unregisterFromRVNKCore();
 

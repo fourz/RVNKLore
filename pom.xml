@@ -8,7 +8,7 @@
    <artifactId>RVNKLore</artifactId>
    <version>1.0-SNAPSHOT</version>
 
-   <name>RVNKQuests</name>
+   <name>RVNKLore</name>
    <description></description>
    <url>http://www.example.com</url>
 
@@ -85,6 +85,13 @@
            <version>1.3.0-alpha</version>
            <scope>provided</scope>
        </dependency>
+       <!-- Jakarta Servlet API (provided by RVNKCore's Jetty server at runtime) -->
+       <dependency>
+           <groupId>jakarta.servlet</groupId>
+           <artifactId>jakarta.servlet-api</artifactId>
+           <version>6.0.0</version>
+           <scope>provided</scope>
+       </dependency>
 
        <!-- Test Dependencies -->
        <dependency>
@@ -103,6 +110,13 @@
            <groupId>org.mockito</groupId>
            <artifactId>mockito-junit-jupiter</artifactId>
            <version>5.8.0</version>
+           <scope>test</scope>
+       </dependency>
+       <!-- MySQL JDBC Driver for integration tests -->
+       <dependency>
+           <groupId>com.mysql</groupId>
+           <artifactId>mysql-connector-j</artifactId>
+           <version>8.2.0</version>
            <scope>test</scope>
        </dependency>
    </dependencies>
