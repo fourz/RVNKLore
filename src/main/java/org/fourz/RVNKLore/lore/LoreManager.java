@@ -56,11 +56,11 @@ public class LoreManager implements ILoreService {
         try {
             initializing = true;
             logger.info("Initializing lore system...");
-            
+
             // Initialize the unified item management system
             this.itemManager = new ItemManager(plugin);
             logger.info("Item management system initialized");
-            
+
             // First load entries from database (doesn't require handlers)
             loadLoreEntries();
             // Then create the LoreFinder (should be after entries are loaded)
@@ -112,10 +112,10 @@ public class LoreManager implements ILoreService {
             logger.warning("Lore entry validation failed for: " + entry.getName());
             return false;
         }
-        
+
         // Add to database
         boolean success = plugin.getDatabaseManager().addLoreEntry(entry);
-        
+
         if (success) {
             cachedEntries.add(entry);
             loreByType.get(entry.getType()).add(entry);
@@ -124,12 +124,12 @@ public class LoreManager implements ILoreService {
             if (entry.getType() == LoreType.ITEM && itemManager != null) {
                 try {
                     // Create basic item properties
-                    org.fourz.RVNKLore.lore.item.ItemProperties itemProps = 
+                    org.fourz.RVNKLore.lore.item.ItemProperties itemProps =
                         new org.fourz.RVNKLore.lore.item.ItemProperties(
                             org.bukkit.Material.valueOf("DIAMOND_SWORD"), // Default, should be extracted from entry
                             entry.getName()
                         );
-                    
+
                     // Set additional properties
                     itemProps.setLoreEntryId(entry.getId()); // Important: Link to lore entry ID
                     if (entry.getNbtData() != null) {
@@ -139,7 +139,7 @@ public class LoreManager implements ILoreService {
                     // Use the entry ID to link items to lore entries
                     java.util.UUID entryUUID = java.util.UUID.fromString(entry.getId());
                     itemManager.registerLoreItem(entryUUID, itemProps);
-                    
+
                     logger.info("Registered item in ItemManager: " + entry.getName() + " with lore entry ID: " + entry.getId());
                 } catch (Exception e) {
                     logger.warning("Failed to register item in ItemManager: " + e.getMessage());
@@ -163,6 +163,18 @@ public class LoreManager implements ILoreService {
                 .filter(entry -> entry.getUUID().equals(id))
                 .findFirst()
                 .orElse(null);
+    }
+
+    /**
+     * Get a lore entry by ID string (synchronous internal method).
+     *
+     * @param id The string ID of the lore entry
+     * @return Optional containing the lore entry, or empty if not found
+     */
+    public Optional<LoreEntry> getLoreEntryByIdSync(String id) {
+        return cachedEntries.stream()
+                .filter(entry -> entry.getId().equals(id))
+                .findFirst();
     }
 
     /**
@@ -228,7 +240,7 @@ public class LoreManager implements ILoreService {
             logger.warning("Attempted to find nearby lore with null location");
             return new ArrayList<>();
         }
-        
+
         return cachedEntries.stream()
                 .filter(LoreEntry::isApproved)
                 .filter(entry -> {
@@ -236,7 +248,7 @@ public class LoreManager implements ILoreService {
                     if (entry.getLocation().getWorld() == null) return false;
                     if (location.getWorld() == null) return false;
                     try {
-                        return entry.getLocation().getWorld().getName().equals(location.getWorld().getName()) 
+                        return entry.getLocation().getWorld().getName().equals(location.getWorld().getName())
                             && entry.getLocation().distance(location) <= radius;
                     } catch (IllegalArgumentException e) {
                         logger.debug("Error calculating distance for lore: " + entry.getId());
@@ -248,7 +260,7 @@ public class LoreManager implements ILoreService {
 
     /**
      * Export all lore entries to JSON
-     * 
+     *
      * @return A string containing the JSON representation of all lore entries
      */
     public String exportToJson() {
@@ -258,13 +270,13 @@ public class LoreManager implements ILoreService {
      */
     public void cleanup() {
         logger.info("Cleaning up lore manager...");
-        
+
         // Cleanup item manager first
         if (itemManager != null) {
             itemManager.cleanup();
             itemManager = null;
         }
-        
+
         cachedEntries.clear();
         loreByType.clear();
         instance = null;
@@ -281,7 +293,7 @@ public class LoreManager implements ILoreService {
 
     /**
      * Get a handler for a specific lore type
-     * 
+     *
      * @param type The lore type
      * @return The handler, or null if not found
      */
@@ -377,14 +389,14 @@ public class LoreManager implements ILoreService {
             entries.clear();
         }
     }
-    
+
     /**
      * Get the lore finder instance
      */
     public LoreFinder getLoreFinder() {
         return loreFinder;
     }
-    
+
     /**
      * Package-private method to get cached entries for the LoreFinder
      */
@@ -400,7 +412,7 @@ public class LoreManager implements ILoreService {
      */
     public LoreEntry getLoreEntryByNameSync(String name) {
         logger.info("Looking up lore entry by name: " + name);
-        
+
         return cachedEntries.stream()
             .filter(entry -> entry.getName().equalsIgnoreCase(name))
             .findFirst()

@@ -21,6 +21,8 @@ import org.fourz.RVNKLore.lore.player.PlayerManager;
 import org.fourz.RVNKLore.api.LoreApiInitializer;
 import org.fourz.RVNKLore.discovery.DiscoveryManager;
 import org.fourz.RVNKLore.achievement.AchievementManager;
+import org.fourz.RVNKLore.gui.GuiListener;
+import org.fourz.RVNKLore.integration.placeholder.RVNKLorePlaceholderExpansion;
 
 public class RVNKLore extends JavaPlugin {
     private LoreManager loreManager;
@@ -44,6 +46,9 @@ public class RVNKLore extends JavaPlugin {
     // RVNKCore integration
     private boolean rvnkCoreAvailable = false;
     private Object rvnkCoreInstance = null;
+
+    // PlaceholderAPI integration
+    private RVNKLorePlaceholderExpansion placeholderExpansion = null;
 
     @Override
     public void onEnable() {
@@ -99,6 +104,9 @@ public class RVNKLore extends JavaPlugin {
             this.achievementManager = new AchievementManager(this);
             this.achievementManager.initialize();
 
+            // Register GUI listener for browse menus
+            getServer().getPluginManager().registerEvents(new GuiListener(), this);
+
             // Remove direct CosmeticManager initialization (now handled by ItemManager)
             // cosmeticManager = new CosmeticManager(this);
             // cosmeticManager.initialize();
@@ -111,6 +119,9 @@ public class RVNKLore extends JavaPlugin {
 
             // Initialize REST API if RVNKCore is available
             initializeRestApi();
+
+            // Register PlaceholderAPI expansion if available
+            registerPlaceholderAPI();
 
             // Start periodic health check
             startHealthCheck();
@@ -205,12 +216,55 @@ public class RVNKLore extends JavaPlugin {
         }
     }
 
+    /**
+     * Registers PlaceholderAPI expansion if PlaceholderAPI is available.
+     * Uses reflection to avoid hard dependency on PlaceholderAPI.
+     */
+    private void registerPlaceholderAPI() {
+        Plugin placeholderAPI = getServer().getPluginManager().getPlugin("PlaceholderAPI");
+        if (placeholderAPI == null || !placeholderAPI.isEnabled()) {
+            logger.info("PlaceholderAPI not found - placeholder support disabled");
+            return;
+        }
+
+        try {
+            placeholderExpansion = new RVNKLorePlaceholderExpansion(this);
+            if (placeholderExpansion.register()) {
+                logger.info("PlaceholderAPI integration enabled - placeholders registered");
+            } else {
+                logger.warning("Failed to register PlaceholderAPI expansion");
+                placeholderExpansion = null;
+            }
+        } catch (Exception e) {
+            logger.warning("Failed to register PlaceholderAPI expansion: " + e.getMessage());
+            placeholderExpansion = null;
+        }
+    }
+
+    /**
+     * Unregisters PlaceholderAPI expansion if it was registered.
+     */
+    private void unregisterPlaceholderAPI() {
+        if (placeholderExpansion != null) {
+            try {
+                placeholderExpansion.unregister();
+                logger.info("PlaceholderAPI expansion unregistered");
+            } catch (Exception e) {
+                logger.warning("Failed to unregister PlaceholderAPI expansion: " + e.getMessage());
+            }
+            placeholderExpansion = null;
+        }
+    }
+
     private void cleanupManagers() {
         // Shutdown REST API first
         if (apiInitializer != null) {
             apiInitializer.shutdown();
             apiInitializer = null;
         }
+
+        // Unregister PlaceholderAPI expansion
+        unregisterPlaceholderAPI();
 
         // Unregister from RVNKCore first
         unregisterFromRVNKCore();
@@ -345,6 +399,24 @@ public class RVNKLore extends JavaPlugin {
             achievementManager.initialize();
         }
         return achievementManager;
+    }
+
+    /**
+     * Get the PlaceholderAPI expansion instance.
+     *
+     * @return The expansion instance, or null if not registered
+     */
+    public RVNKLorePlaceholderExpansion getPlaceholderExpansion() {
+        return placeholderExpansion;
+    }
+
+    /**
+     * Checks if PlaceholderAPI integration is available.
+     *
+     * @return true if PlaceholderAPI is loaded and expansion is registered
+     */
+    public boolean isPlaceholderAPIAvailable() {
+        return placeholderExpansion != null;
     }
 
     /**
