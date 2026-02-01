@@ -233,26 +233,22 @@ public class DiagnosticUtil {
 
     private void addFallbackStatus(CommandSender sender, String prefix, boolean verbose) {
         try {
-            // Check if database has fallback tracker
-            Object fallbackTracker = plugin.getDatabaseManager().getClass().getMethod("getFallbackTracker").invoke(plugin.getDatabaseManager());
+            // Check via LoreManager's isInFallbackMode (from ILoreService interface)
+            LoreManager loreManager = plugin.getLoreManager();
+            boolean inFallback = loreManager.isInFallbackMode();
 
-            if (fallbackTracker != null) {
-                boolean inFallback = (Boolean) fallbackTracker.getClass().getMethod("isInFallbackMode").invoke(fallbackTracker);
-
-                if (inFallback) {
-                    sender.sendMessage(prefix + "Fallback Mode: ACTIVE (database issues detected)");
-                    if (verbose) {
-                        int failureCount = (Integer) fallbackTracker.getClass().getMethod("getConsecutiveFailures").invoke(fallbackTracker);
-                        sender.sendMessage(prefix + "  Consecutive Failures: " + failureCount);
-                    }
-                } else {
-                    sender.sendMessage(prefix + "Fallback Mode: INACTIVE");
+            if (inFallback) {
+                sender.sendMessage(prefix + "Fallback Mode: ACTIVE (database issues detected)");
+                if (verbose) {
+                    sender.sendMessage(prefix + "  Database connection may be unavailable");
                 }
+            } else {
+                sender.sendMessage(prefix + "Fallback Mode: INACTIVE");
             }
         } catch (Exception e) {
-            // Fallback tracker not available - this is fine
+            // LoreManager not available
             if (verbose) {
-                sender.sendMessage(prefix + "Fallback Mode: Not implemented");
+                sender.sendMessage(prefix + "Fallback Mode: Unable to determine - " + e.getMessage());
             }
         }
     }
@@ -301,21 +297,25 @@ public class DiagnosticUtil {
     private void addHandlerStatus(CommandSender sender, String prefix, boolean verbose) {
         if (verbose) {
             HandlerFactory factory = plugin.getHandlerFactory();
-            Map<LoreType, LoreHandler> handlers = factory.getAllHandlers();
+            Map<LoreType, LoreHandler> cachedHandlers = factory.getAllHandlers();
 
-            sender.sendMessage(prefix + "Handlers: " + handlers.size() + " registered");
+            // Count total types and loaded handlers
+            int totalTypes = LoreType.values().length;
+            int loadedHandlers = cachedHandlers.size();
 
-            // Check for missing handlers
-            int missingHandlers = 0;
-            for (LoreType type : LoreType.values()) {
-                if (!handlers.containsKey(type)) {
-                    sender.sendMessage(prefix + "  WARNING: Missing handler for " + type);
-                    missingHandlers++;
+            sender.sendMessage(prefix + "Handlers: " + loadedHandlers + "/" + totalTypes + " loaded (on-demand)");
+
+            // List loaded handlers
+            if (loadedHandlers > 0) {
+                for (Map.Entry<LoreType, LoreHandler> entry : cachedHandlers.entrySet()) {
+                    sender.sendMessage(prefix + "  " + entry.getKey() + ": " + entry.getValue().getClass().getSimpleName());
                 }
             }
 
-            if (missingHandlers == 0) {
-                sender.sendMessage(prefix + "  All lore types have handlers");
+            // Show unloaded types (not errors - they're created when needed)
+            int unloadedCount = totalTypes - loadedHandlers;
+            if (unloadedCount > 0) {
+                sender.sendMessage(prefix + "  " + unloadedCount + " type(s) not yet accessed (will load on first use)");
             }
         }
     }
