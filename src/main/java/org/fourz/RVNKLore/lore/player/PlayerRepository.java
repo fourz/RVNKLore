@@ -260,6 +260,106 @@ public class PlayerRepository implements IPlayerRepository {
     }
 
     /**
+     * Record that a player has discovered a lore entry.
+     * Creates an entry in the player_discoveries table.
+     *
+     * @param playerUuid The UUID of the player
+     * @param entryId The ID of the lore entry discovered
+     * @return CompletableFuture that completes with true if recorded successfully
+     */
+    @Override
+    public CompletableFuture<Boolean> recordLoreDiscovery(UUID playerUuid, String entryId) {
+        return CompletableFuture.supplyAsync(() -> {
+            // First check if already discovered to avoid duplicates
+            String checkSql = "SELECT COUNT(*) FROM player_discoveries WHERE player_uuid = ? AND entry_id = ?";
+            String insertSql = "INSERT INTO player_discoveries (player_uuid, entry_id, discovered_at) VALUES (?, ?, ?)";
+
+            try (Connection conn = dbConnection.getConnection()) {
+                // Check if already exists
+                try (PreparedStatement checkStmt = conn.prepareStatement(checkSql)) {
+                    checkStmt.setString(1, playerUuid.toString());
+                    checkStmt.setString(2, entryId);
+                    try (ResultSet rs = checkStmt.executeQuery()) {
+                        if (rs.next() && rs.getInt(1) > 0) {
+                            // Already discovered
+                            logger.debug("Player " + playerUuid + " already discovered entry " + entryId);
+                            return false;
+                        }
+                    }
+                }
+
+                // Insert new discovery
+                try (PreparedStatement insertStmt = conn.prepareStatement(insertSql)) {
+                    insertStmt.setString(1, playerUuid.toString());
+                    insertStmt.setString(2, entryId);
+                    insertStmt.setTimestamp(3, new java.sql.Timestamp(System.currentTimeMillis()));
+
+                    int rows = insertStmt.executeUpdate();
+                    if (rows > 0) {
+                        logger.debug("Recorded discovery: player=" + playerUuid + ", entry=" + entryId);
+                        return true;
+                    }
+                }
+            } catch (SQLException e) {
+                // Table might not exist - try to create it
+                if (e.getMessage().contains("player_discoveries") || e.getMessage().contains("no such table")) {
+                    logger.warning("player_discoveries table may not exist, attempting to create...");
+                    if (createDiscoveriesTable()) {
+                        // Retry the insert
+                        return recordLoreDiscoveryDirect(playerUuid, entryId);
+                    }
+                }
+                logger.error("Error recording lore discovery: " + playerUuid + ", " + entryId, e);
+                fallbackTracker.recordFailure();
+            } catch (IllegalStateException e) {
+                logger.error("Database unavailable recording discovery: " + playerUuid, e);
+                fallbackTracker.recordFailure();
+            }
+
+            return false;
+        });
+    }
+
+    /**
+     * Helper to create the player_discoveries table if it doesn't exist.
+     */
+    private boolean createDiscoveriesTable() {
+        String createSql = "CREATE TABLE IF NOT EXISTS player_discoveries (" +
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+            "player_uuid VARCHAR(36) NOT NULL, " +
+            "entry_id VARCHAR(36) NOT NULL, " +
+            "discovered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+            "UNIQUE(player_uuid, entry_id))";
+
+        try (Connection conn = dbConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(createSql)) {
+            stmt.executeUpdate();
+            logger.info("Created player_discoveries table");
+            return true;
+        } catch (SQLException e) {
+            logger.error("Failed to create player_discoveries table", e);
+            return false;
+        }
+    }
+
+    /**
+     * Direct insert without checking (used after table creation).
+     */
+    private boolean recordLoreDiscoveryDirect(UUID playerUuid, String entryId) {
+        String insertSql = "INSERT OR IGNORE INTO player_discoveries (player_uuid, entry_id, discovered_at) VALUES (?, ?, ?)";
+        try (Connection conn = dbConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(insertSql)) {
+            stmt.setString(1, playerUuid.toString());
+            stmt.setString(2, entryId);
+            stmt.setTimestamp(3, new java.sql.Timestamp(System.currentTimeMillis()));
+            return stmt.executeUpdate() > 0;
+        } catch (SQLException e) {
+            logger.error("Failed to record discovery after table creation", e);
+            return false;
+        }
+    }
+
+    /**
      * Check if the repository is operating in fallback mode.
      * Delegates to the FallbackTracker which manages failure counting and recovery.
      *

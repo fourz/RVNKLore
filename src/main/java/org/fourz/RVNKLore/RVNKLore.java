@@ -19,6 +19,7 @@ import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
 import org.fourz.RVNKLore.lore.submission.SubmissionManager;
 import org.fourz.RVNKLore.lore.player.PlayerManager;
 import org.fourz.RVNKLore.api.LoreApiInitializer;
+import org.fourz.RVNKLore.discovery.DiscoveryManager;
 
 public class RVNKLore extends JavaPlugin {
     private LoreManager loreManager;
@@ -32,6 +33,7 @@ public class RVNKLore extends JavaPlugin {
     private PlayerManager playerManager;
     private SubmissionManager submissionManager;
     private LoreApiInitializer apiInitializer;
+    private DiscoveryManager discoveryManager;
     private int healthCheckTaskId = -1;
     private Thread shutdownHook;
     private boolean shuttingDown = false;
@@ -86,6 +88,10 @@ public class RVNKLore extends JavaPlugin {
 
             // Initialize SubmissionManager for lore submission workflow
             this.submissionManager = new SubmissionManager(this);
+
+            // Initialize DiscoveryManager for lore discovery events
+            this.discoveryManager = new DiscoveryManager(this);
+            this.discoveryManager.initialize();
 
             // Remove direct CosmeticManager initialization (now handled by ItemManager)
             // cosmeticManager = new CosmeticManager(this);
@@ -224,6 +230,11 @@ public class RVNKLore extends JavaPlugin {
         //     cosmeticManager.shutdown();
         //     cosmeticManager = null;
         // }
+        if (discoveryManager != null) {
+            discoveryManager.shutdown();
+            discoveryManager = null;
+        }
+
         if (itemManager != null) {
             itemManager.shutdown();
             itemManager = null;
@@ -295,6 +306,20 @@ public class RVNKLore extends JavaPlugin {
             playerManager.initialize();
         }
         return playerManager;
+    }
+
+    /**
+     * Get the discovery manager for lore discovery events
+     *
+     * @return The discovery manager
+     */
+    public DiscoveryManager getDiscoveryManager() {
+        if (discoveryManager == null) {
+            logger.warning("Discovery manager requested but was null. Creating new instance.");
+            discoveryManager = new DiscoveryManager(this);
+            discoveryManager.initialize();
+        }
+        return discoveryManager;
     }
 
     /**

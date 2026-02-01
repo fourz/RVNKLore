@@ -60,6 +60,24 @@ public interface IPlayerService {
     CompletableFuture<List<String>> getPlayerLoreEntriesByType(UUID playerId, String entryType);
 
     /**
+     * Record that a player has discovered a lore entry.
+     *
+     * @param playerId The UUID of the player
+     * @param entryId The ID of the lore entry discovered
+     * @return Future containing true if the discovery was recorded, false otherwise
+     */
+    CompletableFuture<Boolean> recordLoreDiscovery(UUID playerId, String entryId);
+
+    /**
+     * Check if a player has discovered a specific lore entry.
+     *
+     * @param playerId The UUID of the player
+     * @param entryId The ID of the lore entry
+     * @return Future containing true if the player has discovered this entry
+     */
+    CompletableFuture<Boolean> hasDiscoveredEntry(UUID playerId, String entryId);
+
+    /**
      * Check if the service is in fallback mode due to database connectivity issues.
      * Fallback mode indicates degraded operation.
      *

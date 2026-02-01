@@ -127,6 +127,32 @@ public class PlayerManager implements IPlayerService {
         return playerRepository.isInFallbackMode();
     }
 
+    /**
+     * Record that a player has discovered a lore entry.
+     *
+     * @param playerId The UUID of the player
+     * @param entryId The ID of the lore entry discovered
+     * @return Future containing true if the discovery was recorded, false otherwise
+     */
+    @Override
+    public CompletableFuture<Boolean> recordLoreDiscovery(UUID playerId, String entryId) {
+        logger.debug("Recording lore discovery: player=" + playerId + ", entry=" + entryId);
+        return playerRepository.recordLoreDiscovery(playerId, entryId);
+    }
+
+    /**
+     * Check if a player has discovered a specific lore entry.
+     *
+     * @param playerId The UUID of the player
+     * @param entryId The ID of the lore entry
+     * @return Future containing true if the player has discovered this entry
+     */
+    @Override
+    public CompletableFuture<Boolean> hasDiscoveredEntry(UUID playerId, String entryId) {
+        return getPlayerLoreEntryIds(playerId)
+            .thenApply(entries -> entries.contains(entryId));
+    }
+
     // ============================================
     // Legacy Synchronous API (Internal Use)
     // ============================================

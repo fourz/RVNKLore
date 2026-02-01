@@ -63,6 +63,15 @@ public interface IPlayerRepository {
     CompletableFuture<List<NameChangeRecord>> getNameChangeHistory(UUID playerUuid);
 
     /**
+     * Record that a player has discovered a lore entry.
+     *
+     * @param playerUuid The UUID of the player
+     * @param entryId The ID of the lore entry discovered
+     * @return CompletableFuture that completes with true if recorded successfully
+     */
+    CompletableFuture<Boolean> recordLoreDiscovery(UUID playerUuid, String entryId);
+
+    /**
      * Check if the repository is operating in fallback mode.
      * Fallback mode indicates degraded operation due to database connectivity issues.
      *
