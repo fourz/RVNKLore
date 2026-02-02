@@ -41,12 +41,18 @@ public class SubmissionManager implements ISubmissionService {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "SubmissionManager");
         logger.info("Initializing SubmissionManager...");
-        
+
         // Verify database availability
         if (plugin.getDatabaseManager() == null || !plugin.getDatabaseManager().isConnected()) {
             logger.warning("Database not available - submission features may be limited");
             fallbackMode = true;
         }
+    }
+
+    /** Helper to get prefixed table name */
+    private String t(String baseName) {
+        DatabaseConnection conn = plugin.getDatabaseManager().getDatabaseConnection();
+        return conn != null ? conn.table(baseName) : baseName;
     }
     
     // ==================== Sync Internal Methods ====================
@@ -78,7 +84,7 @@ public class SubmissionManager implements ISubmissionService {
             return Collections.emptyList();
         }
         
-        String sql = "SELECT * FROM lore_submission WHERE entry_id = ? ORDER BY content_version DESC";
+        String sql = "SELECT * FROM " + t("lore_submission") + " WHERE entry_id = ? ORDER BY content_version DESC";
         
         try (Connection conn = dbConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -119,7 +125,7 @@ public class SubmissionManager implements ISubmissionService {
             return Optional.empty();
         }
         
-        String sql = "SELECT * FROM lore_submission WHERE id = ?";
+        String sql = "SELECT * FROM " + t("lore_submission") + " WHERE id = ?";
         
         try (Connection conn = dbConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -163,7 +169,7 @@ public class SubmissionManager implements ISubmissionService {
         int nextVersion = getNextVersionNumber(entryId);
         String slug = "lore-" + entryId + "-v" + nextVersion + "-" + System.currentTimeMillis();
         
-        String sql = "INSERT INTO lore_submission (entry_id, submitter_uuid, content, slug, " +
+        String sql = "INSERT INTO " + t("lore_submission") + " (entry_id, submitter_uuid, content, slug, " +
                      "content_version, is_current_version, status, approval_status) " +
                      "VALUES (?, ?, ?, ?, ?, FALSE, 'PENDING_APPROVAL', 'PENDING')";
         
@@ -222,7 +228,7 @@ public class SubmissionManager implements ISubmissionService {
             conn.setAutoCommit(false);
             
             // Mark previous current version as not current
-            String unsetCurrentSql = "UPDATE lore_submission SET is_current_version = FALSE " +
+            String unsetCurrentSql = "UPDATE " + t("lore_submission") + " SET is_current_version = FALSE " +
                                      "WHERE entry_id = ? AND is_current_version = TRUE";
             try (PreparedStatement stmt = conn.prepareStatement(unsetCurrentSql)) {
                 stmt.setString(1, submission.entryId());
@@ -230,7 +236,7 @@ public class SubmissionManager implements ISubmissionService {
             }
             
             // Approve this submission and mark as current
-            String approveSql = "UPDATE lore_submission SET approval_status = 'APPROVED', " +
+            String approveSql = "UPDATE " + t("lore_submission") + " SET approval_status = 'APPROVED', " +
                                "status = 'ACTIVE', approved_by = ?, approved_at = ?, " +
                                "is_current_version = TRUE, updated_at = ? " +
                                "WHERE id = ?";
@@ -283,7 +289,7 @@ public class SubmissionManager implements ISubmissionService {
             return false;
         }
         
-        String sql = "UPDATE lore_submission SET approval_status = 'REJECTED', " +
+        String sql = "UPDATE " + t("lore_submission") + " SET approval_status = 'REJECTED', " +
                      "status = 'ARCHIVED', updated_at = ? WHERE id = ?";
         Timestamp now = new Timestamp(System.currentTimeMillis());
         
@@ -323,7 +329,7 @@ public class SubmissionManager implements ISubmissionService {
             return Collections.emptyList();
         }
         
-        String sql = "SELECT * FROM lore_submission WHERE approval_status = 'PENDING' " +
+        String sql = "SELECT * FROM " + t("lore_submission") + " WHERE approval_status = 'PENDING' " +
                      "ORDER BY submission_date ASC";
         
         try (Connection conn = dbConnection.getConnection();
@@ -360,7 +366,7 @@ public class SubmissionManager implements ISubmissionService {
             return Collections.emptyList();
         }
         
-        String sql = "SELECT * FROM lore_submission WHERE submitter_uuid = ? " +
+        String sql = "SELECT * FROM " + t("lore_submission") + " WHERE submitter_uuid = ? " +
                      "ORDER BY submission_date DESC";
         
         try (Connection conn = dbConnection.getConnection();
@@ -398,7 +404,7 @@ public class SubmissionManager implements ISubmissionService {
             return Optional.empty();
         }
         
-        String sql = "SELECT * FROM lore_submission WHERE entry_id = ? AND is_current_version = TRUE";
+        String sql = "SELECT * FROM " + t("lore_submission") + " WHERE entry_id = ? AND is_current_version = TRUE";
         
         try (Connection conn = dbConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -484,7 +490,7 @@ public class SubmissionManager implements ISubmissionService {
             return 1;
         }
         
-        String sql = "SELECT MAX(content_version) FROM lore_submission WHERE entry_id = ?";
+        String sql = "SELECT MAX(content_version) FROM " + t("lore_submission") + " WHERE entry_id = ?";
         
         try (Connection conn = dbConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
