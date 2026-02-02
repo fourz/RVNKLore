@@ -42,6 +42,11 @@ public class PlayerRepository implements IPlayerRepository {
         this.jsonParser = new JSONParser();
     }
 
+    /** Helper to get prefixed table name */
+    private String t(String baseName) {
+        return dbConnection.table(baseName);
+    }
+
     /**
      * Check if a player already has a lore entry in the database
      *
@@ -51,8 +56,8 @@ public class PlayerRepository implements IPlayerRepository {
     @Override
     public CompletableFuture<Boolean> playerExists(UUID playerUuid) {
         return CompletableFuture.supplyAsync(() -> {
-            String sql = "SELECT COUNT(*) FROM lore_submission s " +
-                         "JOIN lore_entry e ON e.id = s.entry_id " +
+            String sql = "SELECT COUNT(*) FROM " + t("lore_submission") + " s " +
+                         "JOIN " + t("lore_entry") + " e ON e.id = s.entry_id " +
                          "WHERE e.entry_type = ? " +
                          "AND s.is_current_version = TRUE " +
                          "AND s.content LIKE ?";
@@ -88,8 +93,8 @@ public class PlayerRepository implements IPlayerRepository {
     @Override
     public CompletableFuture<Optional<String>> getStoredPlayerName(UUID playerUuid) {
         return CompletableFuture.supplyAsync(() -> {
-            String sql = "SELECT s.content FROM lore_submission s " +
-                         "JOIN lore_entry e ON e.id = s.entry_id " +
+            String sql = "SELECT s.content FROM " + t("lore_submission") + " s " +
+                         "JOIN " + t("lore_entry") + " e ON e.id = s.entry_id " +
                          "WHERE e.entry_type = ? " +
                          "AND s.is_current_version = TRUE " +
                          "AND s.content LIKE ?";
@@ -128,8 +133,8 @@ public class PlayerRepository implements IPlayerRepository {
     public CompletableFuture<List<String>> getPlayerLoreEntryIds(UUID playerUuid) {
         return CompletableFuture.supplyAsync(() -> {
             List<String> entryIds = new ArrayList<>();
-            String sql = "SELECT e.id FROM lore_entry e " +
-                         "JOIN lore_submission s ON e.id = s.entry_id " +
+            String sql = "SELECT e.id FROM " + t("lore_entry") + " e " +
+                         "JOIN " + t("lore_submission") + " s ON e.id = s.entry_id " +
                          "WHERE e.entry_type = ? " +
                          "AND s.is_current_version = TRUE " +
                          "AND s.content LIKE ?";
@@ -167,8 +172,8 @@ public class PlayerRepository implements IPlayerRepository {
     public CompletableFuture<List<String>> getPlayerLoreEntriesByType(UUID playerUuid, String entryType) {
         return CompletableFuture.supplyAsync(() -> {
             List<String> entryIds = new ArrayList<>();
-            String sql = "SELECT e.id FROM lore_entry e " +
-                         "JOIN lore_submission s ON e.id = s.entry_id " +
+            String sql = "SELECT e.id FROM " + t("lore_entry") + " e " +
+                         "JOIN " + t("lore_submission") + " s ON e.id = s.entry_id " +
                          "WHERE e.entry_type = ? " +
                          "AND s.is_current_version = TRUE " +
                          "AND s.content LIKE ? " +
@@ -219,8 +224,8 @@ public class PlayerRepository implements IPlayerRepository {
     public CompletableFuture<List<NameChangeRecord>> getNameChangeHistory(UUID playerUuid) {
         return CompletableFuture.supplyAsync(() -> {
             List<NameChangeRecord> nameChanges = new ArrayList<>();
-            String sql = "SELECT s.content, s.created_at FROM lore_submission s " +
-                         "JOIN lore_entry e ON e.id = s.entry_id " +
+            String sql = "SELECT s.content, s.created_at FROM " + t("lore_submission") + " s " +
+                         "JOIN " + t("lore_entry") + " e ON e.id = s.entry_id " +
                          "WHERE e.entry_type = ? " +
                          "AND s.is_current_version = TRUE " +
                          "AND s.content LIKE ? " +
@@ -271,8 +276,8 @@ public class PlayerRepository implements IPlayerRepository {
     public CompletableFuture<Boolean> recordLoreDiscovery(UUID playerUuid, String entryId) {
         return CompletableFuture.supplyAsync(() -> {
             // First check if already discovered to avoid duplicates
-            String checkSql = "SELECT COUNT(*) FROM player_discoveries WHERE player_uuid = ? AND entry_id = ?";
-            String insertSql = "INSERT INTO player_discoveries (player_uuid, entry_id, discovered_at) VALUES (?, ?, ?)";
+            String checkSql = "SELECT COUNT(*) FROM " + t("player_discoveries") + " WHERE player_uuid = ? AND entry_id = ?";
+            String insertSql = "INSERT INTO " + t("player_discoveries") + " (player_uuid, entry_id, discovered_at) VALUES (?, ?, ?)";
 
             try (Connection conn = dbConnection.getConnection()) {
                 // Check if already exists
@@ -324,7 +329,7 @@ public class PlayerRepository implements IPlayerRepository {
      * Helper to create the player_discoveries table if it doesn't exist.
      */
     private boolean createDiscoveriesTable() {
-        String createSql = "CREATE TABLE IF NOT EXISTS player_discoveries (" +
+        String createSql = "CREATE TABLE IF NOT EXISTS " + t("player_discoveries") + " (" +
             "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
             "player_uuid VARCHAR(36) NOT NULL, " +
             "entry_id VARCHAR(36) NOT NULL, " +
@@ -346,7 +351,7 @@ public class PlayerRepository implements IPlayerRepository {
      * Direct insert without checking (used after table creation).
      */
     private boolean recordLoreDiscoveryDirect(UUID playerUuid, String entryId) {
-        String insertSql = "INSERT OR IGNORE INTO player_discoveries (player_uuid, entry_id, discovered_at) VALUES (?, ?, ?)";
+        String insertSql = "INSERT OR IGNORE INTO " + t("player_discoveries") + " (player_uuid, entry_id, discovered_at) VALUES (?, ?, ?)";
         try (Connection conn = dbConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(insertSql)) {
             stmt.setString(1, playerUuid.toString());

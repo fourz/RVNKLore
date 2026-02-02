@@ -39,6 +39,11 @@ public class LoreEntryRepository implements ILoreEntryRepository {
         this.fallbackTracker = new FallbackTracker(plugin);
     }
 
+    /** Helper to get prefixed table name */
+    private String t(String baseName) {
+        return dbConnection.table(baseName);
+    }
+
     /**
      * Add a new lore entry to the database with submission and specialized records.
      *
@@ -72,7 +77,7 @@ public class LoreEntryRepository implements ILoreEntryRepository {
                     }
 
                     // Step 3: Create initial submission version
-                    boolean submissionCreated = insertLoreSubmission(entryId, entry, conn);
+                    boolean submissionCreated = insertLoreSubmission(entryId, entry, conn, 1);
                     if (!submissionCreated) {
                         throw new SQLException("Failed to create initial submission record");
                     }
@@ -108,7 +113,7 @@ public class LoreEntryRepository implements ILoreEntryRepository {
 
                 try {
                     // Step 1: Update base lore_entry record
-                    String updateEntrySql = "UPDATE lore_entry SET name = ? WHERE id = ?";
+                    String updateEntrySql = "UPDATE " + t("lore_entry") + " SET name = ? WHERE id = ?";
                     try (PreparedStatement stmt = conn.prepareStatement(updateEntrySql)) {
                         stmt.setString(1, entry.getName());
                         stmt.setString(2, entry.getId());
@@ -121,7 +126,7 @@ public class LoreEntryRepository implements ILoreEntryRepository {
 
                     // Step 2: Update specialized record if applicable
                     if (entry.getType() == LoreType.ITEM) {
-                        String updateItemSql = "UPDATE lore_item SET name = ?, nbt_data = ? WHERE lore_entry_id = ?";
+                        String updateItemSql = "UPDATE " + t("lore_item") + " SET name = ?, nbt_data = ? WHERE lore_entry_id = ?";
                         try (PreparedStatement stmt = conn.prepareStatement(updateItemSql)) {
                             stmt.setString(1, entry.getName());
                             stmt.setString(2, entry.getNbtData());
@@ -130,16 +135,19 @@ public class LoreEntryRepository implements ILoreEntryRepository {
                         }
                     }
 
-                    // Step 3: Mark existing current version as not current
-                    String updateCurrentSql = "UPDATE lore_submission SET is_current_version = FALSE " +
+                    // Step 3: Get next version number
+                    int nextVersion = getNextVersionNumber(entry.getId(), conn);
+
+                    // Step 4: Mark existing current version as not current
+                    String updateCurrentSql = "UPDATE " + t("lore_submission") + " SET is_current_version = FALSE " +
                                               "WHERE entry_id = ? AND is_current_version = TRUE";
                     try (PreparedStatement stmt = conn.prepareStatement(updateCurrentSql)) {
                         stmt.setString(1, entry.getId());
                         stmt.executeUpdate();
                     }
 
-                    // Step 4: Create new submission version
-                    boolean submissionCreated = insertLoreSubmission(entry.getId(), entry, conn);
+                    // Step 5: Create new submission version with incremented version number
+                    boolean submissionCreated = insertLoreSubmission(entry.getId(), entry, conn, nextVersion);
                     if (!submissionCreated) {
                         throw new SQLException("Failed to create new submission version");
                     }
@@ -176,7 +184,7 @@ public class LoreEntryRepository implements ILoreEntryRepository {
                 try {
                     // Delete from lore_entry will cascade to lore_submission and lore_item
                     // due to foreign key constraints with ON DELETE CASCADE
-                    String sql = "DELETE FROM lore_entry WHERE id = ?";
+                    String sql = "DELETE FROM " + t("lore_entry") + " WHERE id = ?";
 
                     try (PreparedStatement stmt = conn.prepareStatement(sql)) {
                         stmt.setString(1, id.toString());
@@ -216,8 +224,8 @@ public class LoreEntryRepository implements ILoreEntryRepository {
         return CompletableFuture.supplyAsync(() -> {
             String sql = "SELECT e.id, e.entry_type, e.name, s.content, s.submitter_uuid, " +
                          "s.approval_status, s.created_at " +
-                         "FROM lore_entry e " +
-                         "JOIN lore_submission s ON e.id = s.entry_id " +
+                         "FROM " + t("lore_entry") + " e " +
+                         "JOIN " + t("lore_submission") + " s ON e.id = s.entry_id " +
                          "WHERE e.id = ? AND s.is_current_version = TRUE";
 
             try (Connection conn = dbConnection.getConnection();
@@ -248,10 +256,11 @@ public class LoreEntryRepository implements ILoreEntryRepository {
         return CompletableFuture.supplyAsync(() -> {
             List<LoreEntry> entries = new ArrayList<>();
 
-            String sql = "SELECT e.id, e.entry_type, e.name, s.content, s.submitter_uuid, " +
+            // FIXED bug-03: Added DISTINCT to prevent duplicate entries
+            String sql = "SELECT DISTINCT e.id, e.entry_type, e.name, s.content, s.submitter_uuid, " +
                          "s.approval_status, s.created_at " +
-                         "FROM lore_entry e " +
-                         "JOIN lore_submission s ON e.id = s.entry_id " +
+                         "FROM " + t("lore_entry") + " e " +
+                         "JOIN " + t("lore_submission") + " s ON e.id = s.entry_id " +
                          "WHERE s.is_current_version = TRUE";
 
             try (Connection conn = dbConnection.getConnection();
@@ -280,10 +289,11 @@ public class LoreEntryRepository implements ILoreEntryRepository {
         return CompletableFuture.supplyAsync(() -> {
             List<LoreEntry> entries = new ArrayList<>();
 
-            String sql = "SELECT e.id, e.entry_type, e.name, s.content, s.submitter_uuid, " +
+            // FIXED bug-03: Added DISTINCT to prevent duplicate entries
+            String sql = "SELECT DISTINCT e.id, e.entry_type, e.name, s.content, s.submitter_uuid, " +
                          "s.approval_status, s.created_at " +
-                         "FROM lore_entry e " +
-                         "JOIN lore_submission s ON e.id = s.entry_id " +
+                         "FROM " + t("lore_entry") + " e " +
+                         "JOIN " + t("lore_submission") + " s ON e.id = s.entry_id " +
                          "WHERE e.entry_type = ? AND s.is_current_version = TRUE";
 
             try (Connection conn = dbConnection.getConnection();
@@ -321,10 +331,11 @@ public class LoreEntryRepository implements ILoreEntryRepository {
 
             String searchPattern = "%" + keyword.trim() + "%";
 
-            String sql = "SELECT e.id, e.entry_type, e.name, s.content, s.submitter_uuid, " +
+            // FIXED bug-03: Added DISTINCT to prevent duplicate entries
+            String sql = "SELECT DISTINCT e.id, e.entry_type, e.name, s.content, s.submitter_uuid, " +
                          "s.approval_status, s.created_at " +
-                         "FROM lore_entry e " +
-                         "JOIN lore_submission s ON e.id = s.entry_id " +
+                         "FROM " + t("lore_entry") + " e " +
+                         "JOIN " + t("lore_submission") + " s ON e.id = s.entry_id " +
                          "WHERE s.is_current_version = TRUE " +
                          "AND (e.name LIKE ? OR s.content LIKE ?)";
 
@@ -356,7 +367,7 @@ public class LoreEntryRepository implements ILoreEntryRepository {
     public CompletableFuture<Integer> getEntryCount() {
         return CompletableFuture.supplyAsync(() -> {
             int count = 0;
-            String sql = "SELECT COUNT(*) FROM lore_entry";
+            String sql = "SELECT COUNT(*) FROM " + t("lore_entry");
 
             try (Connection conn = dbConnection.getConnection();
                  PreparedStatement stmt = conn.prepareStatement(sql);
@@ -386,7 +397,7 @@ public class LoreEntryRepository implements ILoreEntryRepository {
 
             String sql = "SELECT id, content_version, submitter_uuid, created_at, " +
                          "approval_status, is_current_version " +
-                         "FROM lore_submission " +
+                         "FROM " + t("lore_submission") + " " +
                          "WHERE entry_id = ? " +
                          "ORDER BY content_version DESC";
 
@@ -430,7 +441,7 @@ public class LoreEntryRepository implements ILoreEntryRepository {
                 conn.setAutoCommit(false);
 
                 try {
-                    String sql = "UPDATE lore_submission " +
+                    String sql = "UPDATE " + t("lore_submission") + " " +
                                  "SET approval_status = 'APPROVED', approved_by = ?, approved_at = CURRENT_TIMESTAMP " +
                                  "WHERE entry_id = ? AND is_current_version = TRUE";
 
@@ -483,7 +494,7 @@ public class LoreEntryRepository implements ILoreEntryRepository {
      */
     private String insertLoreEntry(LoreEntry entry, Connection conn) throws SQLException {
         // Use provided UUID string as primary key
-        String sql = "INSERT INTO lore_entry (id, entry_type, name) VALUES (?, ?, ?)";
+        String sql = "INSERT INTO " + t("lore_entry") + " (id, entry_type, name) VALUES (?, ?, ?)";
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, entry.getId());
             stmt.setString(2, entry.getType().name());
@@ -509,7 +520,7 @@ public class LoreEntryRepository implements ILoreEntryRepository {
             logger.warning("Material is required for lore item entry: " + entry.getName());
             throw new SQLException("Material is required for lore item entry");
         }
-        String sql = "INSERT INTO lore_item (lore_entry_id, name, material, item_type, rarity, is_obtainable, nbt_data) VALUES (?, ?, ?, ?, ?, ?, ?)";
+        String sql = "INSERT INTO " + t("lore_item") + " (lore_entry_id, name, material, item_type, rarity, is_obtainable, nbt_data) VALUES (?, ?, ?, ?, ?, ?, ?)";
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, entryId);
             stmt.setString(2, entry.getName());
@@ -523,17 +534,41 @@ public class LoreEntryRepository implements ILoreEntryRepository {
     }
 
     /**
+     * Get the next version number for a lore entry
+     *
+     * @param entryId The entry ID
+     * @param conn The database connection
+     * @return The next version number
+     * @throws SQLException If a database error occurs
+     */
+    private int getNextVersionNumber(String entryId, Connection conn) throws SQLException {
+        String sql = "SELECT MAX(content_version) FROM " + t("lore_submission") + " WHERE entry_id = ?";
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, entryId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1) + 1;
+                }
+            }
+        }
+        return 1; // Default to version 1 if no existing versions
+    }
+
+    /**
      * Insert the initial submission record for a lore entry
+     *
+     * FIXED bug-01: Added version parameter to create versioned slugs to avoid UNIQUE constraint violations
      *
      * @param entryId The parent lore entry ID
      * @param entry The lore entry
      * @param conn The database connection
+     * @param version The content version number
      * @return true if successful, false otherwise
      * @throws SQLException If a database error occurs
      */
     @SuppressWarnings("unchecked")
-    private boolean insertLoreSubmission(String entryId, LoreEntry entry, Connection conn) throws SQLException {
-        String sql = "INSERT INTO lore_submission (entry_id, submitter_uuid, content, slug, is_current_version) VALUES (?, ?, ?, ?, TRUE)";
+    private boolean insertLoreSubmission(String entryId, LoreEntry entry, Connection conn, int version) throws SQLException {
+        String sql = "INSERT INTO " + t("lore_submission") + " (entry_id, submitter_uuid, content, slug, content_version, is_current_version) VALUES (?, ?, ?, ?, ?, TRUE)";
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, entryId);
             // Defensive: use "Server" if submittedBy is null or empty
@@ -564,21 +599,33 @@ public class LoreEntryRepository implements ILoreEntryRepository {
                 }
             }
             stmt.setString(3, content.toJSONString());
-            // Generate and set slug
-            String slug = generateSlug(entry.getName());
+            // Generate and set versioned slug to avoid UNIQUE constraint violations
+            String slug = generateVersionedSlug(entry.getName(), version);
             stmt.setString(4, slug);
+            stmt.setInt(5, version);
             return stmt.executeUpdate() > 0;
         }
     }
 
-    // Utility to generate a URL-friendly slug from a name
-    private String generateSlug(String name) {
+    /**
+     * Generate a versioned URL-friendly slug from a name
+     * FIXED bug-01: Slugs are now versioned to avoid UNIQUE constraint violations
+     *
+     * @param name The entry name
+     * @param version The content version
+     * @return A versioned slug string
+     */
+    private String generateVersionedSlug(String name, int version) {
         if (name == null) return "";
-        return name.trim().toLowerCase()
-            .replaceAll("[^a-z0-9\s-]", "") // Remove invalid chars
-            .replaceAll("\s+", "-")         // Replace whitespace with hyphens
+        String baseSlug = name.trim().toLowerCase()
+            .replaceAll("[^a-z0-9\\s-]", "") // Remove invalid chars
+            .replaceAll("\\s+", "-")         // Replace whitespace with hyphens
             .replaceAll("-+", "-")           // Remove multiple hyphens
             .replaceAll("^-|-$", "");        // Trim leading/trailing hyphens
+
+        // For version 1, use base slug without suffix for backward compatibility
+        // For version 2+, append version to ensure uniqueness
+        return version == 1 ? baseSlug : baseSlug + "-v" + version;
     }
 
     /**

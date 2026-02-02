@@ -61,6 +61,11 @@ public class ItemRepository implements IItemRepository {
         logger.info("ItemRepository initialized");
     }
 
+    /** Helper to get prefixed table name */
+    private String t(String baseName) {
+        return dbConnection.table(baseName);
+    }
+
     /**
      * Verify required database tables exist.
      *
@@ -69,8 +74,8 @@ public class ItemRepository implements IItemRepository {
      * See docs/standard/rvnklore-schema.md for authoritative schema reference.
      */
     private void initializeTables() {
-        // Required tables for ItemRepository operations
-        String[] requiredTables = {"lore_item", "collection", "collection_item", "player_collection_progress"};
+        // Required tables for ItemRepository operations (with prefix applied)
+        String[] requiredTables = {t("lore_item"), t("collection"), t("collection_item"), t("player_collection_progress")};
 
         try {
             Connection conn = dbConnection.getConnection();
@@ -115,7 +120,7 @@ public class ItemRepository implements IItemRepository {
     @Override
     public CompletableFuture<Optional<ItemProperties>> getItemById(int itemId) {
         return CompletableFuture.supplyAsync(() -> {
-            String sql = "SELECT * FROM lore_item WHERE id = ?";
+            String sql = "SELECT * FROM " + t("lore_item") + " WHERE id = ?";
 
             try {
                 ItemProperties result = dbHelper.executeQuery(sql,
@@ -144,7 +149,7 @@ public class ItemRepository implements IItemRepository {
     @Override
     public CompletableFuture<Optional<ItemProperties>> getItemByName(String name) {
         return CompletableFuture.supplyAsync(() -> {
-            String sql = "SELECT * FROM lore_item WHERE name = ? LIMIT 1";
+            String sql = "SELECT * FROM " + t("lore_item") + " WHERE name = ? LIMIT 1";
 
             try {
                 ItemProperties result = dbHelper.executeQuery(sql,
@@ -172,7 +177,7 @@ public class ItemRepository implements IItemRepository {
     @Override
     public CompletableFuture<List<ItemProperties>> getAllItemsByName(String name) {
         return CompletableFuture.supplyAsync(() -> {
-            String sql = "SELECT * FROM lore_item WHERE name = ?";
+            String sql = "SELECT * FROM " + t("lore_item") + " WHERE name = ?";
 
             try {
                 return dbHelper.executeQuery(sql,
@@ -203,7 +208,7 @@ public class ItemRepository implements IItemRepository {
     @Override
     public CompletableFuture<Optional<ItemProperties>> getItemByLoreEntryId(String loreEntryId) {
         return CompletableFuture.supplyAsync(() -> {
-            String sql = "SELECT * FROM lore_item WHERE lore_entry_id = ?";
+            String sql = "SELECT * FROM " + t("lore_item") + " WHERE lore_entry_id = ?";
 
             try {
                 ItemProperties result = dbHelper.executeQuery(sql,
@@ -231,7 +236,7 @@ public class ItemRepository implements IItemRepository {
     @Override
     public CompletableFuture<List<ItemProperties>> getItemsByType(String itemType) {
         return CompletableFuture.supplyAsync(() -> {
-            String sql = "SELECT * FROM lore_item WHERE item_type = ?";
+            String sql = "SELECT * FROM " + t("lore_item") + " WHERE item_type = ?";
 
             try {
                 return dbHelper.executeQuery(sql,
@@ -261,7 +266,7 @@ public class ItemRepository implements IItemRepository {
     @Override
     public CompletableFuture<List<ItemProperties>> getAllItems() {
         return CompletableFuture.supplyAsync(() -> {
-            String sql = "SELECT * FROM lore_item";
+            String sql = "SELECT * FROM " + t("lore_item") + "";
 
             try {
                 return dbHelper.executeQuery(sql,
@@ -295,7 +300,7 @@ public class ItemRepository implements IItemRepository {
     public CompletableFuture<Integer> insertItem(ItemProperties properties) {
         return CompletableFuture.supplyAsync(() -> {
             // Base INSERT without RETURNING clause - dialect handles key retrieval
-            String sql = "INSERT INTO lore_item (name, item_type, rarity, material, " +
+            String sql = "INSERT INTO " + t("lore_item") + " (name, item_type, rarity, material, " +
                         "is_obtainable, custom_model_data, item_properties, created_by, nbt_data, lore_entry_id) " +
                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
             try {
@@ -352,7 +357,7 @@ public class ItemRepository implements IItemRepository {
     @SuppressWarnings({"unchecked"})
     public CompletableFuture<Boolean> updateItem(int itemId, ItemProperties properties) {
         return CompletableFuture.supplyAsync(() -> {
-            String sql = "UPDATE lore_item SET " +
+            String sql = "UPDATE " + t("lore_item") + " SET " +
                         "name = ?, item_type = ?, rarity = ?, " +
                         "material = ?, is_obtainable = ?, custom_model_data = ?, " +
                         "item_properties = ?, updated_at = CURRENT_TIMESTAMP, " +
@@ -415,7 +420,7 @@ public class ItemRepository implements IItemRepository {
     @Override
     public CompletableFuture<Boolean> deleteItem(int itemId) {
         return CompletableFuture.supplyAsync(() -> {
-            String sql = "DELETE FROM lore_item WHERE id = ?";
+            String sql = "DELETE FROM " + t("lore_item") + " WHERE id = ?";
 
             try {
                 int rowsAffected = dbHelper.executeUpdate(sql,
@@ -456,7 +461,7 @@ public class ItemRepository implements IItemRepository {
     @Override
     public CompletableFuture<Integer> getCurrentItemId(String name) {
         return CompletableFuture.supplyAsync(() -> {
-            String sql = "SELECT id FROM lore_item WHERE name = ? LIMIT 1";
+            String sql = "SELECT id FROM " + t("lore_item") + " WHERE name = ? LIMIT 1";
 
             try {
                 return dbHelper.executeQuery(sql,
@@ -483,7 +488,7 @@ public class ItemRepository implements IItemRepository {
     @Override
     public CompletableFuture<List<Integer>> getAllItemIdsByName(String name) {
         return CompletableFuture.supplyAsync(() -> {
-            String sql = "SELECT id FROM lore_item WHERE name = ?";
+            String sql = "SELECT id FROM " + t("lore_item") + " WHERE name = ?";
 
             try {
                 return dbHelper.executeQuery(sql,
@@ -514,7 +519,7 @@ public class ItemRepository implements IItemRepository {
     public CompletableFuture<List<ItemProperties>> getItemsByCollection(int collectionId) {
         return CompletableFuture.supplyAsync(() -> {
             String sql = "SELECT i.*, ci.sequence_number, ci.item_config " +
-                        "FROM lore_item i " +
+                        "FROM " + t("lore_item") + " i " +
                         "JOIN collection_item ci ON i.id = ci.item_id " +
                         "WHERE ci.collection_id = ? " +
                         "ORDER BY ci.sequence_number";
@@ -573,7 +578,7 @@ public class ItemRepository implements IItemRepository {
     public CompletableFuture<Map<Integer, String>> getCollectionsByItem(int itemId) {
         return CompletableFuture.supplyAsync(() -> {
             String sql = "SELECT c.id, c.name " +
-                        "FROM collection c " +
+                        "FROM " + t("collection") + " c " +
                         "JOIN collection_item ci ON c.id = ci.collection_id " +
                         "WHERE ci.item_id = ?";
 
@@ -602,7 +607,7 @@ public class ItemRepository implements IItemRepository {
     @Override
     public CompletableFuture<Map<Integer, String>> getAllCollections() {
         return CompletableFuture.supplyAsync(() -> {
-            String sql = "SELECT id, name FROM collection";
+            String sql = "SELECT id, name FROM " + t("collection") + "";
 
             try {
                 return dbHelper.executeQuery(sql,
@@ -664,7 +669,7 @@ public class ItemRepository implements IItemRepository {
     public CompletableFuture<Integer> createCollection(String name, String description, String theme) {
         return CompletableFuture.supplyAsync(() -> {
             // Base INSERT without RETURNING clause - dialect handles key retrieval
-            String sql = "INSERT INTO collection (name, description, theme) VALUES (?, ?, ?)";
+            String sql = "INSERT INTO " + t("collection") + " (name, description, theme) VALUES (?, ?, ?)";
 
             try {
                 return dbHelper.executeInsertWithGeneratedKey(sql, "id",
@@ -692,7 +697,7 @@ public class ItemRepository implements IItemRepository {
     @Override
     public CompletableFuture<Boolean> updateCollection(int collectionId, String name, String description, String theme) {
         return CompletableFuture.supplyAsync(() -> {
-            StringBuilder sql = new StringBuilder("UPDATE collection SET updated_at = CURRENT_TIMESTAMP");
+            StringBuilder sql = new StringBuilder("UPDATE " + t("collection") + " SET updated_at = CURRENT_TIMESTAMP");
             List<String> params = new ArrayList<>();
 
             if (name != null) {
@@ -740,7 +745,7 @@ public class ItemRepository implements IItemRepository {
     @Override
     public CompletableFuture<Boolean> addItemToCollection(int itemId, int collectionId, int sequenceNumber, JSONObject itemConfig) {
         return CompletableFuture.supplyAsync(() -> {
-            String sql = "INSERT INTO collection_item (collection_id, item_id, sequence_number, item_config) " +
+            String sql = "INSERT INTO " + t("collection_item") + " (collection_id, item_id, sequence_number, item_config) " +
                         "VALUES (?, ?, ?, ?)";
 
             try {
@@ -770,7 +775,7 @@ public class ItemRepository implements IItemRepository {
     @Override
     public CompletableFuture<Boolean> removeItemFromCollection(int itemId, int collectionId) {
         return CompletableFuture.supplyAsync(() -> {
-            String sql = "DELETE FROM collection_item WHERE item_id = ? AND collection_id = ?";
+            String sql = "DELETE FROM " + t("collection_item") + " WHERE item_id = ? AND collection_id = ?";
 
             try {
                 int rowsAffected = dbHelper.executeUpdate(sql,
@@ -812,7 +817,7 @@ public class ItemRepository implements IItemRepository {
                         getCurrentMaxSequence(collectionId, conn) + 1;
 
                     // Add all items
-                    String sql = "INSERT INTO collection_item (collection_id, item_id, sequence_number) VALUES (?, ?, ?)";
+                    String sql = "INSERT INTO " + t("collection_item") + " (collection_id, item_id, sequence_number) VALUES (?, ?, ?)";
                     try (PreparedStatement stmt = conn.prepareStatement(sql)) {
                         for (Integer itemId : itemIds) {
                             stmt.setInt(1, collectionId);
@@ -849,7 +854,7 @@ public class ItemRepository implements IItemRepository {
     @Override
     public CompletableFuture<Boolean> updateCollectionSequences(int collectionId, Map<Integer, Integer> itemSequences) {
         return CompletableFuture.supplyAsync(() -> {
-            String sql = "UPDATE collection_item SET sequence_number = ? WHERE collection_id = ? AND item_id = ?";
+            String sql = "UPDATE " + t("collection_item") + " SET sequence_number = ? WHERE collection_id = ? AND item_id = ?";
 
             try {
                 Connection conn = dbConnection.getConnection();
@@ -922,7 +927,7 @@ public class ItemRepository implements IItemRepository {
     @Override
     public CompletableFuture<List<ItemCollection>> loadAllCollections() {
         return CompletableFuture.supplyAsync(() -> {
-            String sql = "SELECT collection_id, name, description, theme_id, is_active, created_at FROM collection";
+            String sql = "SELECT collection_id, name, description, theme_id, is_active, created_at FROM " + t("collection") + "";
 
             try {
                 return dbHelper.executeQuery(sql, null, rs -> {
@@ -962,7 +967,7 @@ public class ItemRepository implements IItemRepository {
                 return 0.0;
             }
 
-            String sql = "SELECT progress FROM player_collection_progress WHERE player_id = ? AND collection_id = ?";
+            String sql = "SELECT progress FROM " + t("player_collection_progress") + " WHERE player_id = ? AND collection_id = ?";
 
             try {
                 return dbHelper.executeQuery(sql, stmt -> {
@@ -1006,7 +1011,7 @@ public class ItemRepository implements IItemRepository {
             String[] allColumns = {"player_id", "collection_id", "progress", "last_updated"};
             String[] updateColumns = {"progress", "last_updated"};
             String sql = dbConnection.getDialect().getUpsertSQL(
-                    "player_collection_progress", keyColumns, allColumns, updateColumns);
+                    t("player_collection_progress"), keyColumns, allColumns, updateColumns);
 
             try {
                 return dbHelper.executeUpdate(sql, stmt -> {
@@ -1044,7 +1049,7 @@ public class ItemRepository implements IItemRepository {
                 return false;
             }
 
-            String sql = "UPDATE player_collection_progress SET progress = 1.0, completed_at = ?, last_updated = ? " +
+            String sql = "UPDATE " + t("player_collection_progress") + " SET progress = 1.0, completed_at = ?, last_updated = ? " +
                          "WHERE player_id = ? AND collection_id = ?";
 
             try {
@@ -1074,7 +1079,7 @@ public class ItemRepository implements IItemRepository {
                 return new ArrayList<>();
             }
 
-            String sql = "SELECT collection_id FROM player_collection_progress " +
+            String sql = "SELECT collection_id FROM " + t("player_collection_progress") + " " +
                          "WHERE player_id = ? AND progress >= 1.0 AND completed_at IS NOT NULL";
 
             try {
@@ -1107,7 +1112,7 @@ public class ItemRepository implements IItemRepository {
                 return new HashMap<>();
             }
 
-            String sql = "SELECT collection_id, progress FROM player_collection_progress WHERE player_id = ?";
+            String sql = "SELECT collection_id, progress FROM " + t("player_collection_progress") + " WHERE player_id = ?";
 
             try {
                 return dbHelper.executeQuery(sql, stmt -> {
@@ -1143,7 +1148,7 @@ public class ItemRepository implements IItemRepository {
      * Helper method to get the current maximum sequence number in a collection
      */
     private int getCurrentMaxSequence(int collectionId, Connection conn) throws SQLException {
-        String sql = "SELECT MAX(sequence_number) FROM collection_item WHERE collection_id = ?";
+        String sql = "SELECT MAX(sequence_number) FROM " + t("collection_item") + " WHERE collection_id = ?";
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, collectionId);
             try (ResultSet rs = stmt.executeQuery()) {
