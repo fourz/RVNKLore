@@ -4,8 +4,17 @@ import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
+import org.fourz.RVNKLore.lore.player.PlayerRepository;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import org.json.simple.JSONObject;
+
+import java.io.File;
+import java.io.FileWriter;
 import java.sql.Connection;
+import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;

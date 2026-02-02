@@ -25,6 +25,10 @@ public class DatabaseHelper {
     private final LogManager logger;
     private final DatabaseManager databaseManager;
 
+    // Retry configuration
+    private static final int maxRetries = 3;
+    private static final long retryDelayMs = 1000;
+
     public DatabaseHelper(RVNKLore plugin) {
         this.plugin = plugin;
         this.databaseManager = plugin.getDatabaseManager();

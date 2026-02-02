@@ -1,4 +1,4 @@
-package org.fourz.RVNKLore.data;
+package org.fourz.RVNKLore.lore.player;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;

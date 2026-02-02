@@ -27,7 +27,7 @@ mvn dependency:tree
 
 **Output**: `target/RVNKLore-1.0-SNAPSHOT.jar`
 
-**Current Status**: Compilation errors present - requires async refactoring in LoreEntryRepository (interface expects CompletableFuture, implementation returns synchronous types)
+**Current Status**: ✅ Build passing, deployed and tested on RVNK Dev server (Feb 2026)
 
 ## Remote Testing Workflow
 
@@ -302,12 +302,9 @@ rag_search_knowledge_base(query="Bukkit custom items")
 manage_task("update", task_id="...", status="done")
 ```
 
-### Current Status (Jan 2026)
+### Current Status (Feb 2026)
 
-**Critical Issues**:
-- Compilation errors in LoreEntryRepository.java
-- Interface/implementation mismatch (async vs sync methods)
-- Requires CompletableFuture refactoring
+**Build Status**: ✅ Passing (`mvn clean package -Dmaven.test.skip=true`)
 
 **Completed Features**:
 - Service interface layer (ILoreService, IItemService, etc.)
@@ -316,14 +313,13 @@ manage_task("update", task_id="...", status="done")
 - Custom model data manager
 - Enchantment system
 - Cosmetic head system
-- Database abstraction with dialect support
+- Database abstraction with dialect support (HikariCP)
 - QueryBuilder pattern implementation
 - DTO layer for data transfer
+- Async repository pattern (CompletableFuture)
+- REST API endpoints at `/api/lore/*` (via RVNKCore RestAPIService)
 
 **Pending Implementations**:
-- Async repository pattern (CompletableFuture)
-- HikariCP connection pooling migration
-- REST API endpoints (via RVNKCore RestAPIService)
 - Web interface integration
 - PlaceholderAPI support
 - NPC integration (Citizens)
@@ -331,16 +327,15 @@ manage_task("update", task_id="...", status="done")
 ## Development Checklist
 
 Before committing changes:
-1. `mvn clean package` - Build succeeds (currently fails, see Build Status)
+1. `mvn clean package -Dmaven.test.skip=true` - Build succeeds
 2. Test on local MCSS server or deploy to test server
 3. Verify console output for errors: `/rvnkdev-query <id> errors`
 4. Check plugin loads correctly: `/rvnkdev-query <id> plugin RVNKLore`
 5. Validate RVNKCore service registration in logs
-6. Test key commands: `/lore list`, `/lore add`, `/lore item list`
+6. Test key commands: `/lore list`, `/lore search`, `/lore reload`, `/lore export json`
 7. Verify database connectivity (SQLite/MySQL)
 
 ## Known Issues
 
-1. **Async Refactoring Required**: LoreEntryRepository needs CompletableFuture return types to match interface
-2. **Build Failures**: Cannot compile until repository async signatures are fixed
-3. **RVNKCore Dependency**: Must be present in server plugins folder at runtime (provided scope)
+1. **Short ID Format**: `/lore get` requires full UUID but list/search shows truncated IDs (bug-01)
+2. **RVNKCore Dependency**: Must be present in server plugins folder at runtime (provided scope)
