@@ -1,5 +1,6 @@
 package org.fourz.RVNKLore.data;
 
+import com.zaxxer.hikari.HikariDataSource;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.data.dialect.SQLDialect;
 import org.fourz.rvnkcore.util.log.LogManager;
@@ -9,22 +10,64 @@ import java.sql.SQLException;
 import java.sql.Statement;
 
 /**
- * Abstract base class for database connections.
+ * Abstract base class for database connections using HikariCP connection pooling.
  *
  * <p>Each connection holds a reference to its SQL dialect, which provides
  * database-specific SQL generation for cross-platform compatibility.
+ *
+ * <p>Uses HikariCP connection pool instead of a single shared connection to prevent
+ * "database connection closed" errors during concurrent async operations.
  */
 public abstract class DatabaseConnection {
     protected final RVNKLore plugin;
     protected final LogManager logger;
     protected final SQLDialect dialect;
-    protected Connection connection;
+    protected HikariDataSource connectionPool;
     protected String lastConnectionError = null;
+    protected String tablePrefix = "";
+
+    // Table name constants
+    public static final String TABLE_LORE_ENTRY = "lore_entry";
+    public static final String TABLE_LORE_SUBMISSION = "lore_submission";
+    public static final String TABLE_LORE_ITEM = "lore_item";
+    public static final String TABLE_LORE_ENTRIES = "lore_entries";
+    public static final String TABLE_LORE_METADATA = "lore_metadata";
+    public static final String TABLE_COLLECTION = "collection";
+    public static final String TABLE_PLAYER_COLLECTION_PROGRESS = "player_collection_progress";
+    public static final String TABLE_COLLECTION_REWARD = "collection_reward";
+    public static final String TABLE_COLLECTION_ITEM = "collection_item";
 
     public DatabaseConnection(RVNKLore plugin, SQLDialect dialect) {
         this.plugin = plugin;
         this.dialect = dialect;
         this.logger = LogManager.getInstance(plugin, "DatabaseConnection");
+
+        // Load table prefix from config
+        String storageType = plugin.getConfig().getString("storage.type", "sqlite");
+        this.tablePrefix = plugin.getConfig().getString("storage." + storageType + ".tablePrefix", "");
+        if (tablePrefix != null && !tablePrefix.isEmpty()) {
+            logger.info("Using table prefix: " + tablePrefix);
+        }
+    }
+
+    /**
+     * Get the table name with prefix applied.
+     * @param baseName The base table name (e.g., "lore_entry")
+     * @return The prefixed table name (e.g., "rvnklore_lore_entry")
+     */
+    public String table(String baseName) {
+        if (tablePrefix == null || tablePrefix.isEmpty()) {
+            return baseName;
+        }
+        return tablePrefix + baseName;
+    }
+
+    /**
+     * Get the configured table prefix.
+     * @return The table prefix, or empty string if none
+     */
+    public String getTablePrefix() {
+        return tablePrefix != null ? tablePrefix : "";
     }
 
     /**
@@ -34,12 +77,12 @@ public abstract class DatabaseConnection {
     public SQLDialect getDialect() {
         return dialect;
     }
-    
+
     /**
-     * Initialize the database connection
+     * Initialize the database connection pool
      */
     public abstract void initialize() throws SQLException, ClassNotFoundException;
-    
+
     /**
      * Create necessary database tables.
      * Uses dialect-aware DDL for MySQL/SQLite compatibility.
@@ -53,15 +96,25 @@ public abstract class DatabaseConnection {
         String timestampDefault = dialect.getTimestampType(true);
         String timestampNullable = dialect.getTimestampType(false);
 
-        // --- Core Lore Schema Tables ---
-        String createLoreEntryTable = "CREATE TABLE IF NOT EXISTS lore_entry (" +
+        // --- Core Lore Schema Tables (with prefix support) ---
+        String loreEntry = table(TABLE_LORE_ENTRY);
+        String loreSubmission = table(TABLE_LORE_SUBMISSION);
+        String loreItem = table(TABLE_LORE_ITEM);
+        String loreEntries = table(TABLE_LORE_ENTRIES);
+        String loreMetadata = table(TABLE_LORE_METADATA);
+        String collection = table(TABLE_COLLECTION);
+        String playerProgress = table(TABLE_PLAYER_COLLECTION_PROGRESS);
+        String collectionReward = table(TABLE_COLLECTION_REWARD);
+        String collectionItem = table(TABLE_COLLECTION_ITEM);
+
+        String createLoreEntryTable = "CREATE TABLE IF NOT EXISTS " + loreEntry + " (" +
                 "id CHAR(36) PRIMARY KEY, " +
                 "entry_type VARCHAR(50) NOT NULL, " +
                 "name VARCHAR(100) NOT NULL, " +
-                "CONSTRAINT uq_lore_entry_name_type UNIQUE (name, entry_type)" +
+                "CONSTRAINT uq_" + tablePrefix + "lore_entry_name_type UNIQUE (name, entry_type)" +
                 ")";
 
-        String createLoreSubmissionTable = "CREATE TABLE IF NOT EXISTS lore_submission (" +
+        String createLoreSubmissionTable = "CREATE TABLE IF NOT EXISTS " + loreSubmission + " (" +
                 "id " + autoIncPK + ", " +
                 "entry_id CHAR(36) NOT NULL, " +
                 "slug VARCHAR(150) NOT NULL, " +
@@ -79,13 +132,13 @@ public abstract class DatabaseConnection {
                 "content_version INTEGER NOT NULL DEFAULT 1, " +
                 "is_current_version " + boolType + " NOT NULL DEFAULT FALSE, " +
                 "content TEXT, " +
-                "CONSTRAINT uq_lore_submission_entry_version UNIQUE (entry_id, content_version), " +
-                "CONSTRAINT uq_lore_submission_slug UNIQUE (slug), " +
-                "CONSTRAINT ck_lore_submission_status CHECK (status IN ('ACTIVE', 'ARCHIVED', 'DRAFT', 'PENDING_APPROVAL')), " +
-                "CONSTRAINT ck_lore_submission_visibility CHECK (visibility IN ('PUBLIC', 'STAFF_ONLY', 'HIDDEN')), " +
-                "FOREIGN KEY (entry_id) REFERENCES lore_entry(id) ON DELETE CASCADE" +
+                "CONSTRAINT uq_" + tablePrefix + "lore_submission_entry_version UNIQUE (entry_id, content_version), " +
+                "CONSTRAINT uq_" + tablePrefix + "lore_submission_slug UNIQUE (slug), " +
+                "CONSTRAINT ck_" + tablePrefix + "lore_submission_status CHECK (status IN ('ACTIVE', 'ARCHIVED', 'DRAFT', 'PENDING_APPROVAL')), " +
+                "CONSTRAINT ck_" + tablePrefix + "lore_submission_visibility CHECK (visibility IN ('PUBLIC', 'STAFF_ONLY', 'HIDDEN')), " +
+                "FOREIGN KEY (entry_id) REFERENCES " + loreEntry + "(id) ON DELETE CASCADE" +
                 ")";
-        String createLoreItemTable = "CREATE TABLE IF NOT EXISTS lore_item (" +
+        String createLoreItemTable = "CREATE TABLE IF NOT EXISTS " + loreItem + " (" +
                 "id " + autoIncPK + ", " +
                 "name VARCHAR(64) NOT NULL, " +
                 "short_uuid VARCHAR(12), " +
@@ -103,36 +156,37 @@ public abstract class DatabaseConnection {
                 "nbt_data TEXT, " +
                 "created_at " + timestampDefault + ", " +
                 "updated_at " + timestampDefault + ", " +
-                "CONSTRAINT uq_lore_item_entry UNIQUE (lore_entry_id), " +
-                "FOREIGN KEY (lore_entry_id) REFERENCES lore_entry(id) ON DELETE CASCADE" +
+                "CONSTRAINT uq_" + tablePrefix + "lore_item_entry UNIQUE (lore_entry_id), " +
+                "FOREIGN KEY (lore_entry_id) REFERENCES " + loreEntry + "(id) ON DELETE CASCADE" +
                 ")";
-                
+
         // Keep existing metadata table for backward compatibility during transition
-        String createMetadataTable = "CREATE TABLE IF NOT EXISTS lore_metadata (" +
+        String createMetadataTable = "CREATE TABLE IF NOT EXISTS " + loreMetadata + " (" +
                 "lore_id VARCHAR(36) NOT NULL, " +
                 "meta_key VARCHAR(64) NOT NULL, " +
                 "meta_value TEXT, " +
                 "PRIMARY KEY (lore_id, meta_key), " +
-                "FOREIGN KEY (lore_id) REFERENCES lore_entries(id) ON DELETE CASCADE" +
+                "FOREIGN KEY (lore_id) REFERENCES " + loreEntries + "(id) ON DELETE CASCADE" +
                 ")";
-        
+
         // Create index for fast lookups
-        String createLoreSubmissionEntryIndex = 
-                "CREATE INDEX IF NOT EXISTS idx_lore_submission_entry_id ON lore_submission(entry_id)";
-        
-        String createLoreItemEntryIndex = 
-                "CREATE INDEX IF NOT EXISTS idx_lore_item_entry_id ON lore_item(lore_entry_id)";
-        
-        try (Statement stmt = connection.createStatement()) {
+        String createLoreSubmissionEntryIndex =
+                "CREATE INDEX IF NOT EXISTS idx_" + tablePrefix + "lore_submission_entry_id ON " + loreSubmission + "(entry_id)";
+
+        String createLoreItemEntryIndex =
+                "CREATE INDEX IF NOT EXISTS idx_" + tablePrefix + "lore_item_entry_id ON " + loreItem + "(lore_entry_id)";
+
+        try (Connection conn = connectionPool.getConnection();
+             Statement stmt = conn.createStatement()) {
             // Create new schema tables
             stmt.execute(createLoreEntryTable);
             stmt.execute(createLoreSubmissionTable);
             stmt.execute(createLoreItemTable);
             stmt.execute(createLoreSubmissionEntryIndex);
             stmt.execute(createLoreItemEntryIndex);
-            
+
             // Create legacy table for backward compatibility
-            stmt.execute("CREATE TABLE IF NOT EXISTS lore_entries (" +
+            stmt.execute("CREATE TABLE IF NOT EXISTS " + loreEntries + " (" +
                 "id VARCHAR(36) PRIMARY KEY, " +
                 "type VARCHAR(20) NOT NULL, " +
                 "name TEXT NOT NULL, " +
@@ -149,25 +203,35 @@ public abstract class DatabaseConnection {
             stmt.execute(createMetadataTable);
 
             // --- Collection System Tables ---
-            String createCollectionTable = "CREATE TABLE IF NOT EXISTS collection (" +
+            // Use dialect-aware constraint syntax (MySQL uses length specifiers, SQLite doesn't)
+            boolean isMySQL = "MySQL".equals(dialect.getName());
+            String collectionIdConstraint = isMySQL
+                ? "CONSTRAINT uq_" + tablePrefix + "collection_id UNIQUE (collection_id(255))"
+                : "CONSTRAINT uq_" + tablePrefix + "collection_id UNIQUE (collection_id)";
+            String playerCollectionConstraint = isMySQL
+                ? "CONSTRAINT uq_" + tablePrefix + "player_collection UNIQUE (player_id(36), collection_id(255))"
+                : "CONSTRAINT uq_" + tablePrefix + "player_collection UNIQUE (player_id, collection_id)";
+
+            String createCollectionTable = "CREATE TABLE IF NOT EXISTS " + collection + " (" +
                 "id " + autoIncPK + ", " +
-                "collection_id TEXT UNIQUE NOT NULL, " +
+                "collection_id TEXT NOT NULL, " +
                 "name TEXT NOT NULL, " +
                 "description TEXT, " +
                 "theme_id TEXT, " +
                 "is_active " + boolType + " DEFAULT 1, " +
-                "created_at INTEGER NOT NULL" +
+                "created_at INTEGER NOT NULL, " +
+                collectionIdConstraint +
             ")";
-            String createPlayerCollectionProgressTable = "CREATE TABLE IF NOT EXISTS player_collection_progress (" +
+            String createPlayerCollectionProgressTable = "CREATE TABLE IF NOT EXISTS " + playerProgress + " (" +
                 "id " + autoIncPK + ", " +
                 "player_id TEXT NOT NULL, " +
                 "collection_id TEXT NOT NULL, " +
                 "progress REAL DEFAULT 0.0, " +
                 "completed_at INTEGER, " +
                 "last_updated INTEGER NOT NULL, " +
-                "UNIQUE(player_id, collection_id)" +
+                playerCollectionConstraint +
             ")";
-            String createCollectionRewardTable = "CREATE TABLE IF NOT EXISTS collection_reward (" +
+            String createCollectionRewardTable = "CREATE TABLE IF NOT EXISTS " + collectionReward + " (" +
                 "id " + autoIncPK + ", " +
                 "collection_id TEXT NOT NULL, " +
                 "reward_type TEXT NOT NULL, " +
@@ -176,14 +240,14 @@ public abstract class DatabaseConnection {
             ")";
 
             // Collection-item relationship table for managing item sequences in collections
-            String createCollectionItemTable = "CREATE TABLE IF NOT EXISTS collection_item (" +
+            String createCollectionItemTable = "CREATE TABLE IF NOT EXISTS " + collectionItem + " (" +
                 "collection_id INTEGER NOT NULL, " +
                 "item_id INTEGER NOT NULL, " +
                 "sequence_number INTEGER DEFAULT 0, " +
                 "item_config TEXT, " +
                 "PRIMARY KEY (collection_id, item_id), " +
-                "FOREIGN KEY (collection_id) REFERENCES collection(id) ON DELETE CASCADE, " +
-                "FOREIGN KEY (item_id) REFERENCES lore_item(id) ON DELETE CASCADE" +
+                "FOREIGN KEY (collection_id) REFERENCES " + collection + "(id) ON DELETE CASCADE, " +
+                "FOREIGN KEY (item_id) REFERENCES " + loreItem + "(id) ON DELETE CASCADE" +
             ")";
 
             stmt.execute(createCollectionTable);
@@ -193,98 +257,113 @@ public abstract class DatabaseConnection {
             logger.debug("Database tables created/verified");
         }
     }
-    
+
     /**
-     * Close the database connection
+     * Close the database connection pool
      */
     public void close() {
-        if (connection != null) {
+        if (connectionPool != null && !connectionPool.isClosed()) {
             try {
-                connection.close();
-                logger.debug("Database connection closed");
-            } catch (SQLException e) {
-                logger.error("Failed to close database connection", e);
+                connectionPool.close();
+                logger.debug("Database connection pool closed");
+            } catch (Exception e) {
+                logger.error("Failed to close database connection pool", e);
             }
         }
     }
-    
+
     /**
-     * Check if the database connection is active and valid.
-     * Uses JDBC Connection.isValid() for lightweight validation instead of
-     * executing SELECT 1, which can interfere with concurrent operations on SQLite.
+     * Check if the database connection pool is active and valid.
+     * @return true if connected, false otherwise
      */
     public boolean isConnected() {
-        try {
-            // Use JDBC standard isValid() - more reliable than SELECT 1
-            // especially for SQLite single-connection scenario
-            return connection != null && !connection.isClosed() && connection.isValid(2);
+        if (connectionPool == null || connectionPool.isClosed()) {
+            return false;
+        }
+
+        // Test the pool with a quick connection check
+        try (Connection conn = connectionPool.getConnection()) {
+            return conn != null && conn.isValid(2);
         } catch (SQLException e) {
             logger.debug("Database connection check failed: " + e.getMessage());
             return false;
         }
     }
-    
+
     /**
-     * Reconnect to the database
+     * Reconnect to the database by reinitializing the connection pool.
+     * HikariCP handles connection recovery automatically, but this allows
+     * manual pool recreation if needed.
+     * @return true if reconnection was successful
      */
     public boolean reconnect() {
         logger.warning("Attempting to reconnect to database...");
-        
+
         try {
             lastConnectionError = null;
-            
-            if (connection != null && !connection.isClosed()) {
-                connection.close();
+
+            // Close existing pool if present
+            if (connectionPool != null && !connectionPool.isClosed()) {
+                connectionPool.close();
             }
-            
+
+            // Reinitialize
             initialize();
             createTables();
-            
-            boolean connected = isConnected();
-            if (connected) {
+
+            if (isConnected()) {
                 logger.info("Successfully reconnected to database");
+                return true;
             } else {
                 logger.warning("Failed to reconnect to database");
+                return false;
             }
-            
-            return connected;
         } catch (Exception e) {
             lastConnectionError = e.getMessage();
             logger.error("Failed to reconnect to database", e);
             return false;
         }
     }
-    
+
     /**
-     * Get the active database connection.
-     * Validates connection state and attempts reconnection if closed.
-     * This is critical for async operations where the connection may
-     * become stale between scheduling and execution.
+     * Get a connection from the pool.
+     * Each call returns a fresh connection that MUST be closed after use
+     * (preferably via try-with-resources).
      *
-     * @return A valid database connection
-     * @throws IllegalStateException if unable to establish connection
+     * @return A database connection from the pool
+     * @throws IllegalStateException if the pool is not available
      */
-    public synchronized Connection getConnection() {
-        if (!isConnected()) {
-            logger.debug("Connection unavailable, attempting reconnect...");
-            if (!reconnect()) {
-                throw new IllegalStateException("Database connection unavailable and reconnect failed: "
-                    + (lastConnectionError != null ? lastConnectionError : "unknown error"));
-            }
+    public Connection getConnection() {
+        if (connectionPool == null || connectionPool.isClosed()) {
+            throw new IllegalStateException("Database connection pool is not available");
         }
-        return connection;
+
+        try {
+            return connectionPool.getConnection();
+        } catch (SQLException e) {
+            lastConnectionError = e.getMessage();
+            throw new IllegalStateException("Failed to get connection from pool: " + e.getMessage(), e);
+        }
     }
-    
+
+    /**
+     * Get the HikariCP connection pool for direct access.
+     * @return The HikariDataSource, or null if not initialized
+     */
+    public HikariDataSource getConnectionPool() {
+        return connectionPool;
+    }
+
     /**
      * Get information about the connected database
      */
     public abstract String getDatabaseInfo();
-    
+
     /**
      * Check if the database is in read-only mode
      */
     public abstract boolean isReadOnly();
-    
+
     /**
      * Get the last connection error message
      */

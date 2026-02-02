@@ -21,7 +21,7 @@ lore:
     HEAD: DEFAULT
     PLAYER_HEAD: DEFAULT
     MOB_HEAD: DEFAULT
-    HAT: DEFAULT  
+    HAT: DEFAULT
 
 storage:
   test-mode: no # yes = wipe schema on start, no = keep tables on start
@@ -32,10 +32,29 @@ storage:
     username: root
     password: ''
     useSSL: false
-    database: 
-    tablePrefix: 
+    database:
+    # Table prefix for shared database environments (e.g., 'rvnklore_')
+    tablePrefix:
+    # HikariCP connection pool settings for MySQL
+    poolSize: 10
+    connectionTimeout: 30000
+    idleTimeout: 600000
+    maxLifetime: 1800000
   sqlite:
     database: data.db
+    # Table prefix (optional, typically not needed for SQLite)
+    tablePrefix:
+    # HikariCP connection pool settings for SQLite
+    poolSize: 10
+    connectionTimeout: 30000
+    idleTimeout: 600000
+    maxLifetime: 1800000
+    optimizations:
+      # Enable WAL mode for better concurrent write performance
+      useWAL: true
+      # Use NORMAL synchronous mode (faster, still safe)
+      normalSync: true
+
 messages:
   generic:
     error:

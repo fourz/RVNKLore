@@ -14,7 +14,11 @@ import java.sql.SQLException;
 import java.sql.Statement;
 
 /**
- * Helper class for database operations with improved error handling
+ * Helper class for database operations with improved error handling.
+ *
+ * <p>All methods use try-with-resources to properly close connections
+ * obtained from the HikariCP pool. This prevents connection leaks
+ * and ensures connections are returned to the pool after use.
  */
 public class DatabaseHelper {
     private final RVNKLore plugin;
@@ -26,41 +30,42 @@ public class DatabaseHelper {
         this.databaseManager = plugin.getDatabaseManager();
         this.logger = LogManager.getInstance(plugin, "DatabaseHelper");
     }
-    
+
     /**
-     * Execute a database operation with automatic error handling and retry
-     * 
+     * Execute a database operation with automatic error handling and retry.
+     * Each retry gets a fresh connection from the pool.
+     *
      * @param operation The database operation to execute
      * @return The result of the operation
-     * @throws LoreException If the operation fails
+     * @throws LoreException If the operation fails after all retries
      */
     public <T> T executeWithRetry(DatabaseOperation<T> operation) throws LoreException {
         int maxRetries = 3;
         int retryCount = 0;
-        
+
         while (retryCount < maxRetries) {
             try {
-                // Check if connection is valid
+                // Check if connection pool is valid
                 if (!databaseManager.isConnected()) {
-                    logger.warning("Database connection lost, attempting to reconnect...");
+                    logger.warning("Database connection pool unavailable, attempting to reconnect...");
                     boolean reconnected = databaseManager.reconnect();
                     if (!reconnected) {
                         throw new SQLException("Failed to reconnect to database");
                     }
                 }
-                
+
                 // Execute the operation
                 return operation.execute();
-                
+
             } catch (SQLException e) {
                 retryCount++;
                 logger.warning("Database operation failed (attempt " + retryCount + "/" + maxRetries + "): " + e.getMessage());
-                
+
                 // If we've reached max retries, throw an exception
                 if (retryCount >= maxRetries) {
                     throw new LoreException("Database operation failed after " + maxRetries + " attempts", e, LoreExceptionType.DATABASE_ERROR);
                 }
-                
+
                 // Wait before retrying
                 try {
                     Thread.sleep(1000 * retryCount);
@@ -70,11 +75,11 @@ public class DatabaseHelper {
                 }
             }
         }
-        
+
         // This should never be reached, but just in case
         throw new LoreException("Failed to execute database operation", LoreExceptionType.DATABASE_ERROR);
     }
-    
+
     /**
      * Functional interface for database operations
      */
@@ -82,10 +87,11 @@ public class DatabaseHelper {
     public interface DatabaseOperation<T> {
         T execute() throws SQLException;
     }
-    
+
     /**
-     * Execute a query with proper resource management and error handling
-     * 
+     * Execute a query with proper resource management and error handling.
+     * Connection is obtained from pool and properly closed after use.
+     *
      * @param sql The SQL query
      * @param paramSetter A consumer that sets parameters on the prepared statement
      * @param resultHandler A function that processes the result set
@@ -94,13 +100,14 @@ public class DatabaseHelper {
      */
     public <T> T executeQuery(String sql, PreparedStatementSetter paramSetter, ResultSetHandler<T> resultHandler) throws LoreException {
         return executeWithRetry(() -> {
-            Connection conn = databaseManager.getConnection();
-            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            // Get fresh connection from pool - MUST use try-with-resources
+            try (Connection conn = databaseManager.getConnection();
+                 PreparedStatement stmt = conn.prepareStatement(sql)) {
                 // Set parameters if provided
                 if (paramSetter != null) {
                     paramSetter.setParameters(stmt);
                 }
-                
+
                 // Execute query and process results
                 try (ResultSet rs = stmt.executeQuery()) {
                     return resultHandler.handleResultSet(rs);
@@ -108,9 +115,10 @@ public class DatabaseHelper {
             }
         });
     }
-    
+
     /**
-     * Execute an update with proper resource management and error handling
+     * Execute an update with proper resource management and error handling.
+     * Connection is obtained from pool and properly closed after use.
      *
      * @param sql The SQL update statement
      * @param paramSetter A consumer that sets parameters on the prepared statement
@@ -119,8 +127,9 @@ public class DatabaseHelper {
      */
     public int executeUpdate(String sql, PreparedStatementSetter paramSetter) throws LoreException {
         return executeWithRetry(() -> {
-            Connection conn = databaseManager.getConnection();
-            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            // Get fresh connection from pool - MUST use try-with-resources
+            try (Connection conn = databaseManager.getConnection();
+                 PreparedStatement stmt = conn.prepareStatement(sql)) {
                 // Set parameters if provided
                 if (paramSetter != null) {
                     paramSetter.setParameters(stmt);
@@ -138,6 +147,8 @@ public class DatabaseHelper {
      * - SQLite: Uses RETURNING clause with executeQuery()
      * - MySQL: Uses RETURN_GENERATED_KEYS flag with executeUpdate()
      *
+     * Connection is obtained from pool and properly closed after use.
+     *
      * @param baseInsertSql The INSERT SQL WITHOUT RETURNING clause
      * @param idColumn The name of the auto-increment column
      * @param paramSetter A consumer that sets parameters on the prepared statement
@@ -149,33 +160,35 @@ public class DatabaseHelper {
         SQLDialect dialect = databaseManager.getDatabaseConnection().getDialect();
 
         return executeWithRetry(() -> {
-            Connection conn = databaseManager.getConnection();
+            // Get fresh connection from pool - MUST use try-with-resources
+            try (Connection conn = databaseManager.getConnection()) {
 
-            if (dialect.requiresGeneratedKeysFlag()) {
-                // MySQL approach: use getGeneratedKeys()
-                try (PreparedStatement stmt = conn.prepareStatement(baseInsertSql,
-                        Statement.RETURN_GENERATED_KEYS)) {
-                    if (paramSetter != null) {
-                        paramSetter.setParameters(stmt);
+                if (dialect.requiresGeneratedKeysFlag()) {
+                    // MySQL approach: use getGeneratedKeys()
+                    try (PreparedStatement stmt = conn.prepareStatement(baseInsertSql,
+                            Statement.RETURN_GENERATED_KEYS)) {
+                        if (paramSetter != null) {
+                            paramSetter.setParameters(stmt);
+                        }
+                        stmt.executeUpdate();
+                        return dialect.extractGeneratedId(stmt, null, idColumn);
                     }
-                    stmt.executeUpdate();
-                    return dialect.extractGeneratedId(stmt, null, idColumn);
-                }
-            } else {
-                // SQLite approach: use RETURNING clause
-                String sqlWithReturning = dialect.wrapInsertForGeneratedKey(baseInsertSql, idColumn);
-                try (PreparedStatement stmt = conn.prepareStatement(sqlWithReturning)) {
-                    if (paramSetter != null) {
-                        paramSetter.setParameters(stmt);
-                    }
-                    try (ResultSet rs = stmt.executeQuery()) {
-                        return dialect.extractGeneratedId(stmt, rs, idColumn);
+                } else {
+                    // SQLite approach: use RETURNING clause
+                    String sqlWithReturning = dialect.wrapInsertForGeneratedKey(baseInsertSql, idColumn);
+                    try (PreparedStatement stmt = conn.prepareStatement(sqlWithReturning)) {
+                        if (paramSetter != null) {
+                            paramSetter.setParameters(stmt);
+                        }
+                        try (ResultSet rs = stmt.executeQuery()) {
+                            return dialect.extractGeneratedId(stmt, rs, idColumn);
+                        }
                     }
                 }
             }
         });
     }
-    
+
     /**
      * Functional interface for setting parameters on prepared statements
      */
@@ -183,7 +196,7 @@ public class DatabaseHelper {
     public interface PreparedStatementSetter {
         void setParameters(PreparedStatement stmt) throws SQLException;
     }
-    
+
     /**
      * Functional interface for handling result sets
      */
