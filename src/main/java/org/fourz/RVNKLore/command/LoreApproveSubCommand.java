@@ -3,7 +3,7 @@ package org.fourz.RVNKLore.command;
 import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.lore.LoreEntry;
 
 import java.util.ArrayList;
@@ -24,7 +24,7 @@ public class LoreApproveSubCommand implements SubCommand {
     }    @Override
     public boolean execute(CommandSender sender, String[] args) {
         if (args.length < 1) {
-            sender.sendMessage(ChatColor.RED + "&c▶ Usage: /lore approve <id>");
+            sender.sendMessage(ChatColor.RED + "â–¶ Usage: /lore approve <id>");
             return true;
         }
 
@@ -34,13 +34,13 @@ public class LoreApproveSubCommand implements SubCommand {
         // Try to match by full UUID
         try {
             UUID id = UUID.fromString(idInput);
-            matchedEntry = plugin.getLoreManager().getLoreEntry(id);
+            matchedEntry = plugin.getLoreManager().getLoreEntrySync(id);
         } catch (IllegalArgumentException ignored) {}
 
         // Try to match by short UUID (first 8 chars)
         if (matchedEntry == null && idInput.length() >= 8) {
             String shortUuidPart = idInput.substring(0, 8);
-            for (LoreEntry entry : plugin.getLoreManager().findLoreEntries(shortUuidPart)) {
+            for (LoreEntry entry : plugin.getLoreManager().findLoreEntriesSync(shortUuidPart)) {
                 if (!entry.isApproved()) {
                     String entryShortId = entry.getId().toString().substring(0, 8);
                     if (entryShortId.equalsIgnoreCase(shortUuidPart)) {
@@ -55,7 +55,7 @@ public class LoreApproveSubCommand implements SubCommand {
         if (matchedEntry == null && idInput.length() >= 8) {
             String[] parts = idInput.split(" ", 2);
             String shortId = parts[0].trim();
-            for (LoreEntry entry : plugin.getLoreManager().findLoreEntries(shortId)) {
+            for (LoreEntry entry : plugin.getLoreManager().findLoreEntriesSync(shortId)) {
                 if (!entry.isApproved()) {
                     String entryShortId = entry.getId().toString().substring(0, 8);
                     if (entryShortId.equalsIgnoreCase(shortId)) {
@@ -67,7 +67,7 @@ public class LoreApproveSubCommand implements SubCommand {
         }
 
         if (matchedEntry == null) {
-            sender.sendMessage(ChatColor.RED + "&c✖ No valid unapproved lore entry found matching: " + idInput);
+            sender.sendMessage(ChatColor.RED + "âœ– No valid unapproved lore entry found matching: " + idInput);
             return true;
         }
 
@@ -82,27 +82,27 @@ public class LoreApproveSubCommand implements SubCommand {
      * @return true if the command was processed
      */
     private boolean processApproval(CommandSender sender, UUID id) {
-        LoreEntry entry = plugin.getLoreManager().getLoreEntry(id);
+        LoreEntry entry = plugin.getLoreManager().getLoreEntrySync(id);
         
         if (entry == null) {
-            sender.sendMessage(ChatColor.RED + "&c✖ No lore entry found with ID: " + id);
+            sender.sendMessage(ChatColor.RED + "âœ– No lore entry found with ID: " + id);
             return true;
         }
         
         if (entry.isApproved()) {
-            sender.sendMessage(ChatColor.YELLOW + "&e⚠ This lore entry is already approved.");
+            sender.sendMessage(ChatColor.YELLOW + "âš  This lore entry is already approved.");
             return true;
         }
         
-        boolean success = plugin.getLoreManager().approveLoreEntry(id);
+        boolean success = plugin.getLoreManager().approveLoreEntrySync(id);
         
         if (success) {
-            sender.sendMessage(ChatColor.GREEN + "&a✓ Lore entry approved successfully!");
+            sender.sendMessage(ChatColor.GREEN + "âœ“ Lore entry approved successfully!");
             
             // Log the approval
             logger.info("Lore entry " + id + " (" + entry.getName() + ") approved by " + sender.getName());
         } else {
-            sender.sendMessage(ChatColor.RED + "&c✖ Failed to approve lore entry. Please check console for errors.");
+            sender.sendMessage(ChatColor.RED + "âœ– Failed to approve lore entry. Please check console for errors.");
         }
         
         return true;
@@ -126,7 +126,7 @@ public class LoreApproveSubCommand implements SubCommand {
             String partial = args[0].toLowerCase();
 
             if (partial.length() >= 2) {
-                for (LoreEntry entry : plugin.getLoreManager().findLoreEntries(partial)) {
+                for (LoreEntry entry : plugin.getLoreManager().findLoreEntriesSync(partial)) {
                     if (!entry.isApproved()) {
                         String uuid = entry.getId().toString();
                         String shortId = uuid.substring(0, 8);
@@ -143,7 +143,7 @@ public class LoreApproveSubCommand implements SubCommand {
         } else if (args.length > 1) {
             // if a short uuid is prodided, show details
             String shortUuidPart = args[0].trim();  
-            for (LoreEntry entry : plugin.getLoreManager().findLoreEntries(shortUuidPart)) {
+            for (LoreEntry entry : plugin.getLoreManager().findLoreEntriesSync(shortUuidPart)) {
                 if (!entry.isApproved()) {
                     String entryShortId = entry.getId().toString().substring(0, 8);
                     if (entryShortId.equalsIgnoreCase(shortUuidPart)) {                        // Stage 2: If they typed a short ID, show details

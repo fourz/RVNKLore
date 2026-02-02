@@ -243,6 +243,7 @@ public class LoreEntry {
     /**
      * Convert the lore entry to a JSON object
      */
+    @SuppressWarnings("unchecked") // JSONObject from json-simple doesn't support generics
     public JSONObject toJson() {
         JSONObject json = new JSONObject();
         json.put("id", id);

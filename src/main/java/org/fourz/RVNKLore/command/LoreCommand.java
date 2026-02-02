@@ -6,7 +6,7 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.rvnkcore.util.log.LogManager;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -38,11 +38,13 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
         commands.put("add", new LoreAddSubCommand(plugin));
         commands.put("get", new LoreGetSubCommand(plugin));
         commands.put("list", new LoreListSubCommand(plugin));
+        commands.put("search", new LoreSearchSubCommand(plugin));
         commands.put("approve", new LoreApproveSubCommand(plugin));
         commands.put("reload", new LoreReloadSubCommand(plugin));
         commands.put("export", new LoreExportSubCommand(plugin));
+        commands.put("import", new LoreImportSubCommand(plugin));
         commands.put("debug", new LoreDebugSubCommand(plugin));
-        
+
         // Add cosmetic management commands using the new ItemManager-based API
         //if (plugin.getItemManager() != null && plugin.getItemManager().getCosmeticManager() != null) {
         if (plugin.getLoreManager().getItemManager() != null && plugin.getLoreManager().getItemManager().getCosmeticItem() != null) {
@@ -51,7 +53,18 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
             commands.put("item", new LoreItemSubCommand(plugin));
             // Remove /lore itemgive registration
         }
-        
+
+        // Register the /lore book command for lore book management
+        commands.put("book", new LoreBookSubCommand(plugin));
+
+        // Register the /lore achievement command for achievement management
+        if (plugin.getAchievementManager() != null) {
+            commands.put("achievement", new LoreAchievementSubCommand(plugin, plugin.getAchievementManager()));
+        }
+
+        // Register the /lore browse command for GUI browser
+        commands.put("browse", new LoreBrowseSubCommand(plugin));
+
         // Add all commands to the subCommands map
         commands.forEach(this::registerSubCommand);
         logger.debug("Registered " + commands.size() + " subcommands successfully");
@@ -59,7 +72,7 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
 
     /**
      * Registers a subcommand
-     * 
+     *
      * @param name The name of the subcommand
      * @param subCommand The subcommand implementation
      */
@@ -98,7 +111,7 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
 
     /**
      * Shows help information to the sender
-     * 
+     *
      * @param sender Command sender to show help to
      */
     private void showHelp(CommandSender sender) {
@@ -112,11 +125,20 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
                 } else if ("collection".equals(entry.getKey())) {
                     sender.sendMessage(ChatColor.YELLOW + "/lore collection <view|claim> <collection_id>" +
                         ChatColor.WHITE + " - View or claim collection progress/rewards");
+                } else if ("book".equals(entry.getKey())) {
+                    sender.sendMessage(ChatColor.YELLOW + "/lore book <give|list> ..." +
+                        ChatColor.WHITE + " - Create and manage lore books");
+                } else if ("export".equals(entry.getKey())) {
+                    sender.sendMessage(ChatColor.YELLOW + "/lore export [json|yaml] [type]" +
+                        ChatColor.WHITE + " - Export lore entries to file");
+                } else if ("import".equals(entry.getKey())) {
+                    sender.sendMessage(ChatColor.YELLOW + "/lore import <file> [--preview]" +
+                        ChatColor.WHITE + " - Import lore entries from file");
                 } else if ("give".equals(entry.getKey())) {
                     sender.sendMessage(ChatColor.DARK_GRAY + "/lore give ... [DEPRECATED, use /lore itemgive]" +
                         ChatColor.GRAY + " - Deprecated: use /lore itemgive");
                 } else {
-                    sender.sendMessage(ChatColor.YELLOW + "/lore " + entry.getKey() + 
+                    sender.sendMessage(ChatColor.YELLOW + "/lore " + entry.getKey() +
                         ChatColor.WHITE + " - " + entry.getValue().getDescription());
                 }
             }
@@ -132,7 +154,7 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
             // Complete subcommand names
             String partial = args[0].toLowerCase();
             for (String subCommand : subCommands.keySet()) {
-                if (subCommands.get(subCommand).hasPermission(sender) && 
+                if (subCommands.get(subCommand).hasPermission(sender) &&
                     subCommand.startsWith(partial)) {
                     completions.add(subCommand);
                 }
@@ -141,11 +163,11 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
             // Pass to subcommand for completion
             String subCommandName = args[0].toLowerCase();
             SubCommand subCommand = subCommands.get(subCommandName);
-            
+
             if (subCommand != null && subCommand.hasPermission(sender)) {
                 String[] subCommandArgs = new String[args.length - 1];
                 System.arraycopy(args, 1, subCommandArgs, 0, args.length - 1);
-                
+
                 List<String> subCommandCompletions = subCommand.getTabCompletions(sender, subCommandArgs);
                 if (subCommandCompletions != null) {
                     completions.addAll(subCommandCompletions);

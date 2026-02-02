@@ -36,7 +36,7 @@ public class DisplayFactory {
      */
     public static boolean displayItemList(CommandSender sender, ItemManager itemManager, int page, boolean newestFirst) {
         // Get all items with their properties
-        List<ItemProperties> items = itemManager.getAllItemsWithProperties();
+        List<ItemProperties> items = itemManager.getAllItemsWithPropertiesForCommands();
         
         // Sort items by creation date
         if (newestFirst) {

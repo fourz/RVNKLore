@@ -1,8 +1,37 @@
 # RVNKLore Development Roadmap
 
-**Last Updated**: May 25, 2025
+**Last Updated**: January 30, 2026
 
 This document outlines the planned features and improvements for the RVNKLore plugin.
+
+---
+
+## January 2026 Status: RVNKCore Integration Complete
+
+**Completed** (Jan 30, 2026):
+
+- ✅ RVNKCore ServiceRegistry integration via reflection
+- ✅ 4 service interfaces: ILoreService, IItemService, ICollectionService, ISubmissionService
+- ✅ Java Records DTOs: LoreEntryDTO, LoreSubmissionDTO, ItemPropertiesDTO
+- ✅ FallbackTracker pattern for database resilience
+- ✅ 34 unit tests passing
+- ✅ Deployed to MCSS Dev server
+- ✅ 7 commits on `feature/rvnkcore-integration` branch
+
+**Next Phase** (Q1 2026):
+
+- [ ] Schema consolidation - single source of truth (impl-07)
+- [ ] DTO completion - NameChangeRecordDTO, Gson metadata (impl-08)
+- [ ] Repository interface completion - IPlayerRepository (impl-09)
+- [ ] Schema documentation consolidation (doc-05)
+- [ ] Schema validation tests (test-06)
+
+**Documentation**:
+
+- Schema Reference: [docs/standard/rvnklore-schema.md](../../docs/standard/rvnklore-schema.md)
+- Database API: [docs/standard/rvnklore-database-api.md](../../docs/standard/rvnklore-database-api.md)
+
+---
 
 ## Current Status
 

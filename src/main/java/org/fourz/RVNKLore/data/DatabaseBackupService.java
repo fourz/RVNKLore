@@ -3,8 +3,8 @@ package org.fourz.RVNKLore.data;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.Debug;
 import org.fourz.RVNKLore.lore.LoreEntry;
+import org.fourz.rvnkcore.util.log.LogManager;
 import org.json.simple.JSONObject;
 
 import java.io.File;
@@ -14,21 +14,20 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.logging.Level;
 
 /**
  * Service for handling database backup and export operations
  */
 public class DatabaseBackupService {
     private final RVNKLore plugin;
-    private final Debug debug;
+    private final LogManager logger;
     private final DatabaseConnection connection;
     private final String storageType;
-    
+
     public DatabaseBackupService(RVNKLore plugin, DatabaseConnection connection) {
         this.plugin = plugin;
         this.connection = connection;
-        this.debug = Debug.createDebugger(plugin, "DatabaseBackupService", Level.FINE);
+        this.logger = LogManager.getInstance(plugin, "DatabaseBackupService");
         this.storageType = plugin.getConfigManager().getStorageType();
     }
     
@@ -39,7 +38,7 @@ public class DatabaseBackupService {
      * @return true if successful, false otherwise
      */
     public boolean backupDatabase(String backupPath) {
-        debug.debug("Backing up database to: " + backupPath);
+        logger.debug("Backing up database to: " + backupPath);
         
         if (storageType.equalsIgnoreCase("sqlite")) {
             return backupSQLiteDatabase(backupPath);
@@ -63,10 +62,10 @@ public class DatabaseBackupService {
             // Copy the file
             Files.copy(sourceFile.toPath(), destFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
             
-            debug.info("SQLite database backup created at: " + backupPath);
+            logger.info("SQLite database backup created at: " + backupPath);
             return true;
         } catch (Exception e) {
-            debug.error("Failed to backup SQLite database", e);
+            logger.error("Failed to backup SQLite database", e);
             return false;
         }
     }
@@ -78,11 +77,11 @@ public class DatabaseBackupService {
         try {
             // Create JSON backup using the repository
             LoreEntryRepository repository = new LoreEntryRepository(plugin, connection);
-            List<LoreEntry> allEntries = repository.getAllLoreEntries();
+            List<LoreEntry> allEntries = repository.getAllLoreEntries().join();
             
             return exportLoreEntriesToFile(allEntries, backupPath);
         } catch (Exception e) {
-            debug.error("Failed to backup MySQL database", e);
+            logger.error("Failed to backup MySQL database", e);
             return false;
         }
     }
@@ -90,9 +89,10 @@ public class DatabaseBackupService {
     /**
      * Export lore entries to a file
      */
+    @SuppressWarnings("unchecked") // JSONObject from json-simple doesn't support generics
     private boolean exportLoreEntriesToFile(List<LoreEntry> entries, String filePath) {
         try {
-            debug.debug("Exporting " + entries.size() + " lore entries to file: " + filePath);
+            logger.debug("Exporting " + entries.size() + " lore entries to file: " + filePath);
             
             File file = new File(filePath);
             file.getParentFile().mkdirs();
@@ -114,11 +114,15 @@ public class DatabaseBackupService {
                 writer.write(jsonContent);
             }
             
-            debug.info("Exported " + entries.size() + " lore entries to " + filePath);
+            logger.info("Exported " + entries.size() + " lore entries to " + filePath);
             return true;
         } catch (Exception e) {
-            debug.error("Failed to export lore entries to file", e);
+            logger.error("Failed to export lore entries to file", e);
             return false;
         }
     }
 }
+
+
+
+

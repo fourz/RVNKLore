@@ -307,7 +307,7 @@ public class LoreCollectionSubCommand implements SubCommand {
 
         // Use CollectionManager from ItemManager for progress tracking
         CollectionManager collectionManager = plugin.getLoreManager().getItemManager().getCollectionManager();
-        Map<String, ItemCollection> allCollections = collectionManager.getAllCollections();
+        Map<String, ItemCollection> allCollections = collectionManager.getAllCollectionsSync();
 
         if (allCollections.isEmpty()) {
             player.sendMessage(ChatColor.YELLOW + "⚠ No collections available");
@@ -315,7 +315,7 @@ public class LoreCollectionSubCommand implements SubCommand {
         }
 
         for (org.fourz.RVNKLore.lore.item.collection.ItemCollection collection : allCollections.values()) {
-            double progress = collectionManager.getPlayerProgress(player.getUniqueId(), collection.getId());
+            double progress = collectionManager.getPlayerProgressSync(player.getUniqueId(), collection.getId());
             double percent = progress * 100;
 
             String status = percent >= 100.0 ? ChatColor.GREEN + "✓ COMPLETE" : ChatColor.YELLOW + String.format("%.1f%%", percent);

@@ -1,24 +1,48 @@
-# Copilot Instructions for RVNKLore Development
+# RVNKLore Copilot Instructions
 
-## Development Workflow
+**Parent Hub**: See Ravenkraft-Dev CLAUDE.md for complete ecosystem standards.
 
-### Building and Testing
+## Tool Discovery
 
-To build and test the plugin, follow these steps:
+**Server Management**: `mcp_rvnkdev-minec_*` tools (console, files, state, db)
+**Live Testing**: `/rvnktest [health|services|db|plugins|run all]`
+**Agents**: Browse `.claude/agents/` for specialized workflows
+**Skills**: Browse `.claude/skills/` for domain capabilities
+**Rules Import**: Use `@import ../../.claude/rules/<rule>.md` for shared directives
 
-1. **Build the Plugin**:
-   Use the `Build Plugin` task to compile and package the plugin. This will generate the JAR file in the `target` directory.
+## Archon Integration
 
-2. **Copy to Server**:
-   The `Copy to Server` task will automatically copy the built JAR file to the server's plugins folder.
+**Board**: `e7d91a7e-8b3c-4f2a-9d1e-5c8b2a4f6e3d` (RVNKLore)
+**Workflow**: `find_tasks()` → `manage_task("update", status="doing")` → implement → `status="done"`
 
-3. **Reload or Restart the Server**:
-   - Use the `Reload Server` task to reload the plugin without restarting the server. This is useful for quick testing of changes.
-   - Use the `Restart Server` task to fully restart the server. This ensures a clean state and is recommended for testing major changes.
+## Plugin-Specific Standards
 
-These tasks can be executed from the VS Code task runner or directly from the terminal using the provided PowerShell scripts.
+### General Directive
+- **No data migration methods** unless explicitly requested. Assume empty database.
 
-### Additional Notes
+### Database Architecture
+- `DatabaseManager` is the central hub for all connection management
+- All data operations flow through DatabaseManager (no direct repository access from commands)
+- Use async `CompletableFuture` for all database interactions
+- Repositories handle table-specific logic and DTO mapping only
 
-- Always ensure the server is in a stable state before reloading or restarting.
-- Use the `Clean&Reload Server` or `Clean&Restart Server` tasks if you need to clean up the server environment before testing.
+### Services Registered (via RVNKCore)
+- `ILoreService`, `IItemService`, `ICollectionService`
+- `ISubmissionService`, `IPlayerService`
+
+### DTOs
+- Create DTOs for all entities (LoreEntry, LoreSubmission, ItemProperties)
+- DTOs are immutable with validation logic
+- Use conversion methods between DTOs and domain objects
+
+### Message Prefixes
+- `&c▶` usage | `&6⚙` progress | `&a✓` success | `&c✖` error | `&e⚠` warning
+
+### Logging
+Use `LogManager.getInstance(plugin, "ClassName")` from RVNKCore.
+
+## References
+
+- **Schema**: `docs/standard/rvnklore-schema.md`
+- **Database API**: `docs/standard/rvnklore-database-api.md`
+- **Architecture Patterns**: `docs/architecture/shared-patterns.md`

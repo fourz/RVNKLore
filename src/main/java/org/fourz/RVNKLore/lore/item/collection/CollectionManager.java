@@ -4,11 +4,13 @@ import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.lore.item.ItemProperties;
 import org.fourz.RVNKLore.lore.item.cosmetic.HeadCollection;
 import org.fourz.RVNKLore.data.ItemRepository;
+import org.fourz.RVNKLore.service.ICollectionService;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -16,8 +18,13 @@ import java.util.concurrent.ConcurrentHashMap;
  * Handles organization, tracking, and distribution of items across different collections.
  * This manager coordinates with the CosmeticItem for head collections while
  * also providing a unified interface for managing different types of items.
+ * 
+ * Implements ICollectionService for cross-plugin access via RVNKCore ServiceRegistry.
  */
-public class CollectionManager {
+public class CollectionManager implements ICollectionService {
+    
+    /** Tracks whether the service is operating in degraded mode due to errors */
+    private volatile boolean fallbackMode = false;
     private final RVNKLore plugin;
     private final LogManager logger;
     private final Map<String, ItemCollection> collections = new ConcurrentHashMap<>();
@@ -46,14 +53,14 @@ public class CollectionManager {
     }
 
     /**
-     * Creates a new collection with validation
+     * Creates a new collection with validation (sync internal method)
      * 
      * @param id Collection identifier
      * @param name Display name
      * @param description Collection description
      * @return The created collection, or null if validation failed
      */
-    public ItemCollection createCollection(String id, String name, String description) {
+    public ItemCollection createCollectionSync(String id, String name, String description) {
         // Validate the collection before creation
         if (!validateNewCollection(id, name, description)) {
             logger.warning("Failed to create collection due to validation errors: " + id);
@@ -64,6 +71,15 @@ public class CollectionManager {
         collections.put(id, collection);
         logger.info("Created collection: " + name + " (" + id + ")");
         return collection;
+    }
+    
+    /**
+     * Creates a new collection with validation (async interface method).
+     * Implements ICollectionService.createCollection().
+     */
+    @Override
+    public CompletableFuture<Optional<ItemCollection>> createCollection(String id, String name, String description) {
+        return CompletableFuture.supplyAsync(() -> Optional.ofNullable(createCollectionSync(id, name, description)));
     }
     
     /**
@@ -127,7 +143,10 @@ public class CollectionManager {
         return true;
     }
     
-    public ItemCollection getCollection(String id) {
+    /**
+     * Gets a collection by its ID (sync internal method).
+     */
+    public ItemCollection getCollectionSync(String id) {
         if (id == null || id.trim().isEmpty()) {
             logger.warning("Cannot retrieve collection: null or empty ID provided");
             return null;
@@ -140,9 +159,30 @@ public class CollectionManager {
         
         return collection;
     }
+    
+    /**
+     * Gets a collection by its ID (async interface method).
+     * Implements ICollectionService.getCollection().
+     */
+    @Override
+    public CompletableFuture<Optional<ItemCollection>> getCollection(String id) {
+        return CompletableFuture.supplyAsync(() -> Optional.ofNullable(getCollectionSync(id)));
+    }
 
-    public Map<String, ItemCollection> getAllCollections() {
+    /**
+     * Gets all collections (sync internal method).
+     */
+    public Map<String, ItemCollection> getAllCollectionsSync() {
         return new HashMap<>(collections);
+    }
+    
+    /**
+     * Gets all collections (async interface method).
+     * Implements ICollectionService.getAllCollections().
+     */
+    @Override
+    public CompletableFuture<Map<String, ItemCollection>> getAllCollections() {
+        return CompletableFuture.supplyAsync(this::getAllCollectionsSync);
     }
 
     public ItemStack createCollectionItem(ItemProperties properties) {
@@ -165,13 +205,13 @@ public class CollectionManager {
             }
             String collectionId = properties.getCollectionId();
             if (collectionId != null) {
-                ItemCollection collection = getCollection(collectionId);
+                ItemCollection collection = getCollectionSync(collectionId);
                 if (collection != null) {
-                    lore.add("§7Collection: §a" + collection.getName());
+                    lore.add("Â§7Collection: Â§a" + collection.getName());
                 }
             }
             if (properties.getRarityLevel() != null) {
-                lore.add("§7Rarity: §e" + properties.getRarityLevel());
+                lore.add("Â§7Rarity: Â§e" + properties.getRarityLevel());
             }
             meta.setLore(lore);            
             meta.setCustomModelData(properties.getCustomModelData());            
@@ -181,8 +221,11 @@ public class CollectionManager {
         return item;
     }
 
-    public boolean addItemToCollection(String collectionId, ItemStack item) {
-        ItemCollection collection = getCollection(collectionId);
+    /**
+     * Adds an item to a collection (sync internal method).
+     */
+    public boolean addItemToCollectionSync(String collectionId, ItemStack item) {
+        ItemCollection collection = getCollectionSync(collectionId);
         if (collection == null) {
             logger.warning("Cannot add item to non-existent collection: " + collectionId);
             return false;
@@ -191,9 +234,21 @@ public class CollectionManager {
         logger.debug("Added item to collection: " + collectionId);
         return true;
     }
+    
+    /**
+     * Adds an item to a collection (async interface method).
+     * Implements ICollectionService.addItemToCollection().
+     */
+    @Override
+    public CompletableFuture<Boolean> addItemToCollection(String collectionId, ItemStack item) {
+        return CompletableFuture.supplyAsync(() -> addItemToCollectionSync(collectionId, item));
+    }
 
-    public boolean removeItemFromCollection(String collectionId, ItemStack item) {
-        ItemCollection collection = getCollection(collectionId);
+    /**
+     * Removes an item from a collection (sync internal method).
+     */
+    public boolean removeItemFromCollectionSync(String collectionId, ItemStack item) {
+        ItemCollection collection = getCollectionSync(collectionId);
         if (collection == null) {
             return false;
         }
@@ -203,14 +258,35 @@ public class CollectionManager {
         }
         return removed;
     }
+    
+    /**
+     * Removes an item from a collection (async interface method).
+     * Implements ICollectionService.removeItemFromCollection().
+     */
+    @Override
+    public CompletableFuture<Boolean> removeItemFromCollection(String collectionId, ItemStack item) {
+        return CompletableFuture.supplyAsync(() -> removeItemFromCollectionSync(collectionId, item));
+    }
 
-    public List<ItemStack> getCollectionItems(String collectionId) {
-        ItemCollection collection = getCollection(collectionId);
+    /**
+     * Gets items in a collection (sync internal method).
+     */
+    public List<ItemStack> getCollectionItemsSync(String collectionId) {
+        ItemCollection collection = getCollectionSync(collectionId);
         return collection != null ? collection.getItems() : new ArrayList<>();
+    }
+    
+    /**
+     * Gets items in a collection (async interface method).
+     * Implements ICollectionService.getCollectionItems().
+     */
+    @Override
+    public CompletableFuture<List<ItemStack>> getCollectionItems(String collectionId) {
+        return CompletableFuture.supplyAsync(() -> getCollectionItemsSync(collectionId));
     }
 
     public Integer getItemCount(String collectionId) {
-        ItemCollection collection = getCollection(collectionId);
+        ItemCollection collection = getCollectionSync(collectionId);
         return collection != null ? collection.getItemCount() : 0;
     }
 
@@ -243,7 +319,7 @@ public class CollectionManager {
             return;
         }
         ItemRepository repository = new ItemRepository(plugin, plugin.getDatabaseManager().getDatabaseConnection());
-        List<ItemCollection> loadedCollections = repository.loadAllCollections();
+        List<ItemCollection> loadedCollections = repository.loadAllCollections().join();
         for (ItemCollection collection : loadedCollections) {
             collections.put(collection.getId(), collection);
             logger.info("Loaded collection from database: " + collection.getName());
@@ -252,12 +328,12 @@ public class CollectionManager {
     }
 
     /**
-     * Save a collection to the database with enhanced error handling
+     * Save a collection to the database with enhanced error handling (sync internal method)
      *
      * @param collection The collection to persist
      * @return True if successfully saved
      */
-    public boolean saveCollection(ItemCollection collection) {
+    public boolean saveCollectionSync(ItemCollection collection) {
         if (!validateCollection(collection)) {
             logger.warning("Cannot save invalid collection");
             return false;
@@ -265,12 +341,13 @@ public class CollectionManager {
         
         if (plugin.getDatabaseManager() == null || !plugin.getDatabaseManager().isConnected()) {
             logger.warning("Database not available - collection will not be persisted");
+            fallbackMode = true;
             return false;
         }
         
         try {
             ItemRepository repository = new ItemRepository(plugin, plugin.getDatabaseManager().getDatabaseConnection());
-            boolean saved = repository.saveCollection(collection);
+            boolean saved = repository.saveCollection(collection).join();
             
             if (saved) {
                 logger.info("Successfully saved collection: " + collection.getId());
@@ -283,40 +360,60 @@ public class CollectionManager {
             return saved;
         } catch (Exception e) {
             logger.error("Error saving collection: " + collection.getId(), e);
+            fallbackMode = true;
             return false;
         }
     }
+    
+    /**
+     * Save a collection to the database (async interface method).
+     * Implements ICollectionService.saveCollection().
+     */
+    @Override
+    public CompletableFuture<Boolean> saveCollection(ItemCollection collection) {
+        return CompletableFuture.supplyAsync(() -> saveCollectionSync(collection));
+    }
 
     /**
-     * Get a player's progress for a specific collection
+     * Get a player's progress for a specific collection (sync internal method)
      * 
      * @param playerId The player's UUID
      * @param collectionId The collection identifier
      * @return Progress value between 0.0 and 1.0
      */
-    public double getPlayerProgress(UUID playerId, String collectionId) {
+    public double getPlayerProgressSync(UUID playerId, String collectionId) {
         if (playerId == null || collectionId == null) {
             return 0.0;
         }
         
         if (plugin.getDatabaseManager() == null || !plugin.getDatabaseManager().isConnected()) {
             logger.warning("Database not available - cannot retrieve player progress");
+            fallbackMode = true;
             return 0.0;
         }
         
         ItemRepository repository = new ItemRepository(plugin, plugin.getDatabaseManager().getDatabaseConnection());
-        return repository.getPlayerCollectionProgress(playerId.toString(), collectionId);
+        return repository.getPlayerCollectionProgress(playerId.toString(), collectionId).join();
+    }
+    
+    /**
+     * Get a player's progress for a specific collection (async interface method).
+     * Implements ICollectionService.getPlayerProgress().
+     */
+    @Override
+    public CompletableFuture<Double> getPlayerProgress(UUID playerId, String collectionId) {
+        return CompletableFuture.supplyAsync(() -> getPlayerProgressSync(playerId, collectionId));
     }
 
     /**
-     * Update a player's progress for a collection
+     * Update a player's progress for a collection (sync internal method)
      * 
      * @param playerId The player's UUID
      * @param collectionId The collection identifier
      * @param progress Progress value between 0.0 and 1.0
      * @return True if successfully updated
      */
-    public boolean updatePlayerProgress(UUID playerId, String collectionId, double progress) {
+    public boolean updatePlayerProgressSync(UUID playerId, String collectionId, double progress) {
         if (playerId == null || collectionId == null || progress < 0.0 || progress > 1.0) {
             logger.warning("Invalid parameters for progress update");
             return false;
@@ -328,7 +425,7 @@ public class CollectionManager {
         }
         
         ItemRepository repository = new ItemRepository(plugin, plugin.getDatabaseManager().getDatabaseConnection());
-        boolean updated = repository.updatePlayerCollectionProgress(playerId.toString(), collectionId, progress);
+        boolean updated = repository.updatePlayerCollectionProgress(playerId.toString(), collectionId, progress).join();
         
         if (updated) {
             logger.info("Updated progress for player " + playerId + " in collection " + collectionId + ": " + String.format("%.1f%%", progress * 100));
@@ -343,13 +440,22 @@ public class CollectionManager {
     }
     
     /**
+     * Update a player's progress for a collection (async interface method).
+     * Implements ICollectionService.updatePlayerProgress().
+     */
+    @Override
+    public CompletableFuture<Boolean> updatePlayerProgress(UUID playerId, String collectionId, double progress) {
+        return CompletableFuture.supplyAsync(() -> updatePlayerProgressSync(playerId, collectionId, progress));
+    }
+    
+    /**
      * Handle collection completion events and rewards
      * 
      * @param playerId The player who completed the collection
      * @param collectionId The completed collection
      */
     private void handleCollectionCompletion(UUID playerId, String collectionId) {
-        ItemCollection collection = getCollection(collectionId);
+        ItemCollection collection = getCollectionSync(collectionId);
         if (collection == null) {
             logger.warning("Cannot handle completion for unknown collection: " + collectionId);
             return;
@@ -366,19 +472,19 @@ public class CollectionManager {
     }
 
     /**
-     * Grant collection rewards to a player
+     * Grant collection rewards to a player (sync internal method)
      * 
      * @param playerId The player's UUID
      * @param collectionId The collection identifier
      * @return True if rewards were successfully granted
      */
-    public boolean grantCollectionReward(UUID playerId, String collectionId) {
-        if (getPlayerProgress(playerId, collectionId) < 1.0) {
+    public boolean grantCollectionRewardSync(UUID playerId, String collectionId) {
+        if (getPlayerProgressSync(playerId, collectionId) < 1.0) {
             logger.warning("Cannot grant rewards - collection not completed by player " + playerId);
             return false;
         }
         
-        ItemCollection collection = getCollection(collectionId);
+        ItemCollection collection = getCollectionSync(collectionId);
         if (collection == null) {
             logger.warning("Cannot grant rewards for unknown collection: " + collectionId);
             return false;
@@ -390,6 +496,15 @@ public class CollectionManager {
         logger.info("Granted collection rewards to player " + playerId + " for collection: " + collectionId);
         return true;
     }
+    
+    /**
+     * Grant collection rewards to a player (async interface method).
+     * Implements ICollectionService.grantCollectionReward().
+     */
+    @Override
+    public CompletableFuture<Boolean> grantCollectionReward(UUID playerId, String collectionId) {
+        return CompletableFuture.supplyAsync(() -> grantCollectionRewardSync(playerId, collectionId));
+    }
 
     /**
      * Emit collection change events for other systems to listen to
@@ -398,6 +513,7 @@ public class CollectionManager {
      * @param collection The collection that changed
      * @param changeType The type of change
      */
+    @SuppressWarnings("unused")
     private void fireCollectionChangeEvent(ItemCollection collection, ChangeType changeType) {
         // Placeholder for event system integration
         logger.debug("Collection change event: " + changeType + " for " + collection.getId());
@@ -411,14 +527,14 @@ public class CollectionManager {
     }
 
     /**
-     * Get all collections, optionally filtered by theme.
+     * Get all collections, optionally filtered by theme (sync internal method).
      * 
      * @param themeId The theme ID to filter by, or null for all
      * @return Map of collection IDs to ItemCollection
      */
-    public Map<String, ItemCollection> getCollectionsByTheme(String themeId) {
+    public Map<String, ItemCollection> getCollectionsByThemeSync(String themeId) {
         if (themeId == null) {
-            return getAllCollections();
+            return getAllCollectionsSync();
         }
         Map<String, ItemCollection> filtered = new HashMap<>();
         for (Map.Entry<String, ItemCollection> entry : collections.entrySet()) {
@@ -427,6 +543,24 @@ public class CollectionManager {
             }
         }
         return filtered;
+    }
+    
+    /**
+     * Get all collections, optionally filtered by theme (async interface method).
+     * Implements ICollectionService.getCollectionsByTheme().
+     */
+    @Override
+    public CompletableFuture<Map<String, ItemCollection>> getCollectionsByTheme(String themeId) {
+        return CompletableFuture.supplyAsync(() -> getCollectionsByThemeSync(themeId));
+    }
+    
+    /**
+     * Check if the service is in fallback mode due to errors.
+     * Implements ICollectionService.isInFallbackMode().
+     */
+    @Override
+    public boolean isInFallbackMode() {
+        return fallbackMode;
     }
 
     /**
@@ -439,7 +573,7 @@ public class CollectionManager {
             return;
         }
         ItemRepository repository = new ItemRepository(plugin, plugin.getDatabaseManager().getDatabaseConnection());
-        List<ItemCollection> loadedCollections = repository.loadAllCollections();
+        List<ItemCollection> loadedCollections = repository.loadAllCollections().join();
         collections.clear();
         for (ItemCollection collection : loadedCollections) {
             collections.put(collection.getId(), collection);
@@ -447,3 +581,7 @@ public class CollectionManager {
         logger.info("Reloaded " + loadedCollections.size() + " collections from database");
     }
 }
+
+
+
+

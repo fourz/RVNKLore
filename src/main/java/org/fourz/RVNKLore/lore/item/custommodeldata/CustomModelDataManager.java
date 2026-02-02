@@ -3,7 +3,7 @@ package org.fourz.RVNKLore.lore.item.custommodeldata;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.rvnkcore.util.log.LogManager;
 
 import java.util.HashMap;
 import java.util.Map;

@@ -2,6 +2,21 @@
 
 A comprehensive lore and history plugin for Minecraft servers that allows players and staff to document the stories, landmarks, characters, and events that shape your server's world.
 
+## Build Status
+
+**Current Status**: Compilation errors present - requires async refactoring
+
+The plugin currently has compilation errors in `LoreEntryRepository.java` due to interface/implementation mismatch. The repository interface expects async methods returning `CompletableFuture<T>`, but the implementation returns synchronous types. This needs to be resolved before the plugin can be built.
+
+### Required Fixes
+- Update `LoreEntryRepository` methods to return `CompletableFuture` types
+- Wrap synchronous operations in async execution
+- Update all callers to handle async responses
+
+### Dependencies
+- **RVNKCore**: Uses `provided` scope - JAR must be in server plugins folder at runtime
+- The lib/rvnkcore-1.3.0-alpha.jar file is for IDE reference only
+
 ## Features
 
 - **Multiple Lore Types**: Supports various categories of lore including landmarks, cities, player characters, items, events, quests, enchantments, and more
@@ -18,15 +33,16 @@ A comprehensive lore and history plugin for Minecraft servers that allows player
 - **Community Engagement**: Allow players to vote on and contribute to lore development
 - **Roleplay Systems Framework**: Support for structured roleplay including legal, governance, and commerce systems
 - **Seamless Integration**: Works with existing plugins and doesn't interfere with core gameplay
-- **PlaceHolder API Support**: (planned)
+- **PlaceholderAPI Support**: Display lore statistics in chat, scoreboards, and holograms
 
 ## Installation
 
 1. Download the latest RVNKLore.jar from the releases page
 2. Place the JAR file in your server's `plugins` folder
-3. Restart your server
-4. Edit the configuration file at `plugins/RVNKLore/config.yml` to customize settings
-5. Restart again or use `/lore reload` to apply changes
+3. (Optional) Install PlaceholderAPI for placeholder support
+4. Restart your server
+5. Edit the configuration file at `plugins/RVNKLore/config.yml` to customize settings
+6. Restart again or use `/lore reload` to apply changes
 
 ## Usage
 
@@ -67,6 +83,39 @@ A comprehensive lore and history plugin for Minecraft servers that allows player
 - `rvnklore.register.city` - Register new cities
 - `rvnklore.notable` - Mark a player as "notable" for automatic lore generation
 - `rvnklore.admin` - Access to all administrative functions
+
+## PlaceholderAPI Integration
+
+RVNKLore provides PlaceholderAPI support for displaying lore statistics in chat, scoreboards, tab lists, and holograms.
+
+### Available Placeholders
+
+| Placeholder | Description | Example |
+|------------|-------------|---------|
+| `%rvnklore_total_discovered%` | Total lore entries discovered | `42` |
+| `%rvnklore_total_entries%` | Total available entries | `150` |
+| `%rvnklore_discovery_percentage%` | Discovery completion % | `28.0%` |
+| `%rvnklore_items_discovered%` | Items discovered | `15` |
+| `%rvnklore_locations_discovered%` | Locations discovered | `23` |
+| `%rvnklore_characters_discovered%` | Characters discovered | `8` |
+| `%rvnklore_collection_<name>_progress%` | Collection progress | `65.0%` |
+
+### Example Usage
+
+**In chat message:**
+```
+Welcome {PLAYER}! You've discovered %rvnklore_discovery_percentage% of all lore.
+```
+
+**In scoreboard:**
+```yaml
+lines:
+  - "&6Lore Progress"
+  - "&7Discovered: %rvnklore_total_discovered%/%rvnklore_total_entries%"
+  - "&7Items: %rvnklore_items_discovered%"
+```
+
+For complete documentation, see [docs/placeholderapi-integration.md](docs/placeholderapi-integration.md)
 
 ## Configuration
 
@@ -232,8 +281,11 @@ The plugin uses standardized classification systems for various entity types:
 To build RVNKLore from source:
 
 1. Clone the repository
-2. Run `mvn clean package` to build the JAR
-3. The compiled JAR will be in the `target` directory
+2. Ensure RVNKCore JAR is available in lib/ folder
+3. Run `mvn clean package` to build the JAR
+4. The compiled JAR will be in the `target` directory
+
+Note: Currently the build will fail due to async method signature mismatches. See Build Status section above.
 
 ### API for Developers
 
@@ -316,6 +368,7 @@ rvnkLore.getHandlerFactory().registerHandler(LoreType.CUSTOM, new CustomLoreHand
 
 - **Minecraft Versions**: 1.17+
 - **Server Software**: Spigot, Paper, and derivatives
+- **Optional Dependencies**: PlaceholderAPI 2.11+
 - **Recommended Plugins**: Works well with map, economy, roleplay, and quest plugins
 
 ## Troubleshooting
@@ -323,6 +376,7 @@ rvnkLore.getHandlerFactory().registerHandler(LoreType.CUSTOM, new CustomLoreHand
 - **Database Issues**: Check database connection settings in config.yml
 - **Permission Problems**: Verify permission nodes in your permissions plugin
 - **Command Errors**: Use `/lore debug` to get more detailed error information
+- **Placeholder Issues**: See [PlaceholderAPI Integration Guide](docs/placeholderapi-integration.md#troubleshooting)
 
 ## Future Roadmap
 

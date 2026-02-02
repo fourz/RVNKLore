@@ -3,7 +3,6 @@ package org.fourz.RVNKLore.handler;
 import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.PluginManager;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.Debug;
 import org.fourz.RVNKLore.handler.event.PlayerDeathLoreHandler;
 import org.fourz.RVNKLore.handler.PlayerLoreHandler;
 
@@ -12,12 +11,10 @@ import org.fourz.RVNKLore.handler.event.PlayerJoinLoreHandler;
 
 import org.fourz.RVNKLore.lore.LoreType;
 import org.fourz.RVNKLore.lore.QuestLoreHandler;
+import org.fourz.rvnkcore.util.log.LogManager;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.logging.Level;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.EnumMap;
 import java.util.Set;
 import java.util.HashSet;
@@ -27,9 +24,8 @@ import java.util.HashSet;
  * Combines functionality from LoreHandlerManager to prevent duplicate initialization
  */
 public class HandlerFactory {
-    private static final String CLASS_NAME = "HandlerFactory";
     private final RVNKLore plugin;
-    private final Debug debug;
+    private final LogManager logger;
     // Cache handlers to avoid creating new instances repeatedly - use EnumMap for better performance
     private final Map<LoreType, LoreHandler> handlerCache = new EnumMap<>(LoreType.class);
     // Map of type names to handler classes for dynamic instantiation
@@ -39,14 +35,10 @@ public class HandlerFactory {
     // Track initialization state
     private boolean initialized = false;
     private boolean initializing = false; // Add flag to prevent recursion
-    
+
     public HandlerFactory(RVNKLore plugin) {
         this.plugin = plugin;
-        // Use the global log level from ConfigManager
-        this.debug = new Debug(plugin, CLASS_NAME, plugin.getConfigManager().getLogLevel()) {};
-        
-        // Ensure debug level is properly configured
-        plugin.getConfigManager().configureDebugInstance(debug);
+        this.logger = LogManager.getInstance(plugin, "HandlerFactory");
     }
     
     /**
@@ -56,18 +48,18 @@ public class HandlerFactory {
     public void initialize() {
         // Both flags prevent reentry 
         if (initialized) {
-            debug.debug("HandlerFactory already initialized, skipping");
+            logger.debug("HandlerFactory already initialized, skipping");
             return;
         }
         
         if (initializing) {
-            debug.debug("HandlerFactory initialization already in progress, skipping recursive call");
+            logger.debug("HandlerFactory initialization already in progress, skipping recursive call");
             return;
         }
         
         try {
             initializing = true;
-            debug.debug("Initializing HandlerFactory");
+            logger.debug("Initializing HandlerFactory");
             
             // First register handler classes - this doesn't create instances yet
             registerDefaultHandlers();
@@ -77,9 +69,9 @@ public class HandlerFactory {
             
             // Mark as initialized BEFORE we leave the method to prevent reentry
             initialized = true;
-            debug.debug("HandlerFactory initialization complete");
+            logger.debug("HandlerFactory initialization complete");
         } catch (Exception e) {
-            debug.error("Error initializing HandlerFactory", e);
+            logger.error("Error initializing HandlerFactory", e);
         } finally {
             initializing = false;
         }
@@ -90,7 +82,7 @@ public class HandlerFactory {
      */
     private void registerDefaultHandlers() {
         if (!handlerClasses.isEmpty()) {
-            debug.debug("Handler classes already registered, skipping registration");
+            logger.debug("Handler classes already registered, skipping registration");
             return;
         }
         
@@ -122,35 +114,16 @@ public class HandlerFactory {
                 }
             }
             
-            debug.info("Registered " + handlerClasses.size() + " handler classes");
+            logger.info("Registered " + handlerClasses.size() + " handler classes");
         } catch (Exception e) {
-            debug.error("Failed to register handlers", e);
+            logger.error("Failed to register handlers", e);
         }
     }
       /**
      * Pre-create essential handlers without triggering initialization chains
      */
     private void preCreateCoreHandlers() {
-        debug.debug("Pre-creating core handlers");
-        
-        // First create and register PlayerJoinLoreHandler to ensure it gets priority
-        try {
-            // Ensure the PlayerJoinLoreHandler is created and registered first
-            if (!handlerCache.containsKey(LoreType.PLAYER)) {
-                PlayerJoinLoreHandler joinHandler = new PlayerJoinLoreHandler(plugin);
-                handlerCache.put(LoreType.PLAYER, joinHandler);
-                
-                // Register the event handler explicitly
-                PluginManager pm = plugin.getServer().getPluginManager();
-                pm.registerEvents(joinHandler, plugin);
-                registeredListeners.add(joinHandler);
-                debug.info("Pre-registered PlayerJoinLoreHandler for player join events");
-            }
-        } catch (Exception e) {
-            debug.error("Failed to pre-create PlayerJoinLoreHandler", e);
-        }
-        
-        // Then create other core handlers
+        logger.debug("Pre-creating core handlers");
         LoreType[] coreTypes = {
             LoreType.GENERIC, LoreType.CITY, 
             LoreType.LANDMARK, LoreType.FACTION, LoreType.EVENT
@@ -161,7 +134,7 @@ public class HandlerFactory {
                 try {
                     Class<? extends LoreHandler> handlerClass = handlerClasses.get(type.name());
                     if (handlerClass == null) {
-                        debug.debug("No handler class for " + type + ", using default");
+                        logger.debug("No handler class for " + type + ", using default");
                         handlerClass = DefaultLoreHandler.class;
                     }
                     
@@ -176,7 +149,7 @@ public class HandlerFactory {
                         registeredListeners.add(handler);
                     }
                 } catch (Exception e) {
-                    debug.error("Failed to pre-create handler for " + type, e);
+                    logger.error("Failed to pre-create handler for " + type, e);
                 }
             }
         }
@@ -192,7 +165,7 @@ public class HandlerFactory {
         // Protection against recursion
         if (!initialized && !initializing) {
             // Only log this once
-            debug.debug("Initializing HandlerFactory on demand");
+            logger.debug("Initializing HandlerFactory on demand");
             initialize();
         }
         
@@ -203,13 +176,13 @@ public class HandlerFactory {
         
         // Create and cache the handler if not found
         try {
-            debug.debug("Creating handler for type: " + type);
+            logger.debug("Creating handler for type: " + type);
             LoreHandler handler = createHandler(type);
             handlerCache.put(type, handler);
             registerEventListener(handler);
             return handler;
         } catch (Exception e) {
-            debug.error("Error creating handler for " + type, e);
+            logger.error("Error creating handler for " + type, e);
             // Always return something usable
             DefaultLoreHandler defaultHandler = new DefaultLoreHandler(plugin);
             handlerCache.put(type, defaultHandler);
@@ -224,7 +197,7 @@ public class HandlerFactory {
         Class<? extends LoreHandler> handlerClass = handlerClasses.get(type.name());
         
         if (handlerClass == null) {
-            debug.warning("No handler class registered for type: " + type + ", using default");
+            logger.warning("No handler class registered for type: " + type + ", using default");
             return new DefaultLoreHandler(plugin);
         }
         
@@ -233,13 +206,13 @@ public class HandlerFactory {
             try {
                 handler.initialize();
             } catch (Exception e) {
-                debug.error("Handler initialization failed for type: " + type, e);
+                logger.error("Handler initialization failed for type: " + type, e);
                 // Continue with the handler even if initialization failed
             }
-            debug.debug("Created handler for lore type: " + type + " using " + handlerClass.getSimpleName());
+            logger.debug("Created handler for lore type: " + type + " using " + handlerClass.getSimpleName());
             return handler;
         } catch (Exception e) {
-            debug.error("Failed to create handler for type " + type, e);
+            logger.error("Failed to create handler for type " + type, e);
             return new DefaultLoreHandler(plugin);
         }
     }
@@ -256,9 +229,9 @@ public class HandlerFactory {
             PluginManager pm = plugin.getServer().getPluginManager();
             pm.registerEvents(handler, plugin);
             registeredListeners.add(handler);
-            debug.debug("Registered event listener for handler: " + handler.getHandlerType());
+            logger.debug("Registered event listener for handler: " + handler.getHandlerType());
         } catch (Exception e) {
-            debug.error("Failed to register event listener for handler", e);
+            logger.error("Failed to register event listener for handler", e);
         }
     }
     
@@ -272,7 +245,7 @@ public class HandlerFactory {
         registeredListeners.clear();
         handlerCache.clear();
         initialized = false;
-        debug.debug("Unregistered all handler event listeners");
+        logger.debug("Unregistered all handler event listeners");
     }
     
     /**
@@ -288,7 +261,7 @@ public class HandlerFactory {
      * Reload all handlers
      */
     public void reloadHandlers() {
-        debug.debug("Reloading lore handlers");
+        logger.debug("Reloading lore handlers");
         unregisterAllHandlers();
         initialize();
     }

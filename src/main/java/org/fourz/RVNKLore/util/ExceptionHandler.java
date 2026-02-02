@@ -4,20 +4,18 @@ import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.Debug;
-
-import java.util.logging.Level;
+import org.fourz.rvnkcore.util.log.LogManager;
 
 /**
  * Centralized exception handler for providing consistent error handling
  */
 public class ExceptionHandler {
     private final RVNKLore plugin;
-    private final Debug debug;
-    
+    private final LogManager logger;
+
     public ExceptionHandler(RVNKLore plugin) {
         this.plugin = plugin;
-        this.debug = Debug.createDebugger(plugin, "ExceptionHandler", Level.FINE);
+        this.logger = LogManager.getInstance(plugin, "ExceptionHandler");
     }
     
     /**
@@ -29,7 +27,7 @@ public class ExceptionHandler {
      */
     public void handleException(Exception exception, CommandSender sender, String context) {
         // Log the exception
-        debug.error("Error " + context + ": " + exception.getMessage(), exception);
+        logger.error("Error " + context + ": " + exception.getMessage(), exception);
         
         // Notify the user
         if (sender != null) {
@@ -66,7 +64,7 @@ public class ExceptionHandler {
      * @param context Context description
      */
     public void logError(String errorMessage, String context) {
-        debug.error("Error " + context + ": " + errorMessage, null);
+        logger.error("Error " + context + ": " + errorMessage, null);
     }
     
     /**

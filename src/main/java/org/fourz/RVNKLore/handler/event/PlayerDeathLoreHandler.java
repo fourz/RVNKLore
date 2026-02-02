@@ -108,7 +108,7 @@ public class PlayerDeathLoreHandler extends DefaultLoreHandler {
         
         // Save to database - might need admin approval
         entry.setApproved(false);
-        plugin.getLoreManager().addLoreEntry(entry);
+        plugin.getLoreManager().addLoreEntrySync(entry);
         
         logger.debug("Death lore entry created for: " + player.getName());
     }

@@ -4,7 +4,7 @@ import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
 import org.fourz.RVNKLore.lore.item.collection.CollectionTheme;
 import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
@@ -38,7 +38,7 @@ public class LoreCollectionListSubCommand implements SubCommand {
     @Override
     public boolean execute(CommandSender sender, String[] args) {
         if (!(sender instanceof Player)) {
-            sender.sendMessage(ChatColor.RED + "▶ This command can only be used by players");
+            sender.sendMessage(ChatColor.RED + "â–¶ This command can only be used by players");
             return true;
         }
         Player player = (Player) sender;
@@ -52,17 +52,17 @@ public class LoreCollectionListSubCommand implements SubCommand {
         if (themeFilter != null) {
             CollectionTheme theme = CollectionTheme.fromDisplayName(themeFilter);
             if (theme == null || theme == CollectionTheme.CUSTOM) {
-                player.sendMessage(ChatColor.RED + "✖ Unknown theme: " + themeFilter);
+                player.sendMessage(ChatColor.RED + "âœ– Unknown theme: " + themeFilter);
                 listThemes(player);
                 return true;
             }
-            for (ItemCollection collection : collectionManager.getAllCollections().values()) {
+            for (ItemCollection collection : collectionManager.getAllCollectionsSync().values()) {
                 if (theme.name().equalsIgnoreCase(collection.getThemeId())) {
                     collectionsToShow.add(collection);
                 }
             }
         } else {
-            collectionsToShow.addAll(collectionManager.getAllCollections().values());
+            collectionsToShow.addAll(collectionManager.getAllCollectionsSync().values());
         }
 
         // Sort newest to oldest
@@ -75,10 +75,10 @@ public class LoreCollectionListSubCommand implements SubCommand {
     }
 
     private void listThemes(Player player) {
-        player.sendMessage(ChatColor.YELLOW + "⚙ " + ChatColor.BOLD + "Available Themes");
+        player.sendMessage(ChatColor.YELLOW + "âš™ " + ChatColor.BOLD + "Available Themes");
         player.sendMessage("");
         for (CollectionTheme theme : CollectionTheme.values()) {
-            int count = (int) collectionManager.getAllCollections().values().stream()
+            int count = (int) collectionManager.getAllCollectionsSync().values().stream()
                     .filter(c -> theme.name().equalsIgnoreCase(c.getThemeId()))
                     .count();
             if (count > 0) {

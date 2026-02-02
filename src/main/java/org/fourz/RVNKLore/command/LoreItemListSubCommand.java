@@ -3,7 +3,7 @@ package org.fourz.RVNKLore.command;
 import org.bukkit.command.CommandSender;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.command.output.DisplayFactory;
-import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.lore.item.ItemManager;
 import org.fourz.RVNKLore.lore.item.ItemProperties;
 
@@ -35,7 +35,7 @@ public class LoreItemListSubCommand implements SubCommand {
     @Override
     public boolean execute(CommandSender sender, String[] args) {
         if (itemManager == null) {
-            sender.sendMessage(org.bukkit.ChatColor.RED + "✖ Item system is not available. Please try again later.");
+            sender.sendMessage(org.bukkit.ChatColor.RED + "âœ– Item system is not available. Please try again later.");
             logger.error("ItemManager is null when listing items", null);
             return true;
         }
@@ -49,8 +49,8 @@ public class LoreItemListSubCommand implements SubCommand {
             }
         }
 
-        itemManager.refreshCache();
-        List<ItemProperties> items = itemManager.getAllItemsWithProperties();
+        itemManager.refreshCacheForCommands();
+        List<ItemProperties> items = itemManager.getAllItemsWithPropertiesForCommands();
         items.sort(Comparator.comparing(ItemProperties::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())).reversed());
 
         // All pagination logic is now handled by DisplayFactory

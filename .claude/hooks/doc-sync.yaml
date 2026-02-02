@@ -1,0 +1,133 @@
+name: "documentation-sync"
+type: "scheduled"
+version: "1.0.0"
+description: "Automated documentation lifecycle management with RAG sync and archival"
+enabled: true
+
+# Schedule Configuration
+schedule:
+  type: "recurring"
+  frequency: "weekly"
+  day_of_week: "monday"
+  time: "09:00"
+  timezone: "UTC"
+  skip_if_recently_run: true
+  recent_run_threshold_minutes: 60
+
+# Trigger Events
+triggers:
+  - event: "on_new_long_term_doc"
+    watch_paths:
+      - "docs/spec/"
+      - "docs/guide/"
+      - "docs/api/"
+      - "docs/reference/"
+    file_pattern: "*.md"
+    exclude_pattern: "*YYYY-MM-DD*"
+    action: "sync_immediate"
+    description: "Immediately sync newly created long-term documentation"
+    enabled: true
+
+  - event: "on_schedule_weekly"
+    action: "full_cycle"
+    description: "Execute complete documentation lifecycle cycle weekly"
+    enabled: true
+
+  - event: "on_manual_trigger"
+    action: "full_cycle"
+    description: "Allow manual execution via: claude /hooks run doc-sync"
+    enabled: true
+
+# Automation Workflow Steps
+workflow:
+  - step: 1
+    name: "Health Check"
+    command: "mcp_archon_health_check()"
+    timeout_seconds: 10
+    on_failure: "alert_and_continue"
+    retry_count: 2
+    description: "Verify Archon instance connectivity"
+
+  - step: 2
+    name: "Discover New Docs"
+    command: "find_new_docs_in_paths(['docs/spec', 'docs/guide', 'docs/api', 'docs/reference'])"
+    timeout_seconds: 15
+    on_failure: "continue"
+    description: "Identify newly created long-term documents"
+
+  - step: 3
+    name: "Batch Sync Documentation"
+    command: "cli: claude /doc-batch-sync docs sync"
+    timeout_seconds: 300
+    on_failure: "alert_and_continue"
+    retry_count: 1
+    description: "Synchronize all documentation to Archon RAG"
+    outputs:
+      - "sync_report_path"
+      - "updated_docs_count"
+      - "failure_count"
+
+  - step: 4
+    name: "RAG Validation"
+    command: "validate_rag_indexing(['documentation', 'workflow', 'sync', 'archon', 'lifecycle'])"
+    timeout_seconds: 60
+    on_failure: "alert_and_continue"
+    description: "Test that documentation was indexed in RAG"
+    validation:
+      min_successful_queries: 4
+      max_acceptable_delay_seconds: 600
+
+  - step: 5
+    name: "Identify Archival Candidates"
+    command: "find_old_docs_in_fix_folder(age_days=90)"
+    timeout_seconds: 15
+    on_failure: "continue"
+    description: "Find temporal documentation ready for archival"
+
+  - step: 6
+    name: "Generate Sync Report"
+    command: "generate_hook_report({created_docs, updated_docs, sync_failures, rag_status, archival_candidates})"
+    timeout_seconds: 30
+    on_failure: "continue"
+    description: "Create detailed automation report"
+    report_location: "docs/report/hook-doc-sync-$(timestamp).md"
+
+  - step: 7
+    name: "Notify Summary"
+    command: "log_hook_summary()"
+    timeout_seconds: 10
+    on_failure: "continue"
+    description: "Log completion status and metrics"
+
+# Alerts and Notifications
+alerts:
+  on_failure:
+    - channel: "console"
+      format: "detailed"
+      include_timestamp: true
+  on_success:
+    - channel: "console"
+      format: "summary"
+  on_rag_issues:
+    - alert_type: "indexing_delay"
+      threshold_minutes: 20
+      action: "log_warning"
+    - alert_type: "query_failures"
+      threshold_count: 3
+      action: "log_alert"
+
+# Hook Metadata
+metadata:
+  created_at: "2025-12-22"
+  created_by: "claude"
+  last_modified: "2025-12-22"
+  related_skills:
+    - "documentation-standards"
+    - "archon-task-workflow"
+  related_commands:
+    - "archon-sync"
+    - "doc-batch-sync"
+    - "doc-cleanup"
+  documentation:
+    - "docs/spec/documentation-lifecycle-workflow.md"
+    - "docs/spec/documentation-strategy.md"

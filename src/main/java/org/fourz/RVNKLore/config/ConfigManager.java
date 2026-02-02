@@ -2,17 +2,17 @@ package org.fourz.RVNKLore.config;
 
 import org.bukkit.configuration.file.FileConfiguration;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.Debug;
-import org.fourz.RVNKLore.debug.LogManager;
 import org.fourz.RVNKLore.handler.DefaultLoreHandler;
 import org.fourz.RVNKLore.handler.HandlerFactory;
 import org.fourz.RVNKLore.handler.LoreHandler;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
+import org.fourz.rvnkcore.util.log.LogManager;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Level;
 
 public class ConfigManager {
     private final RVNKLore plugin;
@@ -74,33 +74,33 @@ public class ConfigManager {
         
         config.options().copyDefaults(true);
         plugin.saveConfig();
-    }    /**
+    }
+
+    /**
      * Initialize logging system and apply configuration.
      * This method ensures LogManager instances use the correct log level from config.
      */
     public void initDebugLogging() {
-        java.util.logging.Level configLevel = getLogLevel();
+        Level configLevel = getLogLevel();
         updateAllLogManagers(configLevel);
         logger.info("Configuration system initialized with log level: " + configLevel.getName());
-    }/**
+    }
+
+    /**
      * Get the configured log level from config file.
+     * Uses RVNKCore LogManager.parseLevel() which supports aliases (DEBUG, WARN, ERROR).
      * @return The log level from configuration
      */
-    public java.util.logging.Level getLogLevel() {
-        String levelString = config.getString("general.logLevel", "INFO").toUpperCase();
-        try {
-            return java.util.logging.Level.parse(levelString);
-        } catch (IllegalArgumentException e) {
-            logger.warning("Invalid log level in config: " + levelString + ", using INFO as default");
-            return java.util.logging.Level.INFO;
-        }
+    public Level getLogLevel() {
+        String levelString = config.getString("general.logLevel", "INFO");
+        return LogManager.parseLevel(levelString);
     }
 
     /**
      * Set the log level in configuration and update all LogManager instances.
      * @param level The new log level to set
      */
-    public void setLogLevel(java.util.logging.Level level) {
+    public void setLogLevel(Level level) {
         config.set("general.logLevel", level.getName());
         plugin.saveConfig();
         updateAllLogManagers(level);
@@ -108,17 +108,12 @@ public class ConfigManager {
     }
 
     /**
-     * Update log level for all LogManager instances and legacy Debug instances.
+     * Update log level for all LogManager instances.
      * This is called when the configuration changes.
      */
-    private void updateAllLogManagers(java.util.logging.Level newLevel) {
-        // Update all LogManager instances
-        LogManager.updateAllLogLevels(newLevel);
-        
-        // Update legacy Debug instance if it exists (for backward compatibility)
-        if (plugin.getDebugger() != null) {
-            plugin.getDebugger().setLogLevel(newLevel);
-        }
+    private void updateAllLogManagers(Level newLevel) {
+        // Update all LogManager instances for this plugin
+        LogManager.setPluginLogLevel(plugin, newLevel);
     }
 
     /**
@@ -203,37 +198,27 @@ public class ConfigManager {
             initHandlerFactory();
         }
         return handlerFactory;
-    }    /**
-     * Configure log level for any new debug instances
-     */
-    public void configureDebugInstance(Debug debugInstance) {
-        if (debugInstance != null) {
-            debugInstance.setLogLevel(getLogLevel());
-        }
     }
 
     /**
      * Set log level using string value (for command usage).
-     * @param levelString The log level as a string (e.g., "INFO", "WARNING", "SEVERE")
-     * @return True if successful, false if invalid level string
+     * Uses RVNKCore LogManager.parseLevel() which supports aliases (DEBUG, WARN, ERROR).
+     * @param levelString The log level as a string (e.g., "INFO", "DEBUG", "ERROR")
+     * @return True if successful (always true as parseLevel defaults to INFO)
      */
     public boolean setLogLevel(String levelString) {
-        try {
-            java.util.logging.Level level = java.util.logging.Level.parse(levelString.toUpperCase());
-            setLogLevel(level);
-            return true;
-        } catch (IllegalArgumentException e) {
-            logger.warning("Invalid log level: " + levelString + ". Valid levels are: SEVERE, WARNING, INFO, CONFIG, FINE, FINER, FINEST");
-            return false;
-        }
+        Level level = LogManager.parseLevel(levelString);
+        setLogLevel(level);
+        return true;
     }
 
     /**
      * Get available log level names.
+     * Includes RVNKCore LogManager aliases for convenience.
      * @return Array of valid log level names
      */
     public String[] getAvailableLogLevels() {
-        return new String[]{"SEVERE", "WARNING", "INFO", "CONFIG", "FINE", "FINER", "FINEST"};
+        return new String[]{"DEBUG", "INFO", "WARN", "WARNING", "ERROR", "SEVERE", "OFF"};
     }
     
     /**
