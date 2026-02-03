@@ -3,3 +3,4 @@
 target/
 BuildTools/
 .github/logs/
+logs/
