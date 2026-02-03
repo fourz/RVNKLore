@@ -520,7 +520,7 @@ public class ItemRepository implements IItemRepository {
         return CompletableFuture.supplyAsync(() -> {
             String sql = "SELECT i.*, ci.sequence_number, ci.item_config " +
                         "FROM " + t("lore_item") + " i " +
-                        "JOIN collection_item ci ON i.id = ci.item_id " +
+                        "JOIN " + t("collection_item") + " ci ON i.id = ci.item_id " +
                         "WHERE ci.collection_id = ? " +
                         "ORDER BY ci.sequence_number";
 
@@ -579,7 +579,7 @@ public class ItemRepository implements IItemRepository {
         return CompletableFuture.supplyAsync(() -> {
             String sql = "SELECT c.id, c.name " +
                         "FROM " + t("collection") + " c " +
-                        "JOIN collection_item ci ON c.id = ci.collection_id " +
+                        "JOIN " + t("collection_item") + " ci ON c.id = ci.collection_id " +
                         "WHERE ci.item_id = ?";
 
             try {
@@ -635,7 +635,7 @@ public class ItemRepository implements IItemRepository {
     @Override
     public CompletableFuture<Map<String, String>> getCollectionDetails(int collectionId) {
         return CompletableFuture.supplyAsync(() -> {
-            String sql = "SELECT name, description, theme FROM collection WHERE id = ?";
+            String sql = "SELECT name, description, theme FROM " + t("collection") + " WHERE id = ?";
 
             try {
                 return dbHelper.executeQuery(sql,

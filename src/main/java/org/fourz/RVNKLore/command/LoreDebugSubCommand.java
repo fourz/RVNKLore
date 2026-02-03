@@ -20,10 +20,12 @@ import java.util.stream.Collectors;
 public class LoreDebugSubCommand implements SubCommand {
     private final RVNKLore plugin;
     private final DiagnosticUtil diagnosticUtil;
+    private final SeedSubCommand seedSubCommand;
 
     public LoreDebugSubCommand(RVNKLore plugin) {
         this.plugin = plugin;
         this.diagnosticUtil = new DiagnosticUtil(plugin);
+        this.seedSubCommand = new SeedSubCommand(plugin);
     }
 
     @Override
@@ -35,6 +37,7 @@ public class LoreDebugSubCommand implements SubCommand {
             sender.sendMessage(ChatColor.YELLOW + "/lore debug handlers" + ChatColor.WHITE + " - List all registered handlers");
             sender.sendMessage(ChatColor.YELLOW + "/lore debug fix" + ChatColor.WHITE + " - Attempt to fix common issues");
             sender.sendMessage(ChatColor.YELLOW + "/lore debug player <player_name>" + ChatColor.WHITE + " - Show player lore diagnostics");
+            sender.sendMessage(ChatColor.YELLOW + "/lore debug seed <action>" + ChatColor.WHITE + " - Seed test data");
             return true;
         }
 
@@ -63,6 +66,10 @@ public class LoreDebugSubCommand implements SubCommand {
                     return false;
                 }
                 return playerDiagnostics(sender, args[1]);
+
+            case "seed":
+                String[] seedArgs = args.length > 1 ? Arrays.copyOfRange(args, 1, args.length) : new String[0];
+                return seedSubCommand.execute(sender, seedArgs);
 
             default:
                 sender.sendMessage(ChatColor.RED + "Unknown debug command: " + action);
@@ -339,7 +346,11 @@ public class LoreDebugSubCommand implements SubCommand {
     @Override
     public List<String> getTabCompletions(CommandSender sender, String[] args) {
         if (args.length == 1) {
-            return Arrays.asList("diagnostics", "check", "handlers", "fix", "player");
+            return Arrays.asList("diagnostics", "check", "handlers", "fix", "player", "seed");
+        }
+
+        if (args.length >= 2 && args[0].equalsIgnoreCase("seed")) {
+            return seedSubCommand.getTabCompletions(sender, Arrays.copyOfRange(args, 1, args.length));
         }
 
         if (args.length == 2 && args[0].equalsIgnoreCase("diagnostics")) {
