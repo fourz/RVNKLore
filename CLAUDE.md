@@ -271,12 +271,25 @@ Use consistent message prefixes in command handlers:
 
 ## Documentation References
 
+### Local Documentation
 - [README.md](README.md) - Features, commands, configuration, API examples
 - [docs/rvnklore-loremanager.md](docs/rvnklore-loremanager.md) - LoreManager documentation
 - [docs/rvnklore-itemmanager.md](docs/rvnklore-itemmanager.md) - ItemManager documentation
 - [docs/rvnklore-collectionmanager.md](docs/rvnklore-collectionmanager.md) - CollectionManager documentation
 - [docs/rvnklore-enchantmanager.md](docs/rvnklore-enchantmanager.md) - EnchantManager documentation
 - [docs/rvnklore-modeldatamanager.md](docs/rvnklore-modeldatamanager.md) - CustomModelDataManager documentation
+
+### Archon Board Documents (RVNKLore-specific)
+Documents on RVNKLore board (`a5856487-51f9-417f-965b-761f49f385d3`):
+- **RVNKLore Database Schema Reference** - Authoritative schema for lore_entry, lore_submission, lore_item tables
+- **RVNKLore Database Integration API Reference** - HikariCP patterns, DAO implementation, migration system
+- **RVNKLore Database Architecture Refactor Plan** - QueryBuilder migration roadmap
+
+### Parent Board Standards (Cross-cutting)
+Documents on Ravenkraft Dev board (`4787f505-e92e-474d-ba54-f5ac7993ccfe`):
+- [Coding Standards](../../docs/standard/coding-standards.md) - Java 17+ conventions
+- [RVNKCore Integration](../../docs/standard/rvnkcore-integration.md) - ServiceRegistry usage patterns
+- [Database Patterns](../../docs/standard/database-patterns.md) - Repository pattern, HikariCP
 
 ## Archon MCP Integration
 

@@ -69,9 +69,20 @@ public class RVNKLore extends JavaPlugin {
             // First try to initialize the database
             databaseManager = new DatabaseManager(this);
 
-            // Check database connection
+            // Check database connection - allow fallback mode to continue
             if (!databaseManager.isConnected()) {
-                throw new Exception("Database connection failed. Plugin cannot function without storage.");
+                // Check if fallback is disabled - only then is this fatal
+                if (!databaseManager.isFallbackEnabled()) {
+                    throw new Exception("Database connection failed and fallback is disabled. Plugin cannot function without storage.");
+                }
+                throw new Exception("Database connection failed and fallback also failed. Plugin cannot function without storage.");
+            }
+
+            // Log if running in fallback mode
+            if (databaseManager.isInFallbackMode()) {
+                logger.warning("=== PLUGIN RUNNING IN FALLBACK MODE ===");
+                logger.warning("MySQL unavailable - using SQLite fallback storage");
+                logger.warning("Some features may have limited functionality");
             }
 
             // Create handler factory but don't initialize it yet
@@ -145,19 +156,26 @@ public class RVNKLore extends JavaPlugin {
         Runtime.getRuntime().addShutdownHook(shutdownHook);
     }
 
-    private void startHealthCheck() {        healthCheckTaskId = getServer().getScheduler().scheduleSyncRepeatingTask(this, () -> {
+    private void startHealthCheck() {
+        healthCheckTaskId = getServer().getScheduler().scheduleSyncRepeatingTask(this, () -> {
+            if (databaseManager == null) {
+                return;
+            }
+
             // Check database connection
-            if (databaseManager != null && !databaseManager.isConnected()) {
+            if (!databaseManager.isConnected()) {
                 logger.warning("Database connection lost, attempting reconnect");
                 databaseManager.reconnect();
             }
 
-            // Log any accumulated errors
-            // int errorCount = Debug.getErrorCount();
-            // if (errorCount > 0) {
-            //     logger.warning("There have been " + errorCount + " errors since last health check");
-            //     Debug.resetErrorCount();
-            // }
+            // If in fallback mode, periodically attempt primary reconnection
+            if (databaseManager.isInFallbackMode()) {
+                var tracker = databaseManager.getFallbackTracker();
+                if (tracker != null && !tracker.isInFallbackMode()) {
+                    logger.info("Recovery period elapsed, attempting primary database reconnection");
+                    databaseManager.reconnect();
+                }
+            }
         }, 1200L, 1200L); // Check every minute (20 ticks/sec * 60 sec)
     }
 

@@ -658,28 +658,32 @@ public class LoreEntryRepository implements ILoreEntryRepository {
         String nbtData = null;
         Location location = null;
 
-        // Parse the content JSON
-        try {
-            JSONObject content = (JSONObject) jsonParser.parse(contentJson);
-            description = (String) content.get("description");
-            nbtData = (String) content.get("nbt_data");
+        // Parse the content JSON (with null/empty check)
+        if (contentJson != null && !contentJson.trim().isEmpty()) {
+            try {
+                JSONObject content = (JSONObject) jsonParser.parse(contentJson);
+                if (content != null) {
+                    description = (String) content.get("description");
+                    nbtData = (String) content.get("nbt_data");
 
-            // Extract location if available
-            if (content.containsKey("location")) {
-                JSONObject locJson = (JSONObject) content.get("location");
-                String worldName = (String) locJson.get("world");
-                World world = Bukkit.getWorld(worldName);
+                    // Extract location if available
+                    if (content.containsKey("location")) {
+                        JSONObject locJson = (JSONObject) content.get("location");
+                        String worldName = (String) locJson.get("world");
+                        World world = Bukkit.getWorld(worldName);
 
-                if (world != null) {
-                    double x = ((Number) locJson.get("x")).doubleValue();
-                    double y = ((Number) locJson.get("y")).doubleValue();
-                    double z = ((Number) locJson.get("z")).doubleValue();
+                        if (world != null) {
+                            double x = ((Number) locJson.get("x")).doubleValue();
+                            double y = ((Number) locJson.get("y")).doubleValue();
+                            double z = ((Number) locJson.get("z")).doubleValue();
 
-                    location = new Location(world, x, y, z);
+                            location = new Location(world, x, y, z);
+                        }
+                    }
                 }
+            } catch (ParseException e) {
+                logger.warning("Skipping malformed JSON content for lore entry ID: " + id);
             }
-        } catch (ParseException e) {
-            logger.error("Error parsing lore entry content JSON for ID: " + id, e);
         }
 
         // Create the LoreEntry object

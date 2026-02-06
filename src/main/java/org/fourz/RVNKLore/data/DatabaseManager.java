@@ -23,6 +23,9 @@ import java.util.UUID;
  * Manages database connections and operations for the lore system.
  * Acts as a facade for the various database components.
  *
+ * <p>Supports automatic fallback to SQLite when MySQL connection fails,
+ * with configurable failure thresholds and recovery timing.</p>
+ *
  * NOTE: This class provides synchronous wrappers around async repository methods
  * for backward compatibility. Direct use of repository interfaces is recommended
  * for new code requiring async operations.
@@ -31,6 +34,7 @@ public class DatabaseManager {
     private final RVNKLore plugin;
     private final LogManager logger;
     private final DatabaseConnectionFactory connectionFactory;
+    private final FallbackTracker fallbackTracker;
     private DatabaseConnection connection;
     private DatabaseHelper databaseHelper;
     private LoreEntryRepository loreRepository;
@@ -38,6 +42,7 @@ public class DatabaseManager {
     private ItemRepository itemRepository;
     private DatabaseBackupService backupService;
     private volatile boolean connectionValid = false;
+    private volatile boolean inFallbackMode = false;
     private int reconnectAttempts = 0;
     private static final int MAX_RECONNECT_ATTEMPTS = 5;
 
@@ -52,11 +57,13 @@ public class DatabaseManager {
 
         // Initialize components
         this.connectionFactory = new DatabaseConnectionFactory(plugin);
+        this.fallbackTracker = new FallbackTracker(plugin);
         initializeDatabase();
     }
 
     /**
-     * Initialize the database connection and related components
+     * Initialize the database connection and related components.
+     * If primary connection fails and fallback is enabled, attempts SQLite fallback.
      */
     private void initializeDatabase() {
         logger.debug("Initializing database...");
@@ -71,11 +78,58 @@ public class DatabaseManager {
             backupService = new DatabaseBackupService(plugin, connection);
 
             connectionValid = true;
+            inFallbackMode = false;
             reconnectAttempts = 0;
+            fallbackTracker.recordSuccess();
             logger.info("Database initialized successfully");
         } catch (Exception e) {
             connectionValid = false;
+            fallbackTracker.recordFailure();
             logger.error("Failed to initialize database", e);
+
+            // Attempt SQLite fallback if enabled
+            if (connectionFactory.isFallbackEnabled()) {
+                attemptFallbackConnection();
+            }
+        }
+    }
+
+    /**
+     * Attempts to establish a SQLite fallback connection when primary fails.
+     */
+    private void attemptFallbackConnection() {
+        logger.warning("Primary database connection failed - attempting SQLite fallback");
+        try {
+            // Clean up any partial primary connection
+            if (connection != null) {
+                try {
+                    connection.close();
+                } catch (Exception ignored) {}
+            }
+
+            // Create fallback SQLite connection
+            connection = connectionFactory.createFallbackConnection();
+            connection.initialize();
+            connection.createTables();
+
+            // Initialize repositories with fallback connection
+            loreRepository = new LoreEntryRepository(plugin, connection);
+            backupService = new DatabaseBackupService(plugin, connection);
+
+            connectionValid = true;
+            inFallbackMode = true;
+            reconnectAttempts = 0;
+
+            logger.warning("=== RUNNING IN FALLBACK MODE ===");
+            logger.warning("SQLite fallback connection established successfully");
+            logger.warning("Data will be stored locally until MySQL connection is restored");
+            logger.warning("Recovery will be attempted in " +
+                plugin.getConfig().getInt("storage.fallback.recoveryTimeMinutes", 5) + " minutes");
+        } catch (Exception fallbackError) {
+            connectionValid = false;
+            inFallbackMode = false;
+            logger.error("SQLite fallback connection also failed", fallbackError);
+            logger.error("Plugin will operate in limited mode - some features may not work");
         }
     }
 
@@ -247,21 +301,97 @@ public class DatabaseManager {
     }
 
     /**
-     * Reconnect to the database if the connection is lost
+     * Check if running in fallback mode (SQLite instead of configured MySQL).
+     *
+     * @return true if using fallback SQLite connection
+     */
+    public boolean isInFallbackMode() {
+        return inFallbackMode && connectionValid;
+    }
+
+    /**
+     * Check if fallback mode is available as a recovery option.
+     *
+     * @return true if fallback is enabled in configuration
+     */
+    public boolean isFallbackEnabled() {
+        return connectionFactory.isFallbackEnabled();
+    }
+
+    /**
+     * Get the FallbackTracker for diagnostics.
+     *
+     * @return The FallbackTracker instance
+     */
+    public FallbackTracker getFallbackTracker() {
+        return fallbackTracker;
+    }
+
+    /**
+     * Reconnect to the database if the connection is lost.
+     * If in fallback mode and recovery time has elapsed, attempts to reconnect to primary.
      *
      * @return true if the connection was reestablished, false otherwise
      */
     public boolean reconnect() {
+        // If in fallback mode, check if we should attempt primary reconnection
+        if (inFallbackMode && !fallbackTracker.isInFallbackMode()) {
+            logger.info("Attempting to reconnect to primary database...");
+            return attemptPrimaryReconnection();
+        }
+
         if (connection != null) {
             boolean success = connection.reconnect();
             if (success) {
                 connectionValid = true;
                 reconnectAttempts = 0;
+                fallbackTracker.recordSuccess();
+            } else {
+                fallbackTracker.recordFailure();
             }
             return success;
         }
         initializeDatabase();
         return isConnected();
+    }
+
+    /**
+     * Attempts to reconnect to the primary (MySQL) database from fallback mode.
+     *
+     * @return true if primary connection was reestablished
+     */
+    private boolean attemptPrimaryReconnection() {
+        try {
+            // Create a new primary connection
+            DatabaseConnection primaryConnection = connectionFactory.createConnection();
+            primaryConnection.initialize();
+            primaryConnection.createTables();
+
+            // If successful, switch from fallback to primary
+            if (connection != null) {
+                try {
+                    connection.close();
+                } catch (Exception ignored) {}
+            }
+
+            connection = primaryConnection;
+            loreRepository = new LoreEntryRepository(plugin, connection);
+            backupService = new DatabaseBackupService(plugin, connection);
+
+            connectionValid = true;
+            inFallbackMode = false;
+            reconnectAttempts = 0;
+            fallbackTracker.recordSuccess();
+
+            logger.info("=== PRIMARY DATABASE RESTORED ===");
+            logger.info("Successfully reconnected to primary database");
+            logger.info("Plugin is now operating in normal mode");
+            return true;
+        } catch (Exception e) {
+            logger.warning("Primary database still unavailable: " + e.getMessage());
+            fallbackTracker.recordFailure();
+            return false;
+        }
     }
 
     /**

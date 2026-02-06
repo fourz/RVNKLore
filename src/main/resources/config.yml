@@ -54,6 +54,15 @@ storage:
       useWAL: true
       # Use NORMAL synchronous mode (faster, still safe)
       normalSync: true
+  # Fallback configuration for when primary database fails
+  fallback:
+    # Enable automatic fallback to SQLite when MySQL connection fails
+    # When enabled, plugin continues operating using local SQLite storage
+    enabled: true
+    # Number of consecutive failures before entering fallback mode
+    maxFailuresBeforeFallback: 3
+    # Minutes to wait before attempting to reconnect to primary database
+    recoveryTimeMinutes: 5
 
 messages:
   generic:

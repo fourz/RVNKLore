@@ -28,5 +28,20 @@ public enum ItemType {
     /**
      * Standard lore items without special properties.
      */
-    STANDARD
+    STANDARD,
+
+    /**
+     * Legendary items with unique properties and high rarity.
+     */
+    LEGENDARY,
+
+    /**
+     * Artifact items with historical significance or special lore.
+     */
+    ARTIFACT,
+
+    /**
+     * Seasonal items available during specific events or time periods.
+     */
+    SEASONAL
 }
