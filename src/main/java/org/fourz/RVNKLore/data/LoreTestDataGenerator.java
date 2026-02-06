@@ -211,9 +211,17 @@ public class LoreTestDataGenerator extends TestDataGenerator {
     }
 
     private int seedLoreSubmissions(Connection conn, int entryCount) throws SQLException {
-        String sql = "INSERT INTO " + table("lore_submission") +
-            " (entry_id, slug, visibility, status, submitter_uuid, approval_status, content_version, " +
-            "is_current_version, content) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        String sql;
+        if (isMySQL()) {
+            sql = "INSERT INTO " + table("lore_submission") +
+                " (entry_id, slug, visibility, status, submitter_uuid, approval_status, content_version, " +
+                "is_current_version, content) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) " +
+                "ON DUPLICATE KEY UPDATE content = VALUES(content), status = VALUES(status)";
+        } else {
+            sql = "INSERT OR REPLACE INTO " + table("lore_submission") +
+                " (entry_id, slug, visibility, status, submitter_uuid, approval_status, content_version, " +
+                "is_current_version, content) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        }
 
         int inserted = 0;
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -252,9 +260,17 @@ public class LoreTestDataGenerator extends TestDataGenerator {
     }
 
     private int seedLoreItems(Connection conn, int entryCount) throws SQLException {
-        String sql = "INSERT INTO " + table("lore_item") +
-            " (name, short_uuid, lore_entry_id, material, item_type, rarity, " +
-            "is_obtainable, custom_model_data, item_properties) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        String sql;
+        if (isMySQL()) {
+            sql = "INSERT INTO " + table("lore_item") +
+                " (name, short_uuid, lore_entry_id, material, item_type, rarity, " +
+                "is_obtainable, custom_model_data, item_properties) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) " +
+                "ON DUPLICATE KEY UPDATE material = VALUES(material), item_properties = VALUES(item_properties)";
+        } else {
+            sql = "INSERT OR REPLACE INTO " + table("lore_item") +
+                " (name, short_uuid, lore_entry_id, material, item_type, rarity, " +
+                "is_obtainable, custom_model_data, item_properties) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        }
 
         int inserted = 0;
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -431,8 +447,15 @@ public class LoreTestDataGenerator extends TestDataGenerator {
     }
 
     private int seedCollectionRewards(Connection conn) throws SQLException {
-        String sql = "INSERT INTO " + table("collection_reward") +
-            " (collection_id, reward_type, reward_data, is_claimed) VALUES (?, ?, ?, ?)";
+        String sql;
+        if (isMySQL()) {
+            sql = "INSERT INTO " + table("collection_reward") +
+                " (collection_id, reward_type, reward_data, is_claimed) VALUES (?, ?, ?, ?) " +
+                "ON DUPLICATE KEY UPDATE reward_data = VALUES(reward_data)";
+        } else {
+            sql = "INSERT OR REPLACE INTO " + table("collection_reward") +
+                " (collection_id, reward_type, reward_data, is_claimed) VALUES (?, ?, ?, ?)";
+        }
 
         int inserted = 0;
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
