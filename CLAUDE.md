@@ -52,18 +52,6 @@ mvn clean package
 - `b2bc4d7e` - SparkedHost test server
 - `1eb313b1-40f7-4209-aa9d-352128214206` - Local MCSS dev server
 
-## Local MCSS Development
-
-Configure `.vscode/project.json` for local MCSS deployment:
-```json
-{
-    "OutputFile": "..\\target\\RVNKLore-1.0-SNAPSHOT.jar",
-    "DestinationPath": "F:\\Minecraft\\MCSS\\servers\\RVNK Dev\\plugins",
-    "PluginFolder": "RVNKLore",
-    "API": { "serverid": "...", "key": "...", "hostname": "localhost", "port": 25560 }
-}
-```
-
 ## Architecture
 
 ### Core Class Structure
