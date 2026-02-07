@@ -210,9 +210,13 @@ public class LoreManager implements ILoreService {
             logger.warning("Attempted to approve non-existent lore entry: " + id);
             return false;
         }
-        entry.setApproved(true);
-        boolean success = plugin.getDatabaseManager().updateLoreEntry(entry);
+
+        // Use the dedicated approval method that only updates approval_status.
+        // Previously this called updateLoreEntry() which created a new submission
+        // version, causing slug UNIQUE constraint violations (bug-01/bug-02).
+        boolean success = plugin.getDatabaseManager().approveLoreEntry(id.toString(), "Server");
         if (success) {
+            entry.setApproved(true);
             logger.info("Lore entry approved: " + id);
         } else {
             logger.warning("Failed to approve lore entry: " + id);

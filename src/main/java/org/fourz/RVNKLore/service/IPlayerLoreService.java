@@ -8,15 +8,15 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Service interface for player-related lore operations.
+ * Service interface for player lore discovery tracking operations.
  * Exposes player lore functionality for cross-plugin access via RVNKCore ServiceRegistry.
  *
- * <p>This service provides access to player lore entries, name change history,
- * and player existence checks without requiring direct database access.</p>
+ * <p>This service manages lore discovery tracking (which entries a player has found),
+ * not player CRUD operations. For player name resolution, see {@link org.fourz.RVNKLore.util.PlayerLookup}.</p>
  *
  * @since RVNKCore Integration
  */
-public interface IPlayerService {
+public interface IPlayerLoreService {
 
     /**
      * Check if a player already has a lore entry in the system.

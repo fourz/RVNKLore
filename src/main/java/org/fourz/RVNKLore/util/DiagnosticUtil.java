@@ -184,7 +184,7 @@ public class DiagnosticUtil {
 
             // Check service registration status
             int registeredServices = 0;
-            int totalServices = 5; // ILoreService, IItemService, ICollectionService, ISubmissionService, IPlayerService
+            int totalServices = 5; // ILoreService, IItemService, ICollectionService, ISubmissionService, IPlayerLoreService
 
             List<String> serviceStatus = new ArrayList<>();
 
@@ -197,7 +197,7 @@ public class DiagnosticUtil {
                     Object serviceRegistry = rvnkCoreClass.getMethod("getServiceRegistry").invoke(coreInstance);
 
                     // Check each service
-                    String[] serviceNames = {"ILoreService", "IItemService", "ICollectionService", "ISubmissionService", "IPlayerService"};
+                    String[] serviceNames = {"ILoreService", "IItemService", "ICollectionService", "ISubmissionService", "IPlayerLoreService"};
 
                     for (String serviceName : serviceNames) {
                         try {

@@ -200,6 +200,22 @@ public class DatabaseManager {
     }
 
     /**
+     * Approve a lore entry by updating its approval status.
+     * Uses the dedicated approval query (UPDATE only) instead of creating a new submission version.
+     *
+     * @param entryId The UUID string of the entry to approve
+     * @param approvedBy The UUID string of the approver
+     * @return true if successful, false otherwise
+     */
+    public boolean approveLoreEntry(String entryId, String approvedBy) {
+        if (!validateConnection()) {
+            logger.warning("Database connection invalid, cannot approve lore entry");
+            return false;
+        }
+        return loreRepository.approveLoreEntry(entryId, approvedBy).join();
+    }
+
+    /**
      * Search lore entries by keyword in name or description
      *
      * @param keyword The keyword to search for

@@ -12,7 +12,8 @@ import org.fourz.RVNKLore.service.ILoreService;
 import org.fourz.RVNKLore.service.IItemService;
 import org.fourz.RVNKLore.service.ICollectionService;
 import org.fourz.RVNKLore.service.ISubmissionService;
-import org.fourz.RVNKLore.service.IPlayerService;
+import org.fourz.RVNKLore.service.IPlayerLoreService;
+import org.fourz.RVNKLore.util.PlayerLookup;
 import org.fourz.RVNKLore.util.UtilityManager;
 import org.fourz.RVNKLore.lore.item.ItemManager;
 import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
@@ -34,6 +35,7 @@ public class RVNKLore extends JavaPlugin {
     private UtilityManager utilityManager;
     private ItemManager itemManager;
     private PlayerManager playerManager;
+    private PlayerLookup playerLookup;
     private SubmissionManager submissionManager;
     private LoreApiInitializer apiInitializer;
     private DiscoveryManager discoveryManager;
@@ -97,8 +99,12 @@ public class RVNKLore extends JavaPlugin {
             loreManager = LoreManager.getInstance(this);
             loreManager.initializeLore();
 
+            // Initialize PlayerLookup for RVNKCore name resolution
+            this.playerLookup = new PlayerLookup(this);
+
             // Initialize PlayerManager for player-related lore operations
             this.playerManager = new PlayerManager(this);
+            this.playerManager.setPlayerLookup(playerLookup);
             this.playerManager.initialize();
 
             // Initialize ItemManager through LoreManager
@@ -386,6 +392,9 @@ public class RVNKLore extends JavaPlugin {
         if (playerManager == null) {
             logger.warning("Player manager requested but was null. Creating new instance.");
             playerManager = new PlayerManager(this);
+            if (playerLookup != null) {
+                playerManager.setPlayerLookup(playerLookup);
+            }
             playerManager.initialize();
         }
         return playerManager;
@@ -497,10 +506,10 @@ public class RVNKLore extends JavaPlugin {
                 logger.info("Registered ISubmissionService with RVNKCore");
             }
 
-            // Register PlayerService
+            // Register PlayerLoreService
             if (playerManager != null) {
-                registerMethod.invoke(serviceRegistry, IPlayerService.class, playerManager);
-                logger.info("Registered IPlayerService with RVNKCore");
+                registerMethod.invoke(serviceRegistry, IPlayerLoreService.class, playerManager);
+                logger.info("Registered IPlayerLoreService with RVNKCore");
             }
 
             rvnkCoreAvailable = true;
@@ -534,7 +543,7 @@ public class RVNKLore extends JavaPlugin {
             java.lang.reflect.Method unregisterMethod = registryClass.getMethod("unregisterService", Class.class);
 
             // Unregister services in reverse order
-            unregisterMethod.invoke(serviceRegistry, IPlayerService.class);
+            unregisterMethod.invoke(serviceRegistry, IPlayerLoreService.class);
             unregisterMethod.invoke(serviceRegistry, ISubmissionService.class);
             unregisterMethod.invoke(serviceRegistry, ICollectionService.class);
             unregisterMethod.invoke(serviceRegistry, IItemService.class);

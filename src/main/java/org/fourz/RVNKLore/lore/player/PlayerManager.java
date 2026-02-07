@@ -4,7 +4,8 @@ import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.service.IPlayerService;
+import org.fourz.RVNKLore.service.IPlayerLoreService;
+import org.fourz.RVNKLore.util.PlayerLookup;
 import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
@@ -24,12 +25,13 @@ import java.util.concurrent.CompletableFuture;
  * - Player name change detection and recording
  * - Player lore entry lookup and retrieval
  *
- * <p>Implements IPlayerService for cross-plugin access via RVNKCore ServiceRegistry.</p>
+ * <p>Implements IPlayerLoreService for cross-plugin access via RVNKCore ServiceRegistry.</p>
  */
-public class PlayerManager implements IPlayerService {
+public class PlayerManager implements IPlayerLoreService {
     private final RVNKLore plugin;
     private final LogManager logger;
     private final IPlayerRepository playerRepository;
+    private PlayerLookup playerLookup;
 
     /**
      * Create PlayerManager with default PlayerRepository implementation.
@@ -57,8 +59,21 @@ public class PlayerManager implements IPlayerService {
         logger.info("Initializing PlayerManager");
     }
 
+    /**
+     * Set the PlayerLookup instance for RVNKCore name resolution.
+     *
+     * @param playerLookup The PlayerLookup utility, or null to disable
+     */
+    public void setPlayerLookup(PlayerLookup playerLookup) {
+        this.playerLookup = playerLookup;
+        if (playerLookup != null) {
+            logger.info("PlayerLookup integration configured (RVNKCore: " +
+                playerLookup.isRVNKCoreEnabled() + ")");
+        }
+    }
+
     // ============================================
-    // IPlayerService Implementation (Async API)
+    // IPlayerLoreService Implementation (Async API)
     // ============================================
 
     /**
@@ -73,13 +88,22 @@ public class PlayerManager implements IPlayerService {
     }
 
     /**
-     * Get the current player name stored in the lore system.
+     * Get the current player name. Delegates to PlayerLookup (RVNKCore) first,
+     * then falls back to the lore repository's stored name.
      *
      * @param playerId The UUID of the player
-     * @return Future containing Optional with the stored player name, or empty if not found
+     * @return Future containing Optional with the player name, or empty if not found
      */
     @Override
     public CompletableFuture<Optional<String>> getPlayerName(UUID playerId) {
+        // Try PlayerLookup (RVNKCore → Bukkit) first for authoritative name
+        if (playerLookup != null) {
+            String name = playerLookup.getPlayerName(playerId);
+            if (name != null && !name.equals(playerId.toString().substring(0, 8))) {
+                return CompletableFuture.completedFuture(Optional.of(name));
+            }
+        }
+        // Fall back to lore repository's stored name
         return playerRepository.getStoredPlayerName(playerId);
     }
 

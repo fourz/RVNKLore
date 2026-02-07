@@ -7,7 +7,7 @@ import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.lore.LoreType;
 import org.fourz.RVNKLore.service.ICollectionService;
 import org.fourz.RVNKLore.service.ILoreService;
-import org.fourz.RVNKLore.service.IPlayerService;
+import org.fourz.RVNKLore.service.IPlayerLoreService;
 import org.fourz.rvnkcore.util.log.LogManager;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -45,7 +45,7 @@ public class RVNKLorePlaceholderExpansion extends PlaceholderExpansion {
 
     private final RVNKLore plugin;
     private final LogManager logger;
-    private final IPlayerService playerService;
+    private final IPlayerLoreService playerService;
     private final ILoreService loreService;
     private final ICollectionService collectionService;
 
