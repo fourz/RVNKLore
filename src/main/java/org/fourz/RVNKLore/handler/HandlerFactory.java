@@ -296,6 +296,19 @@ public class HandlerFactory {
     public Map<LoreType, LoreHandler> getAllHandlers() {
         return new EnumMap<>(handlerCache);
     }
+
+    /**
+     * Get all registered handler class names, including those not yet instantiated.
+     *
+     * @return Map of handler key names to their implementation class names
+     */
+    public Map<String, String> getRegisteredHandlerClasses() {
+        Map<String, String> result = new java.util.LinkedHashMap<>();
+        for (Map.Entry<String, Class<? extends LoreHandler>> entry : handlerClasses.entrySet()) {
+            result.put(entry.getKey(), entry.getValue().getSimpleName());
+        }
+        return result;
+    }
     
     /**
      * Reload all handlers

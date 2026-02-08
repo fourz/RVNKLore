@@ -127,11 +127,7 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage(ChatColor.GOLD + "===== RVNKLore Commands =====");
         for (Map.Entry<String, SubCommand> entry : subCommands.entrySet()) {
             if (entry.getValue().hasPermission(sender)) {
-                // Update help for unified item give command
-                if ("itemgive".equals(entry.getKey())) {
-                    sender.sendMessage(ChatColor.YELLOW + "/lore itemgive <item_name> <player>" +
-                        ChatColor.WHITE + " - Give any lore item (cosmetic, collection, etc.) by name");
-                } else if ("collection".equals(entry.getKey())) {
+                if ("collection".equals(entry.getKey())) {
                     sender.sendMessage(ChatColor.YELLOW + "/lore collection <view|claim> <collection_id>" +
                         ChatColor.WHITE + " - View or claim collection progress/rewards");
                 } else if ("book".equals(entry.getKey())) {
@@ -146,16 +142,13 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
                 } else if ("dynmap".equals(entry.getKey())) {
                     sender.sendMessage(ChatColor.YELLOW + "/lore dynmap <diff|import> [set]" +
                         ChatColor.WHITE + " - Dynmap marker integration");
-                } else if ("give".equals(entry.getKey())) {
-                    sender.sendMessage(ChatColor.DARK_GRAY + "/lore give ... [DEPRECATED, use /lore itemgive]" +
-                        ChatColor.GRAY + " - Deprecated: use /lore itemgive");
                 } else {
                     sender.sendMessage(ChatColor.YELLOW + "/lore " + entry.getKey() +
                         ChatColor.WHITE + " - " + entry.getValue().getDescription());
                 }
             }
         }
-        sender.sendMessage(ChatColor.GRAY + "\nSee /lore itemgive and /lore collection for unified item and collection management.");
+        sender.sendMessage(ChatColor.GRAY + "\nSee /lore item give and /lore collection for item and collection management.");
     }
 
     @Override

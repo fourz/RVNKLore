@@ -145,10 +145,30 @@ public class LoreDebugSubCommand implements SubCommand {
     private boolean listHandlers(CommandSender sender) {
         sender.sendMessage(ChatColor.YELLOW + "Registered Lore Handlers:");
 
-        plugin.getHandlerFactory().getAllHandlers().forEach((type, handler) -> {
-            sender.sendMessage(ChatColor.GREEN + type.name() + ChatColor.WHITE +
-                " - " + handler.getClass().getSimpleName());
+        // Show cached (active) handlers
+        Map<LoreType, org.fourz.RVNKLore.handler.LoreHandler> cached = plugin.getHandlerFactory().getAllHandlers();
+        cached.forEach((type, handler) -> {
+            sender.sendMessage(ChatColor.GREEN + "  " + type.name() + ChatColor.WHITE +
+                ": " + handler.getClass().getSimpleName());
         });
+
+        // Show registered-but-not-yet-loaded handler classes
+        Map<String, String> allRegistered = plugin.getHandlerFactory().getRegisteredHandlerClasses();
+        int notLoaded = 0;
+        for (Map.Entry<String, String> entry : allRegistered.entrySet()) {
+            try {
+                LoreType type = LoreType.valueOf(entry.getKey());
+                if (!cached.containsKey(type)) {
+                    notLoaded++;
+                }
+            } catch (IllegalArgumentException ignored) {
+                // Non-LoreType keys (event/sign handlers) - always count as loaded via listeners
+            }
+        }
+        if (notLoaded > 0) {
+            sender.sendMessage(ChatColor.GRAY + "  " + notLoaded + " type(s) not yet accessed (will load on first use)");
+        }
+        sender.sendMessage(ChatColor.GRAY + "  Total registered: " + allRegistered.size() + " handler classes");
 
         return true;
     }
