@@ -224,35 +224,35 @@ public class DatabaseHelper {
      */
     public int executeInsertAndGetKey(String sql, PreparedStatementSetter paramSetter) throws LoreException {
         return executeWithRetry(() -> {
-            Connection conn = databaseManager.getConnection();
-            
-            // For SQLite with RETURNING clause
-            if (sql.toUpperCase().contains("RETURNING")) {
-                try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-                    if (paramSetter != null) {
-                        paramSetter.setParameters(stmt);
-                    }
-                    
-                    try (ResultSet rs = stmt.executeQuery()) {
-                        return rs.next() ? rs.getInt(1) : -1;
+            try (Connection conn = databaseManager.getConnection()) {
+                // For SQLite with RETURNING clause
+                if (sql.toUpperCase().contains("RETURNING")) {
+                    try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                        if (paramSetter != null) {
+                            paramSetter.setParameters(stmt);
+                        }
+
+                        try (ResultSet rs = stmt.executeQuery()) {
+                            return rs.next() ? rs.getInt(1) : -1;
+                        }
                     }
                 }
-            } 
-            // For MySQL with auto-increment
-            else {
-                try (PreparedStatement stmt = conn.prepareStatement(sql, PreparedStatement.RETURN_GENERATED_KEYS)) {
-                    if (paramSetter != null) {
-                        paramSetter.setParameters(stmt);
-                    }
-                    
-                    int affectedRows = stmt.executeUpdate();
-                    
-                    if (affectedRows == 0) {
-                        return -1;
-                    }
-                    
-                    try (ResultSet generatedKeys = stmt.getGeneratedKeys()) {
-                        return generatedKeys.next() ? generatedKeys.getInt(1) : -1;
+                // For MySQL with auto-increment
+                else {
+                    try (PreparedStatement stmt = conn.prepareStatement(sql, PreparedStatement.RETURN_GENERATED_KEYS)) {
+                        if (paramSetter != null) {
+                            paramSetter.setParameters(stmt);
+                        }
+
+                        int affectedRows = stmt.executeUpdate();
+
+                        if (affectedRows == 0) {
+                            return -1;
+                        }
+
+                        try (ResultSet generatedKeys = stmt.getGeneratedKeys()) {
+                            return generatedKeys.next() ? generatedKeys.getInt(1) : -1;
+                        }
                     }
                 }
             }

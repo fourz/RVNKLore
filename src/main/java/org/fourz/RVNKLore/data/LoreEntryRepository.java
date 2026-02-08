@@ -583,7 +583,7 @@ public class LoreEntryRepository implements ILoreEntryRepository {
             content.put("nbt_data", entry.getNbtData());
             // Include location if available
             Location loc = entry.getLocation();
-            if (loc != null) {
+            if (loc != null && loc.getWorld() != null) {
                 JSONObject locJson = new JSONObject();
                 locJson.put("world", loc.getWorld().getName());
                 locJson.put("x", loc.getX());

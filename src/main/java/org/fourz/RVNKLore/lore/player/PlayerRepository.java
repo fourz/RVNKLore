@@ -330,7 +330,7 @@ public class PlayerRepository implements IPlayerRepository {
      */
     private boolean createDiscoveriesTable() {
         String createSql = "CREATE TABLE IF NOT EXISTS " + t("player_discoveries") + " (" +
-            "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+            "id " + dbConnection.getDialect().getAutoIncrementPK() + ", " +
             "player_uuid VARCHAR(36) NOT NULL, " +
             "entry_id VARCHAR(36) NOT NULL, " +
             "discovered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
@@ -351,7 +351,8 @@ public class PlayerRepository implements IPlayerRepository {
      * Direct insert without checking (used after table creation).
      */
     private boolean recordLoreDiscoveryDirect(UUID playerUuid, String entryId) {
-        String insertSql = "INSERT OR IGNORE INTO " + t("player_discoveries") + " (player_uuid, entry_id, discovered_at) VALUES (?, ?, ?)";
+        String ignoreKeyword = "MySQL".equals(dbConnection.getDialect().getName()) ? "INSERT IGNORE INTO " : "INSERT OR IGNORE INTO ";
+        String insertSql = ignoreKeyword + t("player_discoveries") + " (player_uuid, entry_id, discovered_at) VALUES (?, ?, ?)";
         try (Connection conn = dbConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(insertSql)) {
             stmt.setString(1, playerUuid.toString());

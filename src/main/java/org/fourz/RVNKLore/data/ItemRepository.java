@@ -77,8 +77,7 @@ public class ItemRepository implements IItemRepository {
         // Required tables for ItemRepository operations (with prefix applied)
         String[] requiredTables = {t("lore_item"), t("collection"), t("collection_item"), t("player_collection_progress")};
 
-        try {
-            Connection conn = dbConnection.getConnection();
+        try (Connection conn = dbConnection.getConnection()) {
             for (String tableName : requiredTables) {
                 if (!tableExists(conn, tableName)) {
                     logger.warning("Required table '" + tableName + "' does not exist. " +
@@ -807,8 +806,7 @@ public class ItemRepository implements IItemRepository {
                 return true;
             }
 
-            try {
-                Connection conn = dbConnection.getConnection();
+            try (Connection conn = dbConnection.getConnection()) {
                 conn.setAutoCommit(false);
 
                 try {
@@ -856,8 +854,7 @@ public class ItemRepository implements IItemRepository {
         return CompletableFuture.supplyAsync(() -> {
             String sql = "UPDATE " + t("collection_item") + " SET sequence_number = ? WHERE collection_id = ? AND item_id = ?";
 
-            try {
-                Connection conn = dbConnection.getConnection();
+            try (Connection conn = dbConnection.getConnection()) {
                 conn.setAutoCommit(false);
 
                 try (PreparedStatement stmt = conn.prepareStatement(sql)) {
