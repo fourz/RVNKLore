@@ -12,6 +12,7 @@ softdepend:
   - PlaceholderAPI
   - Dynmap
   - RVNKQuests
+  - VotingPlugin
 
 commands:
   lore:

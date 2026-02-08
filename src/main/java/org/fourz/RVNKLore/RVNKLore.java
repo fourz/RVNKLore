@@ -25,6 +25,7 @@ import org.fourz.RVNKLore.achievement.AchievementManager;
 import org.fourz.RVNKLore.gui.GuiListener;
 import org.fourz.RVNKLore.integration.placeholder.RVNKLorePlaceholderExpansion;
 import org.fourz.RVNKLore.integration.dynmap.DynmapIntegration;
+import org.fourz.RVNKLore.integration.votingplugin.VotingPluginIntegration;
 
 public class RVNKLore extends JavaPlugin {
     private LoreManager loreManager;
@@ -55,6 +56,9 @@ public class RVNKLore extends JavaPlugin {
 
     // Dynmap integration
     private DynmapIntegration dynmapIntegration = null;
+
+    // VotingPlugin integration
+    private VotingPluginIntegration votingPluginIntegration = null;
 
     @Override
     public void onEnable() {
@@ -146,6 +150,9 @@ public class RVNKLore extends JavaPlugin {
 
             // Register Dynmap integration if available
             registerDynmap();
+
+            // Register VotingPlugin integration if available
+            registerVotingPlugin();
 
             // Start periodic health check
             startHealthCheck();
@@ -331,6 +338,48 @@ public class RVNKLore extends JavaPlugin {
         return dynmapIntegration != null && dynmapIntegration.isEnabled();
     }
 
+    /**
+     * Registers VotingPlugin integration if VotingPlugin is available.
+     * Also registers as event listener for late VotingPlugin loading.
+     */
+    private void registerVotingPlugin() {
+        votingPluginIntegration = new VotingPluginIntegration(this);
+        getServer().getPluginManager().registerEvents(votingPluginIntegration, this);
+        if (votingPluginIntegration.activate()) {
+            logger.info("VotingPlugin integration enabled - vote rewards active");
+        } else {
+            logger.info("VotingPlugin not available - vote reward support disabled");
+        }
+    }
+
+    /**
+     * Cleans up VotingPlugin integration.
+     */
+    private void unregisterVotingPlugin() {
+        if (votingPluginIntegration != null) {
+            votingPluginIntegration.cleanup();
+            votingPluginIntegration = null;
+        }
+    }
+
+    /**
+     * Get the VotingPlugin integration instance.
+     *
+     * @return The VotingPlugin integration, or null if not registered
+     */
+    public VotingPluginIntegration getVotingPluginIntegration() {
+        return votingPluginIntegration;
+    }
+
+    /**
+     * Checks if VotingPlugin integration is active and available.
+     *
+     * @return true if VotingPlugin is loaded and vote API is accessible
+     */
+    public boolean isVotingPluginAvailable() {
+        return votingPluginIntegration != null && votingPluginIntegration.isEnabled();
+    }
+
     private void cleanupManagers() {
         // Shutdown REST API first
         if (apiInitializer != null) {
@@ -343,6 +392,9 @@ public class RVNKLore extends JavaPlugin {
 
         // Cleanup Dynmap integration
         unregisterDynmap();
+
+        // Cleanup VotingPlugin integration
+        unregisterVotingPlugin();
 
         // Unregister from RVNKCore first
         unregisterFromRVNKCore();
