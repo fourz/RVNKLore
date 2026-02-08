@@ -113,10 +113,18 @@ public class HandlerFactory {
             
             // Replace individual head handlers with the unified CommonHeadHandler
             handlerClasses.put("HEAD", CommonHeadHandler.class);
-            
+
+            // Location-based handlers
+            handlerClasses.put("TAVERN", TavernLoreHandler.class);
+            handlerClasses.put("GUILD", GuildLoreHandler.class);
+            handlerClasses.put("SHRINE", ShrineLoreHandler.class);
+
             // Sign handlers
             handlerClasses.put("SIGN_LANDMARK", org.fourz.RVNKLore.handler.sign.HandlerSignLandmark.class);
             handlerClasses.put("SIGN_MONUMENT", org.fourz.RVNKLore.handler.sign.HandlerSignMonument.class);
+            handlerClasses.put("SIGN_TAVERN", org.fourz.RVNKLore.handler.sign.HandlerSignTavern.class);
+            handlerClasses.put("SIGN_GUILD", org.fourz.RVNKLore.handler.sign.HandlerSignGuild.class);
+            handlerClasses.put("SIGN_SHRINE", org.fourz.RVNKLore.handler.sign.HandlerSignShrine.class);
             
             // Check for missing handlers but don't log warnings yet - will use default
             for (LoreType type : LoreType.values()) {
@@ -167,7 +175,10 @@ public class HandlerFactory {
 
         // Create event-driven handlers that need listener registration
         // These aren't tied to a LoreType but must receive Bukkit events
-        String[] eventHandlerKeys = {"ANVIL_ARTIFACT", "ARMOR_STAND", "BOSS_KILL", "LECTERN_BOOK", "PLAYER_DEATH", "PLAYER_JOIN"};
+        String[] eventHandlerKeys = {
+            "ANVIL_ARTIFACT", "ARMOR_STAND", "BOSS_KILL", "LECTERN_BOOK", "PLAYER_DEATH", "PLAYER_JOIN",
+            "SIGN_LANDMARK", "SIGN_MONUMENT", "SIGN_TAVERN", "SIGN_GUILD", "SIGN_SHRINE"
+        };
         for (String key : eventHandlerKeys) {
             try {
                 Class<? extends LoreHandler> handlerClass = handlerClasses.get(key);

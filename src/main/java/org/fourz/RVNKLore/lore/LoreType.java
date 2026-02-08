@@ -62,7 +62,22 @@ public enum LoreType {
     /**
      * Decorative head item (includes player heads, mob heads, custom heads, and hats)
      */
-    HEAD("Decorative head or hat item");
+    HEAD("Decorative head or hat item"),
+
+    /**
+     * Tavern, inn, or social gathering place
+     */
+    TAVERN("Tavern, inn, or social gathering place"),
+
+    /**
+     * Guild hall or professional organization
+     */
+    GUILD("Guild hall or professional organization"),
+
+    /**
+     * Shrine, temple, or place of worship
+     */
+    SHRINE("Shrine, temple, or place of worship");
 
     private final String description;
 
