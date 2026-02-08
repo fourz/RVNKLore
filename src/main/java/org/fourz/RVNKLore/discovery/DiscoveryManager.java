@@ -74,6 +74,17 @@ public class DiscoveryManager {
         DiscoveryListener listener = new DiscoveryListener(plugin, this);
         Bukkit.getPluginManager().registerEvents(listener, plugin);
 
+        // Register quest discovery listener if RVNKQuests is available
+        if (Bukkit.getPluginManager().getPlugin("RVNKQuests") != null) {
+            try {
+                QuestDiscoveryListener questListener = new QuestDiscoveryListener(plugin, this);
+                Bukkit.getPluginManager().registerEvents(questListener, plugin);
+                logger.info("RVNKQuests integration enabled - QUEST_COMPLETE discoveries active");
+            } catch (NoClassDefFoundError e) {
+                logger.warning("RVNKQuests found but event class not available - quest discoveries disabled");
+            }
+        }
+
         initialized = true;
         logger.info("DiscoveryManager initialized");
     }

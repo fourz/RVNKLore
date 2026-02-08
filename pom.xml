@@ -89,6 +89,13 @@
            <version>1.3.0-alpha</version>
            <scope>provided</scope>
        </dependency>
+       <!-- RVNKQuests - for QuestCompleteEvent cross-plugin integration -->
+       <dependency>
+           <groupId>org.fourz.RVNKQuests</groupId>
+           <artifactId>RVNKQuests</artifactId>
+           <version>1.0-SNAPSHOT</version>
+           <scope>provided</scope>
+       </dependency>
        <!-- Jakarta Servlet API (provided by RVNKCore's Jetty server at runtime) -->
        <dependency>
            <groupId>jakarta.servlet</groupId>
