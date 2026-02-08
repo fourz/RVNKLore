@@ -27,7 +27,8 @@ public class LoreMarkerManager {
 
     private static final Set<LoreType> LOCATION_TYPES = EnumSet.of(
         LoreType.LANDMARK, LoreType.MONUMENT, LoreType.CITY,
-        LoreType.PATH, LoreType.EVENT, LoreType.FACTION
+        LoreType.PATH, LoreType.EVENT, LoreType.FACTION,
+        LoreType.TAVERN, LoreType.GUILD, LoreType.SHRINE
     );
 
     private static final String MARKER_ID_PREFIX = "rvnklore_";

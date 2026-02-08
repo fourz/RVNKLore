@@ -23,6 +23,7 @@ public class DynmapIntegration implements Listener {
     private MarkerAPI markerApi;
     private MarkerSet markerSet;
     private LoreMarkerManager markerManager;
+    private DynmapMarkerReader markerReader;
     private boolean enabled = false;
 
     public DynmapIntegration(RVNKLore plugin) {
@@ -60,6 +61,7 @@ public class DynmapIntegration implements Listener {
             initMarkerSet();
             markerManager = new LoreMarkerManager(plugin, markerApi, markerSet);
             markerManager.populateAllMarkers();
+            markerReader = new DynmapMarkerReader(markerApi, logger);
             enabled = true;
             logger.info("Dynmap integration enabled - marker set '" + config.getDynmapMarkerSetId() + "' active");
             return true;
@@ -120,5 +122,9 @@ public class DynmapIntegration implements Listener {
 
     public LoreMarkerManager getMarkerManager() {
         return markerManager;
+    }
+
+    public DynmapMarkerReader getMarkerReader() {
+        return markerReader;
     }
 }
