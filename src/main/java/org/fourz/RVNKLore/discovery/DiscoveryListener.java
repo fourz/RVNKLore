@@ -2,6 +2,7 @@ package org.fourz.RVNKLore.discovery;
 
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
 import org.bukkit.block.Block;
 import org.bukkit.block.Sign;
 import org.bukkit.entity.Entity;
@@ -15,10 +16,14 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.persistence.PersistentDataContainer;
+import org.bukkit.persistence.PersistentDataType;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreManager;
@@ -47,6 +52,9 @@ public class DiscoveryListener implements Listener {
     private final LoreManager loreManager;
     private final LogManager logger;
 
+    // PersistentDataContainer key for lore entry ID (matches LoreBookManager)
+    private final NamespacedKey loreEntryIdKey;
+
     // Location-based discovery tracking (to prevent spam)
     private final Map<UUID, Set<String>> recentLocationDiscoveries = new ConcurrentHashMap<>();
     private static final double LOCATION_DISCOVERY_RADIUS = 10.0;
@@ -59,6 +67,7 @@ public class DiscoveryListener implements Listener {
         this.discoveryManager = discoveryManager;
         this.loreManager = plugin.getLoreManager();
         this.logger = LogManager.getInstance(plugin, "DiscoveryListener");
+        this.loreEntryIdKey = new NamespacedKey(plugin, "lore_entry_id");
 
         // Build location cache
         buildLocationCache();
@@ -279,6 +288,106 @@ public class DiscoveryListener implements Listener {
                 recentLocations.remove(locationKey);
             }, 20 * 60 * 5); // 5 minute cooldown
         }
+    }
+
+    /**
+     * Handles item use (right-click) for lore discovery.
+     * Checks held items for lore entry references via PersistentDataContainer
+     * or item lore text, then triggers ITEM_USE discovery.
+     */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onItemUse(PlayerInteractEvent event) {
+        Action action = event.getAction();
+        if (action != Action.RIGHT_CLICK_AIR && action != Action.RIGHT_CLICK_BLOCK) return;
+
+        // Skip sign interactions (handled by onSignInteract)
+        if (action == Action.RIGHT_CLICK_BLOCK && event.getClickedBlock() != null
+                && event.getClickedBlock().getState() instanceof Sign) {
+            return;
+        }
+
+        Player player = event.getPlayer();
+        ItemStack item = player.getInventory().getItemInMainHand();
+        if (item == null || item.getType() == Material.AIR) return;
+        if (!item.hasItemMeta()) return;
+
+        ItemMeta meta = item.getItemMeta();
+
+        // Primary: check PersistentDataContainer for lore entry ID (lore books + tagged items)
+        PersistentDataContainer pdc = meta.getPersistentDataContainer();
+        if (pdc.has(loreEntryIdKey, PersistentDataType.STRING)) {
+            String entryId = pdc.get(loreEntryIdKey, PersistentDataType.STRING);
+            if (entryId != null && !entryId.isEmpty()) {
+                findLoreEntry(entryId).ifPresent(entry ->
+                    discoveryManager.triggerDiscovery(
+                        player, entry,
+                        DiscoveryTriggerType.ITEM_USE,
+                        player.getLocation()
+                    )
+                );
+                return;
+            }
+        }
+
+        // Fallback: check item lore text for "Lore ID: <id>"
+        if (!meta.hasLore()) return;
+        List<String> lore = meta.getLore();
+        if (lore == null) return;
+
+        for (String line : lore) {
+            String stripped = line.replaceAll("§.", "").trim();
+            if (stripped.startsWith("Lore ID:")) {
+                String entryId = stripped.substring(8).trim();
+                findLoreEntry(entryId).ifPresent(entry ->
+                    discoveryManager.triggerDiscovery(
+                        player, entry,
+                        DiscoveryTriggerType.ITEM_USE,
+                        player.getLocation()
+                    )
+                );
+                return;
+            }
+        }
+    }
+
+    /**
+     * Handles first-join discovery granting.
+     * On a player's first join, grants all lore entries tagged with
+     * metadata "discovery_trigger" = "FIRST_JOIN" after a short delay.
+     */
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onPlayerFirstJoin(PlayerJoinEvent event) {
+        Player player = event.getPlayer();
+        if (player.hasPlayedBefore()) return;
+
+        // Delay so the player loads in and gets oriented (5 seconds = 100 ticks)
+        plugin.getServer().getScheduler().runTaskLaterAsynchronously(plugin, () -> {
+            List<LoreEntry> allEntries = loreManager.getAllLoreEntriesSync();
+
+            List<LoreEntry> starterEntries = new ArrayList<>();
+            for (LoreEntry entry : allEntries) {
+                if (!entry.isApproved()) continue;
+                String trigger = entry.getMetadata("discovery_trigger");
+                if ("FIRST_JOIN".equalsIgnoreCase(trigger)) {
+                    starterEntries.add(entry);
+                }
+            }
+
+            if (starterEntries.isEmpty()) {
+                logger.debug("No FIRST_JOIN starter lore entries configured");
+                return;
+            }
+
+            logger.info("Granting " + starterEntries.size() + " starter discoveries to " + player.getName());
+
+            for (LoreEntry entry : starterEntries) {
+                discoveryManager.triggerDiscovery(
+                    player, entry,
+                    DiscoveryTriggerType.FIRST_JOIN,
+                    player.getLocation()
+                );
+            }
+        }, 100L);
     }
 
     /**
