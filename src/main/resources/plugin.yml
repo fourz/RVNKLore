@@ -13,6 +13,7 @@ softdepend:
   - Dynmap
   - RVNKQuests
   - VotingPlugin
+  - GriefPrevention
 
 commands:
   lore:

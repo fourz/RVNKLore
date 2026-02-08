@@ -26,6 +26,7 @@ import org.fourz.RVNKLore.gui.GuiListener;
 import org.fourz.RVNKLore.integration.placeholder.RVNKLorePlaceholderExpansion;
 import org.fourz.RVNKLore.integration.dynmap.DynmapIntegration;
 import org.fourz.RVNKLore.integration.votingplugin.VotingPluginIntegration;
+import org.fourz.RVNKLore.integration.griefprevention.GriefPreventionIntegration;
 
 public class RVNKLore extends JavaPlugin {
     private LoreManager loreManager;
@@ -59,6 +60,9 @@ public class RVNKLore extends JavaPlugin {
 
     // VotingPlugin integration
     private VotingPluginIntegration votingPluginIntegration = null;
+
+    // GriefPrevention integration
+    private GriefPreventionIntegration gpIntegration = null;
 
     @Override
     public void onEnable() {
@@ -153,6 +157,9 @@ public class RVNKLore extends JavaPlugin {
 
             // Register VotingPlugin integration if available
             registerVotingPlugin();
+
+            // Register GriefPrevention integration if available
+            registerGriefPrevention();
 
             // Start periodic health check
             startHealthCheck();
@@ -380,6 +387,48 @@ public class RVNKLore extends JavaPlugin {
         return votingPluginIntegration != null && votingPluginIntegration.isEnabled();
     }
 
+    /**
+     * Registers GriefPrevention integration if GriefPrevention is available.
+     * Also registers as event listener for late GriefPrevention loading.
+     */
+    private void registerGriefPrevention() {
+        gpIntegration = new GriefPreventionIntegration(this);
+        getServer().getPluginManager().registerEvents(gpIntegration, this);
+        if (gpIntegration.activate()) {
+            logger.info("GriefPrevention integration enabled - claim API active");
+        } else {
+            logger.info("GriefPrevention not available - claim support disabled");
+        }
+    }
+
+    /**
+     * Cleans up GriefPrevention integration.
+     */
+    private void unregisterGriefPrevention() {
+        if (gpIntegration != null) {
+            gpIntegration.cleanup();
+            gpIntegration = null;
+        }
+    }
+
+    /**
+     * Get the GriefPrevention integration instance.
+     *
+     * @return The GriefPrevention integration, or null if not registered
+     */
+    public GriefPreventionIntegration getGriefPreventionIntegration() {
+        return gpIntegration;
+    }
+
+    /**
+     * Checks if GriefPrevention integration is active and available.
+     *
+     * @return true if GriefPrevention is loaded and claim API is accessible
+     */
+    public boolean isGriefPreventionAvailable() {
+        return gpIntegration != null && gpIntegration.isEnabled();
+    }
+
     private void cleanupManagers() {
         // Shutdown REST API first
         if (apiInitializer != null) {
@@ -395,6 +444,9 @@ public class RVNKLore extends JavaPlugin {
 
         // Cleanup VotingPlugin integration
         unregisterVotingPlugin();
+
+        // Cleanup GriefPrevention integration
+        unregisterGriefPrevention();
 
         // Unregister from RVNKCore first
         unregisterFromRVNKCore();
