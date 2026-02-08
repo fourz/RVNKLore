@@ -51,3 +51,6 @@ permissions:
     default: op
   rvnklore.command.collection:
     description: Allows viewing and claiming collection progress and rewards
+  rvnklore.admin.dynmap:
+    description: Allows using dynmap integration commands (diff, import)
+    default: op

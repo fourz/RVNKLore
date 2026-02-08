@@ -65,6 +65,10 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
         // Register the /lore browse command for GUI browser
         commands.put("browse", new LoreBrowseSubCommand(plugin));
 
+        // Register the /lore dynmap command for dynmap integration
+        // Always register — availability checked at execution time since Dynmap enables after RVNKLore
+        commands.put("dynmap", new LoreDynmapSubCommand(plugin));
+
         // Register the /lore discover command for manual discovery granting
         if (plugin.getDiscoveryManager() != null) {
             commands.put("discover", new LoreDiscoverSubCommand(plugin));
@@ -139,6 +143,9 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
                 } else if ("import".equals(entry.getKey())) {
                     sender.sendMessage(ChatColor.YELLOW + "/lore import <file> [--preview]" +
                         ChatColor.WHITE + " - Import lore entries from file");
+                } else if ("dynmap".equals(entry.getKey())) {
+                    sender.sendMessage(ChatColor.YELLOW + "/lore dynmap <diff|import> [set]" +
+                        ChatColor.WHITE + " - Dynmap marker integration");
                 } else if ("give".equals(entry.getKey())) {
                     sender.sendMessage(ChatColor.DARK_GRAY + "/lore give ... [DEPRECATED, use /lore itemgive]" +
                         ChatColor.GRAY + " - Deprecated: use /lore itemgive");
