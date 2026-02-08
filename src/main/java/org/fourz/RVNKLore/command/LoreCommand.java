@@ -65,6 +65,11 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
         // Register the /lore browse command for GUI browser
         commands.put("browse", new LoreBrowseSubCommand(plugin));
 
+        // Register the /lore discover command for manual discovery granting
+        if (plugin.getDiscoveryManager() != null) {
+            commands.put("discover", new LoreDiscoverSubCommand(plugin));
+        }
+
         // Add all commands to the subCommands map
         commands.forEach(this::registerSubCommand);
         logger.debug("Registered " + commands.size() + " subcommands successfully");
