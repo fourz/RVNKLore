@@ -6,6 +6,7 @@ import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.achievement.reward.*;
+import org.fourz.RVNKLore.data.repository.AchievementRepository;
 import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
 import org.fourz.rvnkcore.util.log.LogManager;
 
@@ -20,6 +21,7 @@ public class AchievementManager {
 
     private final RVNKLore plugin;
     private final LogManager logger;
+    private AchievementRepository achievementRepository;
 
     // Achievement registry
     private final Map<String, Achievement> achievements = new ConcurrentHashMap<>();
@@ -58,8 +60,22 @@ public class AchievementManager {
         // Create default achievements
         createDefaultAchievements();
 
-        // Load player progress from database (async)
-        // TODO: Implement database persistence
+        // Load player progress from database
+        try {
+            this.achievementRepository = plugin.getDatabaseManager().getAchievementRepository();
+            if (achievementRepository != null) {
+                Map<UUID, List<AchievementProgress>> allProgress = achievementRepository.loadAllProgress().join();
+                for (Map.Entry<UUID, List<AchievementProgress>> entry : allProgress.entrySet()) {
+                    Map<String, AchievementProgress> progressMap = playerProgress.computeIfAbsent(entry.getKey(), k -> new ConcurrentHashMap<>());
+                    for (AchievementProgress progress : entry.getValue()) {
+                        progressMap.put(progress.getAchievementId(), progress);
+                    }
+                }
+                logger.info("Loaded achievement progress for " + allProgress.size() + " players from database");
+            }
+        } catch (Exception e) {
+            logger.warning("Failed to load achievement progress from database: " + e.getMessage());
+        }
 
         logger.info("AchievementManager initialized with " + achievements.size() + " achievements");
     }
@@ -211,6 +227,9 @@ public class AchievementManager {
         if (completed) {
             handleAchievementUnlock(player, achievementId, progress);
         }
+
+        // Persist progress to database
+        persistProgress(progress);
 
         return completed;
     }
@@ -426,11 +445,36 @@ public class AchievementManager {
     }
 
     /**
+     * Persist a single progress entry to the database.
+     */
+    private void persistProgress(AchievementProgress progress) {
+        if (achievementRepository != null) {
+            achievementRepository.saveProgress(progress).exceptionally(ex -> {
+                logger.warning("Failed to persist achievement progress: " + ex.getMessage());
+                return false;
+            });
+        }
+    }
+
+    /**
      * Shutdown the achievement manager.
      */
     public void shutdown() {
-        // Save progress to database
-        // TODO: Implement persistence
+        // Save all progress to database
+        if (achievementRepository != null) {
+            int saved = 0;
+            for (Map.Entry<UUID, Map<String, AchievementProgress>> playerEntry : playerProgress.entrySet()) {
+                for (AchievementProgress progress : playerEntry.getValue().values()) {
+                    try {
+                        achievementRepository.saveProgress(progress).join();
+                        saved++;
+                    } catch (Exception e) {
+                        logger.warning("Failed to save progress on shutdown: " + e.getMessage());
+                    }
+                }
+            }
+            logger.info("Saved " + saved + " achievement progress records to database");
+        }
 
         achievements.clear();
         playerProgress.clear();

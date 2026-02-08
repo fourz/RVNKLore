@@ -4,6 +4,8 @@ import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.integration.dynmap.DynmapIntegration;
+import org.fourz.RVNKLore.integration.dynmap.LoreMarkerManager;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
 import org.fourz.RVNKLore.lore.player.NameChangeRecord;
@@ -38,6 +40,7 @@ public class LoreDebugSubCommand implements SubCommand {
             sender.sendMessage(ChatColor.YELLOW + "/lore debug fix" + ChatColor.WHITE + " - Attempt to fix common issues");
             sender.sendMessage(ChatColor.YELLOW + "/lore debug player <player_name>" + ChatColor.WHITE + " - Show player lore diagnostics");
             sender.sendMessage(ChatColor.YELLOW + "/lore debug seed <action>" + ChatColor.WHITE + " - Seed test data");
+            sender.sendMessage(ChatColor.YELLOW + "/lore debug dynmap [refresh]" + ChatColor.WHITE + " - Dynmap integration status / refresh markers");
             return true;
         }
 
@@ -70,6 +73,9 @@ public class LoreDebugSubCommand implements SubCommand {
             case "seed":
                 String[] seedArgs = args.length > 1 ? Arrays.copyOfRange(args, 1, args.length) : new String[0];
                 return seedSubCommand.execute(sender, seedArgs);
+
+            case "dynmap":
+                return dynmapDiagnostics(sender, args);
 
             default:
                 sender.sendMessage(ChatColor.RED + "Unknown debug command: " + action);
@@ -319,6 +325,64 @@ public class LoreDebugSubCommand implements SubCommand {
     }
 
     /**
+     * Display Dynmap integration diagnostics and handle refresh.
+     */
+    private boolean dynmapDiagnostics(CommandSender sender, String[] args) {
+        String prefix = "[RVNKLore] ";
+        DynmapIntegration integration = plugin.getDynmapIntegration();
+
+        sender.sendMessage(prefix + "=== DYNMAP INTEGRATION ===");
+        sender.sendMessage(prefix + "Config enabled: " + plugin.getConfigManager().isDynmapEnabled());
+        sender.sendMessage(prefix + "Integration active: " + plugin.isDynmapAvailable());
+
+        if (integration == null) {
+            sender.sendMessage(prefix + "Integration object: null (not initialized)");
+            return true;
+        }
+
+        sender.sendMessage(prefix + "Integration enabled: " + integration.isEnabled());
+
+        LoreMarkerManager markerMgr = integration.getMarkerManager();
+        if (markerMgr == null) {
+            sender.sendMessage(prefix + "MarkerManager: null (Dynmap not connected)");
+
+            // Check if Dynmap plugin exists but isn't hooked
+            org.bukkit.plugin.Plugin dynmapPlugin = plugin.getServer().getPluginManager().getPlugin("dynmap");
+            if (dynmapPlugin != null) {
+                sender.sendMessage(prefix + "Dynmap plugin: " + dynmapPlugin.getDescription().getVersion() + " (loaded but not hooked)");
+            } else {
+                sender.sendMessage(prefix + "Dynmap plugin: NOT INSTALLED");
+            }
+            return true;
+        }
+
+        // Marker stats
+        sender.sendMessage(prefix + "Marker set ID: " + plugin.getConfigManager().getDynmapMarkerSetId());
+        sender.sendMessage(prefix + "Active markers: " + markerMgr.getMarkerCount());
+        sender.sendMessage(prefix + "Only approved: " + plugin.getConfigManager().isDynmapOnlyApproved());
+        sender.sendMessage(prefix + "Popup enabled: " + plugin.getConfigManager().isDynmapPopupEnabled());
+
+        // Show eligible entries count
+        long eligible = plugin.getLoreManager().getAllLoreEntriesSync().stream()
+            .filter(markerMgr::shouldHaveMarker)
+            .count();
+        sender.sendMessage(prefix + "Eligible entries: " + eligible);
+
+        // Location types
+        sender.sendMessage(prefix + "Location types: " + LoreMarkerManager.getLocationTypes());
+
+        // Handle refresh subcommand
+        if (args.length > 1 && "refresh".equalsIgnoreCase(args[1])) {
+            sender.sendMessage(prefix + "Refreshing all Dynmap markers...");
+            markerMgr.cleanup();
+            markerMgr.populateAllMarkers();
+            sender.sendMessage(prefix + "Refresh complete - " + markerMgr.getMarkerCount() + " markers active");
+        }
+
+        return true;
+    }
+
+    /**
      * Resolve a player name to UUID.
      * Uses Bukkit's OfflinePlayer lookup which works even if the player is offline.
      *
@@ -346,7 +410,7 @@ public class LoreDebugSubCommand implements SubCommand {
     @Override
     public List<String> getTabCompletions(CommandSender sender, String[] args) {
         if (args.length == 1) {
-            return Arrays.asList("diagnostics", "check", "handlers", "fix", "player", "seed");
+            return Arrays.asList("diagnostics", "check", "handlers", "fix", "player", "seed", "dynmap");
         }
 
         if (args.length >= 2 && args[0].equalsIgnoreCase("seed")) {
@@ -355,6 +419,10 @@ public class LoreDebugSubCommand implements SubCommand {
 
         if (args.length == 2 && args[0].equalsIgnoreCase("diagnostics")) {
             return Arrays.asList("--verbose");
+        }
+
+        if (args.length == 2 && args[0].equalsIgnoreCase("dynmap")) {
+            return Arrays.asList("refresh");
         }
 
         if (args.length == 2 && args[0].equalsIgnoreCase("check")) {

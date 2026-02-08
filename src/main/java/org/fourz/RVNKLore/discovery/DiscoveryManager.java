@@ -4,6 +4,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.data.repository.DiscoveryRepository;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreManager;
 import org.fourz.RVNKLore.lore.player.PlayerManager;
@@ -35,6 +36,7 @@ public class DiscoveryManager {
     private final LoreManager loreManager;
     private final PlayerManager playerManager;
     private final DiscoveryNotificationManager notificationManager;
+    private final DiscoveryRepository discoveryRepository;
 
     // Cache for first-time discoveries (entry ID -> first discoverer UUID)
     private final Map<String, UUID> firstDiscoverers = new ConcurrentHashMap<>();
@@ -51,6 +53,7 @@ public class DiscoveryManager {
         this.loreManager = plugin.getLoreManager();
         this.playerManager = plugin.getPlayerManager();
         this.notificationManager = new DiscoveryNotificationManager(plugin);
+        this.discoveryRepository = plugin.getDatabaseManager().getDiscoveryRepository();
     }
 
     /**
@@ -79,10 +82,17 @@ public class DiscoveryManager {
      * Loads first discoverers from the database.
      */
     private void loadFirstDiscoverers() {
-        // This would ideally load from a database table
-        // For now, we start fresh each server restart
-        // Future enhancement: persist first discoverer data
-        logger.debug("First discoverer data will be tracked from this server start");
+        if (discoveryRepository == null) {
+            logger.warning("DiscoveryRepository not available, first discoverers will be tracked from this session only");
+            return;
+        }
+        try {
+            Map<String, UUID> loaded = discoveryRepository.loadAllFirstDiscoverers().join();
+            firstDiscoverers.putAll(loaded);
+            logger.info("Loaded " + loaded.size() + " first discoverers from database");
+        } catch (Exception e) {
+            logger.warning("Failed to load first discoverers: " + e.getMessage());
+        }
     }
 
     /**
@@ -130,8 +140,8 @@ public class DiscoveryManager {
                     return CompletableFuture.completedFuture(false);
                 }
 
-                // Record discovery
-                return recordDiscovery(playerUuid, entryId, isFirstDiscovery).thenApply(recorded -> {
+                // Record discovery with full context
+                return recordDiscovery(playerUuid, entryId, isFirstDiscovery, triggerType, location).thenApply(recorded -> {
                     if (recorded) {
                         // Set cooldown
                         setCooldown(playerUuid, entryId);
@@ -154,16 +164,37 @@ public class DiscoveryManager {
     }
 
     /**
-     * Records a discovery in the player's collection.
+     * Records a discovery in the player's collection and the enriched lore_discovery table.
      */
-    private CompletableFuture<Boolean> recordDiscovery(UUID playerUuid, String entryId, boolean isFirstDiscovery) {
-        // Track first discoverer
+    private CompletableFuture<Boolean> recordDiscovery(UUID playerUuid, String entryId,
+                                                        boolean isFirstDiscovery,
+                                                        DiscoveryTriggerType triggerType,
+                                                        Location location) {
+        // Track first discoverer in cache
         if (isFirstDiscovery) {
             firstDiscoverers.put(entryId, playerUuid);
         }
 
-        // Record in PlayerManager (which handles database persistence)
-        return playerManager.recordLoreDiscovery(playerUuid, entryId);
+        // Record in PlayerManager (legacy player_discoveries table)
+        CompletableFuture<Boolean> legacyRecord = playerManager.recordLoreDiscovery(playerUuid, entryId);
+
+        // Also persist to enriched lore_discovery table with full context
+        if (discoveryRepository != null) {
+            String world = location != null && location.getWorld() != null ? location.getWorld().getName() : null;
+            Double x = location != null ? location.getX() : null;
+            Double y = location != null ? location.getY() : null;
+            Double z = location != null ? location.getZ() : null;
+
+            discoveryRepository.recordDiscovery(playerUuid, entryId,
+                    triggerType != null ? triggerType.name() : "UNKNOWN",
+                    world, x, y, z, isFirstDiscovery)
+                .exceptionally(ex -> {
+                    logger.warning("Failed to persist enriched discovery: " + ex.getMessage());
+                    return false;
+                });
+        }
+
+        return legacyRecord;
     }
 
     /**

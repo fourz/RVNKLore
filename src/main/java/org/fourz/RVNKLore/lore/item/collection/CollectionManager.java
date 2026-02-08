@@ -8,6 +8,8 @@ import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.lore.item.ItemProperties;
 import org.fourz.RVNKLore.lore.item.cosmetic.HeadCollection;
 import org.fourz.RVNKLore.data.ItemRepository;
+import org.fourz.RVNKLore.data.model.CollectionReward;
+import org.fourz.RVNKLore.data.repository.CollectionRewardRepository;
 import org.fourz.RVNKLore.service.ICollectionService;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -483,18 +485,31 @@ public class CollectionManager implements ICollectionService {
             logger.warning("Cannot grant rewards - collection not completed by player " + playerId);
             return false;
         }
-        
+
         ItemCollection collection = getCollectionSync(collectionId);
         if (collection == null) {
             logger.warning("Cannot grant rewards for unknown collection: " + collectionId);
             return false;
         }
 
-        // TODO: Integrate with the reward system to actually distribute rewards.
-        // This may involve firing an event or directly awarding items.
+        CollectionRewardRepository rewardRepo = getRewardRepository();
+        if (rewardRepo == null) {
+            logger.warning("Reward repository not available - cannot grant rewards");
+            return false;
+        }
 
-        logger.info("Granted collection rewards to player " + playerId + " for collection: " + collectionId);
-        return true;
+        List<CollectionReward> rewards = rewardRepo.findByCollection(collectionId).join();
+        int claimed = 0;
+        for (CollectionReward reward : rewards) {
+            if (!rewardRepo.hasPlayerClaimed(reward.getId(), playerId).join()) {
+                rewardRepo.claimReward(reward.getId(), playerId).join();
+                claimed++;
+                logger.debug("Claimed reward " + reward.getId() + " (" + reward.getRewardType() + ") for player " + playerId);
+            }
+        }
+
+        logger.info("Granted " + claimed + " collection rewards to player " + playerId + " for collection: " + collectionId);
+        return claimed > 0;
     }
     
     /**
@@ -517,6 +532,11 @@ public class CollectionManager implements ICollectionService {
     private void fireCollectionChangeEvent(ItemCollection collection, ChangeType changeType) {
         // Placeholder for event system integration
         logger.debug("Collection change event: " + changeType + " for " + collection.getId());
+    }
+
+    private CollectionRewardRepository getRewardRepository() {
+        if (plugin.getDatabaseManager() == null) return null;
+        return plugin.getDatabaseManager().getCollectionRewardRepository();
     }
 
     /**

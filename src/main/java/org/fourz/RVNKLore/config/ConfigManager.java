@@ -7,6 +7,7 @@ import org.fourz.RVNKLore.handler.HandlerFactory;
 import org.fourz.RVNKLore.handler.LoreHandler;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
+import org.bukkit.configuration.ConfigurationSection;
 import org.fourz.rvnkcore.util.log.LogManager;
 
 import java.util.HashMap;
@@ -250,5 +251,44 @@ public class ConfigManager {
      */
     public boolean isTestMode() {
         return "yes".equalsIgnoreCase(config.getString("storage.test-mode", "no"));
+    }
+
+    // ==================== Dynmap Configuration ====================
+
+    public boolean isDynmapEnabled() {
+        return config.getBoolean("dynmap.enabled", true);
+    }
+
+    public String getDynmapMarkerSetId() {
+        return config.getString("dynmap.marker-set.id", "rvnklore");
+    }
+
+    public String getDynmapMarkerSetLabel() {
+        return config.getString("dynmap.marker-set.label", "Lore Entries");
+    }
+
+    public boolean isDynmapMarkerSetHidden() {
+        return config.getBoolean("dynmap.marker-set.hide-by-default", false);
+    }
+
+    public int getDynmapLayerPriority() {
+        return config.getInt("dynmap.marker-set.layer-priority", 10);
+    }
+
+    public String getDynmapIcon(LoreType type) {
+        String key = "dynmap.icons." + type.name();
+        return config.getString(key, config.getString("dynmap.icons.default", "sign"));
+    }
+
+    public boolean isDynmapOnlyApproved() {
+        return config.getBoolean("dynmap.only-approved", true);
+    }
+
+    public boolean isDynmapPopupEnabled() {
+        return config.getBoolean("dynmap.popup.enabled", true);
+    }
+
+    public int getDynmapMaxDescriptionLength() {
+        return config.getInt("dynmap.popup.max-description-length", 200);
     }
 }

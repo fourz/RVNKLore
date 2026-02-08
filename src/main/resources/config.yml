@@ -64,6 +64,26 @@ storage:
     # Minutes to wait before attempting to reconnect to primary database
     recoveryTimeMinutes: 5
 
+dynmap:
+  enabled: true
+  marker-set:
+    id: rvnklore
+    label: "Lore Entries"
+    hide-by-default: false
+    layer-priority: 10
+  icons:
+    LANDMARK: pin
+    MONUMENT: temple
+    CITY: bighouse
+    PATH: walk
+    EVENT: skull
+    FACTION: castle
+    default: sign
+  only-approved: true
+  popup:
+    enabled: true
+    max-description-length: 200
+
 messages:
   generic:
     error:

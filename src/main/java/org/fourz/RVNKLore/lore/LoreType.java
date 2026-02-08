@@ -55,6 +55,11 @@ public enum LoreType {
     ENCHANTMENT("Enchantment on an item"),
     
     /**
+     * Monument or memorial marker
+     */
+    MONUMENT("Monument or memorial marker"),
+
+    /**
      * Decorative head item (includes player heads, mob heads, custom heads, and hats)
      */
     HEAD("Decorative head or hat item");

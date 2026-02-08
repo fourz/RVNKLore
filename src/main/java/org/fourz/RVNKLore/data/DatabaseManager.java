@@ -2,6 +2,11 @@ package org.fourz.RVNKLore.data;
 
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.rvnkcore.util.log.LogManager;
+import org.fourz.RVNKLore.data.model.LoreLocation;
+import org.fourz.RVNKLore.data.repository.AchievementRepository;
+import org.fourz.RVNKLore.data.repository.CollectionRewardRepository;
+import org.fourz.RVNKLore.data.repository.DiscoveryRepository;
+import org.fourz.RVNKLore.data.repository.LocationRepository;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
 import org.fourz.RVNKLore.lore.player.PlayerRepository;
@@ -40,6 +45,10 @@ public class DatabaseManager {
     private LoreEntryRepository loreRepository;
     private PlayerRepository playerRepository;
     private ItemRepository itemRepository;
+    private LocationRepository locationRepository;
+    private DiscoveryRepository discoveryRepository;
+    private AchievementRepository achievementRepository;
+    private CollectionRewardRepository collectionRewardRepository;
     private DatabaseBackupService backupService;
     private volatile boolean connectionValid = false;
     private volatile boolean inFallbackMode = false;
@@ -75,6 +84,10 @@ public class DatabaseManager {
 
             // Initialize repositories and services using the connection
             loreRepository = new LoreEntryRepository(plugin, connection);
+            locationRepository = new LocationRepository(plugin, connection);
+            discoveryRepository = new DiscoveryRepository(plugin, connection);
+            achievementRepository = new AchievementRepository(plugin, connection);
+            collectionRewardRepository = new CollectionRewardRepository(plugin, connection);
             backupService = new DatabaseBackupService(plugin, connection);
 
             connectionValid = true;
@@ -114,6 +127,10 @@ public class DatabaseManager {
 
             // Initialize repositories with fallback connection
             loreRepository = new LoreEntryRepository(plugin, connection);
+            locationRepository = new LocationRepository(plugin, connection);
+            discoveryRepository = new DiscoveryRepository(plugin, connection);
+            achievementRepository = new AchievementRepository(plugin, connection);
+            collectionRewardRepository = new CollectionRewardRepository(plugin, connection);
             backupService = new DatabaseBackupService(plugin, connection);
 
             connectionValid = true;
@@ -392,6 +409,10 @@ public class DatabaseManager {
 
             connection = primaryConnection;
             loreRepository = new LoreEntryRepository(plugin, connection);
+            locationRepository = new LocationRepository(plugin, connection);
+            discoveryRepository = new DiscoveryRepository(plugin, connection);
+            achievementRepository = new AchievementRepository(plugin, connection);
+            collectionRewardRepository = new CollectionRewardRepository(plugin, connection);
             backupService = new DatabaseBackupService(plugin, connection);
 
             connectionValid = true;
@@ -408,6 +429,73 @@ public class DatabaseManager {
             fallbackTracker.recordFailure();
             return false;
         }
+    }
+
+    // ==================== Location Repository Facade ====================
+
+    /**
+     * Save a lore location record.
+     */
+    public LoreLocation saveLoreLocation(LoreLocation location) {
+        if (!validateConnection()) return null;
+        return locationRepository.save(location).join();
+    }
+
+    /**
+     * Get all locations for a lore entry.
+     */
+    public List<LoreLocation> getLocationsByEntry(String entryId) {
+        return locationRepository.findByEntryId(entryId).join();
+    }
+
+    /**
+     * Get the primary location for a lore entry.
+     */
+    public LoreLocation getPrimaryLocation(String entryId) {
+        return locationRepository.findPrimaryByEntryId(entryId).join();
+    }
+
+    /**
+     * Find lore locations near a point.
+     */
+    public List<LoreLocation> findNearbyLore(String world, double x, double z, double radius) {
+        return locationRepository.findNearby(world, x, z, radius).join();
+    }
+
+    /**
+     * Delete all locations for a lore entry.
+     */
+    public boolean deleteLoreLocations(String entryId) {
+        if (!validateConnection()) return false;
+        return locationRepository.deleteByEntryId(entryId).join();
+    }
+
+    /**
+     * Get the LocationRepository for direct async access.
+     */
+    public LocationRepository getLocationRepository() {
+        return locationRepository;
+    }
+
+    /**
+     * Get the DiscoveryRepository for direct async access.
+     */
+    public DiscoveryRepository getDiscoveryRepository() {
+        return discoveryRepository;
+    }
+
+    /**
+     * Get the AchievementRepository for direct async access.
+     */
+    public AchievementRepository getAchievementRepository() {
+        return achievementRepository;
+    }
+
+    /**
+     * Get the CollectionRewardRepository for direct async access.
+     */
+    public CollectionRewardRepository getCollectionRewardRepository() {
+        return collectionRewardRepository;
     }
 
     /**

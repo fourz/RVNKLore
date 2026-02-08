@@ -54,6 +54,7 @@ public class LoreApiServlet extends HttpServlet {
         this.gson = new GsonBuilder()
             .setPrettyPrinting()
             .serializeNulls()
+            .setFieldNamingPolicy(com.google.gson.FieldNamingPolicy.LOWER_CASE_WITH_UNDERSCORES)
             .registerTypeAdapter(LocalDateTime.class, new LocalDateTimeAdapter())
             .create();
         this.logger = LogManager.getInstance(plugin, "LoreApiServlet");
@@ -403,7 +404,7 @@ public class LoreApiServlet extends HttpServlet {
         for (LoreType type : LoreType.values()) {
             Map<String, Object> typeInfo = new HashMap<>();
             typeInfo.put("name", type.name());
-            typeInfo.put("displayName", formatDisplayName(type.name()));
+            typeInfo.put("display_name", formatDisplayName(type.name()));
             types.add(typeInfo);
         }
         sendResponse(resp, 200, types);
@@ -416,9 +417,9 @@ public class LoreApiServlet extends HttpServlet {
             List<LoreEntry> allEntries = loreManager.getAllLoreEntriesSync();
 
             Map<String, Object> stats = new HashMap<>();
-            stats.put("totalEntries", allEntries.size());
-            stats.put("approvedEntries", allEntries.stream().filter(LoreEntry::isApproved).count());
-            stats.put("pendingEntries", allEntries.stream().filter(e -> !e.isApproved()).count());
+            stats.put("total_entries", allEntries.size());
+            stats.put("approved_entries", allEntries.stream().filter(LoreEntry::isApproved).count());
+            stats.put("pending_entries", allEntries.stream().filter(e -> !e.isApproved()).count());
 
             // Count by type
             Map<String, Long> byType = allEntries.stream()
@@ -426,9 +427,9 @@ public class LoreApiServlet extends HttpServlet {
                     e -> e.getType() != null ? e.getType().name() : "UNKNOWN",
                     Collectors.counting()
                 ));
-            stats.put("entriesByType", byType);
+            stats.put("entries_by_type", byType);
 
-            stats.put("fallbackMode", loreManager.isInFallbackMode());
+            stats.put("fallback_mode", loreManager.isInFallbackMode());
             stats.put("timestamp", LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
 
             sendResponse(resp, 200, stats);
@@ -446,7 +447,7 @@ public class LoreApiServlet extends HttpServlet {
         health.put("plugin", "RVNKLore");
         health.put("version", plugin.getDescription().getVersion());
         health.put("database", plugin.getDatabaseManager().isConnected() ? "CONNECTED" : "DISCONNECTED");
-        health.put("fallbackMode", loreManager.isInFallbackMode());
+        health.put("fallback_mode", loreManager.isInFallbackMode());
         health.put("timestamp", LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
 
         int statusCode = plugin.getDatabaseManager().isConnected() ? 200 : 503;

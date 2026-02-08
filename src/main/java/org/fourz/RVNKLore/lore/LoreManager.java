@@ -146,6 +146,15 @@ public class LoreManager implements ILoreService {
                     // Continue even if item registration fails
                 }
             }
+
+            // Create Dynmap marker if integration is available
+            if (plugin.isDynmapAvailable()) {
+                try {
+                    plugin.getDynmapIntegration().getMarkerManager().createOrUpdateMarker(entry);
+                } catch (Exception e) {
+                    logger.debug("Failed to create Dynmap marker: " + e.getMessage());
+                }
+            }
         } else {
             logger.warning("Failed to add lore entry to database: " + entry.getName());
         }
@@ -218,6 +227,15 @@ public class LoreManager implements ILoreService {
         if (success) {
             entry.setApproved(true);
             logger.info("Lore entry approved: " + id);
+
+            // Create Dynmap marker now that entry is approved
+            if (plugin.isDynmapAvailable()) {
+                try {
+                    plugin.getDynmapIntegration().getMarkerManager().createOrUpdateMarker(entry);
+                } catch (Exception e) {
+                    logger.debug("Failed to create Dynmap marker on approval: " + e.getMessage());
+                }
+            }
         } else {
             logger.warning("Failed to approve lore entry: " + id);
         }

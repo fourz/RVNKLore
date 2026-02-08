@@ -36,6 +36,10 @@ public abstract class DatabaseConnection {
     public static final String TABLE_PLAYER_COLLECTION_PROGRESS = "player_collection_progress";
     public static final String TABLE_COLLECTION_REWARD = "collection_reward";
     public static final String TABLE_COLLECTION_ITEM = "collection_item";
+    public static final String TABLE_LORE_LOCATION = "lore_location";
+    public static final String TABLE_LORE_DISCOVERY = "lore_discovery";
+    public static final String TABLE_PLAYER_ACHIEVEMENT = "player_achievement";
+    public static final String TABLE_PLAYER_REWARD_CLAIM = "player_reward_claim";
 
     public DatabaseConnection(RVNKLore plugin, SQLDialect dialect) {
         this.plugin = plugin;
@@ -254,6 +258,76 @@ public abstract class DatabaseConnection {
             stmt.execute(createPlayerCollectionProgressTable);
             stmt.execute(createCollectionRewardTable);
             stmt.execute(createCollectionItemTable);
+
+            // --- Lore Location Table (spatial data for lore entries) ---
+            String loreLocation = table(TABLE_LORE_LOCATION);
+            String createLoreLocationTable = "CREATE TABLE IF NOT EXISTS " + loreLocation + " (" +
+                "id " + autoIncPK + ", " +
+                "entry_id CHAR(36) NOT NULL, " +
+                "world VARCHAR(64) NOT NULL, " +
+                "x DOUBLE NOT NULL, " +
+                "y DOUBLE NOT NULL, " +
+                "z DOUBLE NOT NULL, " +
+                "location_type VARCHAR(30) DEFAULT 'PRIMARY', " +
+                "label VARCHAR(100), " +
+                "created_at " + timestampDefault + ", " +
+                "FOREIGN KEY (entry_id) REFERENCES " + loreEntry + "(id) ON DELETE CASCADE" +
+            ")";
+            stmt.execute(createLoreLocationTable);
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_" + tablePrefix + "lore_location_entry ON " + loreLocation + "(entry_id)");
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_" + tablePrefix + "lore_location_world ON " + loreLocation + "(world, x, z)");
+
+            // --- Lore Discovery Table (enriched discovery tracking) ---
+            String loreDiscovery = table(TABLE_LORE_DISCOVERY);
+            String createLoreDiscoveryTable = "CREATE TABLE IF NOT EXISTS " + loreDiscovery + " (" +
+                "id " + autoIncPK + ", " +
+                "player_uuid CHAR(36) NOT NULL, " +
+                "entry_id CHAR(36) NOT NULL, " +
+                "trigger_type VARCHAR(30) NOT NULL, " +
+                "world VARCHAR(64), " +
+                "x DOUBLE, " +
+                "y DOUBLE, " +
+                "z DOUBLE, " +
+                "is_first_discovery " + boolType + " NOT NULL DEFAULT FALSE, " +
+                "discovered_at " + timestampDefault + ", " +
+                "CONSTRAINT uq_" + tablePrefix + "lore_discovery_player_entry UNIQUE (player_uuid, entry_id), " +
+                "FOREIGN KEY (entry_id) REFERENCES " + loreEntry + "(id) ON DELETE CASCADE" +
+            ")";
+            stmt.execute(createLoreDiscoveryTable);
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_" + tablePrefix + "lore_discovery_player ON " + loreDiscovery + "(player_uuid)");
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_" + tablePrefix + "lore_discovery_entry ON " + loreDiscovery + "(entry_id)");
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_" + tablePrefix + "lore_discovery_first ON " + loreDiscovery + "(is_first_discovery)");
+
+            // --- Player Achievement Table (achievement progress persistence) ---
+            String playerAchievement = table(TABLE_PLAYER_ACHIEVEMENT);
+            String createPlayerAchievementTable = "CREATE TABLE IF NOT EXISTS " + playerAchievement + " (" +
+                "player_uuid CHAR(36) NOT NULL, " +
+                "achievement_id VARCHAR(50) NOT NULL, " +
+                "current_progress INTEGER NOT NULL DEFAULT 0, " +
+                "target_progress INTEGER NOT NULL DEFAULT 1, " +
+                "completed " + boolType + " NOT NULL DEFAULT FALSE, " +
+                "rewards_claimed " + boolType + " NOT NULL DEFAULT FALSE, " +
+                "started_at BIGINT NOT NULL, " +
+                "completed_at BIGINT NOT NULL DEFAULT 0, " +
+                "PRIMARY KEY (player_uuid, achievement_id)" +
+            ")";
+            stmt.execute(createPlayerAchievementTable);
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_" + tablePrefix + "player_achievement_player ON " + playerAchievement + "(player_uuid)");
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_" + tablePrefix + "player_achievement_completed ON " + playerAchievement + "(completed)");
+
+            // --- Player Reward Claim Table (per-player reward claim tracking) ---
+            String playerRewardClaim = table(TABLE_PLAYER_REWARD_CLAIM);
+            String createPlayerRewardClaimTable = "CREATE TABLE IF NOT EXISTS " + playerRewardClaim + " (" +
+                "id " + autoIncPK + ", " +
+                "reward_id INTEGER NOT NULL, " +
+                "player_uuid CHAR(36) NOT NULL, " +
+                "claimed_at BIGINT NOT NULL, " +
+                "FOREIGN KEY (reward_id) REFERENCES " + collectionReward + "(id) ON DELETE CASCADE" +
+            ")";
+            stmt.execute(createPlayerRewardClaimTable);
+            stmt.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_" + tablePrefix + "reward_claim_unique ON " + playerRewardClaim + "(reward_id, player_uuid)");
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_" + tablePrefix + "reward_claim_player ON " + playerRewardClaim + "(player_uuid)");
+
             logger.debug("Database tables created/verified");
         }
     }

@@ -10,6 +10,7 @@ depend:
 softdepend:
   - WorldEdit
   - PlaceholderAPI
+  - Dynmap
 
 commands:
   lore:

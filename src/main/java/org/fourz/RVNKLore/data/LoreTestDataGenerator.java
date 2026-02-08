@@ -234,8 +234,21 @@ public class LoreTestDataGenerator extends TestDataGenerator {
                 String approvalStatus = APPROVAL_STATUSES[i % APPROVAL_STATUSES.length];
                 int contentVersion = 1;
                 boolean isCurrent = true;
-                String content = "This is test lore content for entry " + i + ". " +
-                    "It contains some interesting lore about the world of Ravenkraft.";
+                // Content must be JSON matching LoreEntryRepository expectations
+                String loreType = LORE_TYPES[i % LORE_TYPES.length];
+                StringBuilder contentJson = new StringBuilder();
+                contentJson.append("{\"description\":\"Test lore content for entry ").append(i)
+                    .append(". Interesting lore about the world of Ravenkraft.\",\"nbt_data\":null");
+                // Add location for location-capable types
+                if ("LANDMARK".equals(loreType) || "CITY".equals(loreType) ||
+                    "MONUMENT".equals(loreType) || "PATH".equals(loreType) ||
+                    "EVENT".equals(loreType) || "FACTION".equals(loreType)) {
+                    contentJson.append(",\"location\":{\"world\":\"world\",\"x\":")
+                        .append(100 + i * 50).append(",\"y\":64,\"z\":")
+                        .append(200 + i * 50).append("}");
+                }
+                contentJson.append("}");
+                String content = contentJson.toString();
 
                 stmt.setString(1, entryId.toString());
                 stmt.setString(2, slug);

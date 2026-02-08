@@ -24,6 +24,7 @@ import org.fourz.RVNKLore.discovery.DiscoveryManager;
 import org.fourz.RVNKLore.achievement.AchievementManager;
 import org.fourz.RVNKLore.gui.GuiListener;
 import org.fourz.RVNKLore.integration.placeholder.RVNKLorePlaceholderExpansion;
+import org.fourz.RVNKLore.integration.dynmap.DynmapIntegration;
 
 public class RVNKLore extends JavaPlugin {
     private LoreManager loreManager;
@@ -51,6 +52,9 @@ public class RVNKLore extends JavaPlugin {
 
     // PlaceholderAPI integration
     private RVNKLorePlaceholderExpansion placeholderExpansion = null;
+
+    // Dynmap integration
+    private DynmapIntegration dynmapIntegration = null;
 
     @Override
     public void onEnable() {
@@ -139,6 +143,9 @@ public class RVNKLore extends JavaPlugin {
 
             // Register PlaceholderAPI expansion if available
             registerPlaceholderAPI();
+
+            // Register Dynmap integration if available
+            registerDynmap();
 
             // Start periodic health check
             startHealthCheck();
@@ -280,6 +287,50 @@ public class RVNKLore extends JavaPlugin {
         }
     }
 
+    /**
+     * Registers Dynmap integration if Dynmap is available.
+     * Also registers as event listener for late Dynmap loading.
+     */
+    private void registerDynmap() {
+        dynmapIntegration = new DynmapIntegration(this);
+        // Register listener for late Dynmap enable/disable events
+        getServer().getPluginManager().registerEvents(dynmapIntegration, this);
+        // Try immediate activation if Dynmap is already loaded
+        if (dynmapIntegration.activate()) {
+            logger.info("Dynmap integration enabled - markers active");
+        } else {
+            logger.info("Dynmap not available - map marker support disabled");
+        }
+    }
+
+    /**
+     * Cleans up Dynmap integration.
+     */
+    private void unregisterDynmap() {
+        if (dynmapIntegration != null) {
+            dynmapIntegration.cleanup();
+            dynmapIntegration = null;
+        }
+    }
+
+    /**
+     * Get the Dynmap integration instance.
+     *
+     * @return The Dynmap integration, or null if not registered
+     */
+    public DynmapIntegration getDynmapIntegration() {
+        return dynmapIntegration;
+    }
+
+    /**
+     * Checks if Dynmap integration is active and available.
+     *
+     * @return true if Dynmap is loaded and markers are being managed
+     */
+    public boolean isDynmapAvailable() {
+        return dynmapIntegration != null && dynmapIntegration.isEnabled();
+    }
+
     private void cleanupManagers() {
         // Shutdown REST API first
         if (apiInitializer != null) {
@@ -289,6 +340,9 @@ public class RVNKLore extends JavaPlugin {
 
         // Unregister PlaceholderAPI expansion
         unregisterPlaceholderAPI();
+
+        // Cleanup Dynmap integration
+        unregisterDynmap();
 
         // Unregister from RVNKCore first
         unregisterFromRVNKCore();
