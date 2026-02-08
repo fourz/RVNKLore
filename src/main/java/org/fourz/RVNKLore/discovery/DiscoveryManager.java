@@ -74,6 +74,10 @@ public class DiscoveryManager {
         DiscoveryListener listener = new DiscoveryListener(plugin, this);
         Bukkit.getPluginManager().registerEvents(listener, plugin);
 
+        // Register cartography table discovery listener
+        CartographyDiscoveryListener cartographyListener = new CartographyDiscoveryListener(plugin, this);
+        Bukkit.getPluginManager().registerEvents(cartographyListener, plugin);
+
         // Register quest discovery listener if RVNKQuests is available
         if (Bukkit.getPluginManager().getPlugin("RVNKQuests") != null) {
             try {

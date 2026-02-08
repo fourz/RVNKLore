@@ -62,5 +62,11 @@ public enum DiscoveryTriggerType {
     /**
      * First time player joins server.
      */
-    FIRST_JOIN
+    FIRST_JOIN,
+
+    /**
+     * Player creates or clones a map at a cartography table
+     * covering a region with lore locations.
+     */
+    CARTOGRAPHY
 }
