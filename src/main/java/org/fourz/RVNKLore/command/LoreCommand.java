@@ -69,6 +69,10 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
         // Always register — availability checked at execution time since Dynmap enables after RVNKLore
         commands.put("dynmap", new LoreDynmapSubCommand(plugin));
 
+        // Register faction commands (GP territory integration)
+        commands.put("registerfaction", new LoreRegisterFactionSubCommand(plugin));
+        commands.put("faction", new org.fourz.RVNKLore.command.faction.LoreFactionSubCommand(plugin));
+
         // Register the /lore discover command for manual discovery granting
         if (plugin.getDiscoveryManager() != null) {
             commands.put("discover", new LoreDiscoverSubCommand(plugin));
@@ -91,30 +95,46 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        logger.info("[LORE-CMD] onCommand: " + command.getName() + " args.length=" + args.length);
+        if (args.length > 0) {
+            logger.info("[LORE-CMD] args[0]=" + args[0]);
+            for (int i = 0; i < args.length; i++) {
+                logger.info("[LORE-CMD] args[" + i + "]=" + args[i]);
+            }
+        }
+
         if (args.length == 0) {
+            logger.info("[LORE-CMD] No args, showing help");
             showHelp(sender);
             return true;
         }
 
         String subCommandName = args[0].toLowerCase();
+        logger.info("[LORE-CMD] Looking up subcommand: " + subCommandName);
+        logger.info("[LORE-CMD] Available: " + subCommands.keySet());
+
         SubCommand subCommand = subCommands.get(subCommandName);
 
         if (subCommand == null) {
+            logger.info("[LORE-CMD] Subcommand NOT FOUND: " + subCommandName);
             sender.sendMessage(ChatColor.RED + "Unknown subcommand: " + subCommandName);
             showHelp(sender);
             return true;
         }
 
+        logger.info("[LORE-CMD] Found subcommand: " + subCommandName);
         if (!subCommand.hasPermission(sender)) {
+            logger.info("[LORE-CMD] NO PERMISSION: " + subCommandName);
             sender.sendMessage(ChatColor.RED + "You don't have permission to use this command.");
             return true;
         }
 
+        logger.info("[LORE-CMD] Executing: " + subCommandName);
         // Remove the subcommand name from args
         String[] subCommandArgs = new String[args.length - 1];
         System.arraycopy(args, 1, subCommandArgs, 0, args.length - 1);
 
-        logger.debug("Executing subcommand: " + subCommandName);
+        logger.debug("Executing subcommand: " + subCommandName + " with " + subCommandArgs.length + " args");
         return subCommand.execute(sender, subCommandArgs);
     }
 
@@ -142,6 +162,12 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
                 } else if ("dynmap".equals(entry.getKey())) {
                     sender.sendMessage(ChatColor.YELLOW + "/lore dynmap <diff|import> [set]" +
                         ChatColor.WHITE + " - Dynmap marker integration");
+                } else if ("registerfaction".equals(entry.getKey())) {
+                    sender.sendMessage(ChatColor.YELLOW + "/lore registerfaction <name> <member1> [member2...]" +
+                        ChatColor.WHITE + " - Register a faction at your claim");
+                } else if ("faction".equals(entry.getKey())) {
+                    sender.sendMessage(ChatColor.YELLOW + "/lore faction <addterritory|refresh> <name>" +
+                        ChatColor.WHITE + " - Manage faction territories");
                 } else {
                     sender.sendMessage(ChatColor.YELLOW + "/lore " + entry.getKey() +
                         ChatColor.WHITE + " - " + entry.getValue().getDescription());

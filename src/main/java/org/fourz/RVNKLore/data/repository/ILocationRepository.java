@@ -22,4 +22,6 @@ public interface ILocationRepository {
     CompletableFuture<Boolean> deleteByEntryId(String entryId);
 
     CompletableFuture<Boolean> deleteById(int locationId);
+
+    CompletableFuture<Integer> countByWorld(String worldName);
 }

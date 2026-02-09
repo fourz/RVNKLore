@@ -180,6 +180,27 @@ public class LocationRepository implements ILocationRepository {
         });
     }
 
+    @Override
+    public CompletableFuture<Integer> countByWorld(String worldName) {
+        return CompletableFuture.supplyAsync(() -> {
+            String sql = "SELECT COUNT(*) FROM " + t("lore_location") + " WHERE world = ?";
+
+            try (Connection conn = dbConnection.getConnection();
+                 PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+                stmt.setString(1, worldName);
+                try (ResultSet rs = stmt.executeQuery()) {
+                    if (rs.next()) {
+                        return rs.getInt(1);
+                    }
+                }
+            } catch (SQLException e) {
+                logger.error("Failed to count locations in world: " + worldName, e);
+            }
+            return 0;
+        });
+    }
+
     private LoreLocation mapRow(ResultSet rs) throws SQLException {
         LoreLocation loc = new LoreLocation();
         loc.setId(rs.getInt("id"));

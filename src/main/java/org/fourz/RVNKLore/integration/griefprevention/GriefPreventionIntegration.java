@@ -4,6 +4,7 @@ import me.ryanhamshire.GriefPrevention.Claim;
 import me.ryanhamshire.GriefPrevention.DataStore;
 import me.ryanhamshire.GriefPrevention.GriefPrevention;
 import org.bukkit.Location;
+import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.server.PluginEnableEvent;
@@ -11,6 +12,7 @@ import org.bukkit.event.server.PluginDisableEvent;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.rvnkcore.util.log.LogManager;
 
+import java.util.ArrayList;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -136,6 +138,50 @@ public class GriefPreventionIntegration implements Listener {
         } catch (Exception e) {
             logger.debug("Failed to get claim count: " + e.getMessage());
             return 0;
+        }
+    }
+
+    /**
+     * Check if a player owns or manages a claim.
+     *
+     * @param player The player to check
+     * @param claim The claim to check against
+     * @return true if the player is the owner or a manager of the claim
+     */
+    public boolean ownsOrManagesClaim(Player player, Claim claim) {
+        if (claim == null || player == null) {
+            return false;
+        }
+        try {
+            UUID ownerUUID = claim.getOwnerID();
+            if (ownerUUID != null && ownerUUID.equals(player.getUniqueId())) {
+                return true;
+            }
+            // Check manager list
+            ArrayList<String> managers = new ArrayList<>();
+            claim.getPermissions(new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), managers);
+            return managers.contains(player.getUniqueId().toString());
+        } catch (Exception e) {
+            logger.debug("Failed to check claim ownership: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Get a claim by its ID.
+     *
+     * @param claimId The numeric ID of the claim
+     * @return Optional containing the Claim, or empty if not found or unavailable
+     */
+    public Optional<Claim> getClaimById(long claimId) {
+        if (!enabled || dataStore == null) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.ofNullable(dataStore.getClaim(claimId));
+        } catch (Exception e) {
+            logger.debug("Failed to get claim #" + claimId + ": " + e.getMessage());
+            return Optional.empty();
         }
     }
 
