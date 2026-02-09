@@ -175,6 +175,22 @@ public class LoreSearchService {
     }
 
     /**
+     * Quick search by name prefix filtered by lore type (for autocomplete).
+     */
+    public List<String> searchNames(String prefix, LoreType type, int limit) {
+        String lowerPrefix = prefix.toLowerCase();
+
+        return plugin.getLoreManager().getLoreEntriesByTypeSync(type).stream()
+            .filter(entry -> entry.getName() != null)
+            .filter(entry -> entry.getName().toLowerCase().startsWith(lowerPrefix))
+            .map(LoreEntry::getName)
+            .distinct()
+            .sorted(String.CASE_INSENSITIVE_ORDER)
+            .limit(limit)
+            .collect(Collectors.toList());
+    }
+
+    /**
      * Search entries by type.
      */
     public List<LoreEntry> searchByType(LoreType type) {
