@@ -10,9 +10,11 @@ import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
 import org.fourz.RVNKLore.lore.player.NameChangeRecord;
 import org.fourz.RVNKLore.util.DiagnosticUtil;
+import org.fourz.rvnkcore.util.log.LogManager;
 
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.logging.Level;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
@@ -20,6 +22,8 @@ import java.util.stream.Collectors;
  * Debug command for administrators to troubleshoot the plugin
  */
 public class LoreDebugSubCommand implements SubCommand {
+    private static final List<String> LOG_LEVELS = Arrays.asList("DEBUG", "INFO", "WARN", "OFF");
+
     private final RVNKLore plugin;
     private final DiagnosticUtil diagnosticUtil;
     private final SeedSubCommand seedSubCommand;
@@ -40,6 +44,7 @@ public class LoreDebugSubCommand implements SubCommand {
             sender.sendMessage(ChatColor.YELLOW + "/lore debug fix" + ChatColor.WHITE + " - Attempt to fix common issues");
             sender.sendMessage(ChatColor.YELLOW + "/lore debug player <player_name>" + ChatColor.WHITE + " - Show player lore diagnostics");
             sender.sendMessage(ChatColor.YELLOW + "/lore debug seed <action>" + ChatColor.WHITE + " - Seed test data");
+            sender.sendMessage(ChatColor.YELLOW + "/lore debug loglevel [level]" + ChatColor.WHITE + " - View/change runtime log level");
             sender.sendMessage(ChatColor.YELLOW + "/lore debug dynmap [refresh]" + ChatColor.WHITE + " - Dynmap integration status / refresh markers");
             return true;
         }
@@ -73,6 +78,9 @@ public class LoreDebugSubCommand implements SubCommand {
             case "seed":
                 String[] seedArgs = args.length > 1 ? Arrays.copyOfRange(args, 1, args.length) : new String[0];
                 return seedSubCommand.execute(sender, seedArgs);
+
+            case "loglevel":
+                return handleLogLevel(sender, args);
 
             case "dynmap":
                 return dynmapDiagnostics(sender, args);
@@ -403,6 +411,31 @@ public class LoreDebugSubCommand implements SubCommand {
     }
 
     /**
+     * Handle the loglevel subcommand.
+     * Usage: /lore debug loglevel [DEBUG|INFO|WARN|OFF]
+     */
+    private boolean handleLogLevel(CommandSender sender, String[] args) {
+        if (args.length < 2) {
+            String currentLevel = plugin.getConfigManager().getConfig().getString("general.logLevel", "INFO");
+            sender.sendMessage(ChatColor.GOLD + "Current log level: " + ChatColor.WHITE + currentLevel);
+            sender.sendMessage(ChatColor.GRAY + "Usage: /lore debug loglevel <DEBUG|INFO|WARN|OFF>");
+            return true;
+        }
+
+        String levelStr = args[1].toUpperCase();
+        Level level = LogManager.parseLevel(levelStr);
+
+        LogManager.setPluginLogLevel(plugin, level);
+
+        plugin.getConfigManager().getConfig().set("general.logLevel", levelStr);
+        plugin.saveConfig();
+
+        sender.sendMessage(ChatColor.GREEN + "Log level set to: " + ChatColor.WHITE + levelStr);
+        sender.sendMessage(ChatColor.GRAY + "(Saved to config.yml)");
+        return true;
+    }
+
+    /**
      * Resolve a player name to UUID.
      * Uses Bukkit's OfflinePlayer lookup which works even if the player is offline.
      *
@@ -430,7 +463,7 @@ public class LoreDebugSubCommand implements SubCommand {
     @Override
     public List<String> getTabCompletions(CommandSender sender, String[] args) {
         if (args.length == 1) {
-            return Arrays.asList("diagnostics", "check", "handlers", "fix", "player", "seed", "dynmap");
+            return Arrays.asList("diagnostics", "check", "handlers", "fix", "player", "seed", "loglevel", "dynmap");
         }
 
         if (args.length >= 2 && args[0].equalsIgnoreCase("seed")) {
@@ -443,6 +476,10 @@ public class LoreDebugSubCommand implements SubCommand {
 
         if (args.length == 2 && args[0].equalsIgnoreCase("dynmap")) {
             return Arrays.asList("refresh");
+        }
+
+        if (args.length == 2 && args[0].equalsIgnoreCase("loglevel")) {
+            return LOG_LEVELS;
         }
 
         if (args.length == 2 && args[0].equalsIgnoreCase("check")) {
