@@ -50,6 +50,7 @@ public class MonumentLoreHandler implements LoreHandler {
         }
 
         if (!validationErrors.isEmpty()) {
+            entry.addMetadata("validation_errors", String.join(";", validationErrors));
             logger.warning("Monument validation failed: " + String.join(", ", validationErrors));
             return false;
         }

@@ -46,6 +46,7 @@ public class EventLoreHandler implements LoreHandler {
         }
 
         if (!validationErrors.isEmpty()) {
+            entry.addMetadata("validation_errors", String.join(";", validationErrors));
             logger.warning("Event validation failed: " + String.join(", ", validationErrors));
             return false;
         }

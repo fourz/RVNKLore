@@ -50,6 +50,7 @@ public class ShrineLoreHandler implements LoreHandler {
         }
 
         if (!validationErrors.isEmpty()) {
+            entry.addMetadata("validation_errors", String.join(";", validationErrors));
             logger.warning("Shrine validation failed: " + String.join(", ", validationErrors));
             return false;
         }

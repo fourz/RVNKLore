@@ -34,16 +34,22 @@ public class DefaultLoreHandler implements LoreHandler {
     @Override
     public boolean validateEntry(LoreEntry entry) {
         // Basic validation common to all lore entries
+        List<String> validationErrors = new ArrayList<>();
+
         if (entry.getName() == null || entry.getName().isEmpty()) {
-            logger.debug("Lore validation failed: Name is required");
-            return false;
+            validationErrors.add("Name is required");
         }
-        
+
         if (entry.getDescription() == null || entry.getDescription().isEmpty()) {
-            logger.debug("Lore validation failed: Description is required");
+            validationErrors.add("Description is required");
+        }
+
+        if (!validationErrors.isEmpty()) {
+            entry.addMetadata("validation_errors", String.join(";", validationErrors));
+            logger.debug("Lore validation failed: " + String.join(", ", validationErrors));
             return false;
         }
-        
+
         return true;
     }
 

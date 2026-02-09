@@ -50,6 +50,7 @@ public class TavernLoreHandler implements LoreHandler {
         }
 
         if (!validationErrors.isEmpty()) {
+            entry.addMetadata("validation_errors", String.join(";", validationErrors));
             logger.warning("Tavern validation failed: " + String.join(", ", validationErrors));
             return false;
         }
