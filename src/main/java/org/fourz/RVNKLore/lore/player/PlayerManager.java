@@ -5,7 +5,7 @@ import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.service.IPlayerLoreService;
-import org.fourz.RVNKLore.util.PlayerLookup;
+import org.fourz.rvnkcore.util.PlayerLookup;
 import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;

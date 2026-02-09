@@ -42,6 +42,14 @@ permissions:
     default: op
   rvnklore.register.city:
     description: Allows registering new cities
+  rvnklore.register.faction:
+    description: Allows registering new factions with territory claims
+  rvnklore.faction.*:
+    description: Gives access to all faction management commands
+    children:
+      rvnklore.faction.manage: true
+  rvnklore.faction.manage:
+    description: Allows managing faction territories and members
   rvnklore.sign.landmark:
     description: Allows players to create landmark signs
     default: op

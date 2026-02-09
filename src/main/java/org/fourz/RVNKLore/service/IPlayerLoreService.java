@@ -12,7 +12,7 @@ import java.util.concurrent.CompletableFuture;
  * Exposes player lore functionality for cross-plugin access via RVNKCore ServiceRegistry.
  *
  * <p>This service manages lore discovery tracking (which entries a player has found),
- * not player CRUD operations. For player name resolution, see {@link org.fourz.RVNKLore.util.PlayerLookup}.</p>
+ * not player CRUD operations. For player name resolution, see {@link org.fourz.rvnkcore.util.PlayerLookup}.</p>
  *
  * @since RVNKCore Integration
  */

@@ -13,7 +13,7 @@ import org.fourz.RVNKLore.service.IItemService;
 import org.fourz.RVNKLore.service.ICollectionService;
 import org.fourz.RVNKLore.service.ISubmissionService;
 import org.fourz.RVNKLore.service.IPlayerLoreService;
-import org.fourz.RVNKLore.util.PlayerLookup;
+import org.fourz.rvnkcore.util.PlayerLookup;
 import org.fourz.RVNKLore.util.UtilityManager;
 import org.fourz.RVNKLore.lore.item.ItemManager;
 import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
@@ -27,6 +27,7 @@ import org.fourz.RVNKLore.integration.placeholder.RVNKLorePlaceholderExpansion;
 import org.fourz.RVNKLore.integration.dynmap.DynmapIntegration;
 import org.fourz.RVNKLore.integration.votingplugin.VotingPluginIntegration;
 import org.fourz.RVNKLore.integration.griefprevention.GriefPreventionIntegration;
+import org.fourz.RVNKLore.integration.rvnkworlds.WorldLifecycleListener;
 
 public class RVNKLore extends JavaPlugin {
     private LoreManager loreManager;
@@ -63,6 +64,9 @@ public class RVNKLore extends JavaPlugin {
 
     // GriefPrevention integration
     private GriefPreventionIntegration gpIntegration = null;
+
+    // RVNKWorlds integration
+    private WorldLifecycleListener worldLifecycleListener = null;
 
     @Override
     public void onEnable() {
@@ -160,6 +164,9 @@ public class RVNKLore extends JavaPlugin {
 
             // Register GriefPrevention integration if available
             registerGriefPrevention();
+
+            // Register RVNKWorlds integration if available
+            registerRVNKWorlds();
 
             // Start periodic health check
             startHealthCheck();
@@ -429,6 +436,39 @@ public class RVNKLore extends JavaPlugin {
         return gpIntegration != null && gpIntegration.isEnabled();
     }
 
+    /**
+     * Registers RVNKWorlds world lifecycle event integration if available.
+     * Soft dependency -- uses reflection, no compile-time dependency on RVNKWorlds.
+     */
+    private void registerRVNKWorlds() {
+        worldLifecycleListener = new WorldLifecycleListener(this);
+        getServer().getPluginManager().registerEvents(worldLifecycleListener, this);
+        if (worldLifecycleListener.activate()) {
+            logger.info("RVNKWorlds integration enabled - world lifecycle events active");
+        } else {
+            logger.info("RVNKWorlds not available - world lifecycle integration disabled");
+        }
+    }
+
+    /**
+     * Cleans up RVNKWorlds integration.
+     */
+    private void unregisterRVNKWorlds() {
+        if (worldLifecycleListener != null) {
+            worldLifecycleListener.cleanup();
+            worldLifecycleListener = null;
+        }
+    }
+
+    /**
+     * Checks if RVNKWorlds integration is active and available.
+     *
+     * @return true if RVNKWorlds is loaded and event listeners are registered
+     */
+    public boolean isRVNKWorldsAvailable() {
+        return worldLifecycleListener != null && worldLifecycleListener.isEnabled();
+    }
+
     private void cleanupManagers() {
         // Shutdown REST API first
         if (apiInitializer != null) {
@@ -447,6 +487,9 @@ public class RVNKLore extends JavaPlugin {
 
         // Cleanup GriefPrevention integration
         unregisterGriefPrevention();
+
+        // Cleanup RVNKWorlds integration
+        unregisterRVNKWorlds();
 
         // Unregister from RVNKCore first
         unregisterFromRVNKCore();

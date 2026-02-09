@@ -19,6 +19,7 @@ import org.fourz.rvnkcore.util.log.LogManager;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 /**
  * Manages the creation and handling of lore books.
@@ -159,14 +160,31 @@ public class LoreBookManager {
             try {
                 UUID uuid = UUID.fromString(entryId);
                 Optional<LoreEntry> entry = loreManager.getLoreEntry(uuid).join();
-                return entry.map(this::createLoreBook);
+                if (entry.isPresent()) {
+                    return entry.map(this::createLoreBook);
+                }
             } catch (IllegalArgumentException e) {
-                // Not a valid UUID, try partial match
+                // Not a valid UUID, try prefix match
             }
 
-            // Try partial ID match
+            // Try exact ID match
             Optional<LoreEntry> entry = loreManager.getLoreById(entryId);
-            return entry.map(this::createLoreBook);
+            if (entry.isPresent()) {
+                return entry.map(this::createLoreBook);
+            }
+
+            // Try short ID prefix match (tab completion provides 8-char short IDs)
+            String prefix = entryId.toLowerCase();
+            List<LoreEntry> matches = loreManager.findLoreEntriesSync(prefix);
+            List<LoreEntry> idMatches = matches.stream()
+                    .filter(e -> e.getId().toLowerCase().startsWith(prefix))
+                    .collect(Collectors.toList());
+
+            if (idMatches.size() == 1) {
+                return Optional.of(createLoreBook(idMatches.get(0)));
+            }
+
+            return Optional.empty();
         });
     }
 
