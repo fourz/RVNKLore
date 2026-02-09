@@ -123,27 +123,50 @@ public class LoreManager implements ILoreService {
               // For ITEM type entries, register the item in the ItemManager
             if (entry.getType() == LoreType.ITEM && itemManager != null) {
                 try {
-                    // Create basic item properties
-                    org.fourz.RVNKLore.lore.item.ItemProperties itemProps =
-                        new org.fourz.RVNKLore.lore.item.ItemProperties(
-                            org.bukkit.Material.valueOf("DIAMOND_SWORD"), // Default, should be extracted from entry
-                            entry.getName()
-                        );
+                    // Resolve material from entry metadata (set by LoreAddSubCommand)
+                    org.bukkit.Material material = org.bukkit.Material.DIAMOND_SWORD;
+                    String materialName = entry.getMetadata("material");
+                    if (materialName != null) {
+                        try {
+                            material = org.bukkit.Material.valueOf(materialName);
+                        } catch (IllegalArgumentException ignored) {}
+                    }
 
-                    // Set additional properties
-                    itemProps.setLoreEntryId(entry.getId()); // Important: Link to lore entry ID
+                    org.fourz.RVNKLore.lore.item.ItemProperties itemProps =
+                        new org.fourz.RVNKLore.lore.item.ItemProperties(material, entry.getName());
+
+                    itemProps.setLoreEntryId(entry.getId());
                     if (entry.getNbtData() != null) {
                         itemProps.setNbtData(entry.getNbtData());
                     }
-                      // Register the item with reference to lore_entry.id
-                    // Use the entry ID to link items to lore entries
+
                     java.util.UUID entryUUID = java.util.UUID.fromString(entry.getId());
-                    itemManager.registerLoreItem(entryUUID, itemProps);
+                    boolean itemSuccess = itemManager.registerLoreItem(entryUUID, itemProps).join();
+
+                    if (!itemSuccess) {
+                        // Rollback: remove lore_entry since item registration failed
+                        logger.warning("Item registration failed for: " + entry.getName() + " - rolling back lore entry");
+                        plugin.getDatabaseManager().deleteLoreEntry(entryUUID);
+                        cachedEntries.remove(entry);
+                        loreByType.get(entry.getType()).remove(entry);
+                        entry.addMetadata("validation_errors", "Item registration failed in database");
+                        return false;
+                    }
 
                     logger.info("Registered item in ItemManager: " + entry.getName() + " with lore entry ID: " + entry.getId());
                 } catch (Exception e) {
+                    // Rollback: remove lore_entry since item registration failed
                     logger.warning("Failed to register item in ItemManager: " + e.getMessage());
-                    // Continue even if item registration fails
+                    try {
+                        java.util.UUID entryUUID = java.util.UUID.fromString(entry.getId());
+                        plugin.getDatabaseManager().deleteLoreEntry(entryUUID);
+                        cachedEntries.remove(entry);
+                        loreByType.get(entry.getType()).remove(entry);
+                    } catch (Exception rollbackEx) {
+                        logger.warning("Rollback failed: " + rollbackEx.getMessage());
+                    }
+                    entry.addMetadata("validation_errors", "Item registration failed: " + e.getMessage());
+                    return false;
                 }
             }
 
@@ -433,7 +456,7 @@ public class LoreManager implements ILoreService {
      * @return The lore entry, or null if not found
      */
     public LoreEntry getLoreEntryByNameSync(String name) {
-        logger.info("Looking up lore entry by name: " + name);
+        logger.debug("Looking up lore entry by name: " + name);
 
         return cachedEntries.stream()
             .filter(entry -> entry.getName().equalsIgnoreCase(name))
