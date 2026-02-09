@@ -109,10 +109,13 @@ public class HandlerFactory {
             handlerClasses.put("FACTION", FactionLoreHandler.class);
             handlerClasses.put("ITEM", ItemLoreHandler.class);
             handlerClasses.put("EVENT", EventLoreHandler.class);
-            handlerClasses.put("ENCHANTED_ITEM", EnchantedItemLoreHandler.class);
+            handlerClasses.put("ENCHANTMENT", EnchantedItemLoreHandler.class);
             
             // Replace individual head handlers with the unified CommonHeadHandler
             handlerClasses.put("HEAD", CommonHeadHandler.class);
+
+            // Quest handler
+            handlerClasses.put("QUEST", QuestLoreHandler.class);
 
             // Location-based handlers
             handlerClasses.put("TAVERN", TavernLoreHandler.class);
@@ -144,8 +147,9 @@ public class HandlerFactory {
     private void preCreateCoreHandlers() {
         logger.debug("Pre-creating core handlers");
         LoreType[] coreTypes = {
-            LoreType.GENERIC, LoreType.CITY, 
-            LoreType.LANDMARK, LoreType.FACTION, LoreType.EVENT
+            LoreType.GENERIC, LoreType.CITY,
+            LoreType.LANDMARK, LoreType.FACTION, LoreType.EVENT,
+            LoreType.ENCHANTMENT // Pre-create so @EventHandler onItemEnchant is registered
         };
         
         for (LoreType type : coreTypes) {

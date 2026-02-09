@@ -98,6 +98,6 @@ public class EnchantedItemLoreHandler extends DefaultLoreHandler {
 
     @Override
     public LoreType getHandlerType() {
-        return LoreType.ITEM;
+        return LoreType.ENCHANTMENT;
     }
 }
