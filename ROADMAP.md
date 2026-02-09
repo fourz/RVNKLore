@@ -1,8 +1,45 @@
 # RVNKLore Development Roadmap
 
-**Last Updated**: January 30, 2026
+**Last Updated**: February 9, 2026
 
 This document outlines the planned features and improvements for the RVNKLore plugin.
+
+---
+
+## February 9, 2026 Status: Phase D Complete + Integration Expansion
+
+**Recent Commits** (derek/dev, 0ffd597):
+
+- ✅ GriefPrevention soft dependency and integration bootstrap
+- ✅ VotingPlugin soft dependency and integration bootstrap
+- ✅ `/lore discover` manual discovery granting command
+- ✅ TAVERN, GUILD, SHRINE lore types with handlers and sign hooks
+- ✅ DynmapMarkerReader for read-side marker access
+- ✅ QUEST_COMPLETE discovery trigger (RVNKQuests hook)
+- ✅ CARTOGRAPHY discovery trigger (cartography table hook)
+- ✅ `/lore dynmap diff` and `/lore dynmap import` commands
+- ✅ Dead code cleanup (`/lore itemgive`/`/give` references removed, debug handler list fixes)
+
+**Archon Status**:
+
+- **Review**: perf-01 (HikariCP database connection drops fix - keepaliveTime configured 30s, Feb 7 derek/phoenix)
+- **Blocked**: 18 tasks awaiting external plugins (GriefPrevention×10, VotingPlugin×5, WorldGuard×1, recipe×1, maintenance×1)
+
+**Testing**: 15+ commands validated on RVNK Dev server, 3 minor bugs logged
+
+**Next Phase** (Q1 2026):
+
+- [ ] Schema consolidation - single source of truth (impl-07)
+- [ ] DTO completion - NameChangeRecordDTO, Gson metadata (impl-08)
+- [ ] Repository interface completion - IPlayerRepository (impl-09)
+- [ ] Schema documentation consolidation (doc-05)
+- [ ] Schema validation tests (test-06)
+- [ ] External plugin integration unblocking (GriefPrevention, VotingPlugin handlers)
+
+**Documentation**:
+
+- Schema Reference: [docs/standard/rvnklore-schema.md](../../docs/standard/rvnklore-schema.md)
+- Database API: [docs/standard/rvnklore-database-api.md](../../docs/standard/rvnklore-database-api.md)
 
 ---
 
