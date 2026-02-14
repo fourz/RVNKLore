@@ -8,7 +8,9 @@ import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.achievement.reward.*;
 import org.fourz.RVNKLore.data.repository.AchievementRepository;
 import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
+import org.fourz.RVNKLore.integration.preferences.PreferencesServiceLookup;
 import org.fourz.rvnkcore.util.log.LogManager;
+import org.fourz.rvnkcore.api.service.PlayerPreferencesService;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -16,11 +18,14 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Manages achievements, progress tracking, and reward distribution.
+ *
+ * Respects PlayerPreferencesService from RVNKCore (Phase 3 integration).
  */
 public class AchievementManager {
 
     private final RVNKLore plugin;
     private final LogManager logger;
+    private final PreferencesServiceLookup prefsLookup;
     private AchievementRepository achievementRepository;
 
     // Achievement registry
@@ -40,6 +45,7 @@ public class AchievementManager {
     public AchievementManager(RVNKLore plugin) {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "AchievementManager");
+        this.prefsLookup = new PreferencesServiceLookup(plugin);
     }
 
     /**
@@ -254,7 +260,7 @@ public class AchievementManager {
     }
 
     /**
-     * Handle achievement unlock: fire event, notify, grant rewards.
+     * Handle achievement unlock: fire event, notify (with preference checks), grant rewards.
      */
     private void handleAchievementUnlock(Player player, String achievementId, AchievementProgress progress) {
         Achievement achievement = achievements.get(achievementId);
@@ -271,7 +277,7 @@ public class AchievementManager {
             return;
         }
 
-        // Send notification
+        // Send notification with preference checks
         if (!event.isSuppressNotification() && enableNotifications) {
             sendUnlockNotification(player, achievement);
         }
@@ -286,8 +292,76 @@ public class AchievementManager {
 
     /**
      * Send unlock notification to player.
+     * Respects PlayerPreferencesService if available, falls back to config-based settings.
      */
     private void sendUnlockNotification(Player player, Achievement achievement) {
+        if (prefsLookup.isAvailable()) {
+            PlayerPreferencesService prefs = prefsLookup.getService();
+            UUID playerId = player.getUniqueId();
+
+            // Check if achievement notifications are enabled for this player
+            prefs.isNotificationEnabled(playerId, "rvnklore", "achievement")
+                .thenAccept(enabled -> {
+                    if (!enabled) {
+                        logger.debug("Achievement notification suppressed for " + player.getName() +
+                                " (notifications disabled in preferences)");
+                        return;
+                    }
+
+                    // Check individual channel preferences
+                    CompletableFuture<Boolean> titleEnabled = prefs.isChannelEnabled(playerId, "rvnklore", "achievement", "TITLE");
+                    CompletableFuture<Boolean> chatEnabled = prefs.isChannelEnabled(playerId, "rvnklore", "achievement", "CHAT");
+                    CompletableFuture<Boolean> soundEnabled = prefs.isChannelEnabled(playerId, "rvnklore", "achievement", "SOUND");
+
+                    CompletableFuture.allOf(titleEnabled, chatEnabled, soundEnabled)
+                        .thenRun(() -> {
+                            try {
+                                if (titleEnabled.join()) {
+                                    player.sendTitle(
+                                        ChatColor.GOLD + "Achievement Unlocked!",
+                                        ChatColor.YELLOW + achievement.getName(),
+                                        10, 40, 10
+                                    );
+                                }
+                                if (chatEnabled.join()) {
+                                    player.sendMessage("");
+                                    player.sendMessage(ChatColor.GOLD + "★ " + ChatColor.BOLD + "Achievement Unlocked!" + ChatColor.GOLD + " ★");
+                                    player.sendMessage(ChatColor.YELLOW + achievement.getName());
+                                    player.sendMessage(ChatColor.GRAY + achievement.getDescription());
+                                    player.sendMessage(ChatColor.DARK_GRAY + "+" + achievement.getPoints() + " achievement points");
+                                    player.sendMessage("");
+                                }
+                                if (soundEnabled.join()) {
+                                    player.playSound(player.getLocation(), Sound.UI_TOAST_CHALLENGE_COMPLETE, 1.0f, 1.0f);
+                                }
+                            } catch (Exception e) {
+                                logger.debug("Error sending achievement notification: " + e.getMessage());
+                            }
+                        })
+                        .exceptionally(ex -> {
+                            logger.debug("Error checking achievement notification preferences: " + ex.getMessage());
+                            // Fallback to config-based settings
+                            sendUnlockNotificationFallback(player, achievement);
+                            return null;
+                        });
+                })
+                .exceptionally(ex -> {
+                    logger.debug("Error checking achievement notification enable status: " + ex.getMessage());
+                    // Fallback to config-based settings
+                    sendUnlockNotificationFallback(player, achievement);
+                    return null;
+                });
+        } else {
+            // No preferences service available - use config flags
+            sendUnlockNotificationFallback(player, achievement);
+        }
+    }
+
+    /**
+     * Send unlock notification using config-based settings (fallback).
+     * Used when PlayerPreferencesService is not available.
+     */
+    private void sendUnlockNotificationFallback(Player player, Achievement achievement) {
         // Title
         player.sendTitle(
             ChatColor.GOLD + "Achievement Unlocked!",

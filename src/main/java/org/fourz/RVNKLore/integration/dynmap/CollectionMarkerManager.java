@@ -11,16 +11,21 @@ import org.dynmap.markers.MarkerSet;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.config.ConfigManager;
 import org.fourz.RVNKLore.lore.item.ItemManager;
+import org.fourz.RVNKLore.lore.item.ItemProperties;
 import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
 import org.fourz.RVNKLore.lore.item.collection.CollectionTheme;
 import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
 import org.fourz.RVNKLore.lore.item.collection.event.CollectionChangeEvent;
 import org.fourz.RVNKLore.lore.item.collection.event.CollectionEventType;
+import org.fourz.RVNKLore.data.ItemRepository;
+import org.fourz.RVNKLore.data.repository.LocationRepository;
+import org.fourz.RVNKLore.data.model.LoreLocation;
 import org.fourz.rvnkcore.util.log.LogManager;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
@@ -326,18 +331,65 @@ public class CollectionMarkerManager implements Listener {
 
     /**
      * Get the location of a collection item from the database.
-     * This is a placeholder that retrieves the location based on the item's lore metadata.
+     * Implements the database query chain:
+     * collection_item → lore_item (via itemId) → lore_entry → lore_location
      *
      * @param collectionId The collection ID
-     * @param item The item to find
+     * @param item The item to find location for
      * @return The location of the item, or null if not found
      */
     private Location getCollectionItemLocation(String collectionId, ItemStack item) {
-        // In a full implementation, this would query the database for the exact location
-        // based on the collection_item → lore_item → lore_location chain.
-        // For now, return null to indicate items don't have explicit locations yet.
-        // This can be enhanced in future phases when item locations are persisted.
-        return null;
+        if (item == null || item.getType().isAir()) {
+            return null;
+        }
+
+        try {
+            // Get item name/display name for database lookup
+            String itemName = item.hasItemMeta() && item.getItemMeta().hasDisplayName()
+                ? item.getItemMeta().getDisplayName()
+                : item.getType().name();
+
+            // Step 1: Get ItemProperties from database by name
+            ItemRepository itemRepository = new ItemRepository(plugin,
+                plugin.getDatabaseManager().getDatabaseConnection());
+
+            Optional<ItemProperties> itemProps = itemRepository.getItemByName(itemName).join();
+
+            if (!itemProps.isPresent()) {
+                logger.debug("Item not found in database: " + itemName);
+                return null;
+            }
+
+            String loreEntryId = itemProps.get().getLoreEntryId();
+            if (loreEntryId == null || loreEntryId.isEmpty()) {
+                logger.debug("Item has no associated lore entry: " + itemName);
+                return null;
+            }
+
+            // Step 2: Get the primary location for this lore entry
+            LocationRepository locationRepository = new LocationRepository(plugin,
+                plugin.getDatabaseManager().getDatabaseConnection());
+
+            LoreLocation loreLocation = locationRepository.findPrimaryByEntryId(loreEntryId).join();
+
+            if (loreLocation == null) {
+                logger.debug("No location found for lore entry: " + loreEntryId);
+                return null;
+            }
+
+            // Step 3: Convert LoreLocation to Bukkit Location
+            org.bukkit.World world = plugin.getServer().getWorld(loreLocation.getWorld());
+            if (world == null) {
+                logger.debug("World not found: " + loreLocation.getWorld());
+                return null;
+            }
+
+            return new Location(world, loreLocation.getX(), loreLocation.getY(), loreLocation.getZ());
+
+        } catch (Exception e) {
+            logger.debug("Error querying item location: " + e.getMessage());
+            return null;
+        }
     }
 
     /**
