@@ -95,6 +95,31 @@ class ICollectionServiceContractTest {
             return fallbackMode;
         }
 
+        @Override
+        public CompletableFuture<Boolean> trackItemDiscovery(UUID playerId, String collectionId, int itemId) {
+            return CompletableFuture.completedFuture(collections.containsKey(collectionId));
+        }
+
+        @Override
+        public CompletableFuture<List<ItemStack>> getPlayerCollectionItems(UUID playerId, String collectionId) {
+            return CompletableFuture.completedFuture(new ArrayList<>());
+        }
+
+        @Override
+        public CompletableFuture<Integer> getCollectedItemCount(UUID playerId, String collectionId) {
+            return CompletableFuture.completedFuture(0);
+        }
+
+        @Override
+        public CompletableFuture<List<ItemStack>> getMissingItems(UUID playerId, String collectionId) {
+            return CompletableFuture.completedFuture(new ArrayList<>());
+        }
+
+        @Override
+        public CompletableFuture<Double> calculateItemBasedProgress(UUID playerId, String collectionId) {
+            return CompletableFuture.completedFuture(0.0);
+        }
+
         public void setFallbackMode(boolean fallbackMode) {
             this.fallbackMode = fallbackMode;
         }

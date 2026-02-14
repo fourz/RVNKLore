@@ -28,6 +28,8 @@ import org.fourz.RVNKLore.integration.dynmap.DynmapIntegration;
 import org.fourz.RVNKLore.integration.votingplugin.VotingPluginIntegration;
 import org.fourz.RVNKLore.integration.griefprevention.GriefPreventionIntegration;
 import org.fourz.RVNKLore.integration.rvnkworlds.WorldLifecycleListener;
+import org.fourz.RVNKLore.integration.discord.DiscordWebhookManager;
+import org.fourz.RVNKLore.integration.discord.CollectionWebhookListener;
 
 public class RVNKLore extends JavaPlugin {
     private LoreManager loreManager;
@@ -67,6 +69,10 @@ public class RVNKLore extends JavaPlugin {
 
     // RVNKWorlds integration
     private WorldLifecycleListener worldLifecycleListener = null;
+
+    // Discord webhook integration
+    private DiscordWebhookManager discordWebhookManager = null;
+    private CollectionWebhookListener collectionWebhookListener = null;
 
     @Override
     public void onEnable() {
@@ -167,6 +173,9 @@ public class RVNKLore extends JavaPlugin {
 
             // Register RVNKWorlds integration if available
             registerRVNKWorlds();
+
+            // Register Discord webhook integration if configured
+            registerDiscordWebhooks();
 
             // Start periodic health check
             startHealthCheck();
@@ -469,6 +478,62 @@ public class RVNKLore extends JavaPlugin {
         return worldLifecycleListener != null && worldLifecycleListener.isEnabled();
     }
 
+    /**
+     * Registers Discord webhook integration if configured.
+     * Loads webhook URLs from config and registers event listener.
+     */
+    private void registerDiscordWebhooks() {
+        try {
+            boolean discordEnabled = configManager.getConfig().getBoolean("discord.enabled", false);
+
+            if (!discordEnabled) {
+                logger.debug("Discord webhook integration disabled in config");
+                return;
+            }
+
+            // Load webhook URLs from config
+            java.util.Map<String, String> webhookUrls = new java.util.HashMap<>();
+            String collectionWebhook = configManager.getConfig().getString("discord.webhooks.collection-complete", "");
+            if (collectionWebhook != null && !collectionWebhook.isEmpty()) {
+                webhookUrls.put("collection-complete", collectionWebhook);
+            }
+
+            // Create webhook manager
+            discordWebhookManager = new DiscordWebhookManager(this, webhookUrls, discordEnabled);
+
+            // Register event listener
+            collectionWebhookListener = new CollectionWebhookListener(this, discordWebhookManager);
+            getServer().getPluginManager().registerEvents(collectionWebhookListener, this);
+
+            logger.info("Discord webhook integration enabled - collection completion events active");
+        } catch (Exception e) {
+            logger.warning("Failed to register Discord webhook integration: " + e.getMessage());
+            discordWebhookManager = null;
+            collectionWebhookListener = null;
+        }
+    }
+
+    /**
+     * Cleans up Discord webhook integration.
+     */
+    private void unregisterDiscordWebhooks() {
+        if (collectionWebhookListener != null) {
+            collectionWebhookListener = null;
+        }
+        if (discordWebhookManager != null) {
+            discordWebhookManager = null;
+        }
+    }
+
+    /**
+     * Get the Discord webhook manager instance.
+     *
+     * @return The Discord webhook manager, or null if not initialized
+     */
+    public DiscordWebhookManager getDiscordWebhookManager() {
+        return discordWebhookManager;
+    }
+
     private void cleanupManagers() {
         // Shutdown REST API first
         if (apiInitializer != null) {
@@ -490,6 +555,9 @@ public class RVNKLore extends JavaPlugin {
 
         // Cleanup RVNKWorlds integration
         unregisterRVNKWorlds();
+
+        // Cleanup Discord webhook integration
+        unregisterDiscordWebhooks();
 
         // Unregister from RVNKCore first
         unregisterFromRVNKCore();

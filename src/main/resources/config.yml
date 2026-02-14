@@ -83,6 +83,27 @@ dynmap:
   popup:
     enabled: true
     max-description-length: 200
+  # Collection item markers configuration
+  collection-markers:
+    enabled: true
+    # Icon mapping by collection theme
+    icons:
+      treasure: chest
+      mob_heads: skull
+      artifacts: diamond
+      seasonal: default
+      legendary: star
+      quest_rewards: book
+      default: pin
+
+discord:
+  # Discord webhook integration for collection events
+  enabled: false
+  webhooks:
+    # URL for collection completion webhook
+    # Leave blank to disable specific webhook types
+    collection-complete: ''
+    # Example: 'https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_WEBHOOK_TOKEN'
 
 messages:
   generic:

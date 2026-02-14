@@ -25,18 +25,18 @@ class CollectionRewardTest {
     @Test
     @DisplayName("Convenience constructor defaults id to -1")
     void convenienceConstructor() {
-        CollectionReward reward = new CollectionReward("col-456", CollectionReward.RewardType.EXPERIENCE, "500");
+        CollectionReward reward = new CollectionReward("col-456", CollectionReward.RewardType.CURRENCY, "{\"amount\":500.0}");
 
         assertEquals(-1, reward.getId());
         assertEquals("col-456", reward.getCollectionId());
-        assertEquals(CollectionReward.RewardType.EXPERIENCE, reward.getRewardType());
-        assertEquals("500", reward.getRewardData());
+        assertEquals(CollectionReward.RewardType.CURRENCY, reward.getRewardType());
+        assertEquals("{\"amount\":500.0}", reward.getRewardData());
     }
 
     @Test
     @DisplayName("setId updates id")
     void setId() {
-        CollectionReward reward = new CollectionReward("col-1", CollectionReward.RewardType.TITLE, "Champion");
+        CollectionReward reward = new CollectionReward("col-1", CollectionReward.RewardType.PERMISSION, "{\"permission\":\"rvnk.vip\"}");
         assertEquals(-1, reward.getId());
 
         reward.setId(99);
@@ -59,8 +59,8 @@ class CollectionRewardTest {
     @DisplayName("RewardType.fromString parses valid values")
     void rewardTypeFromStringValid() {
         assertEquals(CollectionReward.RewardType.ITEM, CollectionReward.RewardType.fromString("ITEM"));
-        assertEquals(CollectionReward.RewardType.EXPERIENCE, CollectionReward.RewardType.fromString("experience"));
-        assertEquals(CollectionReward.RewardType.TITLE, CollectionReward.RewardType.fromString("Title"));
+        assertEquals(CollectionReward.RewardType.PERMISSION, CollectionReward.RewardType.fromString("permission"));
+        assertEquals(CollectionReward.RewardType.CURRENCY, CollectionReward.RewardType.fromString("Currency"));
         assertEquals(CollectionReward.RewardType.COMMAND, CollectionReward.RewardType.fromString("COMMAND"));
     }
 
@@ -77,8 +77,8 @@ class CollectionRewardTest {
         CollectionReward.RewardType[] types = CollectionReward.RewardType.values();
         assertEquals(4, types.length);
         assertNotNull(CollectionReward.RewardType.valueOf("ITEM"));
-        assertNotNull(CollectionReward.RewardType.valueOf("EXPERIENCE"));
-        assertNotNull(CollectionReward.RewardType.valueOf("TITLE"));
+        assertNotNull(CollectionReward.RewardType.valueOf("PERMISSION"));
+        assertNotNull(CollectionReward.RewardType.valueOf("CURRENCY"));
         assertNotNull(CollectionReward.RewardType.valueOf("COMMAND"));
     }
 }

@@ -1269,4 +1269,204 @@ public class ItemRepository implements IItemRepository {
             return null;
         }
     }
+
+    // ==================== Player Collection Item Discovery Tracking ====================
+
+    /**
+     * Track an item discovery for a player in a collection.
+     * Records when a player first discovers or collects an item in a collection.
+     *
+     * @param playerUuid The player's UUID as string
+     * @param collectionId The numeric collection ID from the database
+     * @param itemId The numeric item ID from the database
+     * @return CompletableFuture that completes with true if tracking was successful
+     */
+    public CompletableFuture<Boolean> trackItemDiscovery(String playerUuid, int collectionId, int itemId) {
+        return CompletableFuture.supplyAsync(() -> {
+            if (playerUuid == null || collectionId <= 0 || itemId <= 0) {
+                return false;
+            }
+
+            String sql = "INSERT OR IGNORE INTO " + t("player_collection_items") +
+                        " (player_uuid, collection_id, item_id, discovered_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)";
+
+            try {
+                return dbHelper.executeUpdate(sql, stmt -> {
+                    stmt.setString(1, playerUuid);
+                    stmt.setInt(2, collectionId);
+                    stmt.setInt(3, itemId);
+                }) > 0;
+            } catch (LoreException e) {
+                logger.error("Failed to track item discovery for player " + playerUuid, e);
+                return false;
+            }
+        });
+    }
+
+    /**
+     * Get all items discovered by a player in a specific collection.
+     *
+     * @param playerUuid The player's UUID as string
+     * @param collectionId The numeric collection ID from the database
+     * @return CompletableFuture that completes with a list of item properties discovered
+     */
+    public CompletableFuture<List<ItemProperties>> getCollectedItems(String playerUuid, int collectionId) {
+        return CompletableFuture.supplyAsync(() -> {
+            if (playerUuid == null || collectionId <= 0) {
+                return new ArrayList<>();
+            }
+
+            String sql = "SELECT i.* FROM " + t("lore_item") + " i " +
+                        "INNER JOIN " + t("player_collection_items") + " pci ON i.id = pci.item_id " +
+                        "WHERE pci.player_uuid = ? AND pci.collection_id = ? " +
+                        "ORDER BY pci.discovered_at ASC";
+
+            try {
+                return dbHelper.executeQuery(sql,
+                    stmt -> {
+                        stmt.setString(1, playerUuid);
+                        stmt.setInt(2, collectionId);
+                    },
+                    rs -> {
+                        List<ItemProperties> items = new ArrayList<>();
+                        while (rs.next()) {
+                            ItemProperties props = resultSetToItemProperties(rs);
+                            if (props != null) {
+                                items.add(props);
+                            }
+                        }
+                        return items;
+                    });
+            } catch (LoreException e) {
+                logger.error("Failed to get collected items for player " + playerUuid, e);
+                return new ArrayList<>();
+            }
+        });
+    }
+
+    /**
+     * Get the count of items discovered by a player in a collection.
+     *
+     * @param playerUuid The player's UUID as string
+     * @param collectionId The numeric collection ID from the database
+     * @return CompletableFuture that completes with the count of discovered items
+     */
+    public CompletableFuture<Integer> getCollectedItemCount(String playerUuid, int collectionId) {
+        return CompletableFuture.supplyAsync(() -> {
+            if (playerUuid == null || collectionId <= 0) {
+                return 0;
+            }
+
+            String sql = "SELECT COUNT(*) FROM " + t("player_collection_items") +
+                        " WHERE player_uuid = ? AND collection_id = ?";
+
+            try {
+                return dbHelper.executeQuery(sql,
+                    stmt -> {
+                        stmt.setString(1, playerUuid);
+                        stmt.setInt(2, collectionId);
+                    },
+                    rs -> {
+                        if (rs.next()) {
+                            return rs.getInt(1);
+                        }
+                        return 0;
+                    });
+            } catch (LoreException e) {
+                logger.error("Failed to get collected item count for player " + playerUuid, e);
+                return 0;
+            }
+        });
+    }
+
+    /**
+     * Get all items in a collection that haven't been discovered by a player.
+     *
+     * @param playerUuid The player's UUID as string
+     * @param collectionId The numeric collection ID from the database
+     * @return CompletableFuture that completes with a list of undiscovered item properties
+     */
+    public CompletableFuture<List<ItemProperties>> getMissingItems(String playerUuid, int collectionId) {
+        return CompletableFuture.supplyAsync(() -> {
+            if (playerUuid == null || collectionId <= 0) {
+                return new ArrayList<>();
+            }
+
+            String sql = "SELECT i.* FROM " + t("lore_item") + " i " +
+                        "INNER JOIN " + t("collection_item") + " ci ON i.id = ci.item_id " +
+                        "WHERE ci.collection_id = ? " +
+                        "AND i.id NOT IN (" +
+                        "  SELECT item_id FROM " + t("player_collection_items") +
+                        "  WHERE player_uuid = ? AND collection_id = ?" +
+                        ") " +
+                        "ORDER BY ci.sequence_number ASC";
+
+            try {
+                return dbHelper.executeQuery(sql,
+                    stmt -> {
+                        stmt.setInt(1, collectionId);
+                        stmt.setString(2, playerUuid);
+                        stmt.setInt(3, collectionId);
+                    },
+                    rs -> {
+                        List<ItemProperties> items = new ArrayList<>();
+                        while (rs.next()) {
+                            ItemProperties props = resultSetToItemProperties(rs);
+                            if (props != null) {
+                                items.add(props);
+                            }
+                        }
+                        return items;
+                    });
+            } catch (LoreException e) {
+                logger.error("Failed to get missing items for player " + playerUuid, e);
+                return new ArrayList<>();
+            }
+        });
+    }
+
+    /**
+     * Calculate a player's collection progress based on item count.
+     * Progress = items_collected / total_items_in_collection
+     *
+     * @param playerUuid The player's UUID as string
+     * @param collectionId The numeric collection ID from the database
+     * @return CompletableFuture that completes with progress value between 0.0 and 1.0
+     */
+    public CompletableFuture<Double> calculateItemBasedProgress(String playerUuid, int collectionId) {
+        return CompletableFuture.supplyAsync(() -> {
+            if (playerUuid == null || collectionId <= 0) {
+                return 0.0;
+            }
+
+            String sql = "SELECT " +
+                        "(SELECT COUNT(*) FROM " + t("player_collection_items") +
+                        " WHERE player_uuid = ? AND collection_id = ?) as collected, " +
+                        "(SELECT COUNT(*) FROM " + t("collection_item") +
+                        " WHERE collection_id = ?) as total";
+
+            try {
+                return dbHelper.executeQuery(sql,
+                    stmt -> {
+                        stmt.setString(1, playerUuid);
+                        stmt.setInt(2, collectionId);
+                        stmt.setInt(3, collectionId);
+                    },
+                    rs -> {
+                        if (rs.next()) {
+                            int collected = rs.getInt("collected");
+                            int total = rs.getInt("total");
+                            if (total <= 0) {
+                                return 0.0;
+                            }
+                            return (double) collected / total;
+                        }
+                        return 0.0;
+                    });
+            } catch (LoreException e) {
+                logger.error("Failed to calculate item-based progress for player " + playerUuid, e);
+                return 0.0;
+            }
+        });
+    }
 }

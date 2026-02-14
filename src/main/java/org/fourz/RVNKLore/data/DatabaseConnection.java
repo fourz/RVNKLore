@@ -36,6 +36,7 @@ public abstract class DatabaseConnection {
     public static final String TABLE_PLAYER_COLLECTION_PROGRESS = "player_collection_progress";
     public static final String TABLE_COLLECTION_REWARD = "collection_reward";
     public static final String TABLE_COLLECTION_ITEM = "collection_item";
+    public static final String TABLE_PLAYER_COLLECTION_ITEMS = "player_collection_items";
     public static final String TABLE_LORE_LOCATION = "lore_location";
     public static final String TABLE_LORE_DISCOVERY = "lore_discovery";
     public static final String TABLE_PLAYER_ACHIEVEMENT = "player_achievement";
@@ -254,10 +255,26 @@ public abstract class DatabaseConnection {
                 "FOREIGN KEY (item_id) REFERENCES " + loreItem + "(id) ON DELETE CASCADE" +
             ")";
 
+            // Player collection items table for tracking individual item discoveries per player
+            String playerCollectionItems = table(TABLE_PLAYER_COLLECTION_ITEMS);
+            String createPlayerCollectionItemsTable = "CREATE TABLE IF NOT EXISTS " + playerCollectionItems + " (" +
+                "id " + autoIncPK + ", " +
+                "player_uuid CHAR(36) NOT NULL, " +
+                "collection_id INTEGER NOT NULL, " +
+                "item_id INTEGER NOT NULL, " +
+                "discovered_at " + timestampDefault + ", " +
+                "CONSTRAINT uq_" + tablePrefix + "player_collection_item UNIQUE (player_uuid, collection_id, item_id), " +
+                "FOREIGN KEY (collection_id) REFERENCES " + collection + "(id) ON DELETE CASCADE, " +
+                "FOREIGN KEY (item_id) REFERENCES " + loreItem + "(id) ON DELETE CASCADE" +
+            ")";
+
             stmt.execute(createCollectionTable);
             stmt.execute(createPlayerCollectionProgressTable);
             stmt.execute(createCollectionRewardTable);
             stmt.execute(createCollectionItemTable);
+            stmt.execute(createPlayerCollectionItemsTable);
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_" + tablePrefix + "player_collection_items_player ON " + playerCollectionItems + "(player_uuid)");
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_" + tablePrefix + "player_collection_items_collection ON " + playerCollectionItems + "(collection_id)");
 
             // --- Lore Location Table (spatial data for lore entries) ---
             String loreLocation = table(TABLE_LORE_LOCATION);

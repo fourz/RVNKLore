@@ -291,4 +291,15 @@ public class ConfigManager {
     public int getDynmapMaxDescriptionLength() {
         return config.getInt("dynmap.popup.max-description-length", 200);
     }
+
+    // ==================== Collection Marker Configuration ====================
+
+    public boolean isCollectionMarkersEnabled() {
+        return config.getBoolean("dynmap.collection-markers.enabled", true);
+    }
+
+    public String getCollectionMarkerIcon(String theme) {
+        String key = "dynmap.collection-markers.icons." + theme;
+        return config.getString(key, config.getString("dynmap.collection-markers.icons.default", "pin"));
+    }
 }

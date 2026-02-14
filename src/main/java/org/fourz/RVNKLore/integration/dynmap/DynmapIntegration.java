@@ -23,6 +23,7 @@ public class DynmapIntegration implements Listener {
     private MarkerAPI markerApi;
     private MarkerSet markerSet;
     private LoreMarkerManager markerManager;
+    private CollectionMarkerManager collectionMarkerManager;
     private DynmapMarkerReader markerReader;
     private boolean enabled = false;
 
@@ -61,6 +62,12 @@ public class DynmapIntegration implements Listener {
             initMarkerSet();
             markerManager = new LoreMarkerManager(plugin, markerApi, markerSet);
             markerManager.populateAllMarkers();
+
+            // Initialize collection marker manager
+            collectionMarkerManager = new CollectionMarkerManager(plugin, markerApi, markerSet);
+            collectionMarkerManager.populateAllCollectionMarkers();
+            plugin.getServer().getPluginManager().registerEvents(collectionMarkerManager, plugin);
+
             markerReader = new DynmapMarkerReader(markerApi, logger);
             enabled = true;
             logger.info("Dynmap integration enabled - marker set '" + config.getDynmapMarkerSetId() + "' active");
@@ -110,6 +117,10 @@ public class DynmapIntegration implements Listener {
             markerManager.cleanup();
             markerManager = null;
         }
+        if (collectionMarkerManager != null) {
+            collectionMarkerManager.cleanup();
+            collectionMarkerManager = null;
+        }
         markerSet = null;
         markerApi = null;
         dynmapApi = null;
@@ -122,6 +133,10 @@ public class DynmapIntegration implements Listener {
 
     public LoreMarkerManager getMarkerManager() {
         return markerManager;
+    }
+
+    public CollectionMarkerManager getCollectionMarkerManager() {
+        return collectionMarkerManager;
     }
 
     public DynmapMarkerReader getMarkerReader() {

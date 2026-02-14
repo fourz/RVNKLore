@@ -3,6 +3,7 @@ package org.fourz.RVNKLore.command;
 import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 import org.fourz.RVNKLore.lore.item.cosmetic.CosmeticsManager;
 import org.fourz.RVNKLore.lore.item.cosmetic.HeadCollection;
 import org.fourz.RVNKLore.lore.item.cosmetic.HeadVariant;
@@ -34,6 +35,8 @@ public class LoreCollectionSubCommand implements SubCommand {
         // Register sub-commands
         subCommands.put("add", new LoreCollectionAddSubCommand(plugin));
         subCommands.put("list", new LoreCollectionListSubCommand(plugin));
+        subCommands.put("additem", new LoreCollectionAddItemSubCommand(plugin));
+        subCommands.put("removeitem", new LoreCollectionRemoveItemSubCommand(plugin));
     }
 
     @Override
@@ -315,17 +318,34 @@ public class LoreCollectionSubCommand implements SubCommand {
         }
 
         for (org.fourz.RVNKLore.lore.item.collection.ItemCollection collection : allCollections.values()) {
-            double progress = collectionManager.getPlayerProgressSync(player.getUniqueId(), collection.getId());
-            double percent = progress * 100;
+            // Get actual item-based progress using new Phase 4 system
+            int collectedCount = collectionManager.getCollectedItemCountSync(player.getUniqueId(), collection.getId());
+            int totalItems = collection.getItemCount();
+            double itemBasedProgress = totalItems > 0 ? (double) collectedCount / totalItems : 0.0;
+            double percent = itemBasedProgress * 100;
 
             String status = percent >= 100.0 ? ChatColor.GREEN + "✓ COMPLETE" : ChatColor.YELLOW + String.format("%.1f%%", percent);
 
             player.sendMessage(ChatColor.WHITE + collection.getName() + ": " + status);
+            player.sendMessage(ChatColor.GRAY + "   " + collectedCount + "/" + totalItems + " items collected");
 
+            // Show missing items if collection not complete
             if (percent < 100.0) {
-                int totalItems = collection.getItemCount();
-                int ownedItems = (int) (totalItems * progress);
-                player.sendMessage(ChatColor.GRAY + "   " + ownedItems + "/" + totalItems + " items collected");
+                List<ItemStack> missingItems = collectionManager.getMissingItemsSync(player.getUniqueId(), collection.getId());
+                if (!missingItems.isEmpty() && missingItems.size() <= 5) {
+                    StringBuilder missingNames = new StringBuilder();
+                    for (int i = 0; i < missingItems.size(); i++) {
+                        ItemStack item = missingItems.get(i);
+                        String itemName = item.getItemMeta() != null && item.getItemMeta().hasDisplayName()
+                                ? item.getItemMeta().getDisplayName()
+                                : item.getType().name();
+                        missingNames.append(itemName);
+                        if (i < missingItems.size() - 1) missingNames.append(", ");
+                    }
+                    player.sendMessage(ChatColor.GRAY + "   Still need: " + missingNames);
+                } else if (missingItems.size() > 5) {
+                    player.sendMessage(ChatColor.GRAY + "   Still need: " + missingItems.size() + " more items");
+                }
             }
         }
     }

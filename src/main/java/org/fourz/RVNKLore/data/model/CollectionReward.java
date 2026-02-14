@@ -35,10 +35,10 @@ public class CollectionReward {
      * Reward types for collection completion.
      */
     public enum RewardType {
-        ITEM,
-        EXPERIENCE,
-        TITLE,
-        COMMAND;
+        ITEM,           // Give items to player inventory
+        PERMISSION,     // Grant a permission node (LuckPerms)
+        COMMAND,        // Execute console command with {player} and {uuid} placeholders
+        CURRENCY;       // Add economy currency (Vault Economy)
 
         public static RewardType fromString(String value) {
             try {
