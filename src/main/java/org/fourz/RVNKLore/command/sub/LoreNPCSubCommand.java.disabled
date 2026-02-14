@@ -1,0 +1,174 @@
+package org.fourz.RVNKLore.command.sub;
+
+import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
+import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.command.SubCommand;
+import org.fourz.rvnkcore.util.log.LogManager;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Dispatcher for /lore npc commands.
+ * Handles subcommands for managing Citizens NPC collection vendors.
+ */
+public class LoreNPCSubCommand implements SubCommand {
+
+    private final RVNKLore plugin;
+    private final LogManager logger;
+
+    public LoreNPCSubCommand(RVNKLore plugin) {
+        this.plugin = plugin;
+        this.logger = LogManager.getInstance(plugin, "LoreNPCSubCommand");
+    }
+
+    @Override
+    public boolean execute(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player)) {
+            sender.sendMessage("§c✖ This command can only be used by players.");
+            return false;
+        }
+
+        Player player = (Player) sender;
+
+        if (args.length < 1) {
+            sendUsage(player);
+            return true;
+        }
+
+        String subcommand = args[0].toLowerCase();
+
+        switch (subcommand) {
+            case "create":
+                return handleCreate(player, args);
+            case "list":
+                return handleList(player);
+            case "delete":
+                return handleDelete(player, args);
+            case "config":
+                return handleConfig(player, args);
+            default:
+                sendUsage(player);
+                return true;
+        }
+    }
+
+    /**
+     * Create a new collection vendor NPC at player's current location.
+     */
+    private boolean handleCreate(Player player, String[] args) {
+        if (args.length < 2) {
+            player.sendMessage("§c▶ Usage: /lore npc create <collection>");
+            return false;
+        }
+
+        String collectionId = args[1];
+
+        // Check if collection exists - use async future
+        plugin.getLoreManager().getItemManager().getCollectionManager().getCollection(collectionId).thenAccept(collection -> {
+            if (!collection.isPresent()) {
+                player.sendMessage("§c✖ Collection not found: " + collectionId);
+                return;
+            }
+
+            // TODO: Create Citizens NPC with CollectionVendorTrait
+            // This requires Citizens integration and spawn tracking
+            player.sendMessage("§a✓ Collection vendor NPC created for: " + collectionId);
+        });
+
+        return true;
+    }
+
+    /**
+     * List all collection vendor NPCs in the world.
+     */
+    private boolean handleList(Player player) {
+        player.sendMessage("§e=== Collection Vendor NPCs ===");
+        player.sendMessage("§7(TODO: List vendors)");
+        // TODO: Query Citizens for all NPCs with CollectionVendorTrait
+        return true;
+    }
+
+    /**
+     * Delete a collection vendor NPC by ID.
+     */
+    private boolean handleDelete(Player player, String[] args) {
+        if (args.length < 2) {
+            player.sendMessage("§c▶ Usage: /lore npc delete <npc_id>");
+            return false;
+        }
+
+        // TODO: Remove Citizens NPC with given ID
+        player.sendMessage("§a✓ Vendor NPC deleted.");
+        return true;
+    }
+
+    /**
+     * Configure an existing vendor NPC.
+     */
+    private boolean handleConfig(Player player, String[] args) {
+        if (args.length < 4) {
+            player.sendMessage("§c▶ Usage: /lore npc config <npc_id> <option> <value>");
+            player.sendMessage("§7Options: multiplier, stackable");
+            return false;
+        }
+
+        // TODO: Modify NPC trait configuration
+        player.sendMessage("§a✓ Vendor configuration updated.");
+        return true;
+    }
+
+    /**
+     * Send usage information.
+     */
+    private void sendUsage(Player player) {
+        player.sendMessage("§e=== Collection Vendor NPC Commands ===");
+        player.sendMessage("§6/lore npc create <collection> §7- Create a vendor NPC");
+        player.sendMessage("§6/lore npc list §7- List all vendor NPCs");
+        player.sendMessage("§6/lore npc delete <npc_id> §7- Delete a vendor NPC");
+        player.sendMessage("§6/lore npc config <npc_id> <option> <value> §7- Configure vendor");
+    }
+
+    @Override
+    public String getName() {
+        return "npc";
+    }
+
+    @Override
+    public String getDescription() {
+        return "Manage Citizens NPC collection vendors";
+    }
+
+    @Override
+    public boolean hasPermission(CommandSender sender) {
+        return sender.hasPermission("rvnklore.command.npc") || sender.isOp();
+    }
+
+    @Override
+    public List<String> getTabCompletions(CommandSender sender, String[] args) {
+        List<String> completions = new ArrayList<>();
+
+        if (args.length == 1) {
+            // Subcommand completions
+            if ("create".startsWith(args[0].toLowerCase())) {
+                completions.add("create");
+            }
+            if ("list".startsWith(args[0].toLowerCase())) {
+                completions.add("list");
+            }
+            if ("delete".startsWith(args[0].toLowerCase())) {
+                completions.add("delete");
+            }
+            if ("config".startsWith(args[0].toLowerCase())) {
+                completions.add("config");
+            }
+        } else if (args.length == 2 && "create".equals(args[0].toLowerCase())) {
+            // Collection name completions for create command
+            // TODO: Add collection suggestions
+            completions.add("<collection>");
+        }
+
+        return completions;
+    }
+}

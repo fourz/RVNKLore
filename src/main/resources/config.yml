@@ -105,6 +105,27 @@ discord:
     collection-complete: ''
     # Example: 'https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_WEBHOOK_TOKEN'
 
+citizens:
+  # Citizens NPC collection vendor configuration
+  vendors:
+    enabled: true
+    # Default name prefix for vendor NPCs
+    default-name: "Collection Vendor"
+    # GUI title for vendor shop menu
+    shop-title: "Collection Shop"
+    # Price calculation settings
+    pricing:
+      # Multiplier applied to base item value (e.g., 1.5 = 150% of item value)
+      multiplier: 1.5
+      # Minimum price in currency units
+      min-price: 100
+      # Maximum price in currency units
+      max-price: 10000
+    # Track purchases separately from discoveries
+    track-purchases: true
+    # Default stackable setting for new vendors
+    default-stackable: true
+
 messages:
   generic:
     error:

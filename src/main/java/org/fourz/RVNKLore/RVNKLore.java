@@ -30,6 +30,7 @@ import org.fourz.RVNKLore.integration.griefprevention.GriefPreventionIntegration
 import org.fourz.RVNKLore.integration.rvnkworlds.WorldLifecycleListener;
 import org.fourz.RVNKLore.integration.discord.DiscordWebhookManager;
 import org.fourz.RVNKLore.integration.discord.CollectionWebhookListener;
+import org.fourz.RVNKLore.integration.citizens.CitizensIntegration;
 
 public class RVNKLore extends JavaPlugin {
     private LoreManager loreManager;
@@ -73,6 +74,9 @@ public class RVNKLore extends JavaPlugin {
     // Discord webhook integration
     private DiscordWebhookManager discordWebhookManager = null;
     private CollectionWebhookListener collectionWebhookListener = null;
+
+    // Citizens NPC integration
+    private CitizensIntegration citizensIntegration = null;
 
     @Override
     public void onEnable() {
@@ -179,6 +183,9 @@ public class RVNKLore extends JavaPlugin {
 
             // Register Discord webhook integration if configured
             registerDiscordWebhooks();
+
+            // Register Citizens NPC integration if available
+            registerCitizens();
 
             // Start periodic health check
             startHealthCheck();
@@ -537,6 +544,52 @@ public class RVNKLore extends JavaPlugin {
         return discordWebhookManager;
     }
 
+    /**
+     * Registers Citizens NPC integration if Citizens plugin is available.
+     * Handles NPC trait registration and event listener setup.
+     */
+    private void registerCitizens() {
+        try {
+            citizensIntegration = new CitizensIntegration(this);
+            if (citizensIntegration.activate()) {
+                logger.info("Citizens integration enabled - NPC collection vendors available");
+            } else {
+                logger.debug("Citizens plugin not available - NPC vendor support disabled");
+            }
+        } catch (Exception e) {
+            logger.warning("Failed to register Citizens integration: " + e.getMessage());
+            citizensIntegration = null;
+        }
+    }
+
+    /**
+     * Cleans up Citizens NPC integration.
+     */
+    private void unregisterCitizens() {
+        if (citizensIntegration != null) {
+            citizensIntegration.cleanup();
+            citizensIntegration = null;
+        }
+    }
+
+    /**
+     * Get the Citizens NPC integration instance.
+     *
+     * @return The Citizens integration, or null if not initialized
+     */
+    public CitizensIntegration getCitizensIntegration() {
+        return citizensIntegration;
+    }
+
+    /**
+     * Checks if Citizens integration is active and available.
+     *
+     * @return true if Citizens is loaded and NPC support is enabled
+     */
+    public boolean isCitizensAvailable() {
+        return citizensIntegration != null && citizensIntegration.isEnabled();
+    }
+
     private void cleanupManagers() {
         // Shutdown REST API first
         if (apiInitializer != null) {
@@ -561,6 +614,9 @@ public class RVNKLore extends JavaPlugin {
 
         // Cleanup Discord webhook integration
         unregisterDiscordWebhooks();
+
+        // Cleanup Citizens NPC integration
+        unregisterCitizens();
 
         // Unregister from RVNKCore first
         unregisterFromRVNKCore();

@@ -78,6 +78,15 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
             commands.put("discover", new LoreDiscoverSubCommand(plugin));
         }
 
+        // Register the /lore prefs command for player notification preferences (Phase 3)
+        commands.put("prefs", new LorePrefsSubCommand(plugin));
+
+        // Register the /lore npc command for Citizens collection vendors (Phase 8)
+        // TODO: Implement Citizens integration in future phase
+        // if (plugin.getCitizensIntegration() != null && plugin.getCitizensIntegration().isEnabled()) {
+        //     commands.put("npc", new LoreNPCSubCommand(plugin));
+        // }
+
         // Add all commands to the subCommands map
         commands.forEach(this::registerSubCommand);
         logger.debug("Registered " + commands.size() + " subcommands successfully");
