@@ -45,9 +45,9 @@ class LoreTypeTest {
     }
 
     @Test
-    @DisplayName("Total lore type count is 12")
+    @DisplayName("Total lore type count is 15")
     void totalTypeCount() {
-        assertEquals(12, LoreType.values().length);
+        assertEquals(15, LoreType.values().length);
     }
 
     @Test

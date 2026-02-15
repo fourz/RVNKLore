@@ -25,14 +25,14 @@ lore:
 
 storage:
   test-mode: no # yes = wipe schema on start, no = keep tables on start
-  type: sqlite
+  type: mysql
   mysql:
-    host: localhost
+    host: 64.20.41.122
     port: 3306
-    username: root
+    username: fourzorg_rvnkuser
     password: ''
-    useSSL: false
-    database:
+    useSSL: true
+    database: fourzorg_rvnkcore_dev
     # Table prefix for shared database environments (e.g., 'rvnklore_')
     tablePrefix:
     # HikariCP connection pool settings for MySQL
