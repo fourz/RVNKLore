@@ -1,8 +1,37 @@
 # RVNKLore Development Roadmap
 
-**Last Updated**: February 9, 2026
+**Last Updated**: February 17, 2026
 
 This document outlines the planned features and improvements for the RVNKLore plugin.
+
+---
+
+## February 17, 2026 Status: DB Schema Fix + Collection System Active
+
+**DB Schema Fix** (Feb 17, 2026):
+
+- ✅ Removed `CREATE TABLE IF NOT EXISTS lore_entries` legacy recreation block from `DatabaseConnection.java` — table was being recreated on every plugin startup
+- ✅ Fixed `lore_lore_metadata` FK: `REFERENCES lore_entries(id)` → `REFERENCES lore_entry(id)`
+- ✅ Removed `seedLegacyLoreEntries()` method from `LoreTestDataGenerator.java`
+- ✅ Seed now produces 521 clean records (was 523 with 2 spurious legacy inserts)
+- ✅ Orphaned `lore_lore_entries` table dropped and confirmed not recreated after restart
+- ✅ Deployed and validated on RVNK Dev server
+
+**Active Work**:
+
+- 🔄 `coll-08`: Citizens NPC collection vendors (DOING in Archon)
+- 📋 **Review backlog**: feat-101 (console support), feat-105 (RVNKWorlds listeners), feat-119 (cartography hook), bug-05 (help footer), feat-109 (GP faction), impl-21 (auto-register worlds)
+
+**Feature Gaps** (Todo in Archon):
+
+- `bug-LO-01`: `/lore collection` command requires player — violates coding standards (console support required)
+- City signs (city landmark auto-discovery)
+- Faction territory cluster: feat-102..114 (city-faction integration, diplomacy, GP claim visualization)
+- Discovery triggers: VotingPlugin vote events, WorldGuard REGION_ENTER
+- PlaceholderAPI support (Phase 5)
+- NPC integration (Citizens) for collection vendors (coll-08)
+
+**Blocked** (18 tasks): GP×10, VotingPlugin×5, WorldGuard×1, recipe×1, maintenance×1
 
 ---
 
