@@ -5,6 +5,7 @@ import org.bukkit.command.CommandSender;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.command.SubCommand;
 import org.fourz.RVNKLore.command.output.DisplayFactory;
+import org.fourz.rvnkcore.util.chat.ChatService;
 import org.fourz.rvnkcore.util.log.LogManager;
 
 import java.util.*;
@@ -16,11 +17,13 @@ import java.util.*;
 public class LoreFactionSubCommand implements SubCommand {
     private final RVNKLore plugin;
     private final LogManager logger;
+    private final ChatService chatService;
     private final Map<String, SubCommand> subCommands;
 
     public LoreFactionSubCommand(RVNKLore plugin) {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "LoreFactionSubCommand");
+        this.chatService = new ChatService();
         this.subCommands = new HashMap<>();
 
         subCommands.put("addterritory", new LoreFactionAddTerritorySubCommand(plugin));
@@ -38,13 +41,13 @@ public class LoreFactionSubCommand implements SubCommand {
         SubCommand subCommand = subCommands.get(subCommandName);
 
         if (subCommand == null) {
-            sender.sendMessage(ChatColor.RED + "\u2716 Unknown faction command: " + subCommandName);
+            chatService.sendError(sender, "Unknown faction command: " + subCommandName);
             showUsage(sender);
             return true;
         }
 
         if (!subCommand.hasPermission(sender)) {
-            sender.sendMessage(ChatColor.RED + "\u2716 You don't have permission to use this command.");
+            chatService.sendError(sender, "You don't have permission to use this command.");
             return true;
         }
 
@@ -54,7 +57,7 @@ public class LoreFactionSubCommand implements SubCommand {
         } catch (Exception e) {
             String errorId = java.util.UUID.randomUUID().toString();
             logger.error("Error ID: " + errorId + " - Error executing faction command: " + subCommandName, e);
-            sender.sendMessage(ChatColor.RED + "\u2716 An error occurred (ID: " + errorId + "). Please report this to an administrator.");
+            chatService.sendError(sender, "An error occurred (ID: " + errorId + "). Please report this to an administrator.");
             return false;
         }
     }
