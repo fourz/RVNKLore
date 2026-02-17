@@ -3,6 +3,7 @@ package org.fourz.RVNKLore.data;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.config.dto.SQLiteSettingsDTO;
 import org.fourz.RVNKLore.data.dialect.SQLDialect;
 
 import java.io.File;
@@ -16,11 +17,11 @@ import java.sql.*;
  * during concurrent async operations.
  */
 public class SQLiteConnection extends DatabaseConnection {
-    private final File databaseFile;
+    private final SQLiteSettingsDTO settings;
 
-    public SQLiteConnection(RVNKLore plugin, SQLDialect dialect) {
+    public SQLiteConnection(RVNKLore plugin, SQLDialect dialect, SQLiteSettingsDTO settings) {
         super(plugin, dialect);
-        this.databaseFile = new File(plugin.getDataFolder(), "lore.db");
+        this.settings = settings;
     }
 
     @Override
@@ -33,7 +34,7 @@ public class SQLiteConnection extends DatabaseConnection {
             plugin.getDataFolder().mkdirs();
         }
 
-        // Load pool configuration from config.yml
+        // Load pool configuration from config.yml (pool tuning not in DTO)
         int poolSize = plugin.getConfig().getInt("storage.sqlite.poolSize", 10);
         int connectionTimeout = plugin.getConfig().getInt("storage.sqlite.connectionTimeout", 30000);
         int idleTimeout = plugin.getConfig().getInt("storage.sqlite.idleTimeout", 600000);
@@ -41,9 +42,9 @@ public class SQLiteConnection extends DatabaseConnection {
         boolean useWAL = plugin.getConfig().getBoolean("storage.sqlite.optimizations.useWAL", true);
         boolean normalSync = plugin.getConfig().getBoolean("storage.sqlite.optimizations.normalSync", true);
 
-        // Set up HikariCP configuration for SQLite
+        // Set up HikariCP configuration for SQLite using DTO file path
         HikariConfig config = new HikariConfig();
-        config.setJdbcUrl("jdbc:sqlite:" + databaseFile.getAbsolutePath());
+        config.setJdbcUrl("jdbc:sqlite:" + settings.getFilePath());
         config.setConnectionTestQuery("SELECT 1");
         config.setMaximumPoolSize(poolSize);
         config.setMinimumIdle(Math.max(1, poolSize / 2));

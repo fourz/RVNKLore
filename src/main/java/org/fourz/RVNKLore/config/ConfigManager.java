@@ -2,6 +2,9 @@ package org.fourz.RVNKLore.config;
 
 import org.bukkit.configuration.file.FileConfiguration;
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.config.dto.DatabaseSettingsDTO;
+import org.fourz.RVNKLore.config.dto.MySQLSettingsDTO;
+import org.fourz.RVNKLore.config.dto.SQLiteSettingsDTO;
 import org.fourz.RVNKLore.handler.DefaultLoreHandler;
 import org.fourz.RVNKLore.handler.HandlerFactory;
 import org.fourz.RVNKLore.handler.LoreHandler;
@@ -10,6 +13,7 @@ import org.fourz.RVNKLore.lore.LoreType;
 import org.bukkit.configuration.ConfigurationSection;
 import org.fourz.rvnkcore.util.log.LogManager;
 
+import java.io.File;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,6 +24,7 @@ public class ConfigManager {
     private FileConfiguration config;
     private HandlerFactory handlerFactory;
     private LogManager logger;
+    private DatabaseSettingsDTO databaseSettings;
 
     public ConfigManager(RVNKLore plugin) {
         this.plugin = plugin;
@@ -36,6 +41,15 @@ public class ConfigManager {
         // Apply log level from config to all LogManager instances
         java.util.logging.Level configLevel = getLogLevel();
         updateAllLogManagers(configLevel);
+
+        // Initialize and validate database settings DTO
+        try {
+            this.databaseSettings = createDatabaseSettings();
+            logger.info("Database configuration validated successfully");
+        } catch (IllegalArgumentException e) {
+            logger.error("Invalid database configuration: " + e.getMessage());
+            logger.warning("Plugin will continue but database features may be unavailable");
+        }
     }
     
     private void validateConfig() {
@@ -75,6 +89,64 @@ public class ConfigManager {
         
         config.options().copyDefaults(true);
         plugin.saveConfig();
+    }
+
+    /**
+     * Create DatabaseSettingsDTO from configuration.
+     * Called during initialization and config reload.
+     * @return Configured DatabaseSettingsDTO instance
+     * @throws IllegalArgumentException if configuration is invalid
+     */
+    private DatabaseSettingsDTO createDatabaseSettings() {
+        String storageType = config.getString("storage.type", "sqlite");
+        DatabaseSettingsDTO.DatabaseType type = storageType.equalsIgnoreCase("mysql")
+            ? DatabaseSettingsDTO.DatabaseType.MYSQL
+            : DatabaseSettingsDTO.DatabaseType.SQLITE;
+
+        int connectionTimeout = config.getInt("storage.mysql.connectionTimeout", 30000);
+        int maxRetries = config.getInt("storage.connection.retryAttempts", 5);
+
+        MySQLSettingsDTO mysqlSettings = null;
+        if (type == DatabaseSettingsDTO.DatabaseType.MYSQL) {
+            mysqlSettings = new MySQLSettingsDTO(
+                config.getString("storage.mysql.host", "localhost"),
+                config.getInt("storage.mysql.port", 3306),
+                config.getString("storage.mysql.database", "minecraft"),
+                config.getString("storage.mysql.username", "root"),
+                config.getString("storage.mysql.password", ""),
+                config.getBoolean("storage.mysql.useSSL", false),
+                config.getString("storage.mysql.tablePrefix", "")
+            );
+        }
+
+        SQLiteSettingsDTO sqliteSettings = null;
+        if (type == DatabaseSettingsDTO.DatabaseType.SQLITE) {
+            String dbFile = config.getString("storage.sqlite.database", "lore.db");
+            String filePath = new File(plugin.getDataFolder(), dbFile).getAbsolutePath();
+            sqliteSettings = new SQLiteSettingsDTO(
+                filePath,
+                config.getString("storage.sqlite.tablePrefix", "")
+            );
+        }
+
+        DatabaseSettingsDTO dto = new DatabaseSettingsDTO(
+            type, mysqlSettings, sqliteSettings, connectionTimeout, maxRetries
+        );
+        dto.validate();
+        return dto;
+    }
+
+    /**
+     * Get the database configuration settings as a strongly-typed DTO.
+     * The DTO is cached and only recreated when the configuration is reloaded.
+     *
+     * @return DatabaseSettingsDTO instance with validated settings
+     */
+    public DatabaseSettingsDTO getDatabaseSettings() {
+        if (databaseSettings == null) {
+            databaseSettings = createDatabaseSettings();
+        }
+        return databaseSettings;
     }
 
     /**
@@ -184,6 +256,15 @@ public class ConfigManager {
     }    public void reloadConfig() {
         plugin.reloadConfig();
         config = plugin.getConfig();
+
+        // Refresh database settings DTO
+        try {
+            this.databaseSettings = createDatabaseSettings();
+            logger.info("Database configuration reloaded and validated");
+        } catch (IllegalArgumentException e) {
+            logger.error("Invalid database configuration after reload: " + e.getMessage());
+        }
+
         java.util.logging.Level newLevel = getLogLevel();
         updateAllLogManagers(newLevel);
         logger.info("Configuration reloaded with log level: " + newLevel.getName());
@@ -220,30 +301,6 @@ public class ConfigManager {
      */
     public String[] getAvailableLogLevels() {
         return new String[]{"DEBUG", "INFO", "WARN", "WARNING", "ERROR", "SEVERE", "OFF"};
-    }
-    
-    /**
-     * Get database connection settings for MySQL
-     */
-    public Map<String, Object> getMySQLSettings() {
-        Map<String, Object> settings = new HashMap<>();
-        settings.put("host", config.getString("storage.mysql.host", "localhost"));
-        settings.put("port", config.getInt("storage.mysql.port", 3306));
-        settings.put("database", config.getString("storage.mysql.database", "minecraft"));
-        settings.put("username", config.getString("storage.mysql.username", "root"));
-        settings.put("password", config.getString("storage.mysql.password", ""));
-        settings.put("useSSL", config.getBoolean("storage.mysql.useSSL", false));
-        settings.put("tablePrefix", config.getString("storage.mysql.tablePrefix", ""));
-        return settings;
-    }
-    
-    /**
-     * Get database connection settings for SQLite
-     */
-    public Map<String, Object> getSQLiteSettings() {
-        Map<String, Object> settings = new HashMap<>();
-        settings.put("database", config.getString("storage.sqlite.database", "data.db"));
-        return settings;
     }
     
     /**
