@@ -30,7 +30,6 @@ public abstract class DatabaseConnection {
     public static final String TABLE_LORE_ENTRY = "lore_entry";
     public static final String TABLE_LORE_SUBMISSION = "lore_submission";
     public static final String TABLE_LORE_ITEM = "lore_item";
-    public static final String TABLE_LORE_ENTRIES = "lore_entries";
     public static final String TABLE_LORE_METADATA = "lore_metadata";
     public static final String TABLE_COLLECTION = "collection";
     public static final String TABLE_PLAYER_COLLECTION_PROGRESS = "player_collection_progress";
@@ -105,7 +104,6 @@ public abstract class DatabaseConnection {
         String loreEntry = table(TABLE_LORE_ENTRY);
         String loreSubmission = table(TABLE_LORE_SUBMISSION);
         String loreItem = table(TABLE_LORE_ITEM);
-        String loreEntries = table(TABLE_LORE_ENTRIES);
         String loreMetadata = table(TABLE_LORE_METADATA);
         String collection = table(TABLE_COLLECTION);
         String playerProgress = table(TABLE_PLAYER_COLLECTION_PROGRESS);
@@ -165,13 +163,12 @@ public abstract class DatabaseConnection {
                 "FOREIGN KEY (lore_entry_id) REFERENCES " + loreEntry + "(id) ON DELETE CASCADE" +
                 ")";
 
-        // Keep existing metadata table for backward compatibility during transition
         String createMetadataTable = "CREATE TABLE IF NOT EXISTS " + loreMetadata + " (" +
                 "lore_id VARCHAR(36) NOT NULL, " +
                 "meta_key VARCHAR(64) NOT NULL, " +
                 "meta_value TEXT, " +
                 "PRIMARY KEY (lore_id, meta_key), " +
-                "FOREIGN KEY (lore_id) REFERENCES " + loreEntries + "(id) ON DELETE CASCADE" +
+                "FOREIGN KEY (lore_id) REFERENCES " + loreEntry + "(id) ON DELETE CASCADE" +
                 ")";
 
         // Create index for fast lookups
@@ -190,21 +187,6 @@ public abstract class DatabaseConnection {
             stmt.execute(createLoreSubmissionEntryIndex);
             stmt.execute(createLoreItemEntryIndex);
 
-            // Create legacy table for backward compatibility
-            stmt.execute("CREATE TABLE IF NOT EXISTS " + loreEntries + " (" +
-                "id VARCHAR(36) PRIMARY KEY, " +
-                "type VARCHAR(20) NOT NULL, " +
-                "name TEXT NOT NULL, " +
-                "description TEXT, " +
-                "nbt_data TEXT, " +
-                "world VARCHAR(64), " +
-                "x DOUBLE, " +
-                "y DOUBLE, " +
-                "z DOUBLE, " +
-                "submitted_by VARCHAR(36) NOT NULL, " +
-                "approved " + boolType + " DEFAULT 0, " +
-                "created_at " + timestampDefault +
-                ")");
             stmt.execute(createMetadataTable);
 
             // --- Collection System Tables ---
