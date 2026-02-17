@@ -1,5 +1,6 @@
 package org.fourz.RVNKLore.command;
 
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -65,13 +66,15 @@ public class LoreCollectionSubCommand implements SubCommand {
             sender.sendMessage(ChatColor.RED + "✖ You don't have permission to use this command");
             return true;
         }
-        if (!(sender instanceof Player)) {
-            sender.sendMessage(ChatColor.RED + "▶ This command can only be used by players");
-            return true;
-        }
-        Player player = (Player) sender;
         if (args.length == 0) {
-            sender.sendMessage(ChatColor.RED + "▶ Usage: /lore collection <view|claim|list|add> [collection_id]");
+            if (sender instanceof Player) {
+                sender.sendMessage(ChatColor.RED + "▶ Usage: /lore collection <view|claim|list|add> [collection_id]");
+            } else {
+                sender.sendMessage("Usage: /lore collection <view|claim|list>");
+                sender.sendMessage("  view <collection_id>              - View collection details");
+                sender.sendMessage("  claim <player> <collection_id>   - Claim rewards for a player");
+                sender.sendMessage("  list                              - List all available collections");
+            }
             sender.sendMessage(ChatColor.GRAY + "   View, claim, list, or add item collections.");
             return true;
         }
@@ -95,28 +98,43 @@ public class LoreCollectionSubCommand implements SubCommand {
                 //sender.sendMessage(ChatColor.GRAY + "Items: " + ChatColor.WHITE + collection.getItemCount());
                 break;
             case "claim":
-                if (args.length < 2) {
-                    sender.sendMessage(ChatColor.RED + "▶ Usage: /lore collection claim <collection_id>");
-                    return true;
+                Player claimTarget;
+                if (sender instanceof Player) {
+                    if (args.length < 2) {
+                        sender.sendMessage(ChatColor.RED + "▶ Usage: /lore collection claim <collection_id>");
+                        return true;
+                    }
+                    claimTarget = (Player) sender;
+                    collectionId = args[1];
+                } else {
+                    if (args.length < 3) {
+                        sender.sendMessage("Usage: /lore collection claim <player> <collection_id>");
+                        return true;
+                    }
+                    claimTarget = Bukkit.getPlayerExact(args[1]);
+                    if (claimTarget == null) {
+                        sender.sendMessage("Player not found or not online: " + args[1]);
+                        return true;
+                    }
+                    collectionId = args[2];
                 }
-                collectionId = args[1];
                 collection = cosmeticItem.getCollection(collectionId);
                 if (collection == null) {
                     sender.sendMessage(ChatColor.RED + "✖ Collection not found: " + collectionId);
                     return true;
                 }
-                Map<String, Double> progress = cosmeticItem.getPlayerCollectionProgress(player);
+                Map<String, Double> progress = cosmeticItem.getPlayerCollectionProgress(claimTarget);
                 double completionPercent = progress.getOrDefault(collection.getId(), 0.0) * 100;
                 if (completionPercent < 100.0) {
-                    player.sendMessage(ChatColor.YELLOW + "⚠ You must complete the collection to claim rewards.");
+                    sender.sendMessage(ChatColor.YELLOW + "⚠ " + claimTarget.getName() + " must complete the collection to claim rewards.");
                     return true;
                 }
                 if (!collection.getRewards().hasRewards()) {
-                    player.sendMessage(ChatColor.YELLOW + "⚠ No rewards available for this collection.");
+                    sender.sendMessage(ChatColor.YELLOW + "⚠ No rewards available for this collection.");
                     return true;
                 }
                 // Award rewards (delegates to CosmeticItem)
-                cosmeticItem.awardCollectionRewards(player, collection, collection.getRewards());
+                cosmeticItem.awardCollectionRewards(claimTarget, collection, collection.getRewards());
                 sender.sendMessage(ChatColor.GREEN + "✓ Claimed rewards for collection: " + ChatColor.YELLOW + collectionId);
                 break;
             case "list":
