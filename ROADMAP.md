@@ -6,21 +6,20 @@ This document outlines the planned features and improvements for the RVNKLore pl
 
 ---
 
-## February 17, 2026 Status: DB Schema Fix + Collection System Active
+<!-- Synced from parent ROADMAP.md 2026-02-18 -->
+## February 18, 2026 Status: Phase 8 Active + DB Schema Fixed
 
 **DB Schema Fix** (Feb 17, 2026):
 
-- ✅ Removed `CREATE TABLE IF NOT EXISTS lore_entries` legacy recreation block from `DatabaseConnection.java` — table was being recreated on every plugin startup
+- ✅ Removed `CREATE TABLE IF NOT EXISTS lore_entries` legacy recreation block from `DatabaseConnection.java`
 - ✅ Fixed `lore_lore_metadata` FK: `REFERENCES lore_entries(id)` → `REFERENCES lore_entry(id)`
-- ✅ Removed `seedLegacyLoreEntries()` method from `LoreTestDataGenerator.java`
-- ✅ Seed now produces 521 clean records (was 523 with 2 spurious legacy inserts)
-- ✅ Orphaned `lore_lore_entries` table dropped and confirmed not recreated after restart
+- ✅ Removed `seedLegacyLoreEntries()` method — seed now produces 521 clean records
 - ✅ Deployed and validated on RVNK Dev server
 
 **Active Work**:
 
 - 🔄 `coll-08`: Citizens NPC collection vendors (DOING in Archon)
-- 📋 **Review backlog**: feat-101 (console support), feat-105 (RVNKWorlds listeners), feat-119 (cartography hook), bug-05 (help footer), feat-109 (GP faction), impl-21 (auto-register worlds)
+- 📋 **Review backlog**: feat-101 (console support), feat-105 (RVNKWorlds listeners), feat-119 (cartography hook), bug-05 (help footer), feat-109 (GP faction), impl-21 (auto-register worlds), feat-125 (boss kill hook)
 
 **Feature Gaps** (Todo in Archon):
 
@@ -29,9 +28,10 @@ This document outlines the planned features and improvements for the RVNKLore pl
 - Faction territory cluster: feat-102..114 (city-faction integration, diplomacy, GP claim visualization)
 - Discovery triggers: VotingPlugin vote events, WorldGuard REGION_ENTER
 - PlaceholderAPI support (Phase 5)
-- NPC integration (Citizens) for collection vendors (coll-08)
 
 **Blocked** (18 tasks): GP×10, VotingPlugin×5, WorldGuard×1, recipe×1, maintenance×1
+
+*Full ecosystem roadmap: [Ravenkraft Dev ROADMAP.md](../../ROADMAP.md)*
 
 ---
 
