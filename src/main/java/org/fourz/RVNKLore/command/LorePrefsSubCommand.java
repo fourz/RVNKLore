@@ -5,6 +5,7 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.integration.preferences.PreferencesServiceLookup;
+import org.fourz.rvnkcore.api.service.PlayerPreferencesService;
 import org.fourz.rvnkcore.util.log.LogManager;
 
 import java.util.ArrayList;
@@ -12,16 +13,23 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Subcommand for managing player notification preferences.
- * Usage: /lore prefs
- *        /lore prefs toggle
- *        /lore prefs disable <type>
- *        /lore prefs enable <type>
- *        /lore prefs quiet <startHour> <endHour>
- *        /lore prefs quiet disable
- *        /lore prefs channel <type> <channel> <on|off>
+ * Subcommand for managing player notification preferences for RVNKLore.
+ *
+ * <p>Delegates to PlayerPreferencesService via PreferencesServiceLookup.
+ * All preference changes are persisted asynchronously.</p>
+ *
+ * Usage:
+ *   /lore prefs
+ *   /lore prefs toggle
+ *   /lore prefs disable &lt;type&gt;
+ *   /lore prefs enable &lt;type&gt;
+ *   /lore prefs quiet &lt;startHour&gt; &lt;endHour&gt;
+ *   /lore prefs quiet disable
+ *   /lore prefs channel &lt;type&gt; &lt;channel&gt; &lt;on|off&gt;
  */
 public class LorePrefsSubCommand implements SubCommand {
+
+    private static final String PLUGIN_ID = "rvnklore";
 
     private final RVNKLore plugin;
     private final LogManager logger;
@@ -71,32 +79,52 @@ public class LorePrefsSubCommand implements SubCommand {
     }
 
     private boolean showPreferences(Player player, UUID playerId) {
-        player.sendMessage(ChatColor.GOLD + "===== Your Lore Preferences =====");
-        player.sendMessage(ChatColor.YELLOW + "Use /lore prefs <action> to modify:");
-        player.sendMessage(ChatColor.GRAY + "  toggle - Toggle all notifications on/off");
-        player.sendMessage(ChatColor.GRAY + "  enable <type> - Enable notification type");
-        player.sendMessage(ChatColor.GRAY + "  disable <type> - Disable notification type");
-        player.sendMessage(ChatColor.GRAY + "  quiet <hour1> <hour2> - Set quiet hours (24h format)");
-        player.sendMessage(ChatColor.GRAY + "  quiet disable - Disable quiet hours");
-        player.sendMessage(ChatColor.GRAY + "  channel <type> <channel> <on|off> - Toggle channel");
-        player.sendMessage(ChatColor.YELLOW + "Notification Types: discovery, achievement, collection_completion");
-        player.sendMessage(ChatColor.YELLOW + "Channels: TITLE, ACTION_BAR, CHAT, SOUND");
+        PlayerPreferencesService service = prefsLookup.getService();
+        service.getPreferences(playerId, PLUGIN_ID)
+                .thenAccept(prefs -> {
+                    player.sendMessage(ChatColor.GOLD + "===== Your Lore Preferences =====");
+                    String master = prefs.isMasterEnabled() ? ChatColor.GREEN + "ON" : ChatColor.RED + "OFF";
+                    player.sendMessage(ChatColor.YELLOW + "Master Toggle: " + master);
+
+                    if (prefs.getQuietHours().isEnabled()) {
+                        player.sendMessage(ChatColor.YELLOW + "Quiet Hours: "
+                                + prefs.getQuietHours().getStartHour() + ":00 - "
+                                + prefs.getQuietHours().getEndHour() + ":00");
+                    } else {
+                        player.sendMessage(ChatColor.YELLOW + "Quiet Hours: " + ChatColor.GRAY + "disabled");
+                    }
+
+                    player.sendMessage(ChatColor.YELLOW + "Notification Types:");
+                    player.sendMessage(ChatColor.GRAY + "  discovery, achievement, collection_completion");
+                    player.sendMessage("");
+                    player.sendMessage(ChatColor.GRAY + "Use /lore prefs <action> to modify.");
+                    player.sendMessage(ChatColor.GRAY + "Or use /pref " + PLUGIN_ID + " for full details.");
+                })
+                .exceptionally(ex -> {
+                    player.sendMessage(ChatColor.RED + "✖ Error loading preferences: " + ex.getMessage());
+                    logger.warning("Error loading lore preferences", ex);
+                    return null;
+                });
         return true;
     }
 
     private boolean handleToggleMaster(Player player, UUID playerId) {
-        var prefsService = prefsLookup.getService();
-        prefsService.isNotificationEnabled(playerId, "rvnklore", "discovery")
-            .thenAccept(enabled -> {
-                plugin.getServer().getScheduler().runTask(plugin, () -> {
-                    if (enabled) {
-                        player.sendMessage(ChatColor.GREEN + "✓ Lore notifications are currently " + ChatColor.YELLOW + "enabled");
-                    } else {
-                        player.sendMessage(ChatColor.GREEN + "✓ Lore notifications are currently " + ChatColor.YELLOW + "disabled");
-                    }
-                    player.sendMessage(ChatColor.GRAY + "Note: Preference persistence coming in future update");
+        PlayerPreferencesService service = prefsLookup.getService();
+        service.isMasterEnabled(playerId, PLUGIN_ID)
+                .thenCompose(currentEnabled -> {
+                    boolean newEnabled = !currentEnabled;
+                    return service.setMasterEnabled(playerId, PLUGIN_ID, newEnabled)
+                            .thenApply(v -> newEnabled);
+                })
+                .thenAccept(newEnabled -> {
+                    String status = newEnabled ? ChatColor.GREEN + "enabled" : ChatColor.RED + "disabled";
+                    player.sendMessage(ChatColor.AQUA + "✓ Lore notifications " + status);
+                })
+                .exceptionally(ex -> {
+                    player.sendMessage(ChatColor.RED + "✖ Error toggling notifications: " + ex.getMessage());
+                    logger.warning("Error toggling lore master toggle", ex);
+                    return null;
                 });
-            });
         return true;
     }
 
@@ -108,8 +136,14 @@ public class LorePrefsSubCommand implements SubCommand {
         }
 
         String type = args[1].toLowerCase();
-        player.sendMessage(ChatColor.GREEN + "✓ Queued: Enable notifications for " + type);
-        player.sendMessage(ChatColor.GRAY + "Note: Preference persistence coming in future update");
+        PlayerPreferencesService service = prefsLookup.getService();
+        service.setNotificationEnabled(playerId, PLUGIN_ID, type, true)
+                .thenRun(() -> player.sendMessage(ChatColor.AQUA + "✓ Enabled " + type + " notifications"))
+                .exceptionally(ex -> {
+                    player.sendMessage(ChatColor.RED + "✖ Error enabling notifications: " + ex.getMessage());
+                    logger.warning("Error enabling lore notification type: " + type, ex);
+                    return null;
+                });
         return true;
     }
 
@@ -121,8 +155,14 @@ public class LorePrefsSubCommand implements SubCommand {
         }
 
         String type = args[1].toLowerCase();
-        player.sendMessage(ChatColor.GREEN + "✓ Queued: Disable notifications for " + type);
-        player.sendMessage(ChatColor.GRAY + "Note: Preference persistence coming in future update");
+        PlayerPreferencesService service = prefsLookup.getService();
+        service.setNotificationEnabled(playerId, PLUGIN_ID, type, false)
+                .thenRun(() -> player.sendMessage(ChatColor.AQUA + "✓ Disabled " + type + " notifications"))
+                .exceptionally(ex -> {
+                    player.sendMessage(ChatColor.RED + "✖ Error disabling notifications: " + ex.getMessage());
+                    logger.warning("Error disabling lore notification type: " + type, ex);
+                    return null;
+                });
         return true;
     }
 
@@ -132,9 +172,16 @@ public class LorePrefsSubCommand implements SubCommand {
             return true;
         }
 
+        PlayerPreferencesService service = prefsLookup.getService();
+
         if ("disable".equalsIgnoreCase(args[1])) {
-            player.sendMessage(ChatColor.GREEN + "✓ Quiet hours disabled");
-            player.sendMessage(ChatColor.GRAY + "Note: Preference persistence coming in future update");
+            service.setQuietHours(playerId, PLUGIN_ID, -1, -1)
+                    .thenRun(() -> player.sendMessage(ChatColor.AQUA + "✓ Quiet hours disabled"))
+                    .exceptionally(ex -> {
+                        player.sendMessage(ChatColor.RED + "✖ Error disabling quiet hours: " + ex.getMessage());
+                        logger.warning("Error disabling lore quiet hours", ex);
+                        return null;
+                    });
             return true;
         }
 
@@ -152,13 +199,17 @@ public class LorePrefsSubCommand implements SubCommand {
                 return true;
             }
 
-            player.sendMessage(ChatColor.GREEN + "✓ Quiet hours set to " + hour1 + ":00 - " + hour2 + ":00");
-            player.sendMessage(ChatColor.GRAY + "Note: Preference persistence coming in future update");
-            return true;
+            service.setQuietHours(playerId, PLUGIN_ID, hour1, hour2)
+                    .thenRun(() -> player.sendMessage(ChatColor.AQUA + "✓ Quiet hours set to " + hour1 + ":00 - " + hour2 + ":00"))
+                    .exceptionally(ex -> {
+                        player.sendMessage(ChatColor.RED + "✖ Error setting quiet hours: " + ex.getMessage());
+                        logger.warning("Error setting lore quiet hours", ex);
+                        return null;
+                    });
         } catch (NumberFormatException e) {
             player.sendMessage(ChatColor.RED + "✖ Hours must be numbers");
-            return true;
         }
+        return true;
     }
 
     private boolean handleChannel(Player player, UUID playerId, String[] args) {
@@ -177,9 +228,18 @@ public class LorePrefsSubCommand implements SubCommand {
             return true;
         }
 
-        String status = state.equals("on") ? "enabled" : "disabled";
-        player.sendMessage(ChatColor.GREEN + "✓ Queued: Channel " + channel + " " + status + " for " + type);
-        player.sendMessage(ChatColor.GRAY + "Note: Preference persistence coming in future update");
+        boolean enabled = state.equals("on");
+        PlayerPreferencesService service = prefsLookup.getService();
+        service.setChannelEnabled(playerId, PLUGIN_ID, type, channel, enabled)
+                .thenRun(() -> {
+                    String status = enabled ? "enabled" : "disabled";
+                    player.sendMessage(ChatColor.AQUA + "✓ Channel " + channel + " " + status + " for " + type);
+                })
+                .exceptionally(ex -> {
+                    player.sendMessage(ChatColor.RED + "✖ Error updating channel: " + ex.getMessage());
+                    logger.warning("Error updating lore channel preference", ex);
+                    return null;
+                });
         return true;
     }
 
@@ -224,6 +284,7 @@ public class LorePrefsSubCommand implements SubCommand {
             } else if ("channel".equalsIgnoreCase(args[0])) {
                 completions.add("discovery");
                 completions.add("achievement");
+                completions.add("collection_completion");
             }
         } else if (args.length == 3) {
             if ("channel".equalsIgnoreCase(args[0])) {

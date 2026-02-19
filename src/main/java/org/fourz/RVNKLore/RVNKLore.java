@@ -3,6 +3,9 @@ package org.fourz.RVNKLore;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.fourz.RVNKLore.handler.HandlerFactory;
+import org.fourz.RVNKLore.integration.preferences.PreferencesServiceLookup;
+import org.fourz.rvnkcore.api.model.NotificationTypeDefinition;
+import org.fourz.rvnkcore.api.service.PlayerPreferencesService;
 import org.fourz.RVNKLore.lore.LoreManager;
 import org.fourz.RVNKLore.config.ConfigManager;
 import org.fourz.RVNKLore.data.DatabaseManager;
@@ -854,59 +857,36 @@ public class RVNKLore extends JavaPlugin {
 
     /**
      * Registers notification types with PlayerPreferencesService.
-     * Allows players to control discovery and achievement notifications.
+     * Allows players to control discovery and achievement notifications via /pref and /lore prefs.
      *
-     * Phase 3: Player Preferences Integration
+     * Phase 5: Dynamic type self-registration
      */
     private void registerNotificationTypes() {
         if (!rvnkCoreAvailable) {
-            return; // PlayerPreferencesService not available
+            return;
         }
 
         try {
-            Class<?> rvnkCoreClass = rvnkCoreInstance.getClass();
-            Object serviceRegistry = rvnkCoreClass.getMethod("getServiceRegistry").invoke(rvnkCoreInstance);
-            if (serviceRegistry == null) {
-                return;
-            }
-
-            // Get PlayerPreferencesService
-            Class<?> prefsServiceClass = Class.forName("org.fourz.rvnkcore.api.service.PlayerPreferencesService");
-            java.lang.reflect.Method getServiceMethod = serviceRegistry.getClass()
-                    .getMethod("getService", Class.class);
-            Object prefsService = getServiceMethod.invoke(serviceRegistry, prefsServiceClass);
-
-            if (prefsService == null) {
+            PreferencesServiceLookup lookup = new PreferencesServiceLookup(this);
+            if (!lookup.isAvailable()) {
                 logger.debug("PlayerPreferencesService not available - notification types not registered");
                 return;
             }
 
-            // Register discovery notification type
-            java.lang.reflect.Method registerTypeMethod = prefsService.getClass()
-                    .getMethod("registerNotificationType", String.class, String.class, java.util.Set.class);
+            PlayerPreferencesService prefsService = lookup.getService();
 
-            java.util.Set<String> discoveryChannels = new java.util.HashSet<>(
-                    java.util.Arrays.asList("TITLE", "ACTION_BAR", "CHAT", "SOUND")
+            java.util.List<NotificationTypeDefinition> types = java.util.Arrays.asList(
+                    new NotificationTypeDefinition("rvnklore", "discovery",
+                            "Lore item discovery notifications", true),
+                    new NotificationTypeDefinition("rvnklore", "achievement",
+                            "Achievement unlocked notifications", true),
+                    new NotificationTypeDefinition("rvnklore", "collection_completion",
+                            "Collection completion announcements", true)
             );
-            registerTypeMethod.invoke(prefsService, "rvnklore", "discovery", discoveryChannels);
-            logger.debug("Registered 'discovery' notification type with PlayerPreferencesService");
 
-            // Register achievement notification type
-            java.util.Set<String> achievementChannels = new java.util.HashSet<>(
-                    java.util.Arrays.asList("TITLE", "CHAT", "SOUND")
-            );
-            registerTypeMethod.invoke(prefsService, "rvnklore", "achievement", achievementChannels);
-            logger.debug("Registered 'achievement' notification type with PlayerPreferencesService");
+            prefsService.registerNotificationTypes("rvnklore", types);
+            logger.info("Registered " + types.size() + " notification types with PlayerPreferencesService");
 
-            // Register collection completion webhook notification type
-            java.util.Set<String> collectionChannels = new java.util.HashSet<>(
-                    java.util.Arrays.asList("DISCORD")
-            );
-            registerTypeMethod.invoke(prefsService, "rvnklore", "collection_completion", collectionChannels);
-            logger.debug("Registered 'collection_completion' notification type with PlayerPreferencesService");
-
-        } catch (ClassNotFoundException e) {
-            logger.debug("PlayerPreferencesService not found - notification types not registered");
         } catch (Exception e) {
             logger.debug("Failed to register notification types: " + e.getMessage());
         }
