@@ -16,6 +16,8 @@ import org.fourz.RVNKLore.service.IItemService;
 import org.fourz.RVNKLore.service.ICollectionService;
 import org.fourz.RVNKLore.service.ISubmissionService;
 import org.fourz.RVNKLore.service.IPlayerLoreService;
+import org.fourz.RVNKLore.service.ILoreBookService;
+import org.fourz.RVNKLore.lore.item.book.LoreBookManager;
 import org.fourz.rvnkcore.util.PlayerLookup;
 import org.fourz.RVNKLore.util.UtilityManager;
 import org.fourz.RVNKLore.lore.item.ItemManager;
@@ -50,6 +52,7 @@ public class RVNKLore extends JavaPlugin {
     private LoreApiInitializer apiInitializer;
     private DiscoveryManager discoveryManager;
     private AchievementManager achievementManager;
+    private LoreBookManager loreBookManager;
     private int healthCheckTaskId = -1;
     private Thread shutdownHook;
     private boolean shuttingDown = false;
@@ -127,6 +130,9 @@ public class RVNKLore extends JavaPlugin {
               // Now initialize LoreManager after HandlerFactory is fully initialized
             loreManager = LoreManager.getInstance(this);
             loreManager.initializeLore();
+
+            // Initialize LoreBookManager as plugin-level singleton
+            loreBookManager = new LoreBookManager(this);
 
             // Initialize PlayerLookup for RVNKCore name resolution
             this.playerLookup = new PlayerLookup(this);
@@ -677,6 +683,11 @@ public class RVNKLore extends JavaPlugin {
     public LoreManager getLoreManager() {
         return loreManager;
     }
+
+    public LoreBookManager getLoreBookManager() {
+        return loreBookManager;
+    }
+
     public LogManager getLogManager() {
         return logger;
     }
@@ -843,6 +854,12 @@ public class RVNKLore extends JavaPlugin {
                 logger.info("Registered IPlayerLoreService with RVNKCore");
             }
 
+            // Register LoreBookService
+            if (loreBookManager != null) {
+                registerMethod.invoke(serviceRegistry, ILoreBookService.class, loreBookManager);
+                logger.info("Registered ILoreBookService with RVNKCore");
+            }
+
             rvnkCoreAvailable = true;
             rvnkCoreInstance = coreInstance;
             logger.info("RVNKCore integration enabled - services registered");
@@ -909,6 +926,7 @@ public class RVNKLore extends JavaPlugin {
             java.lang.reflect.Method unregisterMethod = registryClass.getMethod("unregisterService", Class.class);
 
             // Unregister services in reverse order
+            unregisterMethod.invoke(serviceRegistry, ILoreBookService.class);
             unregisterMethod.invoke(serviceRegistry, IPlayerLoreService.class);
             unregisterMethod.invoke(serviceRegistry, ISubmissionService.class);
             unregisterMethod.invoke(serviceRegistry, ICollectionService.class);

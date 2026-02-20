@@ -11,7 +11,6 @@ softdepend:
   - WorldEdit
   - PlaceholderAPI
   - Dynmap
-  - RVNKQuests
   - VotingPlugin
   - GriefPrevention
 
@@ -58,9 +57,6 @@ permissions:
     default: op
   rvnklore.sign.tavern:
     description: Allows players to create tavern signs
-    default: op
-  rvnklore.sign.temple:
-    description: Allows players to create temple signs
     default: op
   rvnklore.approve.own:
     description: Allows players to auto-approve their own submissions
