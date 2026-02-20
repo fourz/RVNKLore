@@ -1,8 +1,8 @@
 package org.fourz.RVNKLore.data;
 
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.config.dto.DatabaseSettingsDTO;
-import org.fourz.RVNKLore.config.dto.SQLiteSettingsDTO;
+import org.fourz.rvnkcore.config.dto.DatabaseSettingsDTO;
+import org.fourz.rvnkcore.config.dto.SQLiteSettingsDTO;
 import org.fourz.RVNKLore.data.dialect.MySQLDialect;
 import org.fourz.RVNKLore.data.dialect.SQLDialect;
 import org.fourz.RVNKLore.data.dialect.SQLiteDialect;

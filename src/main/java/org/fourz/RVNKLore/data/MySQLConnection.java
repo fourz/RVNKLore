@@ -3,7 +3,7 @@ package org.fourz.RVNKLore.data;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.config.dto.MySQLSettingsDTO;
+import org.fourz.rvnkcore.config.dto.MySQLSettingsDTO;
 import org.fourz.RVNKLore.data.dialect.SQLDialect;
 
 import java.sql.*;

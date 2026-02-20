@@ -8,7 +8,7 @@ import org.bukkit.entity.Player;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
-import org.fourz.RVNKLore.integration.preferences.PreferencesServiceLookup;
+import org.fourz.rvnkcore.RVNKCore;
 import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.rvnkcore.api.service.PlayerPreferencesService;
 
@@ -25,7 +25,6 @@ public class DiscoveryNotificationManager {
 
     private final RVNKLore plugin;
     private final LogManager logger;
-    private final PreferencesServiceLookup prefsLookup;
 
     // Configuration options (can be loaded from config.yml)
     private boolean enableTitles = true;
@@ -37,7 +36,6 @@ public class DiscoveryNotificationManager {
     public DiscoveryNotificationManager(RVNKLore plugin) {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "DiscoveryNotificationManager");
-        this.prefsLookup = new PreferencesServiceLookup(plugin);
         loadConfiguration();
     }
 
@@ -79,8 +77,8 @@ public class DiscoveryNotificationManager {
         }
 
         // Check player preferences if available
-        if (prefsLookup.isAvailable()) {
-            PlayerPreferencesService prefs = prefsLookup.getService();
+        PlayerPreferencesService prefs = RVNKCore.getServiceSafe(PlayerPreferencesService.class);
+        if (prefs != null) {
             UUID playerId = player.getUniqueId();
 
             // Check if discovery notifications are enabled for this player

@@ -8,7 +8,7 @@ import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.achievement.reward.*;
 import org.fourz.RVNKLore.data.repository.AchievementRepository;
 import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
-import org.fourz.RVNKLore.integration.preferences.PreferencesServiceLookup;
+import org.fourz.rvnkcore.RVNKCore;
 import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.rvnkcore.api.service.PlayerPreferencesService;
 
@@ -25,7 +25,6 @@ public class AchievementManager {
 
     private final RVNKLore plugin;
     private final LogManager logger;
-    private final PreferencesServiceLookup prefsLookup;
     private AchievementRepository achievementRepository;
 
     // Achievement registry
@@ -45,7 +44,6 @@ public class AchievementManager {
     public AchievementManager(RVNKLore plugin) {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "AchievementManager");
-        this.prefsLookup = new PreferencesServiceLookup(plugin);
     }
 
     /**
@@ -295,8 +293,8 @@ public class AchievementManager {
      * Respects PlayerPreferencesService if available, falls back to config-based settings.
      */
     private void sendUnlockNotification(Player player, Achievement achievement) {
-        if (prefsLookup.isAvailable()) {
-            PlayerPreferencesService prefs = prefsLookup.getService();
+        PlayerPreferencesService prefs = RVNKCore.getServiceSafe(PlayerPreferencesService.class);
+        if (prefs != null) {
             UUID playerId = player.getUniqueId();
 
             // Check if achievement notifications are enabled for this player

@@ -4,6 +4,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.rvnkcore.data.FallbackTracker;
 import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
@@ -36,7 +37,10 @@ public class LoreEntryRepository implements ILoreEntryRepository {
         this.dbConnection = dbConnection;
         this.logger = LogManager.getInstance(plugin, "LoreEntryRepository");
         this.jsonParser = new JSONParser();
-        this.fallbackTracker = new FallbackTracker(plugin);
+        this.fallbackTracker = new FallbackTracker(
+                plugin.getConfig().getInt("database.fallback.maxFailuresBeforeFallback", 3),
+                plugin.getConfig().getInt("database.fallback.recoveryTimeMinutes", 5) * 60 * 1000L,
+                LogManager.getInstance(plugin, "FallbackTracker"));
     }
 
     /** Helper to get prefixed table name */

@@ -2,6 +2,7 @@ package org.fourz.RVNKLore.data;
 
 import org.bukkit.Material;
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.rvnkcore.data.FallbackTracker;
 import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.exception.LoreException;
 import org.fourz.RVNKLore.lore.item.ItemProperties;
@@ -53,7 +54,10 @@ public class ItemRepository implements IItemRepository {
         this.logger = LogManager.getInstance(plugin, "ItemRepository");
         this.dbConnection = dbConnection;
         this.dbHelper = new DatabaseHelper(plugin);
-        this.fallbackTracker = new FallbackTracker(plugin);
+        this.fallbackTracker = new FallbackTracker(
+                plugin.getConfig().getInt("database.fallback.maxFailuresBeforeFallback", 3),
+                plugin.getConfig().getInt("database.fallback.recoveryTimeMinutes", 5) * 60 * 1000L,
+                LogManager.getInstance(plugin, "FallbackTracker"));
 
         // Initialize database tables
         initializeTables();

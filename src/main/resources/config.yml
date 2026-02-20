@@ -75,6 +75,8 @@ dynmap:
     LANDMARK: pin
     MONUMENT: temple
     CITY: bighouse
+    TAVERN: house
+    SHRINE: church
     PATH: walk
     EVENT: skull
     FACTION: castle
@@ -125,6 +127,22 @@ citizens:
     track-purchases: true
     # Default stackable setting for new vendors
     default-stackable: true
+
+landmarks:
+  signs:
+    auto_approve: false
+
+cities:
+  signs:
+    auto_approve: false
+
+taverns:
+  signs:
+    auto_approve: false
+
+temples:
+  signs:
+    auto_approve: false
 
 messages:
   generic:

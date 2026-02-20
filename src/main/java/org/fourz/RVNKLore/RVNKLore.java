@@ -3,7 +3,7 @@ package org.fourz.RVNKLore;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.fourz.RVNKLore.handler.HandlerFactory;
-import org.fourz.RVNKLore.integration.preferences.PreferencesServiceLookup;
+import org.fourz.rvnkcore.RVNKCore;
 import org.fourz.rvnkcore.api.model.NotificationTypeDefinition;
 import org.fourz.rvnkcore.api.service.PlayerPreferencesService;
 import org.fourz.RVNKLore.lore.LoreManager;
@@ -867,13 +867,11 @@ public class RVNKLore extends JavaPlugin {
         }
 
         try {
-            PreferencesServiceLookup lookup = new PreferencesServiceLookup(this);
-            if (!lookup.isAvailable()) {
+            PlayerPreferencesService prefsService = RVNKCore.getServiceSafe(PlayerPreferencesService.class);
+            if (prefsService == null) {
                 logger.debug("PlayerPreferencesService not available - notification types not registered");
                 return;
             }
-
-            PlayerPreferencesService prefsService = lookup.getService();
 
             java.util.List<NotificationTypeDefinition> types = java.util.Arrays.asList(
                     new NotificationTypeDefinition("rvnklore", "discovery",

@@ -1,6 +1,6 @@
 name: RVNKLore
 api: "1.17"
-version: 1.0.0
+version: '${project.version}'
 description: A lore data system for Minecraft
 authors: [Derek, Fourz]
 main: org.fourz.RVNKLore.RVNKLore
@@ -53,6 +53,15 @@ permissions:
   rvnklore.sign.landmark:
     description: Allows players to create landmark signs
     default: op
+  rvnklore.sign.city:
+    description: Allows players to create city signs
+    default: op
+  rvnklore.sign.tavern:
+    description: Allows players to create tavern signs
+    default: op
+  rvnklore.sign.temple:
+    description: Allows players to create temple signs
+    default: op
   rvnklore.approve.own:
     description: Allows players to auto-approve their own submissions
     default: op
@@ -63,4 +72,16 @@ permissions:
     description: Allows viewing and claiming collection progress and rewards
   rvnklore.admin.dynmap:
     description: Allows using dynmap integration commands (diff, import)
+    default: op
+  rvnklore.use:
+    description: General access to basic lore commands
+    default: true
+  rvnklore.book:
+    description: Access to lore book commands
+    default: true
+  rvnklore.book.list:
+    description: Allows listing available lore books
+    default: true
+  rvnklore.book.give:
+    description: Allows giving lore books to players
     default: op

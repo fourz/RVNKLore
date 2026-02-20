@@ -4,7 +4,7 @@ import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.integration.preferences.PreferencesServiceLookup;
+import org.fourz.rvnkcore.RVNKCore;
 import org.fourz.rvnkcore.api.service.PlayerPreferencesService;
 import org.fourz.rvnkcore.util.log.LogManager;
 
@@ -33,12 +33,10 @@ public class LorePrefsSubCommand implements SubCommand {
 
     private final RVNKLore plugin;
     private final LogManager logger;
-    private final PreferencesServiceLookup prefsLookup;
 
     public LorePrefsSubCommand(RVNKLore plugin) {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "LorePrefsSubCommand");
-        this.prefsLookup = new PreferencesServiceLookup(plugin);
     }
 
     @Override
@@ -51,7 +49,7 @@ public class LorePrefsSubCommand implements SubCommand {
         Player player = (Player) sender;
         UUID playerId = player.getUniqueId();
 
-        if (!prefsLookup.isAvailable()) {
+        if (RVNKCore.getServiceSafe(PlayerPreferencesService.class) == null) {
             player.sendMessage(ChatColor.RED + "✖ PlayerPreferencesService is not available.");
             return true;
         }
@@ -79,7 +77,7 @@ public class LorePrefsSubCommand implements SubCommand {
     }
 
     private boolean showPreferences(Player player, UUID playerId) {
-        PlayerPreferencesService service = prefsLookup.getService();
+        PlayerPreferencesService service = RVNKCore.getServiceSafe(PlayerPreferencesService.class);
         service.getPreferences(playerId, PLUGIN_ID)
                 .thenAccept(prefs -> {
                     player.sendMessage(ChatColor.GOLD + "===== Your Lore Preferences =====");
@@ -109,7 +107,7 @@ public class LorePrefsSubCommand implements SubCommand {
     }
 
     private boolean handleToggleMaster(Player player, UUID playerId) {
-        PlayerPreferencesService service = prefsLookup.getService();
+        PlayerPreferencesService service = RVNKCore.getServiceSafe(PlayerPreferencesService.class);
         service.isMasterEnabled(playerId, PLUGIN_ID)
                 .thenCompose(currentEnabled -> {
                     boolean newEnabled = !currentEnabled;
@@ -136,7 +134,7 @@ public class LorePrefsSubCommand implements SubCommand {
         }
 
         String type = args[1].toLowerCase();
-        PlayerPreferencesService service = prefsLookup.getService();
+        PlayerPreferencesService service = RVNKCore.getServiceSafe(PlayerPreferencesService.class);
         service.setNotificationEnabled(playerId, PLUGIN_ID, type, true)
                 .thenRun(() -> player.sendMessage(ChatColor.AQUA + "✓ Enabled " + type + " notifications"))
                 .exceptionally(ex -> {
@@ -155,7 +153,7 @@ public class LorePrefsSubCommand implements SubCommand {
         }
 
         String type = args[1].toLowerCase();
-        PlayerPreferencesService service = prefsLookup.getService();
+        PlayerPreferencesService service = RVNKCore.getServiceSafe(PlayerPreferencesService.class);
         service.setNotificationEnabled(playerId, PLUGIN_ID, type, false)
                 .thenRun(() -> player.sendMessage(ChatColor.AQUA + "✓ Disabled " + type + " notifications"))
                 .exceptionally(ex -> {
@@ -172,7 +170,7 @@ public class LorePrefsSubCommand implements SubCommand {
             return true;
         }
 
-        PlayerPreferencesService service = prefsLookup.getService();
+        PlayerPreferencesService service = RVNKCore.getServiceSafe(PlayerPreferencesService.class);
 
         if ("disable".equalsIgnoreCase(args[1])) {
             service.setQuietHours(playerId, PLUGIN_ID, -1, -1)
@@ -229,7 +227,7 @@ public class LorePrefsSubCommand implements SubCommand {
         }
 
         boolean enabled = state.equals("on");
-        PlayerPreferencesService service = prefsLookup.getService();
+        PlayerPreferencesService service = RVNKCore.getServiceSafe(PlayerPreferencesService.class);
         service.setChannelEnabled(playerId, PLUGIN_ID, type, channel, enabled)
                 .thenRun(() -> {
                     String status = enabled ? "enabled" : "disabled";

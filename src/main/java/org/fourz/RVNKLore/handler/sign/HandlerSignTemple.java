@@ -16,48 +16,47 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 
 /**
- * Handler for creating taverns via sign creation.
- * When a player places a sign with "[Tavern]" on the first line,
- * a new tavern lore entry is created.
+ * Handler for creating temple/shrine markers via sign creation.
+ * When a player places a sign with "[Temple]" on the first line,
+ * a new SHRINE lore entry is created and a Dynmap marker is placed.
  */
-public class HandlerSignTavern extends DefaultLoreHandler {
-    private static final String TAVERN_SIGN_HEADER = "[Tavern]";
+public class HandlerSignTemple extends DefaultLoreHandler {
+    private static final String TEMPLE_SIGN_HEADER = "[Temple]";
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     private final LogManager logger;
 
-    public HandlerSignTavern(RVNKLore plugin) {
+    public HandlerSignTemple(RVNKLore plugin) {
         super(plugin);
-        this.logger = LogManager.getInstance(plugin, "HandlerSignTavern");
+        this.logger = LogManager.getInstance(plugin, "HandlerSignTemple");
     }
 
     @Override
     public void initialize() {
-        logger.debug("Initializing sign tavern handler");
+        logger.debug("Initializing sign temple handler");
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onSignChange(SignChangeEvent event) {
-        if (!event.getLine(0).equalsIgnoreCase(TAVERN_SIGN_HEADER)) {
+        if (!event.getLine(0).equalsIgnoreCase(TEMPLE_SIGN_HEADER)) {
             return;
         }
 
         Player player = event.getPlayer();
         Block block = event.getBlock();
 
-        if (!player.hasPermission("rvnklore.sign.tavern")) {
-            logger.debug(player.getName() + " tried to create a tavern sign but lacks permission");
-            event.setLine(0, ChatColor.RED + "[Tavern]");
-            player.sendMessage(ChatColor.RED + "You don't have permission to create tavern signs.");
+        if (!player.hasPermission("rvnklore.sign.temple")) {
+            logger.debug(player.getName() + " tried to create a temple sign but lacks permission");
+            event.setLine(0, ChatColor.RED + "[Temple]");
+            player.sendMessage(ChatColor.RED + "You don't have permission to create temple signs.");
             return;
         }
 
-        // Format the sign display
-        event.setLine(0, ChatColor.DARK_AQUA + "[" + ChatColor.AQUA + "Tavern" + ChatColor.DARK_AQUA + "]");
+        event.setLine(0, ChatColor.DARK_PURPLE + "[" + ChatColor.LIGHT_PURPLE + "Temple" + ChatColor.DARK_PURPLE + "]");
 
-        String tavernName = event.getLine(1);
-        if (tavernName == null || tavernName.trim().isEmpty()) {
-            tavernName = "Unnamed Tavern";
-            event.setLine(1, tavernName);
+        String templeName = event.getLine(1);
+        if (templeName == null || templeName.trim().isEmpty()) {
+            templeName = "Unnamed Temple";
+            event.setLine(1, templeName);
         }
 
         String description = "";
@@ -67,14 +66,14 @@ public class HandlerSignTavern extends DefaultLoreHandler {
                 description += " " + event.getLine(3);
             }
         } else {
-            description = "Tavern established by " + player.getName();
+            description = "Temple dedicated by " + player.getName();
         }
 
-        createTavernEntry(player, tavernName, description, block);
+        createTempleEntry(player, templeName, description, block);
     }
 
-    private void createTavernEntry(Player player, String name, String description, Block block) {
-        LoreEntry entry = LoreEntry.createLocationLore(name, description, LoreType.TAVERN, block.getLocation(), player);
+    private void createTempleEntry(Player player, String name, String description, Block block) {
+        LoreEntry entry = LoreEntry.createLocationLore(name, description, LoreType.SHRINE, block.getLocation(), player);
 
         String currentTime = dateFormat.format(new Date());
         entry.addMetadata("created_at", currentTime);
@@ -86,27 +85,27 @@ public class HandlerSignTavern extends DefaultLoreHandler {
         entry.addMetadata("z", String.valueOf(block.getZ()));
         entry.addMetadata("source", "sign");
 
-        boolean autoApprove = plugin.getConfigManager().getConfig().getBoolean("taverns.signs.auto_approve", false);
+        boolean autoApprove = plugin.getConfigManager().getConfig().getBoolean("temples.signs.auto_approve", false);
         entry.setApproved(autoApprove || player.hasPermission("rvnklore.approve.own"));
 
         boolean success = plugin.getLoreManager().addLoreEntrySync(entry);
 
         if (success) {
-            player.sendMessage(ChatColor.GREEN + "Tavern '" + name + "' has been " +
+            player.sendMessage(ChatColor.GREEN + "Temple '" + name + "' has been " +
                     (entry.isApproved() ? "created" : "submitted for approval") + ".");
-            logger.debug("Created tavern via sign: " + name + " by " + player.getName());
+            logger.debug("Created temple via sign: " + name + " by " + player.getName());
 
             if (plugin.isDynmapAvailable()) {
                 plugin.getDynmapIntegration().getMarkerManager().createOrUpdateMarker(entry);
             }
         } else {
-            player.sendMessage(ChatColor.RED + "Failed to create tavern. Please try again or contact an admin.");
-            logger.warning("Failed to create tavern via sign: " + name + " by " + player.getName());
+            player.sendMessage(ChatColor.RED + "Failed to create temple. Please try again or contact an admin.");
+            logger.warning("Failed to create temple via sign: " + name + " by " + player.getName());
         }
     }
 
     @Override
     public LoreType getHandlerType() {
-        return LoreType.TAVERN;
+        return LoreType.SHRINE;
     }
 }

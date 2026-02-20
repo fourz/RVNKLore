@@ -12,7 +12,7 @@ import java.util.concurrent.CompletableFuture;
 
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.data.DatabaseConnection;
-import org.fourz.RVNKLore.data.FallbackTracker;
+import org.fourz.rvnkcore.data.FallbackTracker;
 import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.lore.LoreType;
 import org.json.simple.JSONObject;
@@ -38,7 +38,10 @@ public class PlayerRepository implements IPlayerRepository {
         this.plugin = plugin;
         this.dbConnection = dbConnection;
         this.logger = LogManager.getInstance(plugin, "PlayerRepository");
-        this.fallbackTracker = new FallbackTracker(plugin);
+        this.fallbackTracker = new FallbackTracker(
+                plugin.getConfig().getInt("database.fallback.maxFailuresBeforeFallback", 3),
+                plugin.getConfig().getInt("database.fallback.recoveryTimeMinutes", 5) * 60 * 1000L,
+                LogManager.getInstance(plugin, "FallbackTracker"));
         this.jsonParser = new JSONParser();
     }
 

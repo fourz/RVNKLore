@@ -2,9 +2,9 @@ package org.fourz.RVNKLore.config;
 
 import org.bukkit.configuration.file.FileConfiguration;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.config.dto.DatabaseSettingsDTO;
-import org.fourz.RVNKLore.config.dto.MySQLSettingsDTO;
-import org.fourz.RVNKLore.config.dto.SQLiteSettingsDTO;
+import org.fourz.rvnkcore.config.dto.DatabaseSettingsDTO;
+import org.fourz.rvnkcore.config.dto.MySQLSettingsDTO;
+import org.fourz.rvnkcore.config.dto.SQLiteSettingsDTO;
 import org.fourz.RVNKLore.handler.DefaultLoreHandler;
 import org.fourz.RVNKLore.handler.HandlerFactory;
 import org.fourz.RVNKLore.handler.LoreHandler;

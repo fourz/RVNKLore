@@ -1,6 +1,7 @@
 package org.fourz.RVNKLore.data;
 
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.rvnkcore.data.FallbackTracker;
 import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.data.model.LoreLocation;
 import org.fourz.RVNKLore.data.repository.AchievementRepository;
@@ -66,7 +67,10 @@ public class DatabaseManager {
 
         // Initialize components
         this.connectionFactory = new DatabaseConnectionFactory(plugin);
-        this.fallbackTracker = new FallbackTracker(plugin);
+        this.fallbackTracker = new FallbackTracker(
+                plugin.getConfig().getInt("database.fallback.maxFailuresBeforeFallback", 3),
+                plugin.getConfig().getInt("database.fallback.recoveryTimeMinutes", 5) * 60 * 1000L,
+                LogManager.getInstance(plugin, "FallbackTracker"));
         initializeDatabase();
     }
 

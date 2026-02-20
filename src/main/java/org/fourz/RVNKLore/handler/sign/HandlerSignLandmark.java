@@ -105,9 +105,13 @@ public class HandlerSignLandmark extends DefaultLoreHandler {
         boolean success = plugin.getLoreManager().addLoreEntrySync(entry);
         
         if (success) {
-            player.sendMessage(ChatColor.GREEN + "Landmark '" + name + "' has been " + 
+            player.sendMessage(ChatColor.GREEN + "Landmark '" + name + "' has been " +
                 (entry.isApproved() ? "created" : "submitted for approval") + ".");
             logger.debug("Created landmark via sign: " + name + " by " + player.getName());
+
+            if (plugin.isDynmapAvailable()) {
+                plugin.getDynmapIntegration().getMarkerManager().createOrUpdateMarker(entry);
+            }
         } else {
             player.sendMessage(ChatColor.RED + "Failed to create landmark. Please try again or contact an admin.");
             logger.warning("Failed to create landmark via sign: " + name + " by " + player.getName());
