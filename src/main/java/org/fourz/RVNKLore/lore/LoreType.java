@@ -75,9 +75,9 @@ public enum LoreType {
     GUILD("Guild hall or professional organization"),
 
     /**
-     * Shrine, temple, or place of worship
+     * Shrine, altar, or place of worship
      */
-    SHRINE("Shrine, temple, or place of worship");
+    SHRINE("Shrine, altar, or place of worship");
 
     private final String description;
 
@@ -87,5 +87,31 @@ public enum LoreType {
 
     public String getDescription() {
         return this.description;
+    }
+
+    /**
+     * Returns the broad category this lore type belongs to.
+     */
+    public LoreCategory getCategory() {
+        switch (this) {
+            case LANDMARK: case MONUMENT: case CITY: case PATH: case EVENT:
+            case FACTION: case TAVERN: case GUILD: case SHRINE:
+                return LoreCategory.LOCATION;
+            case PLAYER:
+                return LoreCategory.CHARACTER;
+            case ITEM: case HEAD: case ENCHANTMENT:
+                return LoreCategory.ITEM;
+            case QUEST: case GENERIC:
+            default:
+                return LoreCategory.NARRATIVE;
+        }
+    }
+
+    /**
+     * Returns true if this type represents a location-anchored entry
+     * (eligible for dynmap markers and requires coordinates).
+     */
+    public boolean isLocationCapable() {
+        return getCategory() == LoreCategory.LOCATION;
     }
 }

@@ -95,6 +95,10 @@ public class HandlerSignShrine extends DefaultLoreHandler {
             player.sendMessage(ChatColor.GREEN + "Shrine '" + name + "' has been " +
                     (entry.isApproved() ? "created" : "submitted for approval") + ".");
             logger.debug("Created shrine via sign: " + name + " by " + player.getName());
+
+            if (plugin.isDynmapAvailable()) {
+                plugin.getDynmapIntegration().getMarkerManager().createOrUpdateMarker(entry);
+            }
         } else {
             player.sendMessage(ChatColor.RED + "Failed to create shrine. Please try again or contact an admin.");
             logger.warning("Failed to create shrine via sign: " + name + " by " + player.getName());

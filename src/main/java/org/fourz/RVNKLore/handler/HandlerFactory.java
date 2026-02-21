@@ -129,7 +129,6 @@ public class HandlerFactory {
             handlerClasses.put("SIGN_GUILD", org.fourz.RVNKLore.handler.sign.HandlerSignGuild.class);
             handlerClasses.put("SIGN_SHRINE", org.fourz.RVNKLore.handler.sign.HandlerSignShrine.class);
             handlerClasses.put("SIGN_CITY", org.fourz.RVNKLore.handler.sign.HandlerSignCity.class);
-            handlerClasses.put("SIGN_TEMPLE", org.fourz.RVNKLore.handler.sign.HandlerSignTemple.class);
             
             // Check for missing handlers but don't log warnings yet - will use default
             for (LoreType type : LoreType.values()) {
@@ -184,7 +183,7 @@ public class HandlerFactory {
         String[] eventHandlerKeys = {
             "ANVIL_ARTIFACT", "ARMOR_STAND", "BOSS_KILL", "LECTERN_BOOK", "PLAYER_DEATH", "PLAYER_JOIN",
             "SIGN_LANDMARK", "SIGN_MONUMENT", "SIGN_TAVERN", "SIGN_GUILD", "SIGN_SHRINE",
-            "SIGN_CITY", "SIGN_TEMPLE"
+            "SIGN_CITY"
         };
         for (String key : eventHandlerKeys) {
             try {

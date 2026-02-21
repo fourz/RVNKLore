@@ -91,7 +91,11 @@ public class LoreEntryRepository implements ILoreEntryRepository {
                     return true;
                 } catch (SQLException e) {
                     conn.rollback();
-                    logger.error("Failed to add lore entry to database", e);
+                    if (e instanceof java.sql.SQLIntegrityConstraintViolationException) {
+                        logger.debug("Duplicate entry rejected: " + entry.getName() + " (" + entry.getType() + ")");
+                    } else {
+                        logger.error("Failed to add lore entry to database", e);
+                    }
                     return false;
                 } finally {
                     conn.setAutoCommit(true);
@@ -505,6 +509,10 @@ public class LoreEntryRepository implements ILoreEntryRepository {
             stmt.setString(3, entry.getName());
             int affected = stmt.executeUpdate();
             return affected > 0 ? entry.getId() : null;
+        } catch (java.sql.SQLIntegrityConstraintViolationException e) {
+            entry.addMetadata("validation_errors",
+                "A " + entry.getType().name() + " entry named '" + entry.getName() + "' already exists.");
+            throw e;
         }
     }
 

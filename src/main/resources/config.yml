@@ -140,10 +140,6 @@ taverns:
   signs:
     auto_approve: false
 
-temples:
-  signs:
-    auto_approve: false
-
 messages:
   generic:
     error:

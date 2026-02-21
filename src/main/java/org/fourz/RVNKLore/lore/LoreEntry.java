@@ -356,7 +356,7 @@ public class LoreEntry {
         }
         
         // Location-based lore requires a location
-        if ((type == LoreType.LANDMARK || type == LoreType.CITY || type == LoreType.PATH) && location == null) {
+        if (type != null && type.isLocationCapable() && location == null) {
             return false;
         }
         

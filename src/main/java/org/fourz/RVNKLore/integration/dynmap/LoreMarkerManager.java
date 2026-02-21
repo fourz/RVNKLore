@@ -25,12 +25,6 @@ import java.util.stream.Collectors;
  */
 public class LoreMarkerManager {
 
-    private static final Set<LoreType> LOCATION_TYPES = EnumSet.of(
-        LoreType.LANDMARK, LoreType.MONUMENT, LoreType.CITY,
-        LoreType.PATH, LoreType.EVENT, LoreType.FACTION,
-        LoreType.TAVERN, LoreType.GUILD, LoreType.SHRINE
-    );
-
     private static final String MARKER_ID_PREFIX = "rvnklore_";
     private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("MMM dd, yyyy");
 
@@ -156,7 +150,7 @@ public class LoreMarkerManager {
         }
 
         // Must be a location-capable type
-        if (!LOCATION_TYPES.contains(entry.getType())) {
+        if (!entry.getType().isLocationCapable()) {
             return false;
         }
 
@@ -251,7 +245,11 @@ public class LoreMarkerManager {
      * Get the set of lore types that support map markers.
      */
     public static Set<LoreType> getLocationTypes() {
-        return LOCATION_TYPES;
+        EnumSet<LoreType> types = EnumSet.noneOf(LoreType.class);
+        for (LoreType t : LoreType.values()) {
+            if (t.isLocationCapable()) types.add(t);
+        }
+        return types;
     }
 
     private static String escapeHtml(String text) {
