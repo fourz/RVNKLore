@@ -73,9 +73,8 @@ public class LoreGetSubCommand implements SubCommand {
             } else if (idMatches.size() > 1) {
                 sender.sendMessage(ChatColor.YELLOW + "⚠ Multiple entries match '" + input + "'. Please be more specific:");
                 for (LoreEntry e : idMatches) {
-                    String shortId = e.getId().length() >= 8 ? e.getId().substring(0, 8) : e.getId();
                     sender.sendMessage(ChatColor.GRAY + "  - " + ChatColor.YELLOW + e.getName() +
-                            ChatColor.GRAY + " (" + shortId + ")");
+                            ChatColor.GRAY + " (" + e.getType() + ")");
                 }
                 return true;
             }

@@ -70,8 +70,7 @@ public class LoreBookListSubCommand implements SubCommand {
             List<String> formattedEntries = new ArrayList<>();
             for (BookListEntry entry : filtered) {
                 String line = entry.rarity().getColor() + entry.name() +
-                    ChatColor.GRAY + " [" + formatTypeName(entry.type().name()) + "] " +
-                    ChatColor.DARK_GRAY + "(" + entry.getShortId() + ")";
+                    ChatColor.GRAY + " [" + formatTypeName(entry.type().name()) + "]";
                 formattedEntries.add(line);
             }
 

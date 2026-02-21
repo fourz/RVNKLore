@@ -227,11 +227,6 @@ public class LoreSearchSubCommand implements SubCommand {
         // Type badge
         line.append(ChatColor.AQUA).append("[").append(entry.getType().name()).append("]").append(" ");
 
-        // ID (truncated)
-        String shortId = entry.getId().length() > 8 ?
-            entry.getId().substring(0, 8) : entry.getId();
-        line.append(ChatColor.GRAY).append(shortId).append(" ");
-
         // Name
         line.append(ChatColor.GOLD).append(entry.getName());
 

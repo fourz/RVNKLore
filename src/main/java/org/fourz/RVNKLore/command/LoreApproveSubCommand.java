@@ -102,7 +102,7 @@ public class LoreApproveSubCommand implements SubCommand {
             sender.sendMessage(ChatColor.GREEN + "✓ Lore entry approved successfully!");
 
             // Log the approval
-            logger.info("Lore entry " + id + " (" + entry.getName() + ") approved by " + sender.getName());
+            logger.info("Lore entry '" + entry.getName() + "' (" + entry.getType() + ") approved by " + sender.getName() + " [id=" + id + "]");
         } else {
             sender.sendMessage(ChatColor.RED + "✖ Failed to approve lore entry. Please check console for errors.");
         }

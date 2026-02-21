@@ -83,7 +83,9 @@ public class LoreBookManager implements ILoreBookService {
         }
 
         // Set book title with rarity color
-        String title = rarity.getColor() + entry.getName();
+        String rawName = entry.getName() != null ? entry.getName() : "Unknown";
+        String displayName = formatSlugName(rawName);
+        String title = rarity.getColor() + displayName;
         if (title.length() > 32) {
             title = title.substring(0, 29) + "...";
         }
@@ -101,7 +103,7 @@ public class LoreBookManager implements ILoreBookService {
         meta.setPages(pages);
 
         // Set display name with rarity
-        meta.setDisplayName(rarity.getColor() + "" + ChatColor.BOLD + entry.getName());
+        meta.setDisplayName(rarity.getColor() + "" + ChatColor.BOLD + displayName);
 
         // Set item lore (the description shown in inventory)
         List<String> itemLore = buildItemLore(entry, rarity);
@@ -251,7 +253,17 @@ public class LoreBookManager implements ILoreBookService {
                 }
                 logger.info("Auto-created lore entry for quest book: " + questItemKey);
             }
-            return Optional.ofNullable(createLoreBook(entry));
+            ItemStack book = createLoreBook(entry);
+            if (book != null && title != null && !title.isEmpty()) {
+                BookMeta meta = (BookMeta) book.getItemMeta();
+                if (meta != null) {
+                    String displayTitle = title.length() > 32 ? title.substring(0, 29) + "..." : title;
+                    meta.setTitle(displayTitle);
+                    meta.setDisplayName(ChatColor.GOLD + "" + ChatColor.BOLD + displayTitle);
+                    book.setItemMeta(meta);
+                }
+            }
+            return Optional.ofNullable(book);
         });
     }
 
@@ -1093,6 +1105,24 @@ public class LoreBookManager implements ILoreBookService {
         lore.add(ChatColor.YELLOW + "Right-click to read");
 
         return lore;
+    }
+
+    /**
+     * Format a slug name (underscore_separated) into Title Case for display.
+     * e.g. "grotsnouts_journal" → "Grotsnouts Journal"
+     */
+    private String formatSlugName(String slug) {
+        if (slug == null || slug.isEmpty()) return slug;
+        String[] words = slug.replace("_", " ").split(" ");
+        StringBuilder sb = new StringBuilder();
+        for (String word : words) {
+            if (!word.isEmpty()) {
+                sb.append(Character.toUpperCase(word.charAt(0)));
+                sb.append(word.substring(1));
+                sb.append(" ");
+            }
+        }
+        return sb.toString().trim();
     }
 
     /**

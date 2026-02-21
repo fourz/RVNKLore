@@ -102,20 +102,13 @@ public class LoreListSubCommand implements SubCommand {
                         ChatColor.GREEN + "[✓]" :
                         ChatColor.RED + "[✗]";
 
-                // Get shortened UUID (first 8 characters)
-                String uuid = entry.getId().toString();
-                // Fix: Only take substring if long enough
-                String shortId = uuid.length() >= 8 ? uuid.substring(0, 8) : uuid;
-
                 if (sender.hasPermission("rvnklore.admin")) {
                     sender.sendMessage(approvalStatus + " " +
                             ChatColor.YELLOW + entry.getName() +
-                            ChatColor.GRAY + " (" + entry.getType() + ") - " +
-                            ChatColor.WHITE + shortId);
+                            ChatColor.GRAY + " (" + entry.getType() + ")");
                 } else {
                     sender.sendMessage(ChatColor.YELLOW + entry.getName() +
-                            ChatColor.GRAY + " (" + entry.getType() + ") - " +
-                            ChatColor.WHITE + shortId);
+                            ChatColor.GRAY + " (" + entry.getType() + ")");
                 }
             }
         }

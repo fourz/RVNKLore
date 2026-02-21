@@ -140,7 +140,7 @@ public class LoreAddSubCommand implements SubCommand {
         // Set location: --at flag takes priority, then player location for spatial types
         if (parsedLocation != null) {
             entry.setLocation(parsedLocation);
-        } else if (player != null && (type == LoreType.LANDMARK || type == LoreType.CITY || type == LoreType.PATH)) {
+        } else if (player != null && type.isLocationCapable()) {
             entry.setLocation(player.getLocation());
         }
 
@@ -153,7 +153,7 @@ public class LoreAddSubCommand implements SubCommand {
         // Add the entry
         boolean success = plugin.getLoreManager().addLoreEntrySync(entry);
         if (success) {
-            sender.sendMessage(ChatColor.GREEN + "✓ Lore entry added successfully! ID: " + entry.getId());
+            sender.sendMessage(ChatColor.GREEN + "✓ Lore entry added: " + entry.getName() + " (" + entry.getType() + ")");
             if (isPlayer) {
                 sender.sendMessage(ChatColor.YELLOW + "   Your submission will be reviewed by a staff member.");
             }
