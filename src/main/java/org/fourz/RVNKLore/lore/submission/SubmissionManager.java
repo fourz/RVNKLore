@@ -188,6 +188,11 @@ public class SubmissionManager implements ISubmissionService {
                         int newId = keys.getInt(1);
                         // Invalidate cache
                         entrySubmissionsCache.remove(entryId);
+                        // Auto-approve if approval workflow is disabled
+                        if (!plugin.getConfigManager().requireApproval()) {
+                            approveSubmissionSync(newId, submitterUuid);
+                            logger.debug("Auto-approved submission " + newId + " (requireApproval=false)");
+                        }
                         // Return the new submission
                         return getSubmissionSync(newId);
                     }

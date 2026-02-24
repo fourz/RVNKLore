@@ -697,19 +697,6 @@ public class CollectionManager implements ICollectionService {
      * @param collection The collection that changed
      * @param changeType The type of change
      */
-    @Deprecated
-    @SuppressWarnings("unused")
-    private void fireCollectionChangeEvent(ItemCollection collection, ChangeType changeType) {
-        // Legacy method - use the overloaded versions instead
-        CollectionEventType eventType = switch (changeType) {
-            case COMPLETED -> CollectionEventType.COMPLETED;
-            case CREATED -> CollectionEventType.CREATED;
-            case DELETED -> CollectionEventType.DELETED;
-            case UPDATED -> CollectionEventType.PROGRESS_UPDATE;
-        };
-        logger.debug("Collection change event: " + eventType + " for " + collection.getId());
-    }
-
     /**
      * Fire a collection event for player progress changes.
      *

@@ -57,7 +57,6 @@ public class DiscoveryListener implements Listener {
 
     // Location-based discovery tracking (to prevent spam)
     private final Map<UUID, Set<String>> recentLocationDiscoveries = new ConcurrentHashMap<>();
-    private static final double LOCATION_DISCOVERY_RADIUS = 10.0;
 
     // Cache of locations with lore entries
     private final Map<String, LoreEntry> locationLoreCache = new ConcurrentHashMap<>();
@@ -263,7 +262,7 @@ public class DiscoveryListener implements Listener {
             if (!entryLoc.getWorld().equals(to.getWorld())) continue;
 
             double distance = to.distance(entryLoc);
-            if (distance > LOCATION_DISCOVERY_RADIUS) continue;
+            if (distance > plugin.getConfigManager().getNearbyRadius()) continue;
 
             // Check if recently discovered at this location
             Set<String> recentLocations = recentLocationDiscoveries.computeIfAbsent(
