@@ -205,7 +205,7 @@ test-07 (BarterShops Integration Testing) → Next
 
 ## Related Documentation
 
-- [IPlayerService API Reference](../services/IPlayerService.md)
+- IPlayerService API Reference — `repos/rvnktools/docs/services/IPlayerService.md`
 - [RVNKCore Integration Guide](../standard/rvnkcore-integration.md)
 - [Async Patterns](../standard/coding-standards.md#async-patterns)
 - [Repository Pattern](../architecture/shared-patterns.md#repository-pattern)
