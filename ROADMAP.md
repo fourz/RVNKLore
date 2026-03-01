@@ -1,12 +1,29 @@
 # RVNKLore Development Roadmap
 
-**Last Updated**: February 17, 2026
+**Last Updated**: February 28, 2026
 
 This document outlines the planned features and improvements for the RVNKLore plugin.
 
+**GitHub Board**: [board:rvnklore](https://github.com/fourz/Ravenkaft-Dev/issues?q=is:open+label:board:rvnkquests) (6 open bugs)
+
 ---
 
-<!-- Synced from parent ROADMAP.md 2026-02-18 -->
+<!-- Synced from parent ROADMAP.md 2026-02-27 -->
+## February 28, 2026 Status: Bug Sprint (6 Issues Identified)
+
+**Bug Sprint** (Feb 28, 2026):
+
+Six bugs filed on RVNK Dev server testing session:
+
+- **#142** `bug-LO-05`: Duplicate lore entry name gives no feedback (SQLIntegrityConstraintViolationException not caught in LoreEntryRepository)
+- **#141** `bug-LO-04`: lore discover may not persist if lore reload runs before async write (race condition)
+- **#140** `bug-LO-03`: lore debug check rejects short IDs (full UUID required, inconsistent with `/lore get`)
+- **#139** `bug-LO-02`: lore collection list/view use different collection systems (ItemCollections vs HeadCollection)
+- **#138** `bug-LO-01`: LoreManager fails to write death entries to database (repeated WARN logs)
+- **#137** `bug-LO-01`: lore item info/give can't reference multi-word item names (args[0] only, need `String.join()`)
+
+**Priority**: All bugs marked `priority:low` — functional system, UX improvements
+
 ## February 18, 2026 Status: Phase 8 Active + DB Schema Fixed
 
 **DB Schema Fix** (Feb 17, 2026):
