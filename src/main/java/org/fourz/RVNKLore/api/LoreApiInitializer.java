@@ -2,9 +2,10 @@ package org.fourz.RVNKLore.api;
 
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.api.controller.LoreApiServlet;
+import org.fourz.rvnkcore.RVNKCore;
+import org.fourz.rvnkcore.api.service.IServletRegistrationService;
+import org.fourz.rvnkcore.service.registry.ServiceRegistry;
 import org.fourz.rvnkcore.util.log.LogManager;
-
-import java.lang.reflect.Method;
 
 /**
  * Initializer for RVNKLore REST API integration with RVNKCore.
@@ -37,7 +38,7 @@ public class LoreApiInitializer {
     private final LogManager logger;
 
     private boolean initialized = false;
-    private Object servletService = null;
+    private IServletRegistrationService servletService = null;
 
     /**
      * Creates a new API initializer.
@@ -51,8 +52,6 @@ public class LoreApiInitializer {
 
     /**
      * Initializes the REST API by registering with RVNKCore's servlet service.
-     *
-     * <p>Uses reflection to avoid hard dependency on RVNKCore classes.</p>
      *
      * @return true if API was successfully registered, false otherwise
      */
@@ -68,55 +67,35 @@ public class LoreApiInitializer {
         }
 
         try {
-            // Get IServletRegistrationService from RVNKCore ServiceRegistry
-            Class<?> rvnkCoreClass = Class.forName("org.fourz.rvnkcore.RVNKCore");
-            Object coreInstance = rvnkCoreClass.getMethod("getInstance").invoke(null);
-            if (coreInstance == null) {
+            RVNKCore core = RVNKCore.getInstance();
+            if (core == null) {
                 logger.warning("RVNKCore instance is null - REST API disabled");
                 return false;
             }
 
-            Object serviceRegistry = rvnkCoreClass.getMethod("getServiceRegistry").invoke(coreInstance);
+            ServiceRegistry serviceRegistry = core.getServiceRegistry();
             if (serviceRegistry == null) {
                 logger.warning("ServiceRegistry is null - REST API disabled");
                 return false;
             }
 
-            // Get the servlet registration service
-            Class<?> registryClass = serviceRegistry.getClass();
-            Class<?> servletServiceClass = Class.forName("org.fourz.rvnkcore.api.service.IServletRegistrationService");
-            Method getServiceMethod = registryClass.getMethod("getService", Class.class);
-            servletService = getServiceMethod.invoke(serviceRegistry, servletServiceClass);
-
+            servletService = serviceRegistry.getService(IServletRegistrationService.class);
             if (servletService == null) {
                 logger.info("IServletRegistrationService not available - REST API server may not be running");
                 return false;
             }
 
-            // Check if server is running
-            Method isRunningMethod = servletService.getClass().getMethod("isServerRunning");
-            boolean serverRunning = (boolean) isRunningMethod.invoke(servletService);
-
-            if (!serverRunning) {
+            if (!servletService.isServerRunning()) {
                 logger.info("REST API server not running - RVNKLore API endpoints disabled");
                 return false;
             }
 
-            // Create and register the servlet
             LoreApiServlet servlet = new LoreApiServlet(plugin);
-            Method registerMethod = servletService.getClass().getMethod(
-                "registerServlet", String.class, jakarta.servlet.http.HttpServlet.class, String.class, boolean.class
-            );
-
-            boolean registered = (boolean) registerMethod.invoke(servletService, API_PATH, servlet, DISPLAY_NAME, true);
+            boolean registered = servletService.registerServlet(API_PATH, servlet, DISPLAY_NAME, true);
 
             if (registered) {
-                // Get base URL for logging
-                Method getBaseUrlMethod = servletService.getClass().getMethod("getBaseUrl");
-                String baseUrl = (String) getBaseUrlMethod.invoke(servletService);
-
                 initialized = true;
-                logger.info("REST API registered at: " + baseUrl + "/api/lore/*");
+                logger.info("REST API registered at: " + servletService.getBaseUrl() + "/api/lore/*");
                 logger.info("Available endpoints: /entries, /submit, /player/{uuid}/collection, /collections, /types, /stats, /health");
                 return true;
             } else {
@@ -124,14 +103,8 @@ public class LoreApiInitializer {
                 return false;
             }
 
-        } catch (ClassNotFoundException e) {
-            logger.debug("RVNKCore API classes not found - REST API disabled");
-            return false;
         } catch (Exception e) {
             logger.warning("Failed to initialize REST API: " + e.getMessage());
-            if (logger.isDebugEnabled()) {
-                e.printStackTrace();
-            }
             return false;
         }
     }
@@ -143,15 +116,12 @@ public class LoreApiInitializer {
         if (!initialized || servletService == null) {
             return;
         }
-
         try {
-            Method unregisterMethod = servletService.getClass().getMethod("unregisterServlet", String.class);
-            unregisterMethod.invoke(servletService, API_PATH);
+            servletService.unregisterServlet(API_PATH);
             logger.info("REST API unregistered");
         } catch (Exception e) {
             logger.warning("Failed to unregister REST API: " + e.getMessage());
         }
-
         initialized = false;
         servletService = null;
     }

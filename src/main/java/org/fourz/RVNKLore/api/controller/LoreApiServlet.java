@@ -44,6 +44,8 @@ import java.util.stream.Collectors;
  */
 public class LoreApiServlet extends HttpServlet {
 
+    private static final int ASYNC_TIMEOUT_SECONDS = 15;
+
     private final RVNKLore plugin;
     private final LoreManager loreManager;
     private final PlayerManager playerManager;
@@ -59,7 +61,6 @@ public class LoreApiServlet extends HttpServlet {
         this.gson = new GsonBuilder()
             .setPrettyPrinting()
             .serializeNulls()
-            .setFieldNamingPolicy(com.google.gson.FieldNamingPolicy.LOWER_CASE_WITH_UNDERSCORES)
             .registerTypeAdapter(LocalDateTime.class, new LocalDateTimeAdapter())
             .create();
         this.logger = LogManager.getInstance(plugin, "LoreApiServlet");
@@ -164,9 +165,9 @@ public class LoreApiServlet extends HttpServlet {
         try {
             List<LoreEntry> entries;
             if (approvedOnly) {
-                entries = loreManager.getApprovedLoreEntries().get(15, TimeUnit.SECONDS);
+                entries = loreManager.getApprovedLoreEntries().get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
             } else {
-                entries = loreManager.getAllLoreEntries().get(15, TimeUnit.SECONDS);
+                entries = loreManager.getAllLoreEntries().get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
             }
 
             int total = entries.size();
@@ -191,7 +192,7 @@ public class LoreApiServlet extends HttpServlet {
                 uuid = UUID.fromString(id);
             } catch (IllegalArgumentException e) {
                 // Not a UUID, try finding by name
-                Optional<LoreEntry> byName = loreManager.getLoreEntryByName(id).get(15, TimeUnit.SECONDS);
+                Optional<LoreEntry> byName = loreManager.getLoreEntryByName(id).get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
                 if (byName.isPresent()) {
                     sendResponse(resp, 200, LoreEntryResponse.from(byName.get()));
                     return;
@@ -200,7 +201,7 @@ public class LoreApiServlet extends HttpServlet {
                 return;
             }
 
-            Optional<LoreEntry> entry = loreManager.getLoreEntry(uuid).get(15, TimeUnit.SECONDS);
+            Optional<LoreEntry> entry = loreManager.getLoreEntry(uuid).get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
             if (entry.isPresent()) {
                 sendResponse(resp, 200, LoreEntryResponse.from(entry.get()));
             } else {
@@ -218,7 +219,7 @@ public class LoreApiServlet extends HttpServlet {
             int offset = ApiUtils.getIntParam(req, "offset", 0);
             int limit = ApiUtils.getIntParam(req, "limit", 50);
 
-            List<LoreEntry> entries = loreManager.getLoreEntriesByType(type).get(15, TimeUnit.SECONDS);
+            List<LoreEntry> entries = loreManager.getLoreEntriesByType(type).get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
             int total = entries.size();
 
             List<LoreEntryResponse> data = entries.stream()
@@ -247,7 +248,7 @@ public class LoreApiServlet extends HttpServlet {
         int limit = ApiUtils.getIntParam(req, "limit", 50);
 
         try {
-            List<LoreEntry> entries = loreManager.findLoreEntries(query).get(15, TimeUnit.SECONDS);
+            List<LoreEntry> entries = loreManager.findLoreEntries(query).get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
             int total = entries.size();
 
             List<LoreEntryResponse> data = entries.stream()
@@ -299,7 +300,7 @@ public class LoreApiServlet extends HttpServlet {
             // Submit (not approved by default - requires admin approval)
             entry.setApproved(false);
 
-            boolean success = loreManager.addLoreEntry(entry).get(15, TimeUnit.SECONDS);
+            boolean success = loreManager.addLoreEntry(entry).get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
             if (success) {
                 logger.info("New lore entry submitted via API: " + entry.getName() + " by " + entry.getSubmittedBy());
                 sendResponse(resp, 201, StatusResponse.created("Lore entry submitted successfully. Entry ID: " + entryId));
@@ -339,10 +340,10 @@ public class LoreApiServlet extends HttpServlet {
     private void handleGetPlayerCollection(UUID playerId, HttpServletResponse resp) throws IOException {
         try {
             // Get player name
-            Optional<String> playerName = playerManager.getPlayerName(playerId).get(15, TimeUnit.SECONDS);
+            Optional<String> playerName = playerManager.getPlayerName(playerId).get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
 
             // Get player's discovered lore entry IDs
-            List<String> loreIds = playerManager.getPlayerLoreEntryIds(playerId).get(15, TimeUnit.SECONDS);
+            List<String> loreIds = playerManager.getPlayerLoreEntryIds(playerId).get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
 
             // Get total available entries
             List<LoreEntry> allEntries = loreManager.getAllLoreEntriesSync();
