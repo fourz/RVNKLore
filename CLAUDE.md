@@ -27,7 +27,7 @@ mvn dependency:tree
 
 **Output**: `target/RVNKLore-1.0-SNAPSHOT.jar`
 
-**Current Status**: ✅ Build passing, deployed and tested on RVNK Dev server (Feb 2026)
+**Current Status**: ✅ Phase 8 complete (Feb 2026) — For plugin status and history, search Docker MCP: `search_nodes("RVNKLore")`
 
 ## Remote Testing Workflow
 
