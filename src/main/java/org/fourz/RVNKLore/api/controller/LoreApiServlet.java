@@ -11,6 +11,8 @@ import org.fourz.RVNKLore.api.model.response.*;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreManager;
 import org.fourz.RVNKLore.lore.LoreType;
+import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
+import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
 import org.fourz.RVNKLore.lore.player.PlayerManager;
 import org.fourz.rvnkcore.util.log.LogManager;
 
@@ -44,6 +46,7 @@ public class LoreApiServlet extends HttpServlet {
     private final RVNKLore plugin;
     private final LoreManager loreManager;
     private final PlayerManager playerManager;
+    private final CollectionManager collectionManager;
     private final Gson gson;
     private final LogManager logger;
 
@@ -51,6 +54,7 @@ public class LoreApiServlet extends HttpServlet {
         this.plugin = plugin;
         this.loreManager = plugin.getLoreManager();
         this.playerManager = plugin.getPlayerManager();
+        this.collectionManager = loreManager.getItemManager().getCollectionManager();
         this.gson = new GsonBuilder()
             .setPrettyPrinting()
             .serializeNulls()
@@ -371,21 +375,17 @@ public class LoreApiServlet extends HttpServlet {
     // ===== Collections Endpoint =====
 
     private void handleCollectionsEndpoint(String[] parts, HttpServletResponse resp) throws IOException {
-        // Return list of available collections
-        // This is a placeholder - full implementation depends on CollectionManager
         try {
             List<CollectionResponse> collections = new ArrayList<>();
 
-            // TODO: Integrate with CollectionManager when available
-            // For now, return lore types as pseudo-collections
-            for (LoreType type : LoreType.values()) {
-                int count = loreManager.getLoreEntriesByTypeSync(type).size();
+            Map<String, ItemCollection> all = collectionManager.getAllCollectionsSync();
+            for (ItemCollection col : all.values()) {
                 collections.add(CollectionResponse.builder()
-                    .id(type.name().toLowerCase())
-                    .name(type.name())
-                    .description("Collection of " + type.name().toLowerCase() + " lore entries")
-                    .theme(type.name())
-                    .itemCount(count)
+                    .id(col.getId())
+                    .name(col.getName())
+                    .description(col.getDescription())
+                    .theme(col.getThemeId())
+                    .itemCount(col.getItemCount())
                     .seasonal(false)
                     .build());
             }
