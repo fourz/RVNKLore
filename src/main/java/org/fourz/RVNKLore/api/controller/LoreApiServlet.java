@@ -14,6 +14,7 @@ import org.fourz.RVNKLore.lore.LoreType;
 import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
 import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
 import org.fourz.RVNKLore.lore.player.PlayerManager;
+import org.fourz.rvnkcore.api.util.ApiUtils;
 import org.fourz.rvnkcore.util.log.LogManager;
 
 import java.io.IOException;
@@ -67,7 +68,7 @@ public class LoreApiServlet extends HttpServlet {
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         String pathInfo = req.getPathInfo();
-        String clientIP = getClientIP(req);
+        String clientIP = ApiUtils.getClientIP(req);
 
         logger.debug("LoreAPI GET: " + pathInfo + " from IP: " + clientIP);
 
@@ -113,7 +114,7 @@ public class LoreApiServlet extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         String pathInfo = req.getPathInfo();
-        String clientIP = getClientIP(req);
+        String clientIP = ApiUtils.getClientIP(req);
 
         logger.debug("LoreAPI POST: " + pathInfo + " from IP: " + clientIP);
 
@@ -156,9 +157,9 @@ public class LoreApiServlet extends HttpServlet {
     }
 
     private void handleGetAllEntries(HttpServletRequest req, HttpServletResponse resp) throws IOException {
-        int offset = getIntParam(req, "offset", 0);
-        int limit = getIntParam(req, "limit", 50);
-        boolean approvedOnly = getBoolParam(req, "approved", false);
+        int offset = ApiUtils.getIntParam(req, "offset", 0);
+        int limit = ApiUtils.getIntParam(req, "limit", 50);
+        boolean approvedOnly = ApiUtils.getBoolParam(req, "approved", false);
 
         try {
             List<LoreEntry> entries;
@@ -214,8 +215,8 @@ public class LoreApiServlet extends HttpServlet {
     private void handleGetEntriesByType(String typeStr, HttpServletRequest req, HttpServletResponse resp) throws IOException {
         try {
             LoreType type = LoreType.valueOf(typeStr.toUpperCase());
-            int offset = getIntParam(req, "offset", 0);
-            int limit = getIntParam(req, "limit", 50);
+            int offset = ApiUtils.getIntParam(req, "offset", 0);
+            int limit = ApiUtils.getIntParam(req, "limit", 50);
 
             List<LoreEntry> entries = loreManager.getLoreEntriesByType(type).get(15, TimeUnit.SECONDS);
             int total = entries.size();
@@ -242,8 +243,8 @@ public class LoreApiServlet extends HttpServlet {
             return;
         }
 
-        int offset = getIntParam(req, "offset", 0);
-        int limit = getIntParam(req, "limit", 50);
+        int offset = ApiUtils.getIntParam(req, "offset", 0);
+        int limit = ApiUtils.getIntParam(req, "limit", 50);
 
         try {
             List<LoreEntry> entries = loreManager.findLoreEntries(query).get(15, TimeUnit.SECONDS);
@@ -265,7 +266,7 @@ public class LoreApiServlet extends HttpServlet {
     // ===== Submit Endpoint =====
 
     private void handleSubmitEntry(HttpServletRequest req, HttpServletResponse resp) throws IOException {
-        String body = readRequestBody(req);
+        String body = ApiUtils.readRequestBody(req);
         LoreSubmissionRequest request = gson.fromJson(body, LoreSubmissionRequest.class);
 
         if (request == null || !request.isValid()) {
@@ -472,43 +473,6 @@ public class LoreApiServlet extends HttpServlet {
         } catch (IOException e) {
             logger.error("Error sending error response", e);
         }
-    }
-
-    private int getIntParam(HttpServletRequest req, String name, int defaultValue) {
-        String value = req.getParameter(name);
-        if (value == null) return defaultValue;
-        try {
-            return Integer.parseInt(value);
-        } catch (NumberFormatException e) {
-            return defaultValue;
-        }
-    }
-
-    private boolean getBoolParam(HttpServletRequest req, String name, boolean defaultValue) {
-        String value = req.getParameter(name);
-        if (value == null) return defaultValue;
-        return "true".equalsIgnoreCase(value) || "1".equals(value);
-    }
-
-    private String getClientIP(HttpServletRequest request) {
-        String xForwardedFor = request.getHeader("X-Forwarded-For");
-        if (xForwardedFor != null && !xForwardedFor.isEmpty()) {
-            return xForwardedFor.split(",")[0].trim();
-        }
-        String xRealIP = request.getHeader("X-Real-IP");
-        if (xRealIP != null && !xRealIP.isEmpty()) {
-            return xRealIP;
-        }
-        return request.getRemoteAddr();
-    }
-
-    private String readRequestBody(HttpServletRequest req) throws IOException {
-        StringBuilder body = new StringBuilder();
-        String line;
-        while ((line = req.getReader().readLine()) != null) {
-            body.append(line);
-        }
-        return body.toString();
     }
 
     private Throwable unwrapException(Throwable e) {
