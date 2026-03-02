@@ -81,6 +81,7 @@ public class LoreCollectionSubCommand implements SubCommand {
         
         // Original switch case handling remains the same
         String sub = args[0].toLowerCase();
+        HeadCollection collection = null;
         switch (sub) {
             case "view":
                 if (args.length < 2) {
@@ -88,14 +89,18 @@ public class LoreCollectionSubCommand implements SubCommand {
                     return true;
                 }
                 String collectionId = args[1];
-                HeadCollection collection = cosmeticItem.getCollection(collectionId);
-                if (collection == null) {
+                org.fourz.RVNKLore.lore.item.collection.CollectionManager cmgr =
+                        plugin.getLoreManager().getItemManager().getCollectionManager();
+                org.fourz.RVNKLore.lore.item.collection.ItemCollection itemCollection =
+                        cmgr.getAllCollectionsSync().get(collectionId);
+                if (itemCollection == null) {
                     sender.sendMessage(ChatColor.RED + "✖ Collection not found: " + collectionId);
+                    sender.sendMessage(ChatColor.GRAY + "   Use /lore collection list to see available IDs");
                     return true;
                 }
-                sender.sendMessage(ChatColor.GREEN + "✓ Collection: " + ChatColor.YELLOW + collection.getName());
-                sender.sendMessage(ChatColor.GRAY + "Description: " + ChatColor.WHITE + collection.getDescription());
-                //sender.sendMessage(ChatColor.GRAY + "Items: " + ChatColor.WHITE + collection.getItemCount());
+                sender.sendMessage(ChatColor.GREEN + "✓ Collection: " + ChatColor.YELLOW + itemCollection.getName());
+                sender.sendMessage(ChatColor.GRAY + "ID: " + ChatColor.WHITE + itemCollection.getId());
+                sender.sendMessage(ChatColor.GRAY + "Items: " + ChatColor.WHITE + itemCollection.getItemCount());
                 break;
             case "claim":
                 Player claimTarget;

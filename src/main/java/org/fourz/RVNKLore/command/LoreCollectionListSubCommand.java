@@ -71,7 +71,7 @@ public class LoreCollectionListSubCommand implements SubCommand {
             // Console output: simple list format
             sender.sendMessage(ChatColor.YELLOW + "Collections (" + collectionsToShow.size() + " total):");
             for (ItemCollection collection : collectionsToShow) {
-                sender.sendMessage("  - " + collection.getName() + " (" + collection.getItemCount() + " items)");
+                sender.sendMessage("  - [" + collection.getId() + "] " + collection.getName() + " (" + collection.getItemCount() + " items)");
             }
         }
 

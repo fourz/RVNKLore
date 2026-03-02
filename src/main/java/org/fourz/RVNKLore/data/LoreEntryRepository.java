@@ -611,8 +611,10 @@ public class LoreEntryRepository implements ILoreEntryRepository {
                 }
             }
             stmt.setString(3, content.toJSONString());
-            // Generate and set versioned slug to avoid UNIQUE constraint violations
-            String slug = generateVersionedSlug(entry.getName(), version);
+            // Generate and set versioned slug to avoid UNIQUE constraint violations.
+            // Append entry ID prefix to ensure uniqueness across entries with the same name
+            // (e.g. multiple death entries for the same player — bug-LO-01).
+            String slug = generateVersionedSlug(entry.getName(), version) + "-" + entryId.substring(0, Math.min(8, entryId.length()));
             stmt.setString(4, slug);
             stmt.setInt(5, version);
             return stmt.executeUpdate() > 0;

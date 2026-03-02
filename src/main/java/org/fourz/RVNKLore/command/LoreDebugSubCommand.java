@@ -113,7 +113,16 @@ public class LoreDebugSubCommand implements SubCommand {
     private boolean checkLoreEntry(CommandSender sender, String id) {
         sender.sendMessage(ChatColor.YELLOW + "Checking lore entry: " + id);
 
-        plugin.getLoreManager().getLoreById(id).ifPresentOrElse(
+        // Support short IDs (first 8 chars), consistent with /lore get
+        java.util.Optional<org.fourz.RVNKLore.lore.LoreEntry> result = plugin.getLoreManager().getLoreById(id);
+        if (!result.isPresent() && id.length() <= 8) {
+            final String shortId = id.toLowerCase();
+            result = plugin.getLoreManager().getAllLoreEntriesSync().stream()
+                    .filter(e -> e.getId().length() >= 8 && e.getId().substring(0, 8).equalsIgnoreCase(shortId))
+                    .findFirst();
+        }
+
+        result.ifPresentOrElse(
             entry -> {
                 sender.sendMessage(ChatColor.GREEN + "Found entry: " + entry.getName());
                 sender.sendMessage(ChatColor.WHITE + "Type: " + entry.getType());
