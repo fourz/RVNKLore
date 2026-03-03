@@ -27,7 +27,7 @@ mvn dependency:tree
 
 **Output**: `target/RVNKLore-1.0-SNAPSHOT.jar`
 
-**Current Status**: ✅ Phase 8 complete (Feb 2026) — For plugin status and history, search GraphQL-Memdock: `search_nodes("RVNKLore")`
+**Current Status**: ✅ Phase 8 complete (Feb 2026) — For plugin status and history, search Graph Memory: `search_nodes("RVNKLore")`
 
 ## Remote Testing Workflow
 
@@ -338,3 +338,5 @@ Before committing changes:
 
 1. **Short ID Format**: `/lore get` requires full UUID but list/search shows truncated IDs (bug-01)
 2. **RVNKCore Dependency**: Must be present in server plugins folder at runtime (provided scope)
+
+
