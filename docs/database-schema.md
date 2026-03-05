@@ -460,16 +460,29 @@ The following tables were listed as expected (from prior planning docs) but **do
 
 ---
 
+## Timestamp Type Convention
+
+Three timestamp storage types are used across the 13 tables. **New columns must use `TIMESTAMP` (dialect default)**. The `INTEGER` and `BIGINT` columns are legacy — do not compare them directly with `TIMESTAMP` columns without conversion.
+
+| Type | Tables / Columns | Notes |
+|------|-----------------|-------|
+| `TIMESTAMP` (dialect default) | `lore_entry`, `lore_submission`, `lore_item`, `lore_location`, `lore_discovery.discovered_at`, `player_collection_items.discovered_at` | Standard — use for all new columns |
+| `INTEGER` (Unix epoch seconds) | `collection.created_at`, `player_collection_progress.completed_at`, `player_collection_progress.last_updated` | Legacy — epoch seconds, no fractional precision |
+| `BIGINT` (Unix epoch milliseconds) | `player_achievement.started_at`, `player_achievement.completed_at`, `player_reward_claim.claimed_at` | Legacy — millisecond precision |
+
+**Conversion**: When joining across types, use `FROM_UNIXTIME(col)` (MySQL) or `datetime(col, 'unixepoch')` (SQLite) to convert INTEGER/BIGINT to TIMESTAMP for comparison.
+
+---
+
 ## Known Schema Gaps
 
-| Gap | Affected Table(s) | Severity |
-|-----|-------------------|----------|
-| `created_at` type inconsistency: `INTEGER` vs `TIMESTAMP` vs `BIGINT` | `collection`, `player_collection_progress`, `player_achievement`, `player_reward_claim` vs. others | Medium |
-| Missing index on `player_collection_progress.player_id` | `player_collection_progress` | Medium |
-| Missing index on `collection_reward.collection_id` | `collection_reward` | Low |
-| `is_claimed` on `collection_reward` is global, not per-player | `collection_reward` | Medium (design gap) |
-| No `player_name_history` table for name change tracking | — | Low |
-| `player_achievement.started_at`/`completed_at` use BIGINT ms; `lore_discovery.discovered_at` uses TIMESTAMP | `player_achievement`, `lore_discovery` | Low |
+| Gap | Affected Table(s) | Severity | Status |
+|-----|-------------------|----------|--------|
+| Timestamp type inconsistency across tables | `collection`, `player_collection_progress`, `player_achievement`, `player_reward_claim` | Medium | Open — documented above; new columns use TIMESTAMP |
+| `is_claimed` on `collection_reward` is global, not per-player | `collection_reward` | Medium | Open (design gap) |
+| No `player_name_history` table for name change tracking | — | Low | Open |
+| Missing index on `player_collection_progress.player_id` | `player_collection_progress` | Medium | **Fixed** (commit 4b03ff0) |
+| Missing index on `collection_reward.collection_id` | `collection_reward` | Low | **Fixed** (commit 4b03ff0) |
 
 ---
 

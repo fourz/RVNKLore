@@ -321,6 +321,7 @@ Base path: `/api/lore/*` — registered via `IServletRegistrationService` at plu
 | GET | `/api/lore/entries/search?q=` | Search entries by query string |
 | POST | `/api/lore/submit` | Submit new lore entry |
 | GET | `/api/lore/player/{uuid}/collection` | Player collection progress |
+| GET | `/api/lore/player/{uuid}` | Alias for `/player/{uuid}/collection` (same handler, same response) |
 | GET | `/api/lore/collections` | List all collections |
 | GET | `/api/lore/types` | List available lore types |
 | GET | `/api/lore/stats` | Lore statistics |
@@ -338,7 +339,7 @@ All integrations are optional — plugin runs fully without any of them:
 | Integration | Class | Purpose |
 |-------------|-------|---------|
 | Dynmap | `DynmapIntegration` | Map markers for lore locations |
-| Citizens | `CitizensIntegration` (stub) | NPC collection vendors |
+| Citizens | `CitizensIntegration` (stub, deferred) | NPC collection vendors — excluded from compilation via `citizens.disabled/` package; `TraitFactory` registration not yet wired; deferred until collection system stabilizes |
 | Discord | `CollectionWebhookListener` | Collection completion webhooks |
 | PlaceholderAPI | `RVNKLorePlaceholderExpansion` | `%rvnklore_*%` placeholders |
 | VotingPlugin | `VotingPluginIntegration` | Vote reward items |
