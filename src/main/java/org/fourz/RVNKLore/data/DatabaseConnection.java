@@ -252,7 +252,9 @@ public abstract class DatabaseConnection {
 
             stmt.execute(createCollectionTable);
             stmt.execute(createPlayerCollectionProgressTable);
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_" + tablePrefix + "player_collection_progress_player ON " + playerProgress + "(player_id)");
             stmt.execute(createCollectionRewardTable);
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_" + tablePrefix + "collection_reward_collection ON " + collectionReward + "(collection_id)");
             stmt.execute(createCollectionItemTable);
             stmt.execute(createPlayerCollectionItemsTable);
             stmt.execute("CREATE INDEX IF NOT EXISTS idx_" + tablePrefix + "player_collection_items_player ON " + playerCollectionItems + "(player_uuid)");
