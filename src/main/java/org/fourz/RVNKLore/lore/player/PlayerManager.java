@@ -276,8 +276,8 @@ public class PlayerManager implements IPlayerLoreService {
         logger.info("Creating player lore entry for: " + player.getName());
 
         try {
-            // Create a guaranteed unique entry name with UUID
-            String uniqueName = "Player_" + player.getUniqueId().toString();
+            // Use the player's display name for readability; UUID is stored in metadata
+            String uniqueName = player.getName();
 
             LoreEntry entry = new LoreEntry();
             entry.setType(LoreType.PLAYER);
