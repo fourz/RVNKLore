@@ -108,7 +108,7 @@ public class LoreDynmapDiffSubCommand implements SubCommand {
                         + ", " + (int) entry.getLocation().getZ() + ")";
                 }
                 sender.sendMessage(ChatColor.GRAY + "  - " + ChatColor.WHITE + "[" + entry.getType().name() + "] "
-                    + entry.getName() + ChatColor.DARK_GRAY + coords);
+                    + entry.getDisplayName() + ChatColor.DARK_GRAY + coords);
                 shown++;
             }
         }

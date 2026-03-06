@@ -71,7 +71,7 @@ public class LoreBookGiveSubCommand implements SubCommand {
                         plugin.getServer().getScheduler().runTask(plugin, () -> {
                             target.getInventory().addItem(book);
                             sender.sendMessage(ChatColor.GREEN + "✓ Gave " + rarity.getColoredName() + ChatColor.GREEN + " lore book to " + target.getName());
-                            target.sendMessage(ChatColor.GREEN + "You received a lore book: " + rarity.getColor() + entry.getName());
+                            target.sendMessage(ChatColor.GREEN + "You received a lore book: " + rarity.getColor() + entry.getDisplayName());
                         });
                     }
                 });

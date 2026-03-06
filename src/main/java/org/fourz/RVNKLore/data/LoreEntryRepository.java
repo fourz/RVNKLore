@@ -671,6 +671,7 @@ public class LoreEntryRepository implements ILoreEntryRepository {
         String description = null;
         String nbtData = null;
         Location location = null;
+        java.util.Map<String, String> metadata = null;
 
         // Parse the content JSON (with null/empty check)
         if (contentJson != null && !contentJson.trim().isEmpty()) {
@@ -694,6 +695,20 @@ public class LoreEntryRepository implements ILoreEntryRepository {
                             location = new Location(world, x, y, z);
                         }
                     }
+
+                    // Extract metadata if available
+                    if (content.containsKey("metadata")) {
+                        JSONObject metaJson = (JSONObject) content.get("metadata");
+                        if (metaJson != null) {
+                            metadata = new java.util.HashMap<>();
+                            for (Object key : metaJson.keySet()) {
+                                Object val = metaJson.get(key);
+                                if (val != null) {
+                                    metadata.put((String) key, val.toString());
+                                }
+                            }
+                        }
+                    }
                 }
             } catch (ParseException e) {
                 logger.warning("Skipping malformed JSON content for lore entry ID: " + id);
@@ -712,6 +727,13 @@ public class LoreEntryRepository implements ILoreEntryRepository {
             approved,
             createdAt != null ? createdAt.toString() : null
         );
+
+        // Populate metadata from JSON content
+        if (metadata != null) {
+            for (java.util.Map.Entry<String, String> meta : metadata.entrySet()) {
+                entry.addMetadata(meta.getKey(), meta.getValue());
+            }
+        }
 
         return entry;
     }

@@ -228,7 +228,7 @@ public class LoreSearchSubCommand implements SubCommand {
         line.append(ChatColor.AQUA).append("[").append(entry.getType().name()).append("]").append(" ");
 
         // Name
-        line.append(ChatColor.GOLD).append(entry.getName());
+        line.append(ChatColor.GOLD).append(entry.getDisplayName());
 
         // Approval status
         if (!entry.isApproved()) {

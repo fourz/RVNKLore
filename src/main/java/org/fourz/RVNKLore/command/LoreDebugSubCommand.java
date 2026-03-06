@@ -337,7 +337,7 @@ public class LoreDebugSubCommand implements SubCommand {
                         String date = entry.getCreatedAt() != null
                             ? dateFormat.format(entry.getCreatedAt())
                             : "Unknown";
-                        sender.sendMessage(prefix + "  " + entry.getName() + " (" + entry.getType() + ") - " + date);
+                        sender.sendMessage(prefix + "  " + entry.getDisplayName() + " (" + entry.getType() + ") - " + date);
                     }
                     sender.sendMessage(prefix);
                 }

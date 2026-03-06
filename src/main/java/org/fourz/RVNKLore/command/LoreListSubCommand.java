@@ -104,10 +104,10 @@ public class LoreListSubCommand implements SubCommand {
 
                 if (sender.hasPermission("rvnklore.admin")) {
                     sender.sendMessage(approvalStatus + " " +
-                            ChatColor.YELLOW + entry.getName() +
+                            ChatColor.YELLOW + entry.getDisplayName() +
                             ChatColor.GRAY + " (" + entry.getType() + ")");
                 } else {
-                    sender.sendMessage(ChatColor.YELLOW + entry.getName() +
+                    sender.sendMessage(ChatColor.YELLOW + entry.getDisplayName() +
                             ChatColor.GRAY + " (" + entry.getType() + ")");
                 }
             }

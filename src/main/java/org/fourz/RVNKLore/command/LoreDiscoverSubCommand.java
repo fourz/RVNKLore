@@ -70,7 +70,7 @@ public class LoreDiscoverSubCommand implements SubCommand {
         }
 
         LoreEntry entry = optEntry.get();
-        sender.sendMessage(ChatColor.YELLOW + "⚙ Granting discovery '" + entry.getName() + "' to " + target.getName() + "...");
+        sender.sendMessage(ChatColor.YELLOW + "⚙ Granting discovery '" + entry.getDisplayName() + "' to " + target.getName() + "...");
 
         discoveryManager.triggerDiscovery(
             target, entry,
@@ -79,10 +79,10 @@ public class LoreDiscoverSubCommand implements SubCommand {
         ).thenAccept(success -> {
             Bukkit.getScheduler().runTask(plugin, () -> {
                 if (success) {
-                    sender.sendMessage(ChatColor.GREEN + "✓ " + target.getName() + " discovered: " + entry.getName());
-                    logger.info("Discovery granted via command: " + entry.getName() + " -> " + target.getName() + " by " + sender.getName());
+                    sender.sendMessage(ChatColor.GREEN + "✓ " + target.getName() + " discovered: " + entry.getDisplayName());
+                    logger.info("Discovery granted via command: " + entry.getDisplayName() + " -> " + target.getName() + " by " + sender.getName());
                 } else {
-                    sender.sendMessage(ChatColor.GRAY + "⚠ " + target.getName() + " has already discovered: " + entry.getName());
+                    sender.sendMessage(ChatColor.GRAY + "⚠ " + target.getName() + " has already discovered: " + entry.getDisplayName());
                 }
             });
         });

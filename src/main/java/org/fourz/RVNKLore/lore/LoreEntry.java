@@ -186,6 +186,20 @@ public class LoreEntry {
     }
     
     /**
+     * Get a human-readable display name for this entry.
+     * For PLAYER-type entries, returns the player_name metadata instead of the
+     * internal UUID-based name. Falls back to getName() for all other types.
+     *
+     * @return The display-friendly name
+     */
+    public String getDisplayName() {
+        if (type == LoreType.PLAYER && hasMetadata("player_name")) {
+            return getMetadata("player_name");
+        }
+        return name;
+    }
+
+    /**
      * Add metadata to this lore entry
      * 
      * @param key The metadata key

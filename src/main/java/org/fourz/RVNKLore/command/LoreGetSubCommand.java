@@ -101,7 +101,7 @@ public class LoreGetSubCommand implements SubCommand {
                 handler.displayLore(entry, player);
             } else {
                 // Fallback display if no handler exists
-                player.sendMessage(ChatColor.GOLD + "=== " + entry.getName() + " ===");
+                player.sendMessage(ChatColor.GOLD + "=== " + entry.getDisplayName() + " ===");
                 player.sendMessage(ChatColor.GRAY + "   Type: " + ChatColor.YELLOW + entry.getType());
                 player.sendMessage(ChatColor.WHITE + entry.getDescription());
             }
@@ -124,7 +124,7 @@ public class LoreGetSubCommand implements SubCommand {
             }
         } else {
             // Console display
-            sender.sendMessage("=== " + entry.getName() + " ===");
+            sender.sendMessage("=== " + entry.getDisplayName() + " ===");
             sender.sendMessage("Type: " + entry.getType());
             sender.sendMessage("Description: " + entry.getDescription());
             sender.sendMessage("Submitted by: " + entry.getSubmittedBy());
