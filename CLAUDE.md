@@ -25,7 +25,7 @@ mvn validate
 mvn dependency:tree
 ```
 
-**Output**: `target/RVNKLore-1.0.14.jar`
+**Output**: `target/RVNKLore.jar` (versionless — `<finalName>` set in pom.xml)
 
 **Current Status**: Active development — For plugin status and history, search Graph Memory: `search_nodes("RVNKLore")`
 

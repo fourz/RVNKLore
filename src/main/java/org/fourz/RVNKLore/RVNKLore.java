@@ -24,7 +24,7 @@ import org.fourz.RVNKLore.lore.item.ItemManager;
 import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
 import org.fourz.RVNKLore.lore.submission.SubmissionManager;
 import org.fourz.RVNKLore.lore.player.PlayerManager;
-import org.fourz.RVNKLore.api.LoreApiInitializer;
+import org.fourz.RVNKLore.api.LoreApiEndpointImpl;
 import org.fourz.RVNKLore.discovery.DiscoveryManager;
 import org.fourz.RVNKLore.achievement.AchievementManager;
 import org.fourz.RVNKLore.gui.GuiListener;
@@ -49,7 +49,7 @@ public class RVNKLore extends JavaPlugin {
     private PlayerManager playerManager;
     private PlayerLookup playerLookup;
     private SubmissionManager submissionManager;
-    private LoreApiInitializer apiInitializer;
+    // REST API — ILoreApiService registered with RVNKCore ServiceRegistry (replaces LoreApiInitializer)
     private DiscoveryManager discoveryManager;
     private AchievementManager achievementManager;
     private LoreBookManager loreBookManager;
@@ -280,19 +280,29 @@ public class RVNKLore extends JavaPlugin {
     }
 
     /**
-     * Initializes the REST API layer if RVNKCore is available.
+     * Initializes the REST API layer by registering ILoreApiService with RVNKCore ServiceRegistry.
+     * The LoreController in RVNKCore routes HTTP requests to this service.
      */
     private void initializeRestApi() {
-        if (!rvnkCoreAvailable) {
+        if (!rvnkCoreAvailable || rvnkCoreInstance == null) {
             logger.debug("Skipping REST API initialization - RVNKCore not available");
             return;
         }
 
-        apiInitializer = new LoreApiInitializer(this);
-        if (apiInitializer.initialize()) {
-            logger.info("REST API layer initialized successfully");
-        } else {
-            logger.debug("REST API initialization skipped or failed");
+        try {
+            Class<?> rvnkCoreClass = rvnkCoreInstance.getClass();
+            Object serviceRegistry = rvnkCoreClass.getMethod("getServiceRegistry").invoke(rvnkCoreInstance);
+            if (serviceRegistry == null) return;
+
+            Class<?> registryClass = serviceRegistry.getClass();
+            java.lang.reflect.Method registerMethod = registryClass.getMethod("registerService", Class.class, Object.class);
+
+            LoreApiEndpointImpl apiEndpoint = new LoreApiEndpointImpl(this);
+            Class<?> serviceInterface = Class.forName("org.fourz.rvnkcore.api.service.ILoreApiService");
+            registerMethod.invoke(serviceRegistry, serviceInterface, apiEndpoint);
+            logger.info("Registered ILoreApiService with RVNKCore — REST API routing handled by LoreController");
+        } catch (Exception e) {
+            logger.warning("Failed to register ILoreApiService: " + e.getMessage());
         }
     }
 
@@ -600,11 +610,7 @@ public class RVNKLore extends JavaPlugin {
     }
 
     private void cleanupManagers() {
-        // Shutdown REST API first
-        if (apiInitializer != null) {
-            apiInitializer.shutdown();
-            apiInitializer = null;
-        }
+        // ILoreApiService cleanup handled by unregisterFromRVNKCore()
 
         // Unregister PlaceholderAPI expansion
         unregisterPlaceholderAPI();
@@ -926,6 +932,10 @@ public class RVNKLore extends JavaPlugin {
             java.lang.reflect.Method unregisterMethod = registryClass.getMethod("unregisterService", Class.class);
 
             // Unregister services in reverse order
+            try {
+                Class<?> loreApiServiceClass = Class.forName("org.fourz.rvnkcore.api.service.ILoreApiService");
+                unregisterMethod.invoke(serviceRegistry, loreApiServiceClass);
+            } catch (ClassNotFoundException ignored) {}
             unregisterMethod.invoke(serviceRegistry, ILoreBookService.class);
             unregisterMethod.invoke(serviceRegistry, IPlayerLoreService.class);
             unregisterMethod.invoke(serviceRegistry, ISubmissionService.class);
