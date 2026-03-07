@@ -4,7 +4,7 @@ import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
 import org.fourz.RVNKLore.lore.item.collection.CollectionTheme;
 import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
@@ -37,12 +37,6 @@ public class LoreCollectionListSubCommand implements SubCommand {
 
     @Override
     public boolean execute(CommandSender sender, String[] args) {
-        if (!(sender instanceof Player)) {
-            sender.sendMessage(ChatColor.RED + "▶ This command can only be used by players");
-            return true;
-        }
-        Player player = (Player) sender;
-
         String themeFilter = null;
         if (args.length > 0) {
             themeFilter = args[0];
@@ -52,33 +46,43 @@ public class LoreCollectionListSubCommand implements SubCommand {
         if (themeFilter != null) {
             CollectionTheme theme = CollectionTheme.fromDisplayName(themeFilter);
             if (theme == null || theme == CollectionTheme.CUSTOM) {
-                player.sendMessage(ChatColor.RED + "✖ Unknown theme: " + themeFilter);
-                listThemes(player);
+                sender.sendMessage(ChatColor.RED + "Unknown theme: " + themeFilter);
+                if (sender instanceof Player) {
+                    listThemes((Player) sender);
+                }
                 return true;
             }
-            for (ItemCollection collection : collectionManager.getAllCollections().values()) {
+            for (ItemCollection collection : collectionManager.getAllCollectionsSync().values()) {
                 if (theme.name().equalsIgnoreCase(collection.getThemeId())) {
                     collectionsToShow.add(collection);
                 }
             }
         } else {
-            collectionsToShow.addAll(collectionManager.getAllCollections().values());
+            collectionsToShow.addAll(collectionManager.getAllCollectionsSync().values());
         }
 
         // Sort newest to oldest
         collectionsToShow.sort(Comparator.comparingLong(ItemCollection::getCreatedAt).reversed());
 
-        // Output via DisplayFactory
-        DisplayFactory.displayCollectionList(player, collectionsToShow);
+        // Output via DisplayFactory (player only) or console output
+        if (sender instanceof Player) {
+            DisplayFactory.displayCollectionList((Player) sender, collectionsToShow);
+        } else {
+            // Console output: simple list format
+            sender.sendMessage(ChatColor.YELLOW + "Collections (" + collectionsToShow.size() + " total):");
+            for (ItemCollection collection : collectionsToShow) {
+                sender.sendMessage("  - [" + collection.getId() + "] " + collection.getName() + " (" + collection.getItemCount() + " items)");
+            }
+        }
 
         return true;
     }
 
     private void listThemes(Player player) {
-        player.sendMessage(ChatColor.YELLOW + "⚙ " + ChatColor.BOLD + "Available Themes");
+        player.sendMessage(ChatColor.YELLOW + "âš™ " + ChatColor.BOLD + "Available Themes");
         player.sendMessage("");
         for (CollectionTheme theme : CollectionTheme.values()) {
-            int count = (int) collectionManager.getAllCollections().values().stream()
+            int count = (int) collectionManager.getAllCollectionsSync().values().stream()
                     .filter(c -> theme.name().equalsIgnoreCase(c.getThemeId()))
                     .count();
             if (count > 0) {

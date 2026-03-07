@@ -8,7 +8,7 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.handler.DefaultLoreHandler;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
@@ -28,22 +28,25 @@ public class PlayerJoinLoreHandler extends DefaultLoreHandler {
         super(plugin);
         this.logger = LogManager.getInstance(plugin, "PlayerJoinLoreHandler");
     }
-    
-    @Override
+      @Override
     public void initialize() {
-        logger.debug("Initializing player join lore handler");
-    }
-    
-    /**
-     * Handle player join events
+        logger.info("Initializing player join event handler - this is the primary handler for PlayerJoinEvent");
+    }    /**
+     * Handle player join events - only logs for first joins and name changes
      */
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
         
         try {
-            // Use the centralized PlayerManager instead of duplicate logic
-            plugin.getPlayerManager().processPlayerJoin(player);
+            // Only log debug information for the actual handling
+            // Use the centralized PlayerManager for all player join processing
+            boolean processed = plugin.getPlayerManager().processPlayerJoin(player);
+            
+            // Only log if an action was taken (first join or name change)
+            if (processed) {
+                logger.info("Player join event created lore entry for: " + player.getName());
+            }
         } catch (Exception e) {
             logger.error("Error processing player join event: " + player.getName(), e);
         }
@@ -109,9 +112,7 @@ public class PlayerJoinLoreHandler extends DefaultLoreHandler {
             logger.debug("Error formatting join date: " + e.getMessage());
         }
         return null;
-    }
-
-    @Override
+    }    @Override
     public LoreType getHandlerType() {
         return LoreType.PLAYER;
     }

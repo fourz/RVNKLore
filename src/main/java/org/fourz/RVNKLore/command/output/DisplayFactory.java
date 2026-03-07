@@ -36,7 +36,7 @@ public class DisplayFactory {
      */
     public static boolean displayItemList(CommandSender sender, ItemManager itemManager, int page, boolean newestFirst) {
         // Get all items with their properties
-        List<ItemProperties> items = itemManager.getAllItemsWithProperties();
+        List<ItemProperties> items = itemManager.getAllItemsWithPropertiesForCommands();
         
         // Sort items by creation date
         if (newestFirst) {
@@ -92,7 +92,7 @@ public class DisplayFactory {
      * @return true if the display was successful
      */
     public static boolean displayLoreEntry(CommandSender sender, LoreEntry entry) {
-        sender.sendMessage(ChatColor.GOLD + "===== Item Info: " + entry.getName() + " =====");
+        sender.sendMessage(ChatColor.GOLD + "===== Item Info: " + entry.getDisplayName() + " =====");
         sender.sendMessage(ChatColor.YELLOW + "Type: " + entry.getType());
         sender.sendMessage(ChatColor.YELLOW + "ID: " + entry.getId());
         

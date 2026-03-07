@@ -73,7 +73,7 @@ public class EnchantedItemLoreHandler extends DefaultLoreHandler {
         // Auto-approve since it's system-generated
         entry.setApproved(true);
         
-        getPlugin().getLoreManager().addLoreEntry(entry);
+        getPlugin().getLoreManager().addLoreEntrySync(entry);
     }
 
     @Override
@@ -98,6 +98,6 @@ public class EnchantedItemLoreHandler extends DefaultLoreHandler {
 
     @Override
     public LoreType getHandlerType() {
-        return LoreType.ITEM;
+        return LoreType.ENCHANTMENT;
     }
 }

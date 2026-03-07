@@ -6,9 +6,14 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
+
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -53,8 +58,19 @@ public class FactionLoreHandler implements LoreHandler {
         if (entry.getMetadata("members") == null || entry.getMetadata("members").isEmpty()) {
             validationErrors.add("At least one member must be specified");
         }
-        
+
+        // Factions must have a founder
+        if (entry.getMetadata("founder_uuid") == null) {
+            validationErrors.add("Faction must have a founder");
+        }
+
+        // Factions must have at least one territory claim
+        if (entry.getMetadata("claim_ids") == null || entry.getMetadata("claim_ids").isEmpty()) {
+            validationErrors.add("Faction must have at least one territory claim");
+        }
+
         if (!validationErrors.isEmpty()) {
+            entry.addMetadata("validation_errors", String.join(";", validationErrors));
             logger.debug("Faction validation failed: " + String.join(", ", validationErrors));
             return false;
         }
@@ -103,16 +119,37 @@ public class FactionLoreHandler implements LoreHandler {
                 lore.add(ChatColor.WHITE + line);
             }
             
+            // Add territory info if available
+            String territoryData = entry.getMetadata("territory_data");
+            if (territoryData != null && !territoryData.isEmpty()) {
+                try {
+                    JsonArray territories = JsonParser.parseString(territoryData).getAsJsonArray();
+                    int totalArea = 0;
+                    for (JsonElement elem : territories) {
+                        JsonObject territory = elem.getAsJsonObject();
+                        int minX = territory.get("min_x").getAsInt();
+                        int maxX = territory.get("max_x").getAsInt();
+                        int minZ = territory.get("min_z").getAsInt();
+                        int maxZ = territory.get("max_z").getAsInt();
+                        totalArea += (maxX - minX) * (maxZ - minZ);
+                    }
+                    lore.add(ChatColor.GRAY + "Territories: " + ChatColor.WHITE + territories.size());
+                    lore.add(ChatColor.GRAY + "Total Area: " + ChatColor.WHITE + totalArea + " blocks");
+                } catch (Exception e) {
+                    logger.debug("Failed to parse territory data for item: " + entry.getName());
+                }
+            }
+
             // Add headquarters location if available
             if (entry.getLocation() != null) {
                 lore.add("");
-                lore.add(ChatColor.GRAY + "Headquarters: " + 
-                        ChatColor.WHITE + entry.getLocation().getWorld().getName() + " at " + 
-                        (int)entry.getLocation().getX() + ", " + 
-                        (int)entry.getLocation().getY() + ", " + 
+                lore.add(ChatColor.GRAY + "Headquarters: " +
+                        ChatColor.WHITE + entry.getLocation().getWorld().getName() + " at " +
+                        (int)entry.getLocation().getX() + ", " +
+                        (int)entry.getLocation().getY() + ", " +
                         (int)entry.getLocation().getZ());
             }
-            
+
             meta.setLore(lore);
             item.setItemMeta(meta);
         }
@@ -155,13 +192,40 @@ public class FactionLoreHandler implements LoreHandler {
             player.sendMessage(ChatColor.WHITE + line);
         }
         
+        // Display territory information if available
+        String territoryData = entry.getMetadata("territory_data");
+        if (territoryData != null && !territoryData.isEmpty()) {
+            player.sendMessage("");
+            player.sendMessage(ChatColor.RED + "Territories:");
+            try {
+                JsonArray territories = JsonParser.parseString(territoryData).getAsJsonArray();
+                int totalArea = 0;
+                for (JsonElement elem : territories) {
+                    JsonObject territory = elem.getAsJsonObject();
+                    int claimId = territory.get("claim_id").getAsInt();
+                    int minX = territory.get("min_x").getAsInt();
+                    int maxX = territory.get("max_x").getAsInt();
+                    int minZ = territory.get("min_z").getAsInt();
+                    int maxZ = territory.get("max_z").getAsInt();
+                    int area = (maxX - minX) * (maxZ - minZ);
+                    totalArea += area;
+                    String world = territory.get("world").getAsString();
+                    player.sendMessage(ChatColor.RED + "  Claim #" + claimId + ": " +
+                        ChatColor.GRAY + area + " blocks (" + world + ")");
+                }
+                player.sendMessage(ChatColor.RED + "  Total Area: " + ChatColor.GRAY + totalArea + " blocks");
+            } catch (Exception e) {
+                logger.debug("Failed to parse territory data for faction: " + entry.getName());
+            }
+        }
+
         // Add headquarters location if available
         if (entry.getLocation() != null) {
             player.sendMessage("");
-            player.sendMessage(ChatColor.GRAY + "Headquarters: " + 
-                    ChatColor.WHITE + entry.getLocation().getWorld().getName() + " at " + 
-                    (int)entry.getLocation().getX() + ", " + 
-                    (int)entry.getLocation().getY() + ", " + 
+            player.sendMessage(ChatColor.GRAY + "Headquarters: " +
+                    ChatColor.WHITE + entry.getLocation().getWorld().getName() + " at " +
+                    (int)entry.getLocation().getX() + ", " +
+                    (int)entry.getLocation().getY() + ", " +
                     (int)entry.getLocation().getZ());
         }
     }

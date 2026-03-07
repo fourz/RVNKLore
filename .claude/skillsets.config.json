@@ -1,0 +1,40 @@
+{
+  "schema_version": "2.0.0",
+  "version": "1.0.0",
+  "project": "rvnklore",
+  "parent": "../..",
+  "installed_from": {
+    "flavor": "minimal",
+    "version": "1.0.0",
+    "date": "2026-01-25T00:00:00Z"
+  },
+  "notes": "Skills do NOT inherit - installed via /skillsets install minimal",
+  "skillsets": [
+    {
+      "name": "utility",
+      "description": "Core Archon task management and documentation sync (minimal package)",
+      "enabled": true,
+      "source": "install-package",
+      "commands": [
+        "init-archon",
+        "doc-cleanup",
+        "archon-sync"
+      ],
+      "agents": [
+        "archon-manager",
+        "documentation-specialist",
+        "git-workflow-manager"
+      ],
+      "skills": [
+        "archon-task-workflow",
+        "documentation-standards"
+      ],
+      "activated_at": "2026-01-25T00:00:00Z"
+    }
+  ],
+  "global_components": {
+    "agents": [],
+    "skills": [],
+    "commands": []
+  }
+}

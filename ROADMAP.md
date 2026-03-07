@@ -1,8 +1,133 @@
+> **DEPRECATED — March 2026**: Status is now tracked in Docker MCP knowledge graph
+> (`mcp__MCP_DOCKER__search_nodes("RVNKLore")`). Open tasks tracked in GitHub Issues (`board:rvnklore`).
+> This file is preserved as historical reference only and is no longer actively maintained.
+
 # RVNKLore Development Roadmap
 
-**Last Updated**: May 25, 2025
+**Last Updated**: February 28, 2026
 
 This document outlines the planned features and improvements for the RVNKLore plugin.
+
+**GitHub Board**: [board:rvnklore](https://github.com/fourz/Ravenkaft-Dev/issues?q=is:open+label:board:rvnkquests) (6 open bugs)
+
+---
+
+<!-- Synced from parent ROADMAP.md 2026-02-27 -->
+## February 28, 2026 Status: Bug Sprint (6 Issues Identified)
+
+**Bug Sprint** (Feb 28, 2026):
+
+Six bugs filed on RVNK Dev server testing session:
+
+- **#142** `bug-LO-05`: Duplicate lore entry name gives no feedback (SQLIntegrityConstraintViolationException not caught in LoreEntryRepository)
+- **#141** `bug-LO-04`: lore discover may not persist if lore reload runs before async write (race condition)
+- **#140** `bug-LO-03`: lore debug check rejects short IDs (full UUID required, inconsistent with `/lore get`)
+- **#139** `bug-LO-02`: lore collection list/view use different collection systems (ItemCollections vs HeadCollection)
+- **#138** `bug-LO-01`: LoreManager fails to write death entries to database (repeated WARN logs)
+- **#137** `bug-LO-01`: lore item info/give can't reference multi-word item names (args[0] only, need `String.join()`)
+
+**Priority**: All bugs marked `priority:low` — functional system, UX improvements
+
+## February 18, 2026 Status: Phase 8 Active + DB Schema Fixed
+
+**DB Schema Fix** (Feb 17, 2026):
+
+- ✅ Removed `CREATE TABLE IF NOT EXISTS lore_entries` legacy recreation block from `DatabaseConnection.java`
+- ✅ Fixed `lore_lore_metadata` FK: `REFERENCES lore_entries(id)` → `REFERENCES lore_entry(id)`
+- ✅ Removed `seedLegacyLoreEntries()` method — seed now produces 521 clean records
+- ✅ Deployed and validated on RVNK Dev server
+
+**Active Work**:
+
+- 🔄 `coll-08`: Citizens NPC collection vendors (DOING in Archon)
+- 📋 **Review backlog**: feat-101 (console support), feat-105 (RVNKWorlds listeners), feat-119 (cartography hook), bug-05 (help footer), feat-109 (GP faction), impl-21 (auto-register worlds), feat-125 (boss kill hook)
+
+**Feature Gaps** (Todo in Archon):
+
+- `bug-LO-01`: `/lore collection` command requires player — violates coding standards (console support required)
+- City signs (city landmark auto-discovery)
+- Faction territory cluster: feat-102..114 (city-faction integration, diplomacy, GP claim visualization)
+- Discovery triggers: VotingPlugin vote events, WorldGuard REGION_ENTER
+- PlaceholderAPI support (Phase 5)
+
+**Blocked** (18 tasks): GP×10, VotingPlugin×5, WorldGuard×1, recipe×1, maintenance×1
+
+*Full ecosystem roadmap: [Ravenkraft Dev ROADMAP.md](../../ROADMAP.md)*
+
+---
+
+## February 9, 2026 Status: Phase E (UX & Stabilization) Complete
+
+**Phase E Sprint** (Feb 8-9, 2026):
+
+- ✅ Live tab completion across 5 commands: `/lore get`, `/lore list`, `/lore add`, `/lore approve`, `/lore search`
+- ✅ `TabCompletionUtil` shared utility class (name, enum, player, type-filtered completions)
+- ✅ `LoreSearchService.searchNames(partial, type, limit)` type-filtered overload
+- ✅ `LoreManager.findLoreEntryByNameSync()` for name→entry resolution
+- ✅ `/lore get` and `/lore approve` accept both names and UUIDs (backward compatible)
+- ✅ HandlerFactory audit: QUEST registration fix, ENCHANTMENT type mismatch fix
+- ✅ 3 DB integrity bugs fixed (cache mismatch, legacy table cleanup, ITEM atomic creation)
+- ✅ Deployed and validated on RVNK Dev server
+
+**Phase D Sprint** (Feb 7-8, 2026):
+
+- ✅ GriefPrevention + VotingPlugin soft dependency bootstraps
+- ✅ `/lore discover` manual discovery granting command
+- ✅ TAVERN, GUILD, SHRINE lore types with handlers and sign hooks
+- ✅ DynmapMarkerReader, `/lore dynmap diff` + `/lore dynmap import`
+- ✅ QUEST_COMPLETE + CARTOGRAPHY discovery triggers
+- ✅ Dead code cleanup
+
+**Archon Status**:
+
+- **Review**: perf-01 (HikariCP keepaliveTime 30s)
+- **Todo**: 10 feature tasks (city signs, faction integration, event hooks)
+- **Blocked**: 18 tasks (GP×10, VotingPlugin×5, WorldGuard×1, recipe×1, maintenance×1)
+
+**Testing**: 20+ commands validated on RVNK Dev, all tab completion verified
+
+**Next Phase** (Q1 2026):
+
+- [ ] Schema consolidation - single source of truth (impl-07)
+- [ ] DTO completion - NameChangeRecordDTO, Gson metadata (impl-08)
+- [ ] Repository interface completion - IPlayerRepository (impl-09)
+- [ ] Schema documentation consolidation (doc-05)
+- [ ] Schema validation tests (test-06)
+- [ ] External plugin integration unblocking (GriefPrevention, VotingPlugin handlers)
+
+**Documentation**:
+
+- Schema Reference: [docs/standard/rvnklore-schema.md](../../docs/standard/rvnklore-schema.md)
+- Database API: [docs/standard/rvnklore-database-api.md](../../docs/standard/rvnklore-database-api.md)
+
+---
+
+## January 2026 Status: RVNKCore Integration Complete
+
+**Completed** (Jan 30, 2026):
+
+- ✅ RVNKCore ServiceRegistry integration via reflection
+- ✅ 4 service interfaces: ILoreService, IItemService, ICollectionService, ISubmissionService
+- ✅ Java Records DTOs: LoreEntryDTO, LoreSubmissionDTO, ItemPropertiesDTO
+- ✅ FallbackTracker pattern for database resilience
+- ✅ 34 unit tests passing
+- ✅ Deployed to MCSS Dev server
+- ✅ 7 commits on `feature/rvnkcore-integration` branch
+
+**Next Phase** (Q1 2026):
+
+- [ ] Schema consolidation - single source of truth (impl-07)
+- [ ] DTO completion - NameChangeRecordDTO, Gson metadata (impl-08)
+- [ ] Repository interface completion - IPlayerRepository (impl-09)
+- [ ] Schema documentation consolidation (doc-05)
+- [ ] Schema validation tests (test-06)
+
+**Documentation**:
+
+- Schema Reference: [docs/standard/rvnklore-schema.md](../../docs/standard/rvnklore-schema.md)
+- Database API: [docs/standard/rvnklore-database-api.md](../../docs/standard/rvnklore-database-api.md)
+
+---
 
 ## Current Status
 

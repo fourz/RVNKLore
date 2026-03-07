@@ -10,7 +10,7 @@ import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.plugin.EventExecutor;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.rvnkcore.util.log.LogManager;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -124,9 +124,9 @@ public class HandlerEventLogger implements Listener {
      * Send event statistics to a player
      */
     public void sendStatisticsToPlayer(Player player) {
-        player.sendMessage("§6§lHandler Event Statistics:");
+        player.sendMessage("Â§6Â§lHandler Event Statistics:");
         eventCounts.forEach((eventClass, count) -> 
-            player.sendMessage("§e  " + eventClass.getSimpleName() + "§7: " + count + " events")
+            player.sendMessage("Â§e  " + eventClass.getSimpleName() + "Â§7: " + count + " events")
         );
     }
 }

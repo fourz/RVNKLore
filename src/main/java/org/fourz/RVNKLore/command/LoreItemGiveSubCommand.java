@@ -5,7 +5,7 @@ import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.lore.item.ItemManager;
 
 import java.util.ArrayList;
@@ -44,30 +44,30 @@ public class LoreItemGiveSubCommand implements SubCommand {
     }    @Override
     public boolean execute(CommandSender sender, String[] args) {
         if (args.length < 2) {
-            sender.sendMessage(ChatColor.RED + "▶ Usage: /lore item give <item_name> <player>");
+            sender.sendMessage(ChatColor.RED + "â–¶ Usage: /lore item give <item_name> <player>");
             sender.sendMessage(ChatColor.GRAY + "   Give any registered lore item to a player");
             return true;
         }
-        String itemName = args[0];
-        String playerName = args[1];
+        String playerName = args[args.length - 1];
+        String itemName = String.join(" ", java.util.Arrays.copyOfRange(args, 0, args.length - 1));
         Player target = Bukkit.getPlayerExact(playerName);
         if (target == null) {
-            sender.sendMessage(ChatColor.RED + "✖ Player '" + playerName + "' not found or not online.");
+            sender.sendMessage(ChatColor.RED + "âœ– Player '" + playerName + "' not found or not online.");
             return true;
         }
         if (itemManager == null) {
-            sender.sendMessage(ChatColor.RED + "✖ Item system is not available. Please try again later.");
+            sender.sendMessage(ChatColor.RED + "âœ– Item system is not available. Please try again later.");
             logger.error("ItemManager is null when trying to give item: " + itemName, null);
             return true;
         }
         // Use ItemManager for item lookup and giving
-        org.bukkit.inventory.ItemStack item = itemManager.createLoreItem(itemName);
+        org.bukkit.inventory.ItemStack item = itemManager.createLoreItemSync(itemName);
         if (item == null) {
-            sender.sendMessage(ChatColor.RED + "✖ Item not found: " + itemName);
+            sender.sendMessage(ChatColor.RED + "âœ– Item not found: " + itemName);
             return true;
         }
         target.getInventory().addItem(item);
-        sender.sendMessage(ChatColor.GREEN + "✓ Gave " + itemName + " to " + playerName);
+        sender.sendMessage(ChatColor.GREEN + "âœ“ Gave " + itemName + " to " + playerName);
         return true;
     }
 
@@ -80,7 +80,7 @@ public class LoreItemGiveSubCommand implements SubCommand {
     public List<String> getTabCompletions(CommandSender sender, String[] args) {
         List<String> completions = new ArrayList<>();
         if (args.length == 1) {
-            completions.addAll(itemManager.getAllItemNames());
+            completions.addAll(itemManager.getAllItemNamesForCommands());
         } else if (args.length == 2) {
             // Suggest online player names for the second argument
             org.bukkit.Bukkit.getOnlinePlayers().forEach(p -> completions.add(p.getName()));

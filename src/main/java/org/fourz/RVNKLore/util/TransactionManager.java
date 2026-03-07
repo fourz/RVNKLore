@@ -1,7 +1,7 @@
 package org.fourz.RVNKLore.util;
 
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.rvnkcore.util.log.LogManager;
 
 import java.util.Map;
 import java.util.UUID;

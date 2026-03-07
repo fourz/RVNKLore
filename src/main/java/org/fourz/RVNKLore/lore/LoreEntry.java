@@ -186,6 +186,20 @@ public class LoreEntry {
     }
     
     /**
+     * Get a human-readable display name for this entry.
+     * For PLAYER-type entries, returns the player_name metadata instead of the
+     * internal UUID-based name. Falls back to getName() for all other types.
+     *
+     * @return The display-friendly name
+     */
+    public String getDisplayName() {
+        if (type == LoreType.PLAYER && hasMetadata("player_name")) {
+            return getMetadata("player_name");
+        }
+        return name;
+    }
+
+    /**
      * Add metadata to this lore entry
      * 
      * @param key The metadata key
@@ -243,6 +257,7 @@ public class LoreEntry {
     /**
      * Convert the lore entry to a JSON object
      */
+    @SuppressWarnings("unchecked") // JSONObject from json-simple doesn't support generics
     public JSONObject toJson() {
         JSONObject json = new JSONObject();
         json.put("id", id);
@@ -355,7 +370,7 @@ public class LoreEntry {
         }
         
         // Location-based lore requires a location
-        if ((type == LoreType.LANDMARK || type == LoreType.CITY || type == LoreType.PATH) && location == null) {
+        if (type != null && type.isLocationCapable() && location == null) {
             return false;
         }
         

@@ -10,7 +10,7 @@ import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.handler.DefaultLoreHandler;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
-import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.rvnkcore.util.log.LogManager;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -102,12 +102,16 @@ public class HandlerSignLandmark extends DefaultLoreHandler {
         entry.setApproved(autoApprove || player.hasPermission("rvnklore.approve.own"));
         
         // Save the entry
-        boolean success = plugin.getLoreManager().addLoreEntry(entry);
+        boolean success = plugin.getLoreManager().addLoreEntrySync(entry);
         
         if (success) {
-            player.sendMessage(ChatColor.GREEN + "Landmark '" + name + "' has been " + 
+            player.sendMessage(ChatColor.GREEN + "Landmark '" + name + "' has been " +
                 (entry.isApproved() ? "created" : "submitted for approval") + ".");
             logger.debug("Created landmark via sign: " + name + " by " + player.getName());
+
+            if (plugin.isDynmapAvailable()) {
+                plugin.getDynmapIntegration().getMarkerManager().createOrUpdateMarker(entry);
+            }
         } else {
             player.sendMessage(ChatColor.RED + "Failed to create landmark. Please try again or contact an admin.");
             logger.warning("Failed to create landmark via sign: " + name + " by " + player.getName());

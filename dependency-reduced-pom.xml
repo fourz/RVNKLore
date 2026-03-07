@@ -3,10 +3,17 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>org.fourz.RVNKLore</groupId>
   <artifactId>RVNKLore</artifactId>
-  <name>RVNKQuests</name>
-  <version>1.0-SNAPSHOT</version>
+  <name>RVNKLore</name>
+  <version>1.0.14</version>
   <url>http://www.example.com</url>
   <build>
+    <resources>
+      <resource>
+        <filtering>true</filtering>
+        <directory>src/main/resources</directory>
+      </resource>
+    </resources>
+    <finalName>${project.artifactId}</finalName>
     <plugins>
       <plugin>
         <artifactId>maven-shade-plugin</artifactId>
@@ -35,6 +42,10 @@
           </execution>
         </executions>
       </plugin>
+      <plugin>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.2.3</version>
+      </plugin>
     </plugins>
   </build>
   <repositories>
@@ -58,6 +69,22 @@
       <id>minecraft-libraries</id>
       <url>https://libraries.minecraft.net/</url>
     </repository>
+    <repository>
+      <id>dynmap-repo</id>
+      <url>https://repo.mikeprimm.com/</url>
+    </repository>
+    <repository>
+      <id>bencodez-repo</id>
+      <url>https://nexus.bencodez.com/repository/maven-public/</url>
+    </repository>
+    <repository>
+      <id>jitpack.io</id>
+      <url>https://jitpack.io</url>
+    </repository>
+    <repository>
+      <id>citizens-repo</id>
+      <url>https://repo.citizensnpcs.co/</url>
+    </repository>
   </repositories>
   <dependencies>
     <dependency>
@@ -79,10 +106,111 @@
       <version>7.3.0</version>
       <scope>provided</scope>
     </dependency>
+    <dependency>
+      <groupId>org.fourz</groupId>
+      <artifactId>rvnkcore</artifactId>
+      <version>1.3.5-alpha</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.fourz.RVNKQuests</groupId>
+      <artifactId>RVNKQuests</artifactId>
+      <version>1.0-SNAPSHOT</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>me.clip</groupId>
+      <artifactId>placeholderapi</artifactId>
+      <version>2.11.6</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>us.dynmap</groupId>
+      <artifactId>DynmapCoreAPI</artifactId>
+      <version>3.8</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.bencodez</groupId>
+      <artifactId>votingplugin</artifactId>
+      <version>7.0-SNAPSHOT</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.github.TechFortress</groupId>
+      <artifactId>GriefPrevention</artifactId>
+      <version>16.18</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>net.citizensnpcs</groupId>
+      <artifactId>citizens-main</artifactId>
+      <version>2.0.34-SNAPSHOT</version>
+      <scope>provided</scope>
+      <exclusions>
+        <exclusion>
+          <artifactId>*</artifactId>
+          <groupId>*</groupId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>5.10.1</version>
+      <scope>test</scope>
+      <exclusions>
+        <exclusion>
+          <artifactId>junit-jupiter-api</artifactId>
+          <groupId>org.junit.jupiter</groupId>
+        </exclusion>
+        <exclusion>
+          <artifactId>junit-jupiter-params</artifactId>
+          <groupId>org.junit.jupiter</groupId>
+        </exclusion>
+        <exclusion>
+          <artifactId>junit-jupiter-engine</artifactId>
+          <groupId>org.junit.jupiter</groupId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>org.mockito</groupId>
+      <artifactId>mockito-core</artifactId>
+      <version>5.8.0</version>
+      <scope>test</scope>
+      <exclusions>
+        <exclusion>
+          <artifactId>byte-buddy</artifactId>
+          <groupId>net.bytebuddy</groupId>
+        </exclusion>
+        <exclusion>
+          <artifactId>byte-buddy-agent</artifactId>
+          <groupId>net.bytebuddy</groupId>
+        </exclusion>
+        <exclusion>
+          <artifactId>objenesis</artifactId>
+          <groupId>org.objenesis</groupId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>org.mockito</groupId>
+      <artifactId>mockito-junit-jupiter</artifactId>
+      <version>5.8.0</version>
+      <scope>test</scope>
+      <exclusions>
+        <exclusion>
+          <artifactId>junit-jupiter-api</artifactId>
+          <groupId>org.junit.jupiter</groupId>
+        </exclusion>
+      </exclusions>
+    </dependency>
   </dependencies>
   <properties>
-    <maven.compiler.target>21</maven.compiler.target>
+    <maven.compiler.release>21</maven.compiler.release>
     <java.version>21</java.version>
-    <maven.compiler.source>21</maven.compiler.source>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
   </properties>
 </project>

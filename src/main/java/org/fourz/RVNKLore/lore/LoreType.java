@@ -55,9 +55,29 @@ public enum LoreType {
     ENCHANTMENT("Enchantment on an item"),
     
     /**
+     * Monument or memorial marker
+     */
+    MONUMENT("Monument or memorial marker"),
+
+    /**
      * Decorative head item (includes player heads, mob heads, custom heads, and hats)
      */
-    HEAD("Decorative head or hat item");
+    HEAD("Decorative head or hat item"),
+
+    /**
+     * Tavern, inn, or social gathering place
+     */
+    TAVERN("Tavern, inn, or social gathering place"),
+
+    /**
+     * Guild hall or professional organization
+     */
+    GUILD("Guild hall or professional organization"),
+
+    /**
+     * Shrine, altar, or place of worship
+     */
+    SHRINE("Shrine, altar, or place of worship");
 
     private final String description;
 
@@ -67,5 +87,31 @@ public enum LoreType {
 
     public String getDescription() {
         return this.description;
+    }
+
+    /**
+     * Returns the broad category this lore type belongs to.
+     */
+    public LoreCategory getCategory() {
+        switch (this) {
+            case LANDMARK: case MONUMENT: case CITY: case PATH: case EVENT:
+            case FACTION: case TAVERN: case GUILD: case SHRINE:
+                return LoreCategory.LOCATION;
+            case PLAYER:
+                return LoreCategory.CHARACTER;
+            case ITEM: case HEAD: case ENCHANTMENT:
+                return LoreCategory.ITEM;
+            case QUEST: case GENERIC:
+            default:
+                return LoreCategory.NARRATIVE;
+        }
+    }
+
+    /**
+     * Returns true if this type represents a location-anchored entry
+     * (eligible for dynmap markers and requires coordinates).
+     */
+    public boolean isLocationCapable() {
+        return getCategory() == LoreCategory.LOCATION;
     }
 }

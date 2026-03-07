@@ -6,7 +6,7 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.rvnkcore.util.log.LogManager;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -38,11 +38,13 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
         commands.put("add", new LoreAddSubCommand(plugin));
         commands.put("get", new LoreGetSubCommand(plugin));
         commands.put("list", new LoreListSubCommand(plugin));
+        commands.put("search", new LoreSearchSubCommand(plugin));
         commands.put("approve", new LoreApproveSubCommand(plugin));
         commands.put("reload", new LoreReloadSubCommand(plugin));
         commands.put("export", new LoreExportSubCommand(plugin));
+        commands.put("import", new LoreImportSubCommand(plugin));
         commands.put("debug", new LoreDebugSubCommand(plugin));
-        
+
         // Add cosmetic management commands using the new ItemManager-based API
         //if (plugin.getItemManager() != null && plugin.getItemManager().getCosmeticManager() != null) {
         if (plugin.getLoreManager().getItemManager() != null && plugin.getLoreManager().getItemManager().getCosmeticItem() != null) {
@@ -51,7 +53,40 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
             commands.put("item", new LoreItemSubCommand(plugin));
             // Remove /lore itemgive registration
         }
-        
+
+        // Register the /lore book command for lore book management
+        commands.put("book", new LoreBookSubCommand(plugin));
+
+        // Register the /lore achievement command for achievement management
+        if (plugin.getAchievementManager() != null) {
+            commands.put("achievement", new LoreAchievementSubCommand(plugin, plugin.getAchievementManager()));
+        }
+
+        // Register the /lore browse command for GUI browser
+        commands.put("browse", new LoreBrowseSubCommand(plugin));
+
+        // Register the /lore dynmap command for dynmap integration
+        // Always register — availability checked at execution time since Dynmap enables after RVNKLore
+        commands.put("dynmap", new LoreDynmapSubCommand(plugin));
+
+        // Register faction commands (GP territory integration)
+        commands.put("registerfaction", new LoreRegisterFactionSubCommand(plugin));
+        commands.put("faction", new org.fourz.RVNKLore.command.faction.LoreFactionSubCommand(plugin));
+
+        // Register the /lore discover command for manual discovery granting
+        if (plugin.getDiscoveryManager() != null) {
+            commands.put("discover", new LoreDiscoverSubCommand(plugin));
+        }
+
+        // Register the /lore prefs command for player notification preferences (Phase 3)
+        commands.put("prefs", new LorePrefsSubCommand(plugin));
+
+        // Register the /lore npc command for Citizens collection vendors (Phase 8)
+        // TODO: Implement Citizens integration in future phase
+        // if (plugin.getCitizensIntegration() != null && plugin.getCitizensIntegration().isEnabled()) {
+        //     commands.put("npc", new LoreNPCSubCommand(plugin));
+        // }
+
         // Add all commands to the subCommands map
         commands.forEach(this::registerSubCommand);
         logger.debug("Registered " + commands.size() + " subcommands successfully");
@@ -59,7 +94,7 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
 
     /**
      * Registers a subcommand
-     * 
+     *
      * @param name The name of the subcommand
      * @param subCommand The subcommand implementation
      */
@@ -69,59 +104,86 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        logger.info("[LORE-CMD] onCommand: " + command.getName() + " args.length=" + args.length);
+        if (args.length > 0) {
+            logger.info("[LORE-CMD] args[0]=" + args[0]);
+            for (int i = 0; i < args.length; i++) {
+                logger.info("[LORE-CMD] args[" + i + "]=" + args[i]);
+            }
+        }
+
         if (args.length == 0) {
+            logger.info("[LORE-CMD] No args, showing help");
             showHelp(sender);
             return true;
         }
 
         String subCommandName = args[0].toLowerCase();
+        logger.info("[LORE-CMD] Looking up subcommand: " + subCommandName);
+        logger.info("[LORE-CMD] Available: " + subCommands.keySet());
+
         SubCommand subCommand = subCommands.get(subCommandName);
 
         if (subCommand == null) {
+            logger.info("[LORE-CMD] Subcommand NOT FOUND: " + subCommandName);
             sender.sendMessage(ChatColor.RED + "Unknown subcommand: " + subCommandName);
             showHelp(sender);
             return true;
         }
 
+        logger.info("[LORE-CMD] Found subcommand: " + subCommandName);
         if (!subCommand.hasPermission(sender)) {
+            logger.info("[LORE-CMD] NO PERMISSION: " + subCommandName);
             sender.sendMessage(ChatColor.RED + "You don't have permission to use this command.");
             return true;
         }
 
+        logger.info("[LORE-CMD] Executing: " + subCommandName);
         // Remove the subcommand name from args
         String[] subCommandArgs = new String[args.length - 1];
         System.arraycopy(args, 1, subCommandArgs, 0, args.length - 1);
 
-        logger.debug("Executing subcommand: " + subCommandName);
+        logger.debug("Executing subcommand: " + subCommandName + " with " + subCommandArgs.length + " args");
         return subCommand.execute(sender, subCommandArgs);
     }
 
     /**
      * Shows help information to the sender
-     * 
+     *
      * @param sender Command sender to show help to
      */
     private void showHelp(CommandSender sender) {
         sender.sendMessage(ChatColor.GOLD + "===== RVNKLore Commands =====");
         for (Map.Entry<String, SubCommand> entry : subCommands.entrySet()) {
             if (entry.getValue().hasPermission(sender)) {
-                // Update help for unified item give command
-                if ("itemgive".equals(entry.getKey())) {
-                    sender.sendMessage(ChatColor.YELLOW + "/lore itemgive <item_name> <player>" +
-                        ChatColor.WHITE + " - Give any lore item (cosmetic, collection, etc.) by name");
-                } else if ("collection".equals(entry.getKey())) {
+                if ("collection".equals(entry.getKey())) {
                     sender.sendMessage(ChatColor.YELLOW + "/lore collection <view|claim> <collection_id>" +
                         ChatColor.WHITE + " - View or claim collection progress/rewards");
-                } else if ("give".equals(entry.getKey())) {
-                    sender.sendMessage(ChatColor.DARK_GRAY + "/lore give ... [DEPRECATED, use /lore itemgive]" +
-                        ChatColor.GRAY + " - Deprecated: use /lore itemgive");
+                } else if ("book".equals(entry.getKey())) {
+                    sender.sendMessage(ChatColor.YELLOW + "/lore book <give|list> ..." +
+                        ChatColor.WHITE + " - Create and manage lore books");
+                } else if ("export".equals(entry.getKey())) {
+                    sender.sendMessage(ChatColor.YELLOW + "/lore export [json|yaml] [type]" +
+                        ChatColor.WHITE + " - Export lore entries to file");
+                } else if ("import".equals(entry.getKey())) {
+                    sender.sendMessage(ChatColor.YELLOW + "/lore import <file> [--preview]" +
+                        ChatColor.WHITE + " - Import lore entries from file");
+                } else if ("dynmap".equals(entry.getKey())) {
+                    sender.sendMessage(ChatColor.YELLOW + "/lore dynmap <diff|import> [set]" +
+                        ChatColor.WHITE + " - Dynmap marker integration");
+                } else if ("registerfaction".equals(entry.getKey())) {
+                    sender.sendMessage(ChatColor.YELLOW + "/lore registerfaction <name> <member1> [member2...]" +
+                        ChatColor.WHITE + " - Register a faction at your claim");
+                } else if ("faction".equals(entry.getKey())) {
+                    sender.sendMessage(ChatColor.YELLOW + "/lore faction <addterritory|refresh> <name>" +
+                        ChatColor.WHITE + " - Manage faction territories");
                 } else {
-                    sender.sendMessage(ChatColor.YELLOW + "/lore " + entry.getKey() + 
+                    sender.sendMessage(ChatColor.YELLOW + "/lore " + entry.getKey() +
                         ChatColor.WHITE + " - " + entry.getValue().getDescription());
                 }
             }
         }
-        sender.sendMessage(ChatColor.GRAY + "\nSee /lore itemgive and /lore collection for unified item and collection management.");
+        sender.sendMessage(ChatColor.GRAY + "\nSee /lore item give and /lore collection for item and collection management.");
     }
 
     @Override
@@ -132,7 +194,7 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
             // Complete subcommand names
             String partial = args[0].toLowerCase();
             for (String subCommand : subCommands.keySet()) {
-                if (subCommands.get(subCommand).hasPermission(sender) && 
+                if (subCommands.get(subCommand).hasPermission(sender) &&
                     subCommand.startsWith(partial)) {
                     completions.add(subCommand);
                 }
@@ -141,11 +203,11 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
             // Pass to subcommand for completion
             String subCommandName = args[0].toLowerCase();
             SubCommand subCommand = subCommands.get(subCommandName);
-            
+
             if (subCommand != null && subCommand.hasPermission(sender)) {
                 String[] subCommandArgs = new String[args.length - 1];
                 System.arraycopy(args, 1, subCommandArgs, 0, args.length - 1);
-                
+
                 List<String> subCommandCompletions = subCommand.getTabCompletions(sender, subCommandArgs);
                 if (subCommandCompletions != null) {
                     completions.addAll(subCommandCompletions);

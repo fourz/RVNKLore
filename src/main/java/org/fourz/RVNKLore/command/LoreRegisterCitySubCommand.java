@@ -5,7 +5,7 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.Location;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
 import org.fourz.RVNKLore.handler.LoreHandler;
@@ -62,13 +62,13 @@ public class LoreRegisterCitySubCommand implements SubCommand {
             }
             
             // Check if city already exists
-            if (plugin.getLoreManager().getLoreEntryByName(cityName) != null) {
+            if (plugin.getLoreManager().getLoreEntryByNameSync(cityName) != null) {
                 player.sendMessage(ChatColor.RED + "A city with that name already exists!");
                 return false;
             }
 
             // Get existing city entries only once for efficiency
-            List<LoreEntry> cityEntries = plugin.getLoreManager().getLoreEntriesByType(LoreType.CITY);
+            List<LoreEntry> cityEntries = plugin.getLoreManager().getLoreEntriesByTypeSync(LoreType.CITY);
             
             // Check distance to other cities
             for (LoreEntry existingEntry : cityEntries) {
@@ -123,7 +123,7 @@ public class LoreRegisterCitySubCommand implements SubCommand {
             entry.setApproved(false);
             
             // Save to database
-            boolean success = plugin.getLoreManager().addLoreEntry(entry);
+            boolean success = plugin.getLoreManager().addLoreEntrySync(entry);
             
             if (success) {
                 player.sendMessage(ChatColor.GREEN + "City '" + cityName + "' has been registered in the lore books!");
@@ -156,7 +156,7 @@ public class LoreRegisterCitySubCommand implements SubCommand {
 
     private double findNearestCityDistance(Location location) {
         double nearest = Double.MAX_VALUE;
-        for (LoreEntry entry : plugin.getLoreManager().getAllLoreEntries()) {
+        for (LoreEntry entry : plugin.getLoreManager().getAllLoreEntriesSync()) {
             if (entry.getType() == LoreType.CITY) {
                 double distance = location.distance(entry.getLocation());
                 nearest = Math.min(nearest, distance);

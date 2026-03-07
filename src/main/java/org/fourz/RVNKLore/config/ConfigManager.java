@@ -2,23 +2,29 @@ package org.fourz.RVNKLore.config;
 
 import org.bukkit.configuration.file.FileConfiguration;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.debug.Debug;
-import org.fourz.RVNKLore.debug.LogManager;
+import org.fourz.rvnkcore.config.dto.DatabaseSettingsDTO;
+import org.fourz.rvnkcore.config.dto.MySQLSettingsDTO;
+import org.fourz.rvnkcore.config.dto.SQLiteSettingsDTO;
 import org.fourz.RVNKLore.handler.DefaultLoreHandler;
 import org.fourz.RVNKLore.handler.HandlerFactory;
 import org.fourz.RVNKLore.handler.LoreHandler;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
+import org.bukkit.configuration.ConfigurationSection;
+import org.fourz.rvnkcore.util.log.LogManager;
 
+import java.io.File;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Level;
 
 public class ConfigManager {
     private final RVNKLore plugin;
     private FileConfiguration config;
     private HandlerFactory handlerFactory;
     private LogManager logger;
+    private DatabaseSettingsDTO databaseSettings;
 
     public ConfigManager(RVNKLore plugin) {
         this.plugin = plugin;
@@ -35,6 +41,15 @@ public class ConfigManager {
         // Apply log level from config to all LogManager instances
         java.util.logging.Level configLevel = getLogLevel();
         updateAllLogManagers(configLevel);
+
+        // Initialize and validate database settings DTO
+        try {
+            this.databaseSettings = createDatabaseSettings();
+            logger.info("Database configuration validated successfully");
+        } catch (IllegalArgumentException e) {
+            logger.error("Invalid database configuration: " + e.getMessage());
+            logger.warning("Plugin will continue but database features may be unavailable");
+        }
     }
     
     private void validateConfig() {
@@ -74,33 +89,91 @@ public class ConfigManager {
         
         config.options().copyDefaults(true);
         plugin.saveConfig();
-    }    /**
+    }
+
+    /**
+     * Create DatabaseSettingsDTO from configuration.
+     * Called during initialization and config reload.
+     * @return Configured DatabaseSettingsDTO instance
+     * @throws IllegalArgumentException if configuration is invalid
+     */
+    private DatabaseSettingsDTO createDatabaseSettings() {
+        String storageType = config.getString("storage.type", "sqlite");
+        DatabaseSettingsDTO.DatabaseType type = storageType.equalsIgnoreCase("mysql")
+            ? DatabaseSettingsDTO.DatabaseType.MYSQL
+            : DatabaseSettingsDTO.DatabaseType.SQLITE;
+
+        int connectionTimeout = config.getInt("storage.mysql.connectionTimeout", 30000);
+        int maxRetries = config.getInt("storage.connection.retryAttempts", 5);
+
+        MySQLSettingsDTO mysqlSettings = null;
+        if (type == DatabaseSettingsDTO.DatabaseType.MYSQL) {
+            mysqlSettings = new MySQLSettingsDTO(
+                config.getString("storage.mysql.host", "localhost"),
+                config.getInt("storage.mysql.port", 3306),
+                config.getString("storage.mysql.database", "minecraft"),
+                config.getString("storage.mysql.username", "root"),
+                config.getString("storage.mysql.password", ""),
+                config.getBoolean("storage.mysql.useSSL", false),
+                config.getString("storage.mysql.tablePrefix", "")
+            );
+        }
+
+        SQLiteSettingsDTO sqliteSettings = null;
+        if (type == DatabaseSettingsDTO.DatabaseType.SQLITE) {
+            String dbFile = config.getString("storage.sqlite.database", "lore.db");
+            String filePath = new File(plugin.getDataFolder(), dbFile).getAbsolutePath();
+            sqliteSettings = new SQLiteSettingsDTO(
+                filePath,
+                config.getString("storage.sqlite.tablePrefix", "")
+            );
+        }
+
+        DatabaseSettingsDTO dto = new DatabaseSettingsDTO(
+            type, mysqlSettings, sqliteSettings, connectionTimeout, maxRetries
+        );
+        dto.validate();
+        return dto;
+    }
+
+    /**
+     * Get the database configuration settings as a strongly-typed DTO.
+     * The DTO is cached and only recreated when the configuration is reloaded.
+     *
+     * @return DatabaseSettingsDTO instance with validated settings
+     */
+    public DatabaseSettingsDTO getDatabaseSettings() {
+        if (databaseSettings == null) {
+            databaseSettings = createDatabaseSettings();
+        }
+        return databaseSettings;
+    }
+
+    /**
      * Initialize logging system and apply configuration.
      * This method ensures LogManager instances use the correct log level from config.
      */
     public void initDebugLogging() {
-        java.util.logging.Level configLevel = getLogLevel();
+        Level configLevel = getLogLevel();
         updateAllLogManagers(configLevel);
         logger.info("Configuration system initialized with log level: " + configLevel.getName());
-    }/**
+    }
+
+    /**
      * Get the configured log level from config file.
+     * Uses RVNKCore LogManager.parseLevel() which supports aliases (DEBUG, WARN, ERROR).
      * @return The log level from configuration
      */
-    public java.util.logging.Level getLogLevel() {
-        String levelString = config.getString("general.logLevel", "INFO").toUpperCase();
-        try {
-            return java.util.logging.Level.parse(levelString);
-        } catch (IllegalArgumentException e) {
-            logger.warning("Invalid log level in config: " + levelString + ", using INFO as default");
-            return java.util.logging.Level.INFO;
-        }
+    public Level getLogLevel() {
+        String levelString = config.getString("general.logLevel", "INFO");
+        return LogManager.parseLevel(levelString);
     }
 
     /**
      * Set the log level in configuration and update all LogManager instances.
      * @param level The new log level to set
      */
-    public void setLogLevel(java.util.logging.Level level) {
+    public void setLogLevel(Level level) {
         config.set("general.logLevel", level.getName());
         plugin.saveConfig();
         updateAllLogManagers(level);
@@ -108,17 +181,12 @@ public class ConfigManager {
     }
 
     /**
-     * Update log level for all LogManager instances and legacy Debug instances.
+     * Update log level for all LogManager instances.
      * This is called when the configuration changes.
      */
-    private void updateAllLogManagers(java.util.logging.Level newLevel) {
-        // Update all LogManager instances
-        LogManager.updateAllLogLevels(newLevel);
-        
-        // Update legacy Debug instance if it exists (for backward compatibility)
-        if (plugin.getDebugger() != null) {
-            plugin.getDebugger().setLogLevel(newLevel);
-        }
+    private void updateAllLogManagers(Level newLevel) {
+        // Update all LogManager instances for this plugin
+        LogManager.setPluginLogLevel(plugin, newLevel);
     }
 
     /**
@@ -188,6 +256,15 @@ public class ConfigManager {
     }    public void reloadConfig() {
         plugin.reloadConfig();
         config = plugin.getConfig();
+
+        // Refresh database settings DTO
+        try {
+            this.databaseSettings = createDatabaseSettings();
+            logger.info("Database configuration reloaded and validated");
+        } catch (IllegalArgumentException e) {
+            logger.error("Invalid database configuration after reload: " + e.getMessage());
+        }
+
         java.util.logging.Level newLevel = getLogLevel();
         updateAllLogManagers(newLevel);
         logger.info("Configuration reloaded with log level: " + newLevel.getName());
@@ -203,61 +280,27 @@ public class ConfigManager {
             initHandlerFactory();
         }
         return handlerFactory;
-    }    /**
-     * Configure log level for any new debug instances
-     */
-    public void configureDebugInstance(Debug debugInstance) {
-        if (debugInstance != null) {
-            debugInstance.setLogLevel(getLogLevel());
-        }
     }
 
     /**
      * Set log level using string value (for command usage).
-     * @param levelString The log level as a string (e.g., "INFO", "WARNING", "SEVERE")
-     * @return True if successful, false if invalid level string
+     * Uses RVNKCore LogManager.parseLevel() which supports aliases (DEBUG, WARN, ERROR).
+     * @param levelString The log level as a string (e.g., "INFO", "DEBUG", "ERROR")
+     * @return True if successful (always true as parseLevel defaults to INFO)
      */
     public boolean setLogLevel(String levelString) {
-        try {
-            java.util.logging.Level level = java.util.logging.Level.parse(levelString.toUpperCase());
-            setLogLevel(level);
-            return true;
-        } catch (IllegalArgumentException e) {
-            logger.warning("Invalid log level: " + levelString + ". Valid levels are: SEVERE, WARNING, INFO, CONFIG, FINE, FINER, FINEST");
-            return false;
-        }
+        Level level = LogManager.parseLevel(levelString);
+        setLogLevel(level);
+        return true;
     }
 
     /**
      * Get available log level names.
+     * Includes RVNKCore LogManager aliases for convenience.
      * @return Array of valid log level names
      */
     public String[] getAvailableLogLevels() {
-        return new String[]{"SEVERE", "WARNING", "INFO", "CONFIG", "FINE", "FINER", "FINEST"};
-    }
-    
-    /**
-     * Get database connection settings for MySQL
-     */
-    public Map<String, Object> getMySQLSettings() {
-        Map<String, Object> settings = new HashMap<>();
-        settings.put("host", config.getString("storage.mysql.host", "localhost"));
-        settings.put("port", config.getInt("storage.mysql.port", 3306));
-        settings.put("database", config.getString("storage.mysql.database", "minecraft"));
-        settings.put("username", config.getString("storage.mysql.username", "root"));
-        settings.put("password", config.getString("storage.mysql.password", ""));
-        settings.put("useSSL", config.getBoolean("storage.mysql.useSSL", false));
-        settings.put("tablePrefix", config.getString("storage.mysql.tablePrefix", ""));
-        return settings;
-    }
-    
-    /**
-     * Get database connection settings for SQLite
-     */
-    public Map<String, Object> getSQLiteSettings() {
-        Map<String, Object> settings = new HashMap<>();
-        settings.put("database", config.getString("storage.sqlite.database", "data.db"));
-        return settings;
+        return new String[]{"DEBUG", "INFO", "WARN", "WARNING", "ERROR", "SEVERE", "OFF"};
     }
     
     /**
@@ -265,5 +308,55 @@ public class ConfigManager {
      */
     public boolean isTestMode() {
         return "yes".equalsIgnoreCase(config.getString("storage.test-mode", "no"));
+    }
+
+    // ==================== Dynmap Configuration ====================
+
+    public boolean isDynmapEnabled() {
+        return config.getBoolean("dynmap.enabled", true);
+    }
+
+    public String getDynmapMarkerSetId() {
+        return config.getString("dynmap.marker-set.id", "rvnklore");
+    }
+
+    public String getDynmapMarkerSetLabel() {
+        return config.getString("dynmap.marker-set.label", "Lore Entries");
+    }
+
+    public boolean isDynmapMarkerSetHidden() {
+        return config.getBoolean("dynmap.marker-set.hide-by-default", false);
+    }
+
+    public int getDynmapLayerPriority() {
+        return config.getInt("dynmap.marker-set.layer-priority", 10);
+    }
+
+    public String getDynmapIcon(LoreType type) {
+        String key = "dynmap.icons." + type.name();
+        return config.getString(key, config.getString("dynmap.icons.default", "sign"));
+    }
+
+    public boolean isDynmapOnlyApproved() {
+        return config.getBoolean("dynmap.only-approved", true);
+    }
+
+    public boolean isDynmapPopupEnabled() {
+        return config.getBoolean("dynmap.popup.enabled", true);
+    }
+
+    public int getDynmapMaxDescriptionLength() {
+        return config.getInt("dynmap.popup.max-description-length", 200);
+    }
+
+    // ==================== Collection Marker Configuration ====================
+
+    public boolean isCollectionMarkersEnabled() {
+        return config.getBoolean("dynmap.collection-markers.enabled", true);
+    }
+
+    public String getCollectionMarkerIcon(String theme) {
+        String key = "dynmap.collection-markers.icons." + theme;
+        return config.getString(key, config.getString("dynmap.collection-markers.icons.default", "pin"));
     }
 }

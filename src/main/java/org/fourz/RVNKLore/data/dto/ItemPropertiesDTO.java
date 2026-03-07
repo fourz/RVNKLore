@@ -1,129 +1,77 @@
 package org.fourz.RVNKLore.data.dto;
 
-import java.util.List;
-import java.util.Map;
 import org.bukkit.Material;
 import org.fourz.RVNKLore.lore.item.ItemProperties;
 import org.fourz.RVNKLore.lore.item.ItemType;
-import org.fourz.RVNKLore.lore.item.cosmetic.HeadVariant;
 import org.fourz.RVNKLore.lore.item.cosmetic.HeadRarity;
+import org.fourz.RVNKLore.lore.item.cosmetic.HeadVariant;
 
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 /**
- * Data Transfer Object for item properties.
- * Used to transfer item property data between database and domain layers.
+ * Data Transfer Object for ItemProperties using Java Record.
+ * Immutable and thread-safe for cross-plugin data transfer via RVNKCore.
  */
-public class ItemPropertiesDTO {
+public record ItemPropertiesDTO(
     // Core properties
-    private int id;
-    private ItemType itemType;
-    private String material;
-    private String displayName;
-    private List<String> lore;
-    private Integer customModelData;
-    private String rarity;
-    private boolean obtainable;
-    
+    int id,
+    ItemType itemType,
+    String material,
+    String displayName,
+    List<String> lore,
+    Integer customModelData,
+    String rarity,
+    boolean obtainable,
+
     // Linking properties
-    private String loreEntryId;
-    private String nbtData;
-    
+    String loreEntryId,
+    String nbtData,
+
     // Cosmetic properties
-    private boolean glow;
-    private String skullTexture;
-    private String textureData;
-    private String ownerName;
-    
+    boolean glow,
+    String skullTexture,
+    String textureData,
+    String ownerName,
+
     // Collection properties
-    private String collectionId;
-    private String themeId;
-    private String rarityLevel;
-    private Integer collectionSequence;
-    
+    String collectionId,
+    String themeId,
+    String rarityLevel,
+    Integer collectionSequence,
+
     // Meta properties
-    private String createdBy;
-    private Long createdAt;
-    private Map<String, Object> customProperties;
-    private Map<String, String> metadata;
+    String createdBy,
+    Long createdAt,
+    Map<String, Object> customProperties,
+    Map<String, String> metadata
+) {
+    /**
+     * Compact constructor with validation and defensive copies.
+     */
+    public ItemPropertiesDTO {
+        Objects.requireNonNull(material, "material cannot be null");
+        Objects.requireNonNull(displayName, "displayName cannot be null");
 
-    public ItemPropertiesDTO() {}
-
-    public ItemPropertiesDTO(int id, ItemType itemType, String material, 
-                           String displayName, List<String> lore,
-                           Integer customModelData, String rarity,
-                           boolean obtainable, String loreEntryId) {
-        this.id = id;
-        this.itemType = itemType;
-        this.material = material;
-        this.displayName = displayName;
-        this.lore = lore;
-        this.customModelData = customModelData;
-        this.rarity = rarity;
-        this.obtainable = obtainable;
-        this.loreEntryId = loreEntryId;
+        // Defensive copies for mutable collections
+        lore = lore == null ? List.of() : List.copyOf(lore);
+        customProperties = customProperties == null ? Map.of() : Map.copyOf(customProperties);
+        metadata = metadata == null ? Map.of() : Map.copyOf(metadata);
     }
 
-    // Core property getters and setters
-    public int getId() { return id; }
-    public void setId(int id) { this.id = id; }
-    public ItemType getItemType() { return itemType; }
-    public void setItemType(ItemType itemType) { this.itemType = itemType; }
-    public String getMaterial() { return material; }
-    public void setMaterial(String material) { this.material = material; }
-    public String getDisplayName() { return displayName; }
-    public void setDisplayName(String displayName) { this.displayName = displayName; }
-    public List<String> getLore() { return lore; }
-    public void setLore(List<String> lore) { this.lore = lore; }
-    public Integer getCustomModelData() { return customModelData; }
-    public void setCustomModelData(Integer customModelData) { this.customModelData = customModelData; }
-    public String getRarity() { return rarity; }
-    public void setRarity(String rarity) { this.rarity = rarity; }
-    public boolean isObtainable() { return obtainable; }
-    public void setObtainable(boolean obtainable) { this.obtainable = obtainable; }
-
-    // Linking properties getters and setters
-    public String getLoreEntryId() { return loreEntryId; }
-    public void setLoreEntryId(String loreEntryId) { this.loreEntryId = loreEntryId; }
-    public String getNbtData() { return nbtData; }
-    public void setNbtData(String nbtData) { this.nbtData = nbtData; }
-
-    // Cosmetic properties getters and setters
-    public boolean isGlow() { return glow; }
-    public void setGlow(boolean glow) { this.glow = glow; }
-    public String getSkullTexture() { return skullTexture; }
-    public void setSkullTexture(String skullTexture) { this.skullTexture = skullTexture; }
-    public String getTextureData() { return textureData; }
-    public void setTextureData(String textureData) { this.textureData = textureData; }
-    public String getOwnerName() { return ownerName; }
-    public void setOwnerName(String ownerName) { this.ownerName = ownerName; }
-
-    // Collection properties getters and setters
-    public String getCollectionId() { return collectionId; }
-    public void setCollectionId(String collectionId) { this.collectionId = collectionId; }
-    public String getThemeId() { return themeId; }
-    public void setThemeId(String themeId) { this.themeId = themeId; }
-    public String getRarityLevel() { return rarityLevel; }
-    public void setRarityLevel(String rarityLevel) { this.rarityLevel = rarityLevel; }
-    public Integer getCollectionSequence() { return collectionSequence; }
-    public void setCollectionSequence(Integer collectionSequence) { this.collectionSequence = collectionSequence; }
-
-    // Meta properties getters and setters
-    public String getCreatedBy() { return createdBy; }
-    public void setCreatedBy(String createdBy) { this.createdBy = createdBy; }
-    public Long getCreatedAt() { return createdAt; }
-    public void setCreatedAt(Long createdAt) { this.createdAt = createdAt; }
-    public Map<String, Object> getCustomProperties() { return customProperties; }
-    public void setCustomProperties(Map<String, Object> customProperties) { this.customProperties = customProperties; }
-    public Map<String, String> getMetadata() { return metadata; }
-    public void setMetadata(Map<String, String> metadata) { this.metadata = metadata; }
-
     /**
-     * Converts an ItemProperties domain object to a DTO
+     * Factory method from ItemProperties domain object.
+     *
+     * @param properties The domain entity to convert
+     * @return A new ItemPropertiesDTO, or null if properties is null
      */
-    public static ItemPropertiesDTO fromItemProperties(ItemProperties properties) {
+    public static ItemPropertiesDTO from(ItemProperties properties) {
         if (properties == null) return null;
 
-        ItemPropertiesDTO dto = new ItemPropertiesDTO(
+        HeadVariant headVariant = properties.getHeadVariant();
+
+        return new ItemPropertiesDTO(
             properties.getDatabaseId(),
             properties.getItemType(),
             properties.getMaterial().name(),
@@ -132,62 +80,49 @@ public class ItemPropertiesDTO {
             properties.getCustomModelData(),
             properties.getRarity(),
             properties.isObtainable(),
-            properties.getLoreEntryId()
+            properties.getLoreEntryId(),
+            properties.getNbtData(),
+            properties.isGlow(),
+            properties.getSkullTexture(),
+            headVariant != null ? properties.getTextureData() : null,
+            headVariant != null ? properties.getOwnerName() : null,
+            properties.getCollectionId(),
+            properties.getThemeId(),
+            properties.getRarityLevel(),
+            properties.getCollectionSequence(),
+            properties.getCreatedBy(),
+            properties.getCreatedAt(),
+            properties.hasCustomProperties() ? properties.getAllCustomProperties() : null,
+            properties.getAllMetadata()
         );
-
-        // Set optional properties
-        dto.setNbtData(properties.getNbtData());
-        dto.setGlow(properties.isGlow());
-        dto.setSkullTexture(properties.getSkullTexture());
-        dto.setCreatedBy(properties.getCreatedBy());
-        dto.setCreatedAt(properties.getCreatedAt());
-        
-        // Set collection properties
-        dto.setCollectionId(properties.getCollectionId());
-        dto.setThemeId(properties.getThemeId());
-        dto.setRarityLevel(properties.getRarityLevel());
-        dto.setCollectionSequence(properties.getCollectionSequence());
-
-        // Copy custom properties and metadata
-        if (properties.hasCustomProperties()) {
-            dto.setCustomProperties(properties.getAllCustomProperties());
-        }
-        dto.setMetadata(properties.getAllMetadata());
-
-        // Copy head variant properties if exists
-        HeadVariant headVariant = properties.getHeadVariant();
-        if (headVariant != null) {
-            dto.setTextureData(properties.getTextureData());
-            dto.setOwnerName(properties.getOwnerName());
-        }
-
-        return dto;
     }
 
     /**
-     * Converts this DTO to an ItemProperties domain object
+     * Converts this DTO to an ItemProperties domain object.
+     *
+     * @return A new ItemProperties populated with DTO values
      */
-    public ItemProperties toItemProperties() {
+    public ItemProperties toEntity() {
         ItemProperties properties = new ItemProperties(Material.valueOf(material), displayName);
-        
+
         // Set core properties
         properties.setDatabaseId(id);
         properties.setItemType(itemType);
-        properties.setLore(lore);
+        properties.setLore(lore.isEmpty() ? null : new java.util.ArrayList<>(lore));
         if (customModelData != null) {
             properties.setCustomModelData(customModelData);
         }
         properties.setRarity(rarity);
         properties.setObtainable(obtainable);
         properties.setLoreEntryId(loreEntryId);
-        
+
         // Set optional properties
         if (nbtData != null) properties.setNbtData(nbtData);
         properties.setGlow(glow);
         if (skullTexture != null) properties.setSkullTexture(skullTexture);
         if (createdBy != null) properties.setCreatedBy(createdBy);
         if (createdAt != null) properties.setCreatedAt(createdAt);
-        
+
         // Set collection properties
         if (collectionId != null) properties.setCollectionId(collectionId);
         if (themeId != null) properties.setThemeId(themeId);
@@ -195,18 +130,19 @@ public class ItemPropertiesDTO {
         if (collectionSequence != null) properties.setCollectionSequence(collectionSequence);
 
         // Set custom properties and metadata
-        if (customProperties != null) {
+        if (!customProperties.isEmpty()) {
             for (Map.Entry<String, Object> entry : customProperties.entrySet()) {
                 properties.setCustomProperty(entry.getKey(), entry.getValue());
             }
         }
-        if (metadata != null) {
+        if (!metadata.isEmpty()) {
             for (Map.Entry<String, String> entry : metadata.entrySet()) {
                 properties.setMetadata(entry.getKey(), entry.getValue());
             }
-        }        // Set head variant properties if exists
+        }
+
+        // Set head variant properties if exists
         if (textureData != null || ownerName != null) {
-            // Create a basic head variant with default values since we can't create one with no params
             HeadVariant headVariant = new HeadVariant(
                 "generated-" + System.currentTimeMillis(),
                 "Generated Head",
@@ -214,12 +150,166 @@ public class ItemPropertiesDTO {
                 ownerName != null ? ownerName : "",
                 HeadRarity.COMMON
             );
-            
+
             if (textureData != null) properties.setTextureData(textureData);
             if (ownerName != null) properties.setOwnerName(ownerName);
             properties.setHeadVariant(headVariant);
         }
 
         return properties;
+    }
+
+    /**
+     * Builder for constructing ItemPropertiesDTO with optional fields.
+     */
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    /**
+     * Builder class for ItemPropertiesDTO.
+     */
+    public static class Builder {
+        private int id;
+        private ItemType itemType;
+        private String material;
+        private String displayName;
+        private List<String> lore;
+        private Integer customModelData;
+        private String rarity;
+        private boolean obtainable = true;
+        private String loreEntryId;
+        private String nbtData;
+        private boolean glow;
+        private String skullTexture;
+        private String textureData;
+        private String ownerName;
+        private String collectionId;
+        private String themeId;
+        private String rarityLevel;
+        private Integer collectionSequence;
+        private String createdBy;
+        private Long createdAt;
+        private Map<String, Object> customProperties;
+        private Map<String, String> metadata;
+
+        public Builder id(int id) {
+            this.id = id;
+            return this;
+        }
+
+        public Builder itemType(ItemType itemType) {
+            this.itemType = itemType;
+            return this;
+        }
+
+        public Builder material(String material) {
+            this.material = material;
+            return this;
+        }
+
+        public Builder displayName(String displayName) {
+            this.displayName = displayName;
+            return this;
+        }
+
+        public Builder lore(List<String> lore) {
+            this.lore = lore;
+            return this;
+        }
+
+        public Builder customModelData(Integer customModelData) {
+            this.customModelData = customModelData;
+            return this;
+        }
+
+        public Builder rarity(String rarity) {
+            this.rarity = rarity;
+            return this;
+        }
+
+        public Builder obtainable(boolean obtainable) {
+            this.obtainable = obtainable;
+            return this;
+        }
+
+        public Builder loreEntryId(String loreEntryId) {
+            this.loreEntryId = loreEntryId;
+            return this;
+        }
+
+        public Builder nbtData(String nbtData) {
+            this.nbtData = nbtData;
+            return this;
+        }
+
+        public Builder glow(boolean glow) {
+            this.glow = glow;
+            return this;
+        }
+
+        public Builder skullTexture(String skullTexture) {
+            this.skullTexture = skullTexture;
+            return this;
+        }
+
+        public Builder textureData(String textureData) {
+            this.textureData = textureData;
+            return this;
+        }
+
+        public Builder ownerName(String ownerName) {
+            this.ownerName = ownerName;
+            return this;
+        }
+
+        public Builder collectionId(String collectionId) {
+            this.collectionId = collectionId;
+            return this;
+        }
+
+        public Builder themeId(String themeId) {
+            this.themeId = themeId;
+            return this;
+        }
+
+        public Builder rarityLevel(String rarityLevel) {
+            this.rarityLevel = rarityLevel;
+            return this;
+        }
+
+        public Builder collectionSequence(Integer collectionSequence) {
+            this.collectionSequence = collectionSequence;
+            return this;
+        }
+
+        public Builder createdBy(String createdBy) {
+            this.createdBy = createdBy;
+            return this;
+        }
+
+        public Builder createdAt(Long createdAt) {
+            this.createdAt = createdAt;
+            return this;
+        }
+
+        public Builder customProperties(Map<String, Object> customProperties) {
+            this.customProperties = customProperties;
+            return this;
+        }
+
+        public Builder metadata(Map<String, String> metadata) {
+            this.metadata = metadata;
+            return this;
+        }
+
+        public ItemPropertiesDTO build() {
+            return new ItemPropertiesDTO(
+                id, itemType, material, displayName, lore, customModelData, rarity, obtainable,
+                loreEntryId, nbtData, glow, skullTexture, textureData, ownerName,
+                collectionId, themeId, rarityLevel, collectionSequence,
+                createdBy, createdAt, customProperties, metadata
+            );
+        }
     }
 }
