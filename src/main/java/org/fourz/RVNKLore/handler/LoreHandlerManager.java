@@ -30,17 +30,17 @@ public class LoreHandlerManager {
      * Initialize all handlers for supported lore types
      */
     private void initializeHandlers() {
-        logger.info("Initializing lore handlers");
+        logger.debug("Initializing lore handlers");
         try {
             // Initialize only the actively used lore types
             LoreType[] activeTypes = {
-                LoreType.GENERIC, LoreType.PLAYER, LoreType.CITY, 
+                LoreType.GENERIC, LoreType.PLAYER, LoreType.CITY,
                 LoreType.LANDMARK, LoreType.FACTION, LoreType.PATH
             };
             for (LoreType type : activeTypes) {
                 getHandler(type); // This will create and cache the handler
             }
-            logger.info("All core lore handlers initialized successfully");
+            logger.debug("All core lore handlers initialized successfully");
         } catch (Exception e) {
             logger.error("Error initializing lore handlers", e);
         }
@@ -56,7 +56,7 @@ public class LoreHandlerManager {
         // Use computeIfAbsent to avoid redundant handler creation
         LoreHandler handler = handlers.computeIfAbsent(type, t -> {
             LoreHandler h = factory.getHandler(t);
-            logger.info("Retrieved handler for lore type: " + t);
+            logger.debug("Retrieved handler for lore type: " + t);
             return h;
         });
         return handler;
@@ -66,7 +66,7 @@ public class LoreHandlerManager {
      * Unregister all event handlers
      */
     public void unregisterAllHandlers() {
-        logger.info("Unregistering all lore handlers");
+        logger.debug("Unregistering all lore handlers");
         factory.unregisterAllHandlers();
         handlers.clear();
     }
@@ -75,7 +75,7 @@ public class LoreHandlerManager {
      * Reload all handlers
      */
     public void reloadHandlers() {
-        logger.info("Reloading lore handlers");
+        logger.debug("Reloading lore handlers");
         unregisterAllHandlers();
         initializeHandlers();
     }

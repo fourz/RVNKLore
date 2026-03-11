@@ -109,7 +109,7 @@ public class ArmorStandLoreHandler extends DefaultLoreHandler {
                     registeredStatues.add(standUuid);
                     player.sendMessage(ChatColor.GREEN + "Statue '" + statueName + "' has been " +
                         (entry.isApproved() ? "registered in the lore." : "submitted for approval."));
-                    logger.info("Statue lore entry created: " + statueName + " by " + player.getName());
+                    logger.debug("Statue lore entry created: " + statueName + " by " + player.getName());
                 } else {
                     logger.debug("Statue entry not saved (may already exist): " + statueName);
                 }

@@ -41,7 +41,7 @@ public class CommandRewardHandler implements RewardHandler {
             Bukkit.dispatchCommand(Bukkit.getConsoleSender(), finalCommand);
         });
 
-        logger.info("Executed reward command for " + player.getName() + ": " + command);
+        logger.debug("Executed reward command for " + player.getName() + ": " + command);
         return true;
     }
 

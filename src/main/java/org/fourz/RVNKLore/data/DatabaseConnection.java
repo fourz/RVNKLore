@@ -50,7 +50,7 @@ public abstract class DatabaseConnection {
         String storageType = plugin.getConfig().getString("storage.type", "sqlite");
         this.tablePrefix = plugin.getConfig().getString("storage." + storageType + ".tablePrefix", "");
         if (tablePrefix != null && !tablePrefix.isEmpty()) {
-            logger.info("Using table prefix: " + tablePrefix);
+            logger.debug("Using table prefix: " + tablePrefix);
         }
     }
 

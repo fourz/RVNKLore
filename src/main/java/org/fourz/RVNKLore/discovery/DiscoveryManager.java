@@ -88,14 +88,14 @@ public class DiscoveryManager {
             try {
                 QuestDiscoveryListener questListener = new QuestDiscoveryListener(plugin, this);
                 Bukkit.getPluginManager().registerEvents(questListener, plugin);
-                logger.info("RVNKQuests integration enabled - QUEST_COMPLETE discoveries active");
+                logger.debug("RVNKQuests integration enabled - QUEST_COMPLETE discoveries active");
             } catch (NoClassDefFoundError e) {
                 logger.warning("RVNKQuests found but event class not available - quest discoveries disabled");
             }
         }
 
         initialized = true;
-        logger.info("DiscoveryManager initialized");
+        logger.debug("DiscoveryManager initialized");
     }
 
     /**
@@ -109,7 +109,7 @@ public class DiscoveryManager {
         try {
             Map<String, UUID> loaded = discoveryRepository.loadAllFirstDiscoverers().join();
             firstDiscoverers.putAll(loaded);
-            logger.info("Loaded " + loaded.size() + " first discoverers from database");
+            logger.debug("Loaded " + loaded.size() + " first discoverers from database");
         } catch (Exception e) {
             logger.warning("Failed to load first discoverers: " + e.getMessage());
         }
@@ -171,7 +171,7 @@ public class DiscoveryManager {
                             notificationManager.sendDiscoveryNotification(evt);
                         });
 
-                        logger.info("Player " + player.getName() + " discovered: " + entry.getName() +
+                        logger.debug("Player " + player.getName() + " discovered: " + entry.getName() +
                             (isFirstDiscovery ? " (FIRST DISCOVERY)" : ""));
                     }
                     return recorded;
@@ -307,11 +307,11 @@ public class DiscoveryManager {
         if (pendingWrites.isEmpty()) {
             return;
         }
-        logger.info("Awaiting " + pendingWrites.size() + " pending discovery writes...");
+        logger.debug("Awaiting " + pendingWrites.size() + " pending discovery writes...");
         try {
             CompletableFuture.allOf(pendingWrites.toArray(new CompletableFuture[0]))
                 .get(PENDING_WRITE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
-            logger.info("All pending discovery writes completed");
+            logger.debug("All pending discovery writes completed");
         } catch (Exception e) {
             logger.warning("Timed out waiting for pending writes: " + e.getMessage());
         }

@@ -61,7 +61,7 @@ public class ItemRewardHandler implements RewardHandler {
             player.sendMessage("§eYour inventory was full. Some items were dropped at your feet.");
         }
 
-        logger.info("Granted item reward to " + player.getName() + ": " + itemName + " x" + amount);
+        logger.debug("Granted item reward to " + player.getName() + ": " + itemName + " x" + amount);
         return true;
     }
 

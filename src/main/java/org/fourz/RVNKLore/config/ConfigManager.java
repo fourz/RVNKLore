@@ -45,7 +45,7 @@ public class ConfigManager {
         // Initialize and validate database settings DTO
         try {
             this.databaseSettings = createDatabaseSettings();
-            logger.info("Database configuration validated successfully");
+            logger.debug("Database configuration validated successfully");
         } catch (IllegalArgumentException e) {
             logger.error("Invalid database configuration: " + e.getMessage());
             logger.warning("Plugin will continue but database features may be unavailable");
@@ -156,7 +156,7 @@ public class ConfigManager {
     public void initDebugLogging() {
         Level configLevel = getLogLevel();
         updateAllLogManagers(configLevel);
-        logger.info("Configuration system initialized with log level: " + configLevel.getName());
+        logger.debug("Configuration system initialized with log level: " + configLevel.getName());
     }
 
     /**
@@ -205,14 +205,14 @@ public class ConfigManager {
         if (handlerFactory == null) {
             initHandlerFactory();
         }
-        logger.info("Loading lore handlers from configuration...");
+        logger.debug("Loading lore handlers from configuration...");
         Map<LoreType, LoreHandler> handlers = new HashMap<>();
         // Register handlers for all lore types
         for (LoreType type : LoreType.values()) {
             try {
                 LoreHandler handler = handlerFactory.getHandler(type);
                 handlers.put(type, handler);
-                logger.info("Registered handler for " + type + ": " + handler.getClass().getSimpleName());
+                logger.debug("Registered handler for " + type + ": " + handler.getClass().getSimpleName());
             } catch (Exception e) {
                 logger.error("Failed to create handler for type " + type + ", using default handler", e);
                 handlers.put(type, new DefaultLoreHandler(plugin));

@@ -62,7 +62,7 @@ public class ItemRepository implements IItemRepository {
         // Initialize database tables
         initializeTables();
 
-        logger.info("ItemRepository initialized");
+        logger.debug("ItemRepository initialized");
     }
 
     /** Helper to get prefixed table name */
@@ -88,7 +88,7 @@ public class ItemRepository implements IItemRepository {
                             "Ensure DatabaseConnection.createTables() is called before ItemRepository initialization.");
                 }
             }
-            logger.info("Item database tables verified");
+            logger.debug("Item database tables verified");
         } catch (SQLException e) {
             logger.error("Failed to verify item database tables", e);
         }

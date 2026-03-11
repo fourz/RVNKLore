@@ -28,7 +28,7 @@ public class GuildLoreHandler implements LoreHandler {
 
     @Override
     public void initialize() {
-        logger.info("Initializing guild lore handler");
+        logger.debug("Initializing guild lore handler");
     }
 
     @Override

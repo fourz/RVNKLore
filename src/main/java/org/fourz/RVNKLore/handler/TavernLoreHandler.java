@@ -28,7 +28,7 @@ public class TavernLoreHandler implements LoreHandler {
 
     @Override
     public void initialize() {
-        logger.info("Initializing tavern lore handler");
+        logger.debug("Initializing tavern lore handler");
     }
 
     @Override

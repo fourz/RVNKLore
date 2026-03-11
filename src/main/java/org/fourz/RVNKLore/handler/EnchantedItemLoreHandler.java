@@ -27,7 +27,6 @@ public class EnchantedItemLoreHandler extends DefaultLoreHandler {
     
     @Override
     public void initialize() {
-        //logger.debug("Initializing enchanted item lore handler");
     }
 
     /**

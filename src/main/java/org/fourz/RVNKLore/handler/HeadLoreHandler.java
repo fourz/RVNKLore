@@ -28,7 +28,7 @@ public class HeadLoreHandler implements LoreHandler {
 
     @Override
     public void initialize() {
-        logger.info("Initializing head lore handler");
+        logger.debug("Initializing head lore handler");
     }
 
     @Override

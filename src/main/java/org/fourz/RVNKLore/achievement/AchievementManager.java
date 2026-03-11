@@ -50,7 +50,7 @@ public class AchievementManager {
      * Initialize the achievement system.
      */
     public void initialize() {
-        logger.info("Initializing AchievementManager...");
+        logger.debug("Initializing AchievementManager...");
 
         // Register default reward handlers
         registerRewardHandler(new ItemRewardHandler(plugin));
@@ -75,13 +75,13 @@ public class AchievementManager {
                         progressMap.put(progress.getAchievementId(), progress);
                     }
                 }
-                logger.info("Loaded achievement progress for " + allProgress.size() + " players from database");
+                logger.debug("Loaded achievement progress for " + allProgress.size() + " players from database");
             }
         } catch (Exception e) {
             logger.warning("Failed to load achievement progress from database: " + e.getMessage());
         }
 
-        logger.info("AchievementManager initialized with " + achievements.size() + " achievements");
+        logger.debug("AchievementManager initialized with " + achievements.size() + " achievements");
     }
 
     /**
@@ -285,7 +285,7 @@ public class AchievementManager {
             grantRewards(player, achievement);
         }
 
-        logger.info(player.getName() + " unlocked achievement: " + achievement.getName());
+        logger.debug(player.getName() + " unlocked achievement: " + achievement.getName());
     }
 
     /**
@@ -545,12 +545,12 @@ public class AchievementManager {
                     }
                 }
             }
-            logger.info("Saved " + saved + " achievement progress records to database");
+            logger.debug("Saved " + saved + " achievement progress records to database");
         }
 
         achievements.clear();
         playerProgress.clear();
         rewardHandlers.clear();
-        logger.info("AchievementManager shutdown complete");
+        logger.debug("AchievementManager shutdown complete");
     }
 }

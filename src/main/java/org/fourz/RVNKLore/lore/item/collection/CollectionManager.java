@@ -42,7 +42,7 @@ public class CollectionManager implements ICollectionService {
         this.logger = LogManager.getInstance(plugin, "CollectionManager");
         this.rewardHandlers = new RewardHandlerRegistry(plugin);
         initializeCollections();
-        logger.info("CollectionManager initialized with reward handlers");
+        logger.debug("CollectionManager initialized with reward handlers");
     }
 
     private void initializeCollections() {
@@ -61,7 +61,7 @@ public class CollectionManager implements ICollectionService {
             createCollection("starter_items", "Starter Collection", "Basic items for new players");
             createCollection("rare_finds", "Rare Discoveries", "Uncommon items found throughout the world");
             createCollection("legendary_artifacts", "Legendary Artifacts", "Powerful items of great significance");
-            logger.info("Default collections initialized");
+            logger.debug("Default collections initialized");
         }
 
         // Load items for all collections from database
@@ -98,7 +98,7 @@ public class CollectionManager implements ICollectionService {
         
         ItemCollection collection = new ItemCollection(id, name, description);
         collections.put(id, collection);
-        logger.info("Created collection: " + name + " (" + id + ")");
+        logger.debug("Created collection: " + name + " (" + id + ")");
         return collection;
     }
     
@@ -322,7 +322,7 @@ public class CollectionManager implements ICollectionService {
     public void registerTheme(CollectionTheme theme) {
         if (theme == null) return;
         themes.put(theme.name().toLowerCase(), theme);
-        logger.info("Registered collection theme: " + theme.getDisplayName());
+        logger.debug("Registered collection theme: " + theme.getDisplayName());
     }
 
     public CollectionTheme getTheme(String id) {
@@ -336,7 +336,7 @@ public class CollectionManager implements ICollectionService {
     public void shutdown() {
         collections.clear();
         themes.clear();
-        logger.info("CollectionManager shutdown");
+        logger.debug("CollectionManager shutdown");
     }
 
     /**
@@ -351,9 +351,9 @@ public class CollectionManager implements ICollectionService {
         List<ItemCollection> loadedCollections = repository.loadAllCollections().join();
         for (ItemCollection collection : loadedCollections) {
             collections.put(collection.getId(), collection);
-            logger.info("Loaded collection from database: " + collection.getName());
+            logger.debug("Loaded collection from database: " + collection.getName());
         }
-        logger.info("Loaded " + loadedCollections.size() + " collections from database");
+        logger.debug("Loaded " + loadedCollections.size() + " collections from database");
     }
 
     /**
@@ -379,7 +379,7 @@ public class CollectionManager implements ICollectionService {
             boolean saved = repository.saveCollection(collection).join();
             
             if (saved) {
-                logger.info("Successfully saved collection: " + collection.getId());
+                logger.debug("Successfully saved collection: " + collection.getId());
                 // Update the in-memory collection
                 collections.put(collection.getId(), collection);
             } else {
@@ -458,7 +458,7 @@ public class CollectionManager implements ICollectionService {
                 }
             }
 
-            logger.info("Loaded " + itemProps.size() + " items for collection: " + collection.getId());
+            logger.debug("Loaded " + itemProps.size() + " items for collection: " + collection.getId());
             return true;
         } catch (Exception e) {
             logger.error("Failed to load items for collection: " + collection.getId(), e);
@@ -552,7 +552,7 @@ public class CollectionManager implements ICollectionService {
         boolean updated = repository.updatePlayerCollectionProgress(playerId.toString(), collectionId, progress).join();
         
         if (updated) {
-            logger.info("Updated progress for player " + playerId + " in collection " + collectionId + ": " + String.format("%.1f%%", progress * 100));
+            logger.debug("Updated progress for player " + playerId + " in collection " + collectionId + ": " + String.format("%.1f%%", progress * 100));
             
             // Check for completion and trigger rewards
             if (progress >= 1.0) {
@@ -585,7 +585,7 @@ public class CollectionManager implements ICollectionService {
             return;
         }
 
-        logger.info("Player " + playerId + " completed collection: " + collection.getName());
+        logger.debug("Player " + playerId + " completed collection: " + collection.getName());
 
         // Emit a collection completion event for external systems (to be integrated)
         // TODO: Fire CollectionChangeEvent with ChangeType.COMPLETED for event-driven handling
@@ -660,7 +660,7 @@ public class CollectionManager implements ICollectionService {
                     // Mark as claimed in database
                     rewardRepo.claimReward(reward.getId(), playerId).join();
                     granted++;
-                    logger.info("Granted reward " + reward.getId() + " (" + reward.getRewardType() + ") to player " + player.getName());
+                    logger.debug("Granted reward " + reward.getId() + " (" + reward.getRewardType() + ") to player " + player.getName());
                 } else {
                     logger.warning("Handler failed to execute reward " + reward.getId() + " for player " + playerId);
                     failed++;
@@ -671,7 +671,7 @@ public class CollectionManager implements ICollectionService {
             }
         }
 
-        logger.info("Collection reward distribution complete for " + player.getName() + ": " + granted + " granted, " + failed + " failed");
+        logger.debug("Collection reward distribution complete for " + player.getName() + ": " + granted + " granted, " + failed + " failed");
 
         // Fire event if rewards were granted
         if (granted > 0) {
@@ -830,7 +830,7 @@ public class CollectionManager implements ICollectionService {
         for (ItemCollection collection : loadedCollections) {
             collections.put(collection.getId(), collection);
         }
-        logger.info("Reloaded " + loadedCollections.size() + " collections from database");
+        logger.debug("Reloaded " + loadedCollections.size() + " collections from database");
     }
 
     /**

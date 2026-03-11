@@ -56,7 +56,7 @@ public class PlayerManager implements IPlayerLoreService {
      * Initialize the player manager
      */
     public void initialize() {
-        logger.info("Initializing PlayerManager");
+        logger.debug("Initializing PlayerManager");
     }
 
     /**
@@ -67,7 +67,7 @@ public class PlayerManager implements IPlayerLoreService {
     public void setPlayerLookup(PlayerLookup playerLookup) {
         this.playerLookup = playerLookup;
         if (playerLookup != null) {
-            logger.info("PlayerLookup integration configured (RVNKCore: " +
+            logger.debug("PlayerLookup integration configured (RVNKCore: " +
                 playerLookup.isRVNKCoreEnabled() + ")");
         }
     }
@@ -228,7 +228,7 @@ public class PlayerManager implements IPlayerLoreService {
                 
                 if (!exists) {
                     // New player, create first join entry
-                    logger.info("Creating first join entry for new player: " + currentName);
+                    logger.debug("Creating first join entry for new player: " + currentName);
                     return createPlayerLoreEntry(player);
                 } else {
                     // Existing player, check for name change
@@ -236,7 +236,7 @@ public class PlayerManager implements IPlayerLoreService {
                     logger.debug("Stored name for " + currentName + ": " + storedName);
                     
                     if (storedName != null && !storedName.equals(currentName)) {
-                        logger.info("Detected name change for player: " + storedName + " → " + currentName);
+                        logger.debug("Detected name change for player: " + storedName + " → " + currentName);
                         return createNameChangeLoreEntry(player, storedName);
                     } else {
                         logger.debug("No action needed for existing player: " + currentName);
@@ -273,7 +273,7 @@ public class PlayerManager implements IPlayerLoreService {
      * @return true if the entry was created successfully, false otherwise
      */
     public boolean createPlayerLoreEntry(Player player) {
-        logger.info("Creating player lore entry for: " + player.getName());
+        logger.debug("Creating player lore entry for: " + player.getName());
 
         try {
             // Use the player's display name for readability; UUID is stored in metadata
@@ -298,7 +298,7 @@ public class PlayerManager implements IPlayerLoreService {
             boolean success = plugin.getLoreManager().addLoreEntrySync(entry);
 
             if (success) {
-                logger.info("Player lore entry created for: " + player.getName());
+                logger.debug("Player lore entry created for: " + player.getName());
             } else {
                 logger.warning("Failed to create player lore entry for: " + player.getName());
             }
@@ -317,7 +317,7 @@ public class PlayerManager implements IPlayerLoreService {
      * @return true if the entry was created successfully, false otherwise
      */
     public boolean createFirstJoinLoreEntry(Player player) {
-        logger.info("Creating first join lore entry for: " + player.getName());
+        logger.debug("Creating first join lore entry for: " + player.getName());
 
         try {
             // Create a guaranteed unique entry name with UUID
@@ -352,7 +352,7 @@ public class PlayerManager implements IPlayerLoreService {
             if (success) {
                 // Notify the player
                 player.sendMessage(ChatColor.GOLD + "Your arrival has been recorded in the annals of history!");
-                logger.info("First join lore entry created for: " + player.getName());
+                logger.debug("First join lore entry created for: " + player.getName());
             } else {
                 logger.warning("Failed to create first join lore entry for: " + player.getName());
             }
@@ -372,7 +372,7 @@ public class PlayerManager implements IPlayerLoreService {
      * @return true if the entry was created successfully, false otherwise
      */
     public boolean createNameChangeLoreEntry(Player player, String oldName) {
-        logger.info("Creating name change lore entry: " + oldName + " → " + player.getName());
+        logger.debug("Creating name change lore entry: " + oldName + " → " + player.getName());
 
         try {
             // Create a guaranteed unique entry name with UUID and timestamp
@@ -405,7 +405,7 @@ public class PlayerManager implements IPlayerLoreService {
             if (success) {
                 // Notify the player
                 player.sendMessage(ChatColor.GOLD + "Your name change has been recorded in the annals of history!");
-                logger.info("Name change lore entry created: " + oldName + " → " + player.getName());
+                logger.debug("Name change lore entry created: " + oldName + " → " + player.getName());
             } else {
                 logger.warning("Failed to create name change lore entry: " + oldName + " → " + player.getName());
             }

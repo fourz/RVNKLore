@@ -6,6 +6,7 @@ import org.fourz.RVNKLore.data.DatabaseManager;
 import org.fourz.RVNKLore.data.LoreTestDataGenerator;
 import org.fourz.rvnkcore.testing.TestDataGenerator.DataCategory;
 import org.fourz.rvnkcore.util.chat.ChatService;
+import org.fourz.rvnkcore.util.log.LogManager;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -30,12 +31,14 @@ public class SeedSubCommand implements SubCommand {
     private static final String PERMISSION = "rvnklore.admin.seed";
 
     private final RVNKLore plugin;
+    private final LogManager logger;
     private final ChatService chatService;
     private LoreTestDataGenerator generator;
     private boolean seeding = false;
 
     public SeedSubCommand(RVNKLore plugin) {
         this.plugin = plugin;
+        this.logger = LogManager.getInstance(plugin, "SeedSubCommand");
         this.chatService = new ChatService();
     }
 
@@ -122,7 +125,7 @@ public class SeedSubCommand implements SubCommand {
         }).exceptionally(ex -> {
             seeding = false;
             chatService.sendError(sender, "Seed failed: " + ex.getMessage());
-            plugin.getLogger().severe("Seed operation failed: " + ex.getMessage());
+            logger.error("Seed operation failed: " + ex.getMessage());
             return null;
         });
 
@@ -148,7 +151,7 @@ public class SeedSubCommand implements SubCommand {
         }).exceptionally(ex -> {
             seeding = false;
             chatService.sendError(sender, "Cleanup failed: " + ex.getMessage());
-            plugin.getLogger().severe("Cleanup operation failed: " + ex.getMessage());
+            logger.error("Cleanup operation failed: " + ex.getMessage());
             return null;
         });
 
@@ -178,7 +181,7 @@ public class SeedSubCommand implements SubCommand {
         }).exceptionally(ex -> {
             seeding = false;
             chatService.sendError(sender, "Cleanup failed: " + ex.getMessage());
-            plugin.getLogger().severe("Player cleanup operation failed: " + ex.getMessage());
+            logger.error("Player cleanup operation failed: " + ex.getMessage());
             return null;
         });
 

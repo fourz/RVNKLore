@@ -28,7 +28,7 @@ public class MonumentLoreHandler implements LoreHandler {
 
     @Override
     public void initialize() {
-        logger.info("Initializing monument lore handler");
+        logger.debug("Initializing monument lore handler");
     }
 
     @Override

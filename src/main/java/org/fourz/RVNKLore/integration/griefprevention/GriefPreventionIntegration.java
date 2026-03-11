@@ -60,7 +60,7 @@ public class GriefPreventionIntegration implements Listener {
             }
 
             enabled = true;
-            logger.info("GriefPrevention integration enabled");
+            logger.debug("GriefPrevention integration activated");
             return true;
         } catch (Exception e) {
             logger.warning("Failed to initialize GriefPrevention integration: " + e.getMessage());

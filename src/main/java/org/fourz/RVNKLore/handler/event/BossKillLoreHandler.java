@@ -115,7 +115,7 @@ public class BossKillLoreHandler extends DefaultLoreHandler {
 
         plugin.getLoreManager().addLoreEntry(entry).thenAccept(success -> {
             if (success) {
-                logger.info("Boss kill lore entry created: " + entry.getName());
+                logger.debug("Boss kill lore entry created: " + entry.getName());
                 Bukkit.getScheduler().runTask(plugin, () ->
                     announceBossKill(bossName, killer, participants));
             } else {

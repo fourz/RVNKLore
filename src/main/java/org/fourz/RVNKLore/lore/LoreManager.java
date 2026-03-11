@@ -50,22 +50,21 @@ public class LoreManager implements ILoreService {
      * Initialize the lore system and load handlers
      */    public void initializeLore() {
         if (initializing) {
-            logger.info("Lore system initialization already in progress, skipping recursive call");
+            logger.debug("Lore system initialization already in progress, skipping recursive call");
             return;
         }
         try {
             initializing = true;
-            logger.info("Initializing lore system...");
+            logger.debug("Initializing lore system...");
 
             // Initialize the unified item management system
             this.itemManager = new ItemManager(plugin);
-            logger.info("Item management system initialized");
 
             // First load entries from database (doesn't require handlers)
             loadLoreEntries();
             // Then create the LoreFinder (should be after entries are loaded)
             this.loreFinder = new LoreFinder(plugin, this);
-            logger.info("Lore system initialized successfully");
+            logger.debug("Lore system initialized successfully");
         } catch (Exception e) {
             logger.error("Error initializing lore system", e);
         } finally {
@@ -77,7 +76,7 @@ public class LoreManager implements ILoreService {
      * Load all lore entries from the database
      */
     private void loadLoreEntries() {
-        logger.info("Loading lore entries from database...");
+        logger.debug("Loading lore entries from database...");
         cachedEntries.clear();
         List<LoreEntry> entries = plugin.getDatabaseManager().getAllLoreEntries();
         cachedEntries.addAll(entries);
@@ -85,7 +84,7 @@ public class LoreManager implements ILoreService {
         for (LoreEntry entry : entries) {
             loreByType.get(entry.getType()).add(entry);
         }
-        logger.info("Loaded " + cachedEntries.size() + " lore entries");
+        logger.debug("Loaded " + cachedEntries.size() + " lore entries");
     }    /**
      * Add a new lore entry (synchronous internal method).
      *
@@ -101,7 +100,7 @@ public class LoreManager implements ILoreService {
             logger.warning("Lore entry has null type: " + entry.getName());
             return false;
         }
-        logger.info("Adding lore entry: " + entry.getName() + " of type " + entry.getType());
+        logger.debug("Adding lore entry: " + entry.getName() + " of type " + entry.getType());
         // Validate the entry using the appropriate handler from HandlerFactory
         LoreHandler handler = plugin.getHandlerFactory().getHandler(entry.getType());
         if (handler == null) {
@@ -119,7 +118,7 @@ public class LoreManager implements ILoreService {
         if (success) {
             cachedEntries.add(entry);
             loreByType.get(entry.getType()).add(entry);
-            logger.info("Lore entry added successfully: " + entry.getId());
+            logger.debug("Lore entry added successfully: " + entry.getId());
               // For ITEM type entries, register the item in the ItemManager
             if (entry.getType() == LoreType.ITEM && itemManager != null) {
                 try {
@@ -153,7 +152,7 @@ public class LoreManager implements ILoreService {
                         return false;
                     }
 
-                    logger.info("Registered item in ItemManager: " + entry.getName() + " with lore entry ID: " + entry.getId());
+                    logger.debug("Registered item in ItemManager: " + entry.getName() + " with lore entry ID: " + entry.getId());
                 } catch (Exception e) {
                     // Rollback: remove lore_entry since item registration failed
                     logger.warning("Failed to register item in ItemManager: " + e.getMessage());
@@ -249,7 +248,7 @@ public class LoreManager implements ILoreService {
         boolean success = plugin.getDatabaseManager().approveLoreEntry(id.toString(), "Server");
         if (success) {
             entry.setApproved(true);
-            logger.info("Lore entry approved: " + id);
+            logger.debug("Lore entry approved: " + id);
 
             // Create Dynmap marker now that entry is approved
             if (plugin.isDynmapAvailable()) {
@@ -269,7 +268,7 @@ public class LoreManager implements ILoreService {
      * Reload all lore entries from the database
      */
     public void reloadLore() {
-        logger.info("Reloading lore entries...");
+        logger.debug("Reloading lore entries...");
         loadLoreEntries();
     }
 
@@ -314,7 +313,7 @@ public class LoreManager implements ILoreService {
      * Clean up resources when the plugin is disabled
      */
     public void cleanup() {
-        logger.info("Cleaning up lore manager...");
+        logger.debug("Cleaning up lore manager...");
 
         // Cleanup item manager first
         if (itemManager != null) {

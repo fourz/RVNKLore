@@ -231,7 +231,7 @@ public class LoreMarkerManager {
             }
         }
         markerCache.clear();
-        logger.info("Cleaned up " + count + " Dynmap markers");
+        logger.debug("Cleaned up " + count + " Dynmap markers");
     }
 
     /**

@@ -109,7 +109,7 @@ public class LecternBookLoreHandler extends DefaultLoreHandler {
                 if (success) {
                     player.sendMessage(ChatColor.GREEN + "Book '" + bookTitle + "' has been " +
                         (entry.isApproved() ? "added to the lore library." : "submitted for approval."));
-                    logger.info("Library lore entry created: " + entryName + " by " + player.getName());
+                    logger.debug("Library lore entry created: " + entryName + " by " + player.getName());
                 } else {
                     logger.debug("Library entry not saved (may already exist): " + entryName);
                 }

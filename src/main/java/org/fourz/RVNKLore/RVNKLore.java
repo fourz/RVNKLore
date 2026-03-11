@@ -125,7 +125,6 @@ public class RVNKLore extends JavaPlugin {
             // Initialize utility manager for diagnostics
             utilityManager = UtilityManager.getInstance(this);
               // First initialize the handler factory completely before LoreManager needs it
-            logger.info("Initializing core systems...");
             handlerFactory.initialize();
               // Now initialize LoreManager after HandlerFactory is fully initialized
             loreManager = LoreManager.getInstance(this);
@@ -313,7 +312,7 @@ public class RVNKLore extends JavaPlugin {
     private void registerPlaceholderAPI() {
         Plugin placeholderAPI = getServer().getPluginManager().getPlugin("PlaceholderAPI");
         if (placeholderAPI == null || !placeholderAPI.isEnabled()) {
-            logger.info("PlaceholderAPI not found - placeholder support disabled");
+            logger.debug("PlaceholderAPI not found - placeholder support disabled");
             return;
         }
 
@@ -338,7 +337,7 @@ public class RVNKLore extends JavaPlugin {
         if (placeholderExpansion != null) {
             try {
                 placeholderExpansion.unregister();
-                logger.info("PlaceholderAPI expansion unregistered");
+                logger.debug("PlaceholderAPI expansion unregistered");
             } catch (Exception e) {
                 logger.warning("Failed to unregister PlaceholderAPI expansion: " + e.getMessage());
             }
@@ -358,7 +357,7 @@ public class RVNKLore extends JavaPlugin {
         if (dynmapIntegration.activate()) {
             logger.info("Dynmap integration enabled - markers active");
         } else {
-            logger.info("Dynmap not available - map marker support disabled");
+            logger.debug("Dynmap not available - map marker support disabled");
         }
     }
 
@@ -400,7 +399,7 @@ public class RVNKLore extends JavaPlugin {
         if (votingPluginIntegration.activate()) {
             logger.info("VotingPlugin integration enabled - vote rewards active");
         } else {
-            logger.info("VotingPlugin not available - vote reward support disabled");
+            logger.debug("VotingPlugin not available - vote reward support disabled");
         }
     }
 
@@ -442,7 +441,7 @@ public class RVNKLore extends JavaPlugin {
         if (gpIntegration.activate()) {
             logger.info("GriefPrevention integration enabled - claim API active");
         } else {
-            logger.info("GriefPrevention not available - claim support disabled");
+            logger.debug("GriefPrevention not available - claim support disabled");
         }
     }
 
@@ -484,7 +483,7 @@ public class RVNKLore extends JavaPlugin {
         if (worldLifecycleListener.activate()) {
             logger.info("RVNKWorlds integration enabled - world lifecycle events active");
         } else {
-            logger.info("RVNKWorlds not available - world lifecycle integration disabled");
+            logger.debug("RVNKWorlds not available - world lifecycle integration disabled");
         }
     }
 
@@ -833,42 +832,34 @@ public class RVNKLore extends JavaPlugin {
             Class<?> registryClass = serviceRegistry.getClass();
             java.lang.reflect.Method registerMethod = registryClass.getMethod("registerService", Class.class, Object.class);
 
-            // Register our services
-            // Note: LoreManager implements ILoreService, ItemManager implements IItemService, etc.
+            // Register all services with RVNKCore ServiceRegistry
+            int serviceCount = 0;
             registerMethod.invoke(serviceRegistry, ILoreService.class, loreManager);
-            logger.info("Registered ILoreService with RVNKCore");
-
+            serviceCount++;
             registerMethod.invoke(serviceRegistry, IItemService.class, itemManager);
-            logger.info("Registered IItemService with RVNKCore");
+            serviceCount++;
 
-            // Register CollectionService (via ItemManager's CollectionManager)
             CollectionManager collectionManager = itemManager.getCollectionManager();
             if (collectionManager != null) {
                 registerMethod.invoke(serviceRegistry, ICollectionService.class, collectionManager);
-                logger.info("Registered ICollectionService with RVNKCore");
+                serviceCount++;
             }
-
-            // Register SubmissionService
             if (submissionManager != null) {
                 registerMethod.invoke(serviceRegistry, ISubmissionService.class, submissionManager);
-                logger.info("Registered ISubmissionService with RVNKCore");
+                serviceCount++;
             }
-
-            // Register PlayerLoreService
             if (playerManager != null) {
                 registerMethod.invoke(serviceRegistry, IPlayerLoreService.class, playerManager);
-                logger.info("Registered IPlayerLoreService with RVNKCore");
+                serviceCount++;
             }
-
-            // Register LoreBookService
             if (loreBookManager != null) {
                 registerMethod.invoke(serviceRegistry, ILoreBookService.class, loreBookManager);
-                logger.info("Registered ILoreBookService with RVNKCore");
+                serviceCount++;
             }
 
             rvnkCoreAvailable = true;
             rvnkCoreInstance = coreInstance;
-            logger.info("RVNKCore integration enabled - services registered");
+            logger.info("RVNKCore integration enabled — " + serviceCount + " services registered");
 
         } catch (ClassNotFoundException e) {
             logger.info("RVNKCore classes not found - running in standalone mode");
@@ -906,7 +897,7 @@ public class RVNKLore extends JavaPlugin {
             );
 
             prefsService.registerNotificationTypes("rvnklore", types);
-            logger.info("Registered " + types.size() + " notification types with PlayerPreferencesService");
+            logger.debug("Registered " + types.size() + " notification types with PlayerPreferencesService");
 
         } catch (Exception e) {
             logger.debug("Failed to register notification types: " + e.getMessage());
@@ -943,7 +934,7 @@ public class RVNKLore extends JavaPlugin {
             unregisterMethod.invoke(serviceRegistry, IItemService.class);
             unregisterMethod.invoke(serviceRegistry, ILoreService.class);
 
-            logger.info("Services unregistered from RVNKCore");
+            logger.debug("Services unregistered from RVNKCore");
 
         } catch (Exception e) {
             logger.warning("Failed to unregister from RVNKCore: " + e.getMessage());

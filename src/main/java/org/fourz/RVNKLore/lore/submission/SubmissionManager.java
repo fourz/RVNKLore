@@ -40,7 +40,7 @@ public class SubmissionManager implements ISubmissionService {
     public SubmissionManager(RVNKLore plugin) {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "SubmissionManager");
-        logger.info("Initializing SubmissionManager...");
+        logger.debug("Initializing SubmissionManager...");
 
         // Verify database availability
         if (plugin.getDatabaseManager() == null || !plugin.getDatabaseManager().isConnected()) {
@@ -260,7 +260,7 @@ public class SubmissionManager implements ISubmissionService {
             submissionCache.remove(submissionId);
             entrySubmissionsCache.remove(submission.entryId());
             
-            logger.info("Approved submission " + submissionId + " by " + approverUuid);
+            logger.debug("Approved submission " + submissionId + " by " + approverUuid);
             return true;
             
         } catch (SQLException e) {
@@ -310,7 +310,7 @@ public class SubmissionManager implements ISubmissionService {
                 if (cached != null) {
                     entrySubmissionsCache.remove(cached.getEntryId());
                 }
-                logger.info("Rejected submission " + submissionId + ": " + reason);
+                logger.debug("Rejected submission " + submissionId + ": " + reason);
                 return true;
             }
         } catch (SQLException e) {
@@ -553,6 +553,6 @@ public class SubmissionManager implements ISubmissionService {
      */
     public void shutdown() {
         clearCaches();
-        logger.info("SubmissionManager shutdown complete");
+        logger.debug("SubmissionManager shutdown complete");
     }
 }

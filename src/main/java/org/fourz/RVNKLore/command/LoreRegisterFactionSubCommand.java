@@ -33,37 +33,22 @@ public class LoreRegisterFactionSubCommand implements SubCommand {
 
     @Override
     public boolean execute(CommandSender sender, String[] args) {
-        logger.info("[FACTION-CMD] execute() called");
-        logger.info("[FACTION-CMD] sender: " + sender.getName() + " (isPlayer: " + (sender instanceof Player) + ")");
-        logger.info("[FACTION-CMD] args.length: " + args.length);
-        for (int i = 0; i < args.length; i++) {
-            logger.info("[FACTION-CMD] args[" + i + "]: " + args[i]);
-        }
-
         if (!(sender instanceof Player)) {
-            logger.info("[FACTION-CMD] Sender is not a player!");
             sender.sendMessage(ChatColor.RED + "This command can only be used by players.");
             return true;
         }
 
         Player player = (Player) sender;
-        logger.info("[FACTION-CMD] Player confirmed: " + player.getName());
 
-        boolean hasPerm = player.hasPermission("rvnklore.register.faction");
-        logger.info("[FACTION-CMD] hasPermission(rvnklore.register.faction) = " + hasPerm);
-        if (!hasPerm) {
+        if (!player.hasPermission("rvnklore.register.faction")) {
             player.sendMessage(ChatColor.RED + "\u2716 You don't have permission to register factions.");
             return true;
         }
 
-        logger.info("[FACTION-CMD] Permission check passed");
         if (args.length < 2) {
-            logger.info("[FACTION-CMD] Invalid args count: " + args.length);
             player.sendMessage(ChatColor.RED + "\u25B6 Usage: /lore registerfaction <name> <member1> [member2] [member3...]");
             return false;
         }
-
-        logger.info("[FACTION-CMD] Args validation passed");
 
         String factionName = args[0];
         String[] memberArgs = Arrays.copyOfRange(args, 1, args.length);

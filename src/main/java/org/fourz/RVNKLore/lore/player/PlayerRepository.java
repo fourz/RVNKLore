@@ -342,7 +342,7 @@ public class PlayerRepository implements IPlayerRepository {
         try (Connection conn = dbConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(createSql)) {
             stmt.executeUpdate();
-            logger.info("Created player_discoveries table");
+            logger.debug("Created player_discoveries table");
             return true;
         } catch (SQLException e) {
             logger.error("Failed to create player_discoveries table", e);

@@ -26,7 +26,7 @@ public class ExperienceRewardHandler implements RewardHandler {
         try {
             int xp = Integer.parseInt(reward.getValue());
             player.giveExp(xp);
-            logger.info("Granted " + xp + " XP to " + player.getName());
+            logger.debug("Granted " + xp + " XP to " + player.getName());
             return true;
         } catch (NumberFormatException e) {
             logger.warning("Invalid XP value: " + reward.getValue());

@@ -406,7 +406,7 @@ public class CollectionMarkerManager implements Listener {
         }
         markerCache.clear();
         if (count > 0) {
-            logger.info("Cleaned up " + count + " collection markers");
+            logger.debug("Cleaned up " + count + " collection markers");
         }
     }
 

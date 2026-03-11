@@ -27,7 +27,7 @@ public class LandmarkLoreHandler implements LoreHandler {
 
     @Override
     public void initialize() {
-        logger.info("Initializing landmark lore handler");
+        logger.debug("Initializing landmark lore handler");
     }
 
     @Override

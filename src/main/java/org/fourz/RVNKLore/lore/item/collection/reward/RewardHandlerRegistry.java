@@ -44,7 +44,7 @@ public class RewardHandlerRegistry {
         handlers.put(CollectionReward.RewardType.CURRENCY, new CurrencyHandler(logger, pluginManager));
         logger.debug("Registered CurrencyHandler");
 
-        logger.info("Reward handler registry initialized with " + handlers.size() + " handlers");
+        logger.debug("Reward handler registry initialized with " + handlers.size() + " handlers");
     }
 
     /**
