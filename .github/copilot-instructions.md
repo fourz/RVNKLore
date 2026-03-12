@@ -1,13 +1,15 @@
 # RVNKLore Copilot Instructions
 
-**Lore system plugin** — Player biographies, item generation, collection tracking.
+**Lore system plugin** — Player biographies, item generation, discovery tracking, collection achievements, Dynmap integration.
 
 ---
 
 ## Quick Reference
 
-**Tech**: Java 17+, Paper 1.20+, Maven, RVNKCore dependency
+**Tech**: Java 21, Paper 1.21.4, Maven, RVNKCore 1.3.5-alpha (provided)
+**Version**: 1.0.14 | **Branch**: derek/dev
 **Standards**: See `docs/standard/` in Ravenkraft-Dev
+**Task board**: `gh issue list --repo fourz/Ravenkraft-Dev --label "board:rvnklore"`
 
 ---
 
@@ -16,62 +18,87 @@
 ### Live Server Testing
 ```
 /rvnktest health              # Full health check
-/rvnktest services            # List registered services (ILoreService, IItemService, etc.)
+/rvnktest services            # List registered services (6 expected)
 /rvnktest db                  # Database connectivity
 /lore                         # Plugin commands
 ```
 
 ### MCP Server Management
-`mcp_rvnkdev-minec_*` tools for console commands, file operations, server state.
+`mcp__rvnkdev-minec__*` tools for console commands, file operations, server state.
 
 ### Claude Integration
 - **Rules**: `.claude/rules/` — Import shared patterns
-- **Skills**: `.claude/skills/` — Domain capabilities (ravenkraft-lore.md)
+- **Skills**: `.claude/skills/` — Domain capabilities
 - **Agents**: `.claude/agents/` — Specialized workflows
 
 ---
 
-## Archon Workflow
+## Task Management
 
-See [CLAUDE.md](../../CLAUDE.md) for complete task-driven development.
-
-**Quick cycle**: `find_tasks()` → doing → research → implement → review → done
+**GitHub Issues (primary)**: `gh issue list --repo fourz/Ravenkraft-Dev --label "board:rvnklore" --json number,title,labels`
 
 ---
 
 ## Core Directives
 
-- **Do not create migration methods** unless explicitly asked
 - **Use DatabaseManager** as single entry point for all connections
-- **Use ServiceRegistry** for RVNKCore integration
+- **Use ServiceRegistry** for RVNKCore integration (reflection-based)
 - **Use Repository pattern** with `I` prefix interfaces
 - **Use DTOs** for all data transfer
+- **Do not create migration methods** unless explicitly asked
+- **REST API does NOT re-register on reload** — server restart required
 
 ---
 
-## Registered Services
+## Registered Services (6)
 
-RVNKLore registers these with RVNKCore ServiceRegistry:
-- `ILoreService` — Lore entry management
-- `IItemService` — Custom item generation
-- `ICollectionService` — Collection tracking
-- `ISubmissionService` — Lore submissions
-- `IPlayerService` — Player lore data
+RVNKLore registers these with RVNKCore ServiceRegistry at startup:
+
+| Interface | Implementation |
+|-----------|---------------|
+| `ILoreService` | `LoreManager` |
+| `IItemService` | `ItemManager` |
+| `ICollectionService` | `CollectionManager` |
+| `ISubmissionService` | `SubmissionManager` |
+| `IPlayerLoreService` | `PlayerManager` |
+| `ILoreBookService` | `LoreBookManager` |
+
+3 notification types registered with `PlayerPreferencesService`: `rvnklore.discovery`, `rvnklore.achievement`, `rvnklore.collection_completion`.
 
 ---
 
 ## Database Architecture
 
-```java
-// All operations through DatabaseManager
-CompletableFuture<LoreEntry> future = databaseManager.getLoreEntry(id);
-future.thenAccept(entry -> { /* process */ });
-
-// Configuration via DTOs
-MySQLSettingsDTO settings = configManager.getMySQLSettings();
+```
+Primary:  MySQL (HikariCP pool)
+Fallback: SQLite (automatic on failure)
+Tracker:  FallbackTracker from RVNKCore
 ```
 
-**Query Builder**: Use `MySQLQueryBuilder`/`SQLiteQueryBuilder` for dialect abstraction.
+**Tables**: `lore_entry`, `lore_submission`, `lore_item`, `lore_metadata`, `collection`, `player_collection_progress`, `collection_reward`, `collection_item`, `player_collection_items`, `lore_location`, `lore_discovery`, `player_achievement`, `player_reward_claim`
+
+Table name constants are in `DatabaseConnection.java`.
+
+---
+
+## REST API
+
+Base: `/api/lore/*` — registered via `IServletRegistrationService`.
+
+**Reload does NOT re-register endpoints — restart required.**
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/entries` | Paginated lore entries |
+| GET | `/entries/{id}` | Single entry by UUID |
+| GET | `/entries/type/{type}` | Entries by LoreType |
+| GET | `/entries/search?q=` | Text search |
+| POST | `/submit` | New submission |
+| GET | `/player/{uuid}/collection` | Player collection progress |
+| GET | `/collections` | All collections |
+| GET | `/types` | Available lore types |
+| GET | `/stats` | Statistics |
+| GET | `/health` | Health check |
 
 ---
 
@@ -86,7 +113,7 @@ MySQLSettingsDTO settings = configManager.getMySQLSettings();
 | Warning | `&e⚠` |
 | Tips | `&7   ` |
 
-**Console**: No emojis, no colors — use LogManager.
+**Console**: No emojis, no colors — use `LogManager` from RVNKCore.
 
 ---
 
@@ -102,19 +129,23 @@ public MyClass(RVNKLore plugin) {
 
 ---
 
-## Schema Reference
+## External Integrations (Soft Dependencies)
 
-See `docs/schema/` for naming conventions:
-- Tables: singular form with domain prefix
-- Primary keys: `id`
-- Foreign keys: `entity_name_id`
-- Booleans: `is_` or `has_` prefix
-- Timestamps: `_at` or `_date` suffix
+Plugin runs fully without any of these:
+- **Dynmap** — Lore location map markers
+- **PlaceholderAPI** — `%rvnklore_*%` placeholders
+- **Discord** — Collection completion webhooks
+- **Citizens** — NPC collection vendors (stub)
+- **GriefPrevention** — Claim-based protection
+- **VotingPlugin** — Vote reward items
+- **RVNKWorlds** — World lifecycle events
 
 ---
 
 ## Documentation References
 
+- **CLAUDE.md**: Full architecture, class tree, DB schema, API reference
 - **Coding Standards**: `docs/standard/coding-standards.md`
 - **Architecture**: `docs/architecture/shared-patterns.md`
 - **RVNKCore Integration**: `docs/standard/rvnkcore-integration.md`
+- **Graph Memory**: `search_nodes("RVNKLore")`

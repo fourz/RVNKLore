@@ -116,4 +116,50 @@ public interface ICollectionService {
      * @return true if operating in degraded mode
      */
     boolean isInFallbackMode();
+
+    /**
+     * Track individual item discovery for a player in a collection.
+     *
+     * @param playerId The player UUID
+     * @param collectionId The collection ID
+     * @param itemId The item ID being discovered
+     * @return Future containing true if successfully recorded
+     */
+    CompletableFuture<Boolean> trackItemDiscovery(UUID playerId, String collectionId, int itemId);
+
+    /**
+     * Get all items discovered by a player in a collection.
+     *
+     * @param playerId The player UUID
+     * @param collectionId The collection ID
+     * @return Future containing list of discovered item properties
+     */
+    CompletableFuture<List<ItemStack>> getPlayerCollectionItems(UUID playerId, String collectionId);
+
+    /**
+     * Get count of items collected by a player in a collection.
+     *
+     * @param playerId The player UUID
+     * @param collectionId The collection ID
+     * @return Future containing count of discovered items
+     */
+    CompletableFuture<Integer> getCollectedItemCount(UUID playerId, String collectionId);
+
+    /**
+     * Get items NOT yet discovered by a player in a collection.
+     *
+     * @param playerId The player UUID
+     * @param collectionId The collection ID
+     * @return Future containing list of missing item properties
+     */
+    CompletableFuture<List<ItemStack>> getMissingItems(UUID playerId, String collectionId);
+
+    /**
+     * Calculate progress based on individual items collected vs total.
+     *
+     * @param playerId The player UUID
+     * @param collectionId The collection ID
+     * @return Future containing progress as percentage (0.0 to 1.0)
+     */
+    CompletableFuture<Double> calculateItemBasedProgress(UUID playerId, String collectionId);
 }

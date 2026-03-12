@@ -49,12 +49,7 @@ public class LoreItemInfoSubCommand implements SubCommand {
             DisplayFactory.displayPaginatedList(sender, "Available Items", allItems, 1, 50, s -> org.bukkit.ChatColor.YELLOW + " - " + s);
             return true;
         }
-        if (args.length > 1) {
-            sender.sendMessage(org.bukkit.ChatColor.RED + "â–¶ Usage: /lore item info <item_name>");
-            sender.sendMessage(org.bukkit.ChatColor.GRAY + "   Display information about a registered item");
-            return true;
-        }
-        String itemNameOrId = args[0];
+        String itemNameOrId = String.join(" ", args);
         if (itemManager == null) {
             sender.sendMessage(org.bukkit.ChatColor.RED + "âœ– Item system is not available. Please try again later.");
             logger.error("ItemManager is null when trying to get item info: " + itemNameOrId, null);

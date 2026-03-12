@@ -25,14 +25,14 @@ lore:
 
 storage:
   test-mode: no # yes = wipe schema on start, no = keep tables on start
-  type: sqlite
+  type: mysql
   mysql:
-    host: localhost
+    host: 64.20.41.122
     port: 3306
-    username: root
+    username: fourzorg_rvnkuser
     password: ''
-    useSSL: false
-    database:
+    useSSL: true
+    database: fourzorg_rvnkcore_dev
     # Table prefix for shared database environments (e.g., 'rvnklore_')
     tablePrefix:
     # HikariCP connection pool settings for MySQL
@@ -63,6 +63,82 @@ storage:
     maxFailuresBeforeFallback: 3
     # Minutes to wait before attempting to reconnect to primary database
     recoveryTimeMinutes: 5
+
+dynmap:
+  enabled: true
+  marker-set:
+    id: rvnklore
+    label: "Lore Entries"
+    hide-by-default: false
+    layer-priority: 10
+  icons:
+    LANDMARK: pin
+    MONUMENT: temple
+    CITY: bighouse
+    TAVERN: house
+    SHRINE: church
+    PATH: walk
+    EVENT: skull
+    FACTION: castle
+    default: sign
+  only-approved: true
+  popup:
+    enabled: true
+    max-description-length: 200
+  # Collection item markers configuration
+  collection-markers:
+    enabled: true
+    # Icon mapping by collection theme
+    icons:
+      treasure: chest
+      mob_heads: skull
+      artifacts: diamond
+      seasonal: default
+      legendary: star
+      quest_rewards: book
+      default: pin
+
+discord:
+  # Discord webhook integration for collection events
+  enabled: false
+  webhooks:
+    # URL for collection completion webhook
+    # Leave blank to disable specific webhook types
+    collection-complete: ''
+    # Example: 'https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_WEBHOOK_TOKEN'
+
+citizens:
+  # Citizens NPC collection vendor configuration
+  vendors:
+    enabled: true
+    # Default name prefix for vendor NPCs
+    default-name: "Collection Vendor"
+    # GUI title for vendor shop menu
+    shop-title: "Collection Shop"
+    # Price calculation settings
+    pricing:
+      # Multiplier applied to base item value (e.g., 1.5 = 150% of item value)
+      multiplier: 1.5
+      # Minimum price in currency units
+      min-price: 100
+      # Maximum price in currency units
+      max-price: 10000
+    # Track purchases separately from discoveries
+    track-purchases: true
+    # Default stackable setting for new vendors
+    default-stackable: true
+
+landmarks:
+  signs:
+    auto_approve: false
+
+cities:
+  signs:
+    auto_approve: false
+
+taverns:
+  signs:
+    auto_approve: false
 
 messages:
   generic:

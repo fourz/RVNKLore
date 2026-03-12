@@ -48,8 +48,8 @@ public class LoreItemGiveSubCommand implements SubCommand {
             sender.sendMessage(ChatColor.GRAY + "   Give any registered lore item to a player");
             return true;
         }
-        String itemName = args[0];
-        String playerName = args[1];
+        String playerName = args[args.length - 1];
+        String itemName = String.join(" ", java.util.Arrays.copyOfRange(args, 0, args.length - 1));
         Player target = Bukkit.getPlayerExact(playerName);
         if (target == null) {
             sender.sendMessage(ChatColor.RED + "âœ– Player '" + playerName + "' not found or not online.");

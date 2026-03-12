@@ -1,0 +1,619 @@
+openapi: 3.0.3
+info:
+  title: RVNKLore REST API
+  version: "1.0"
+  description: |
+    REST API for the RVNKLore Minecraft plugin.
+    Provides access to lore entries, player collections, item collections, and server statistics.
+    All endpoints are served by RVNKCore's RestAPIService under the `/api/lore` base path.
+  contact:
+    name: Ravenkraft Dev
+servers:
+  - url: /api/lore
+    description: RVNKLore API base path (served by RVNKCore RestAPIService)
+
+security:
+  - ApiKeyAuth: []
+
+tags:
+  - name: entries
+    description: Lore entry CRUD and search
+  - name: player
+    description: Player discovery progress
+  - name: collections
+    description: Item collections
+  - name: meta
+    description: Metadata, statistics, and health
+
+paths:
+
+  # ─── Lore Entries ────────────────────────────────────────────────────────────
+
+  /entries:
+    get:
+      tags: [entries]
+      summary: List lore entries (paginated)
+      operationId: listEntries
+      parameters:
+        - $ref: '#/components/parameters/offset'
+        - $ref: '#/components/parameters/limit'
+        - name: approved
+          in: query
+          description: If true, return only approved entries
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Paginated list of lore entries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedLoreResponse'
+        "500":
+          $ref: '#/components/responses/InternalError'
+
+  /entries/search:
+    get:
+      tags: [entries]
+      summary: Full-text search across lore entries
+      operationId: searchEntries
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Search query string
+          schema:
+            type: string
+            minLength: 1
+            example: "ancient dragon"
+        - $ref: '#/components/parameters/offset'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        "200":
+          description: Matching lore entries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedLoreResponse'
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "500":
+          $ref: '#/components/responses/InternalError'
+
+  /entries/{id}:
+    get:
+      tags: [entries]
+      summary: Get a single lore entry by UUID or name
+      operationId: getEntry
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Entry UUID or exact name
+          schema:
+            type: string
+            example: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+      responses:
+        "200":
+          description: Lore entry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoreEntryResponse'
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "500":
+          $ref: '#/components/responses/InternalError'
+
+  /entries/type/{type}:
+    get:
+      tags: [entries]
+      summary: Get lore entries by LoreType
+      operationId: getEntriesByType
+      parameters:
+        - name: type
+          in: path
+          required: true
+          description: LoreType enum value (case-insensitive)
+          schema:
+            $ref: '#/components/schemas/LoreType'
+        - $ref: '#/components/parameters/offset'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        "200":
+          description: Paginated list of entries for the given type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedLoreResponse'
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "500":
+          $ref: '#/components/responses/InternalError'
+
+  # ─── Submission ───────────────────────────────────────────────────────────────
+
+  /submit:
+    post:
+      tags: [entries]
+      summary: Submit a new lore entry (pending approval)
+      operationId: submitEntry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoreSubmissionRequest'
+      responses:
+        "201":
+          description: Submission accepted (pending admin approval)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+              example:
+                status: "created"
+                message: "Lore entry submitted successfully. Entry ID: 3fa85f64-5717-4562-b3fc-2c963f66afa6"
+                code: 201
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "500":
+          $ref: '#/components/responses/InternalError'
+
+  # ─── Player ───────────────────────────────────────────────────────────────────
+
+  /player/{uuid}/collection:
+    get:
+      tags: [player]
+      summary: Get a player's lore discovery progress
+      operationId: getPlayerCollection
+      parameters:
+        - name: uuid
+          in: path
+          required: true
+          description: Player UUID
+          schema:
+            type: string
+            format: uuid
+            example: "069a79f4-44e9-4726-a5be-fca90e38aaf5"
+      responses:
+        "200":
+          description: Player collection progress
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayerCollectionResponse'
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "500":
+          $ref: '#/components/responses/InternalError'
+
+  # Also accessible as /player/{uuid} (alias)
+  /player/{uuid}:
+    get:
+      tags: [player]
+      summary: Get a player's lore discovery progress (alias for /player/{uuid}/collection)
+      operationId: getPlayerCollectionAlias
+      parameters:
+        - name: uuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Player collection progress
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayerCollectionResponse'
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "500":
+          $ref: '#/components/responses/InternalError'
+
+  # ─── Collections ──────────────────────────────────────────────────────────────
+
+  /collections:
+    get:
+      tags: [collections]
+      summary: List all item collections
+      operationId: listCollections
+      responses:
+        "200":
+          description: All item collections
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CollectionResponse'
+        "500":
+          $ref: '#/components/responses/InternalError'
+
+  # ─── Metadata ─────────────────────────────────────────────────────────────────
+
+  /types:
+    get:
+      tags: [meta]
+      summary: List available LoreType enum values
+      operationId: listTypes
+      responses:
+        "200":
+          description: All lore types with display names
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LoreTypeInfo'
+
+  /stats:
+    get:
+      tags: [meta]
+      summary: Server-wide lore statistics
+      operationId: getStats
+      responses:
+        "200":
+          description: Statistics snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoreStatsResponse'
+        "500":
+          $ref: '#/components/responses/InternalError'
+
+  /health:
+    get:
+      tags: [meta]
+      summary: Plugin health status
+      operationId: health
+      security: []
+      responses:
+        "200":
+          description: Plugin is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        "503":
+          description: Database disconnected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+# ─── Components ───────────────────────────────────────────────────────────────
+
+components:
+
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: Shared API key configured in RVNKCore config.yml
+
+  parameters:
+    offset:
+      name: offset
+      in: query
+      description: Number of records to skip
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+    limit:
+      name: limit
+      in: query
+      description: Maximum number of records to return
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+
+  responses:
+    BadRequest:
+      description: Invalid request parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/StatusResponse'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/StatusResponse'
+    InternalError:
+      description: Server-side error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/StatusResponse'
+
+  schemas:
+
+    # ─── Enums ──────────────────────────────────────────────────────────────────
+
+    LoreType:
+      type: string
+      enum:
+        - LANDMARK
+        - CITY
+        - PLAYER
+        - FACTION
+        - ITEM
+        - HEAD
+        - EVENT
+        - PATH
+        - QUEST
+        - ENCHANTMENT
+        - SPECIAL_ENTITY
+        - GENERIC
+      example: LANDMARK
+
+    # ─── Entry Schemas ──────────────────────────────────────────────────────────
+
+    LoreEntryResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique entry identifier
+          example: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+        name:
+          type: string
+          example: "The Ancient Spire"
+        description:
+          type: string
+          example: "A towering structure built by the first settlers..."
+        type:
+          $ref: '#/components/schemas/LoreType'
+        submittedBy:
+          type: string
+          description: Player name or "web" for API submissions
+          example: "Notch"
+        approved:
+          type: boolean
+          example: true
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-01-15T10:30:00"
+        updatedAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-01-15T10:30:00"
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+          description: Arbitrary key-value metadata
+          example:
+            location: "1024, 64, -512"
+            region: "Northern Wastes"
+
+    PagedLoreResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/LoreEntryResponse'
+        offset:
+          type: integer
+          example: 0
+        limit:
+          type: integer
+          example: 50
+        total:
+          type: integer
+          description: Total matching records (before pagination)
+          example: 142
+        hasMore:
+          type: boolean
+          example: true
+
+    LoreSubmissionRequest:
+      type: object
+      required: [name, description, type]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          example: "The Silver Citadel"
+        description:
+          type: string
+          minLength: 1
+          example: "A fortress said to have been carved from a single mountain..."
+        type:
+          $ref: '#/components/schemas/LoreType'
+        submittedBy:
+          type: string
+          description: Player name or identifier (defaults to "web" if omitted)
+          example: "PlayerName"
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+          example:
+            location: "512, 80, 256"
+
+    # ─── Player Schemas ─────────────────────────────────────────────────────────
+
+    PlayerCollectionResponse:
+      type: object
+      properties:
+        playerId:
+          type: string
+          format: uuid
+          example: "069a79f4-44e9-4726-a5be-fca90e38aaf5"
+        playerName:
+          type: string
+          example: "Notch"
+        totalDiscovered:
+          type: integer
+          example: 47
+        totalAvailable:
+          type: integer
+          example: 142
+        completionPercentage:
+          type: number
+          format: double
+          example: 33.09
+        collections:
+          type: array
+          nullable: true
+          items:
+            $ref: '#/components/schemas/CollectionProgressResponse'
+        recentDiscoveries:
+          type: array
+          items:
+            $ref: '#/components/schemas/LoreEntryResponse'
+          maxItems: 5
+
+    CollectionProgressResponse:
+      type: object
+      properties:
+        collectionId:
+          type: string
+          example: "micky_hats"
+        collectionName:
+          type: string
+          example: "Micky's Hat Collection"
+        discovered:
+          type: integer
+          example: 3
+        total:
+          type: integer
+          example: 10
+        percentage:
+          type: number
+          format: double
+          example: 30.0
+        completed:
+          type: boolean
+          example: false
+
+    # ─── Collection Schemas ─────────────────────────────────────────────────────
+
+    CollectionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "legendary_weapons"
+        name:
+          type: string
+          example: "Legendary Weapons"
+        description:
+          type: string
+          nullable: true
+          example: "Weapons of extraordinary power found across the realm."
+        theme:
+          type: string
+          nullable: true
+          example: "LEGENDARY"
+        itemCount:
+          type: integer
+          example: 12
+        itemIds:
+          type: array
+          nullable: true
+          items:
+            type: string
+        seasonal:
+          type: boolean
+          example: false
+        seasonStart:
+          type: string
+          nullable: true
+          example: "2026-12-01"
+        seasonEnd:
+          type: string
+          nullable: true
+          example: "2027-01-15"
+
+    # ─── Meta Schemas ────────────────────────────────────────────────────────────
+
+    LoreTypeInfo:
+      type: object
+      properties:
+        name:
+          $ref: '#/components/schemas/LoreType'
+        display_name:
+          type: string
+          example: "Landmark"
+
+    LoreStatsResponse:
+      type: object
+      properties:
+        total_entries:
+          type: integer
+          example: 142
+        approved_entries:
+          type: integer
+          example: 127
+        pending_entries:
+          type: integer
+          example: 15
+        entries_by_type:
+          type: object
+          additionalProperties:
+            type: integer
+          example:
+            LANDMARK: 34
+            CITY: 18
+            PLAYER: 22
+        fallback_mode:
+          type: boolean
+          description: True if the plugin is operating from in-memory/YAML fallback due to DB failure
+          example: false
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-03-02T14:30:00"
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [UP, DOWN]
+          example: "UP"
+        plugin:
+          type: string
+          example: "RVNKLore"
+        version:
+          type: string
+          example: "1.0-SNAPSHOT"
+        database:
+          type: string
+          enum: [CONNECTED, DISCONNECTED]
+          example: "CONNECTED"
+        fallback_mode:
+          type: boolean
+          example: false
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-03-02T14:30:00"
+
+    StatusResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "error"
+        message:
+          type: string
+          example: "Lore entry not found: abc123"
+        code:
+          type: integer
+          example: 404

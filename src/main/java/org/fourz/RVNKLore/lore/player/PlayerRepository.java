@@ -12,7 +12,7 @@ import java.util.concurrent.CompletableFuture;
 
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.data.DatabaseConnection;
-import org.fourz.RVNKLore.data.FallbackTracker;
+import org.fourz.rvnkcore.data.FallbackTracker;
 import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.lore.LoreType;
 import org.json.simple.JSONObject;
@@ -38,7 +38,10 @@ public class PlayerRepository implements IPlayerRepository {
         this.plugin = plugin;
         this.dbConnection = dbConnection;
         this.logger = LogManager.getInstance(plugin, "PlayerRepository");
-        this.fallbackTracker = new FallbackTracker(plugin);
+        this.fallbackTracker = new FallbackTracker(
+                plugin.getConfig().getInt("database.fallback.maxFailuresBeforeFallback", 3),
+                plugin.getConfig().getInt("database.fallback.recoveryTimeMinutes", 5) * 60 * 1000L,
+                LogManager.getInstance(plugin, "FallbackTracker"));
         this.jsonParser = new JSONParser();
     }
 
@@ -330,7 +333,7 @@ public class PlayerRepository implements IPlayerRepository {
      */
     private boolean createDiscoveriesTable() {
         String createSql = "CREATE TABLE IF NOT EXISTS " + t("player_discoveries") + " (" +
-            "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+            "id " + dbConnection.getDialect().getAutoIncrementPK() + ", " +
             "player_uuid VARCHAR(36) NOT NULL, " +
             "entry_id VARCHAR(36) NOT NULL, " +
             "discovered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
@@ -339,7 +342,7 @@ public class PlayerRepository implements IPlayerRepository {
         try (Connection conn = dbConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(createSql)) {
             stmt.executeUpdate();
-            logger.info("Created player_discoveries table");
+            logger.debug("Created player_discoveries table");
             return true;
         } catch (SQLException e) {
             logger.error("Failed to create player_discoveries table", e);
@@ -351,7 +354,8 @@ public class PlayerRepository implements IPlayerRepository {
      * Direct insert without checking (used after table creation).
      */
     private boolean recordLoreDiscoveryDirect(UUID playerUuid, String entryId) {
-        String insertSql = "INSERT OR IGNORE INTO " + t("player_discoveries") + " (player_uuid, entry_id, discovered_at) VALUES (?, ?, ?)";
+        String ignoreKeyword = "MySQL".equals(dbConnection.getDialect().getName()) ? "INSERT IGNORE INTO " : "INSERT OR IGNORE INTO ";
+        String insertSql = ignoreKeyword + t("player_discoveries") + " (player_uuid, entry_id, discovered_at) VALUES (?, ?, ?)";
         try (Connection conn = dbConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(insertSql)) {
             stmt.setString(1, playerUuid.toString());

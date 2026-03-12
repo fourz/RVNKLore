@@ -8,11 +8,18 @@ import org.bukkit.entity.Player;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
+import org.fourz.rvnkcore.RVNKCore;
 import org.fourz.rvnkcore.util.log.LogManager;
+import org.fourz.rvnkcore.api.service.PlayerPreferencesService;
+
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Manages player notifications for lore discoveries.
  * Supports chat messages, titles, action bar, and sound effects.
+ *
+ * Respects PlayerPreferencesService from RVNKCore (Phase 3 integration).
  */
 public class DiscoveryNotificationManager {
 
@@ -51,6 +58,7 @@ public class DiscoveryNotificationManager {
 
     /**
      * Sends discovery notification to a player.
+     * Respects PlayerPreferencesService settings if available, falls back to config flags.
      *
      * @param event The discovery event
      */
@@ -68,7 +76,69 @@ public class DiscoveryNotificationManager {
             return;
         }
 
-        // Send notifications based on configuration
+        // Check player preferences if available
+        PlayerPreferencesService prefs = RVNKCore.getServiceSafe(PlayerPreferencesService.class);
+        if (prefs != null) {
+            UUID playerId = player.getUniqueId();
+
+            // Check if discovery notifications are enabled for this player
+            prefs.isNotificationEnabled(playerId, "rvnklore", "discovery")
+                .thenAccept(enabled -> {
+                    if (!enabled) {
+                        logger.debug("Discovery notification suppressed for " + player.getName() +
+                                " (notifications disabled in preferences)");
+                        return;
+                    }
+
+                    // Check individual channel preferences
+                    CompletableFuture<Boolean> titleEnabled = prefs.isChannelEnabled(playerId, "rvnklore", "discovery", "TITLE");
+                    CompletableFuture<Boolean> actionBarEnabled = prefs.isChannelEnabled(playerId, "rvnklore", "discovery", "ACTION_BAR");
+                    CompletableFuture<Boolean> chatEnabled = prefs.isChannelEnabled(playerId, "rvnklore", "discovery", "CHAT");
+                    CompletableFuture<Boolean> soundEnabled = prefs.isChannelEnabled(playerId, "rvnklore", "discovery", "SOUND");
+
+                    CompletableFuture.allOf(titleEnabled, actionBarEnabled, chatEnabled, soundEnabled)
+                        .thenRun(() -> {
+                            try {
+                                if (titleEnabled.join()) {
+                                    sendTitleNotification(player, entry, event.isFirstDiscovery());
+                                }
+                                if (actionBarEnabled.join()) {
+                                    sendActionBarNotification(player, entry);
+                                }
+                                if (chatEnabled.join()) {
+                                    sendChatNotification(player, entry, event.isFirstDiscovery(), event.isFirstForPlayer());
+                                }
+                                if (soundEnabled.join()) {
+                                    playDiscoverySound(player, entry, event.isFirstDiscovery());
+                                }
+                            } catch (Exception e) {
+                                logger.debug("Error sending discovery notifications: " + e.getMessage());
+                            }
+                        })
+                        .exceptionally(ex -> {
+                            logger.debug("Error checking discovery notification preferences: " + ex.getMessage());
+                            // Fallback to config-based settings
+                            sendDiscoveryNotificationFallback(player, entry, event);
+                            return null;
+                        });
+                })
+                .exceptionally(ex -> {
+                    logger.debug("Error checking discovery notification enable status: " + ex.getMessage());
+                    // Fallback to config-based settings
+                    sendDiscoveryNotificationFallback(player, entry, event);
+                    return null;
+                });
+        } else {
+            // No preferences service available - use config flags
+            sendDiscoveryNotificationFallback(player, entry, event);
+        }
+    }
+
+    /**
+     * Sends discovery notification using config-based settings (fallback).
+     * Used when PlayerPreferencesService is not available.
+     */
+    private void sendDiscoveryNotificationFallback(Player player, LoreEntry entry, LoreDiscoveryEvent event) {
         if (enableTitles) {
             sendTitleNotification(player, entry, event.isFirstDiscovery());
         }

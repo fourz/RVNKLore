@@ -7,7 +7,7 @@ import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.lore.LoreType;
 import org.fourz.RVNKLore.service.ICollectionService;
 import org.fourz.RVNKLore.service.ILoreService;
-import org.fourz.RVNKLore.service.IPlayerService;
+import org.fourz.RVNKLore.service.IPlayerLoreService;
 import org.fourz.rvnkcore.util.log.LogManager;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -34,6 +34,10 @@ import java.util.concurrent.TimeUnit;
  *   <li>%rvnklore_locations_discovered% - Locations discovered</li>
  *   <li>%rvnklore_characters_discovered% - Characters discovered</li>
  *   <li>%rvnklore_collection_&lt;name&gt;_progress% - Specific collection progress</li>
+ *   <li>%rvnklore_collection_&lt;name&gt;_items% - Items collected in collection (Phase 4)</li>
+ *   <li>%rvnklore_collection_&lt;name&gt;_total% - Total items in collection (Phase 4)</li>
+ *   <li>%rvnklore_collection_&lt;name&gt;_missing% - Count of missing items (Phase 4)</li>
+ *   <li>%rvnklore_collection_completed_count% - Total completed collections (Phase 4)</li>
  *   <li>%rvnklore_rarest_item% - Player's rarest discovered item (placeholder)</li>
  *   <li>%rvnklore_latest_discovery% - Most recent discovery name (placeholder)</li>
  * </ul>
@@ -45,7 +49,7 @@ public class RVNKLorePlaceholderExpansion extends PlaceholderExpansion {
 
     private final RVNKLore plugin;
     private final LogManager logger;
-    private final IPlayerService playerService;
+    private final IPlayerLoreService playerService;
     private final ILoreService loreService;
     private final ICollectionService collectionService;
 
@@ -146,11 +150,37 @@ public class RVNKLorePlaceholderExpansion extends PlaceholderExpansion {
                 case "latest_discovery":
                     return getLatestDiscovery(playerId);
 
+                case "collection_completed_count":
+                    return getCollectionCompletedCount(playerId);
+
                 default:
-                    // Check for collection progress: collection_<name>_progress
-                    if (params.toLowerCase().startsWith("collection_") && params.toLowerCase().endsWith("_progress")) {
-                        String collectionName = params.substring(11, params.length() - 9);
-                        return getCollectionProgress(playerId, collectionName);
+                    // Check for collection-specific placeholders: collection_<name>_*
+                    if (params.toLowerCase().startsWith("collection_")) {
+                        String rest = params.substring(11).toLowerCase();
+
+                        // Pattern: collection_<name>_progress
+                        if (rest.endsWith("_progress")) {
+                            String collectionName = rest.substring(0, rest.length() - 9);
+                            return getCollectionProgress(playerId, collectionName);
+                        }
+
+                        // Pattern: collection_<name>_items (collected count)
+                        if (rest.endsWith("_items")) {
+                            String collectionName = rest.substring(0, rest.length() - 6);
+                            return getCollectionItemsCollected(playerId, collectionName);
+                        }
+
+                        // Pattern: collection_<name>_total (total items)
+                        if (rest.endsWith("_total")) {
+                            String collectionName = rest.substring(0, rest.length() - 6);
+                            return getCollectionItemsTotal(playerId, collectionName);
+                        }
+
+                        // Pattern: collection_<name>_missing (count of missing items)
+                        if (rest.endsWith("_missing")) {
+                            String collectionName = rest.substring(0, rest.length() - 8);
+                            return getCollectionItemsMissing(playerId, collectionName);
+                        }
                     }
                     return null;
             }
@@ -289,6 +319,96 @@ public class RVNKLorePlaceholderExpansion extends PlaceholderExpansion {
         } catch (Exception e) {
             logger.debug("Failed to get collection progress for player: " + playerId + ", collection: " + collectionId);
             return "0%";
+        }
+    }
+
+    /**
+     * Get count of items collected in a specific collection (Phase 4).
+     *
+     * @param playerId The player UUID
+     * @param collectionId The collection ID
+     * @return Count of collected items
+     */
+    private String getCollectionItemsCollected(UUID playerId, String collectionId) {
+        try {
+            CompletableFuture<Integer> future = collectionService.getCollectedItemCount(playerId, collectionId);
+            int count = future.get(1, TimeUnit.SECONDS);
+            return String.valueOf(count);
+        } catch (Exception e) {
+            logger.debug("Failed to get collected items for player: " + playerId + ", collection: " + collectionId);
+            return "0";
+        }
+    }
+
+    /**
+     * Get total items in a specific collection (Phase 4).
+     *
+     * @param playerId The player UUID
+     * @param collectionId The collection ID
+     * @return Total item count
+     */
+    private String getCollectionItemsTotal(UUID playerId, String collectionId) {
+        try {
+            // Use collectionService to get all items in collection
+            CompletableFuture<java.util.List<org.bukkit.inventory.ItemStack>> future =
+                collectionService.getCollectionItems(collectionId);
+            java.util.List<org.bukkit.inventory.ItemStack> items = future.get(1, TimeUnit.SECONDS);
+            return String.valueOf(items.size());
+        } catch (Exception e) {
+            logger.debug("Failed to get total items for collection: " + collectionId);
+            return "0";
+        }
+    }
+
+    /**
+     * Get count of missing items in a specific collection (Phase 4).
+     *
+     * @param playerId The player UUID
+     * @param collectionId The collection ID
+     * @return Count of missing items
+     */
+    private String getCollectionItemsMissing(UUID playerId, String collectionId) {
+        try {
+            CompletableFuture<Integer> collected = collectionService.getCollectedItemCount(playerId, collectionId);
+            CompletableFuture<java.util.List<org.bukkit.inventory.ItemStack>> total =
+                collectionService.getCollectionItems(collectionId);
+
+            int collectedCount = collected.get(1, TimeUnit.SECONDS);
+            int totalCount = total.get(1, TimeUnit.SECONDS).size();
+
+            return String.valueOf(Math.max(0, totalCount - collectedCount));
+        } catch (Exception e) {
+            logger.debug("Failed to get missing items for player: " + playerId + ", collection: " + collectionId);
+            return "0";
+        }
+    }
+
+    /**
+     * Get total number of completed collections for a player (Phase 4).
+     *
+     * @param playerId The player UUID
+     * @return Count of completed collections
+     */
+    private String getCollectionCompletedCount(UUID playerId) {
+        try {
+            CompletableFuture<java.util.Map<String, org.fourz.RVNKLore.lore.item.collection.ItemCollection>> future =
+                collectionService.getAllCollections();
+            java.util.Map<String, org.fourz.RVNKLore.lore.item.collection.ItemCollection> allCollections =
+                future.get(1, TimeUnit.SECONDS);
+
+            int completedCount = 0;
+            for (String collectionId : allCollections.keySet()) {
+                CompletableFuture<Double> progressFuture = collectionService.getPlayerProgress(playerId, collectionId);
+                double progress = progressFuture.get(500, TimeUnit.MILLISECONDS);
+                if (progress >= 1.0) {
+                    completedCount++;
+                }
+            }
+
+            return String.valueOf(completedCount);
+        } catch (Exception e) {
+            logger.debug("Failed to get completed collection count for player: " + playerId);
+            return "0";
         }
     }
 

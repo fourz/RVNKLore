@@ -14,17 +14,20 @@ import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreManager;
 import org.fourz.RVNKLore.lore.LoreType;
+import org.fourz.RVNKLore.service.ILoreBookService;
 import org.fourz.rvnkcore.util.log.LogManager;
 
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 /**
  * Manages the creation and handling of lore books.
  * Lore books are written books that contain lore entry content.
  */
-public class LoreBookManager {
+public class LoreBookManager implements ILoreBookService {
 
     private final RVNKLore plugin;
     private final LogManager logger;
@@ -55,7 +58,7 @@ public class LoreBookManager {
         this.signedByKey = new NamespacedKey(plugin, "signed_by");
         this.createdAtKey = new NamespacedKey(plugin, "created_at");
 
-        logger.info("LoreBookManager initialized");
+        logger.debug("LoreBookManager initialized");
     }
 
     /**
@@ -80,7 +83,9 @@ public class LoreBookManager {
         }
 
         // Set book title with rarity color
-        String title = rarity.getColor() + entry.getName();
+        String rawName = entry.getName() != null ? entry.getName() : "Unknown";
+        String displayName = formatSlugName(rawName);
+        String title = rarity.getColor() + displayName;
         if (title.length() > 32) {
             title = title.substring(0, 29) + "...";
         }
@@ -98,7 +103,7 @@ public class LoreBookManager {
         meta.setPages(pages);
 
         // Set display name with rarity
-        meta.setDisplayName(rarity.getColor() + "" + ChatColor.BOLD + entry.getName());
+        meta.setDisplayName(rarity.getColor() + "" + ChatColor.BOLD + displayName);
 
         // Set item lore (the description shown in inventory)
         List<String> itemLore = buildItemLore(entry, rarity);
@@ -159,14 +164,31 @@ public class LoreBookManager {
             try {
                 UUID uuid = UUID.fromString(entryId);
                 Optional<LoreEntry> entry = loreManager.getLoreEntry(uuid).join();
-                return entry.map(this::createLoreBook);
+                if (entry.isPresent()) {
+                    return entry.map(this::createLoreBook);
+                }
             } catch (IllegalArgumentException e) {
-                // Not a valid UUID, try partial match
+                // Not a valid UUID, try prefix match
             }
 
-            // Try partial ID match
+            // Try exact ID match
             Optional<LoreEntry> entry = loreManager.getLoreById(entryId);
-            return entry.map(this::createLoreBook);
+            if (entry.isPresent()) {
+                return entry.map(this::createLoreBook);
+            }
+
+            // Try short ID prefix match (tab completion provides 8-char short IDs)
+            String prefix = entryId.toLowerCase();
+            List<LoreEntry> matches = loreManager.findLoreEntriesSync(prefix);
+            List<LoreEntry> idMatches = matches.stream()
+                    .filter(e -> e.getId().toLowerCase().startsWith(prefix))
+                    .collect(Collectors.toList());
+
+            if (idMatches.size() == 1) {
+                return Optional.of(createLoreBook(idMatches.get(0)));
+            }
+
+            return Optional.empty();
         });
     }
 
@@ -196,6 +218,52 @@ public class LoreBookManager {
             });
 
             return true;
+        });
+    }
+
+    /**
+     * Get or create a lore book for a quest item key.
+     *
+     * <p>Looks up the lore entry by name. If not found, auto-creates a QUEST
+     * entry with the provided seed data (approved immediately) and generates
+     * the book. Future edits to the DB description are reflected on next call.</p>
+     *
+     * @param questItemKey Unique key used as the lore entry name
+     * @param title        Seed title when auto-creating
+     * @param description  Seed description when auto-creating
+     * @return Future containing the book, or empty on failure
+     */
+    @Override
+    public CompletableFuture<Optional<ItemStack>> getOrCreateQuestBook(
+            String questItemKey, String title, String description) {
+        return CompletableFuture.supplyAsync(() -> {
+            // Look up existing entry by name
+            Optional<LoreEntry> existing = loreManager.getLoreEntryByName(questItemKey).join();
+            LoreEntry entry;
+            if (existing.isPresent()) {
+                entry = existing.get();
+            } else {
+                // Auto-create: seed a new QUEST lore entry
+                entry = new LoreEntry(questItemKey, description, LoreType.QUEST, (String) null);
+                entry.setApproved(true);
+                boolean created = loreManager.addLoreEntry(entry).join();
+                if (!created) {
+                    logger.warning("Failed to create lore entry for quest book: " + questItemKey);
+                    return Optional.empty();
+                }
+                logger.debug("Auto-created lore entry for quest book: " + questItemKey);
+            }
+            ItemStack book = createLoreBook(entry);
+            if (book != null && title != null && !title.isEmpty()) {
+                BookMeta meta = (BookMeta) book.getItemMeta();
+                if (meta != null) {
+                    String displayTitle = title.length() > 32 ? title.substring(0, 29) + "..." : title;
+                    meta.setTitle(displayTitle);
+                    meta.setDisplayName(ChatColor.GOLD + "" + ChatColor.BOLD + displayTitle);
+                    book.setItemMeta(meta);
+                }
+            }
+            return Optional.ofNullable(book);
         });
     }
 
@@ -345,6 +413,30 @@ public class LoreBookManager {
      * Build the pages of a lore book.
      */
     private List<String> buildBookPages(LoreEntry entry, BookRarity rarity) {
+        // Type-specific templates
+        if (entry.getType() == LoreType.PLAYER) {
+            return buildPlayerProfilePages(entry, rarity);
+        }
+        if (entry.getType() == LoreType.EVENT) {
+            return buildEventPages(entry, rarity);
+        }
+        if (entry.getType() == LoreType.QUEST) {
+            return buildQuestPages(entry, rarity);
+        }
+        if (entry.getType() == LoreType.LANDMARK || entry.getType() == LoreType.MONUMENT) {
+            return buildLandmarkPages(entry, rarity);
+        }
+        if (entry.getType() == LoreType.CITY || entry.getType() == LoreType.TAVERN
+                || entry.getType() == LoreType.GUILD) {
+            return buildSettlementPages(entry, rarity);
+        }
+        if (entry.getType() == LoreType.SHRINE) {
+            return buildShrinePages(entry, rarity);
+        }
+        if (entry.getType() == LoreType.FACTION) {
+            return buildFactionPages(entry, rarity);
+        }
+
         List<String> pages = new ArrayList<>();
 
         // Title page
@@ -394,6 +486,566 @@ public class LoreBookManager {
                 }
                 pages.add(metaPage.toString());
             }
+        }
+
+        return pages;
+    }
+
+    /**
+     * Build pages for a PLAYER type lore entry using the chronicle layout.
+     *
+     * <p>Page 1 — Identity: name, optional title/faction from metadata, status, since date.
+     * <p>Page 2+ — Biography: description prose with a "◆ History" header on the first page.
+     * <p>Final page — Record: any extra metadata fields not already shown on the identity page.
+     */
+    private List<String> buildPlayerProfilePages(LoreEntry entry, BookRarity rarity) {
+        List<String> pages = new ArrayList<>();
+        DateTimeFormatter dateFmt = DateTimeFormatter.ofPattern("MMM dd, yyyy");
+
+        // --- Page 1: Identity ---
+        StringBuilder identity = new StringBuilder();
+        identity.append(ChatColor.DARK_GRAY).append(ChatColor.ITALIC)
+                .append("\u2014 Chronicle \u2014\n\n");
+        identity.append(rarity.getColor()).append(ChatColor.BOLD)
+                .append(entry.getName()).append(ChatColor.RESET).append("\n");
+
+        String title = entry.getMetadata("title");
+        if (title != null && !title.isEmpty()) {
+            identity.append(ChatColor.GOLD).append(ChatColor.ITALIC)
+                    .append(title).append(ChatColor.RESET).append("\n");
+        }
+        identity.append("\n");
+
+        String faction = entry.getMetadata("faction");
+        if (faction != null && !faction.isEmpty()) {
+            identity.append(ChatColor.DARK_GRAY).append("Faction: ")
+                    .append(ChatColor.GRAY).append(faction).append("\n");
+        }
+
+        String status = entry.getMetadata("status");
+        identity.append(ChatColor.DARK_GRAY).append("Status: ")
+                .append(ChatColor.GRAY).append(status != null ? status : "Active").append("\n");
+
+        if (entry.getCreatedAt() != null) {
+            String dateStr = entry.getCreatedAt().toLocalDateTime().format(dateFmt);
+            identity.append(ChatColor.DARK_GRAY).append("Since: ")
+                    .append(ChatColor.GRAY).append(dateStr);
+        }
+
+        pages.add(identity.toString());
+
+        // --- Pages 2+: Biography ---
+        String description = entry.getDescription();
+        if (description != null && !description.isEmpty()) {
+            String bioHeader = ChatColor.DARK_GRAY + "" + ChatColor.ITALIC + "\u25c6 History\n\n" + ChatColor.BLACK;
+            int firstPageCapacity = MAX_CHARS_PER_PAGE - bioHeader.length();
+
+            if (description.length() <= firstPageCapacity) {
+                pages.add(bioHeader + description);
+            } else {
+                // Break at word boundary for first bio page
+                int end = firstPageCapacity;
+                int lastSpace = description.lastIndexOf(' ', end);
+                if (lastSpace > 0) end = lastSpace;
+                pages.add(bioHeader + description.substring(0, end).trim());
+
+                // Remaining text on standard split pages
+                String remaining = description.substring(end).trim();
+                if (!remaining.isEmpty()) {
+                    pages.addAll(splitIntoPages(remaining));
+                }
+            }
+        }
+
+        // --- Final page: Additional metadata record (fields not shown on identity page) ---
+        Set<String> identityKeys = new HashSet<>(Arrays.asList(
+                "title", "faction", "status", "validation_errors", "material"));
+        Map<String, String> allMeta = entry.getAllMetadata();
+        Map<String, String> extraMeta = new LinkedHashMap<>();
+        for (Map.Entry<String, String> m : allMeta.entrySet()) {
+            if (!identityKeys.contains(m.getKey())) {
+                extraMeta.put(m.getKey(), m.getValue());
+            }
+        }
+        if (!extraMeta.isEmpty()) {
+            StringBuilder recordPage = new StringBuilder();
+            recordPage.append(ChatColor.DARK_GRAY).append(ChatColor.ITALIC)
+                    .append("\u25c6 Record\n\n");
+            for (Map.Entry<String, String> m : extraMeta.entrySet()) {
+                recordPage.append(ChatColor.DARK_GRAY)
+                        .append(formatMetaKey(m.getKey())).append(": ")
+                        .append(ChatColor.GRAY).append(m.getValue()).append("\n");
+            }
+            pages.add(recordPage.toString());
+        }
+
+        return pages;
+    }
+
+    /**
+     * Build pages for an EVENT type lore entry using the archive record layout.
+     *
+     * <p>Page 1 — Archive Record: name, inline location, recorded date, filed by.
+     * <p>Page 2+ — Account: description prose with section header.
+     * <p>Optional — Participants page from metadata key "participants".
+     */
+    private List<String> buildEventPages(LoreEntry entry, BookRarity rarity) {
+        List<String> pages = new ArrayList<>();
+        DateTimeFormatter dateFmt = DateTimeFormatter.ofPattern("MMM dd, yyyy");
+
+        // --- Page 1: Archive Record ---
+        StringBuilder record = new StringBuilder();
+        record.append(ChatColor.DARK_GRAY).append(ChatColor.ITALIC)
+                .append("\u2014 Archive Record \u2014\n\n");
+        record.append(rarity.getColor()).append(ChatColor.BOLD)
+                .append(entry.getName()).append(ChatColor.RESET).append("\n\n");
+
+        // Location inline (not a separate page for events)
+        if (entry.getLocation() != null) {
+            String locName = entry.getMetadata("location_name");
+            if (locName != null && !locName.isEmpty()) {
+                record.append(ChatColor.DARK_GRAY).append("Location: ")
+                        .append(ChatColor.GRAY).append(locName).append("\n");
+            } else {
+                record.append(ChatColor.DARK_GRAY).append("Location: ")
+                        .append(ChatColor.GRAY)
+                        .append(entry.getLocation().getWorld().getName())
+                        .append(String.format(" (%d, %d, %d)",
+                                (int) entry.getLocation().getX(),
+                                (int) entry.getLocation().getY(),
+                                (int) entry.getLocation().getZ()))
+                        .append("\n");
+            }
+        }
+
+        // Prefer metadata event_date, fall back to createdAt
+        String eventDate = entry.getMetadata("event_date");
+        if (eventDate != null && !eventDate.isEmpty()) {
+            record.append(ChatColor.DARK_GRAY).append("Date: ")
+                    .append(ChatColor.GRAY).append(eventDate).append("\n");
+        } else if (entry.getCreatedAt() != null) {
+            record.append(ChatColor.DARK_GRAY).append("Recorded: ")
+                    .append(ChatColor.GRAY)
+                    .append(entry.getCreatedAt().toLocalDateTime().format(dateFmt)).append("\n");
+        }
+
+        if (entry.getSubmittedBy() != null) {
+            record.append(ChatColor.DARK_GRAY).append("Filed by: ")
+                    .append(ChatColor.GRAY).append(entry.getSubmittedBy());
+        }
+
+        pages.add(record.toString());
+
+        // --- Pages 2+: Account ---
+        String description = entry.getDescription();
+        if (description != null && !description.isEmpty()) {
+            String accountHeader = ChatColor.DARK_GRAY + "" + ChatColor.ITALIC
+                    + "\u25c6 Account\n\n" + ChatColor.BLACK;
+            int firstPageCapacity = MAX_CHARS_PER_PAGE - accountHeader.length();
+
+            if (description.length() <= firstPageCapacity) {
+                pages.add(accountHeader + description);
+            } else {
+                int end = firstPageCapacity;
+                int lastSpace = description.lastIndexOf(' ', end);
+                if (lastSpace > 0) end = lastSpace;
+                pages.add(accountHeader + description.substring(0, end).trim());
+                String remaining = description.substring(end).trim();
+                if (!remaining.isEmpty()) {
+                    pages.addAll(splitIntoPages(remaining));
+                }
+            }
+        }
+
+        // --- Optional: Participants page ---
+        String participants = entry.getMetadata("participants");
+        if (participants != null && !participants.isEmpty()) {
+            pages.add(ChatColor.DARK_GRAY + "" + ChatColor.ITALIC
+                    + "\u25c6 Participants\n\n" + ChatColor.GRAY + participants);
+        }
+
+        return pages;
+    }
+
+    /**
+     * Build pages for a QUEST type lore entry using the notice board layout.
+     *
+     * <p>Page 1 — Notice: name, status (Open default), difficulty, posted by, date.
+     * <p>Page 2+ — Objective: description prose with section header.
+     * <p>Optional — Reward page from metadata key "reward".
+     */
+    private List<String> buildQuestPages(LoreEntry entry, BookRarity rarity) {
+        List<String> pages = new ArrayList<>();
+        DateTimeFormatter dateFmt = DateTimeFormatter.ofPattern("MMM dd, yyyy");
+
+        // --- Page 1: Notice ---
+        StringBuilder notice = new StringBuilder();
+        notice.append(ChatColor.DARK_GRAY).append(ChatColor.ITALIC)
+                .append("\u2014 Notice Board \u2014\n\n");
+        notice.append(rarity.getColor()).append(ChatColor.BOLD)
+                .append(entry.getName()).append(ChatColor.RESET).append("\n\n");
+
+        String status = entry.getMetadata("status");
+        notice.append(ChatColor.DARK_GRAY).append("Status: ")
+                .append(ChatColor.GRAY).append(status != null ? status : "Open").append("\n");
+
+        String difficulty = entry.getMetadata("difficulty");
+        if (difficulty != null && !difficulty.isEmpty()) {
+            notice.append(ChatColor.DARK_GRAY).append("Difficulty: ")
+                    .append(ChatColor.GRAY).append(difficulty).append("\n");
+        }
+
+        if (entry.getSubmittedBy() != null) {
+            notice.append(ChatColor.DARK_GRAY).append("Posted by: ")
+                    .append(ChatColor.GRAY).append(entry.getSubmittedBy()).append("\n");
+        }
+
+        if (entry.getCreatedAt() != null) {
+            notice.append(ChatColor.DARK_GRAY).append("Posted: ")
+                    .append(ChatColor.GRAY)
+                    .append(entry.getCreatedAt().toLocalDateTime().format(dateFmt));
+        }
+
+        pages.add(notice.toString());
+
+        // --- Pages 2+: Objective ---
+        String description = entry.getDescription();
+        if (description != null && !description.isEmpty()) {
+            String objectiveHeader = ChatColor.DARK_GRAY + "" + ChatColor.ITALIC
+                    + "\u25c6 Objective\n\n" + ChatColor.BLACK;
+            int firstPageCapacity = MAX_CHARS_PER_PAGE - objectiveHeader.length();
+
+            if (description.length() <= firstPageCapacity) {
+                pages.add(objectiveHeader + description);
+            } else {
+                int end = firstPageCapacity;
+                int lastSpace = description.lastIndexOf(' ', end);
+                if (lastSpace > 0) end = lastSpace;
+                pages.add(objectiveHeader + description.substring(0, end).trim());
+                String remaining = description.substring(end).trim();
+                if (!remaining.isEmpty()) {
+                    pages.addAll(splitIntoPages(remaining));
+                }
+            }
+        }
+
+        // --- Optional: Reward page ---
+        String reward = entry.getMetadata("reward");
+        if (reward != null && !reward.isEmpty()) {
+            pages.add(ChatColor.DARK_GRAY + "" + ChatColor.ITALIC
+                    + "\u25c6 Reward\n\n" + ChatColor.GRAY + reward);
+        }
+
+        return pages;
+    }
+
+    /**
+     * Build pages for LANDMARK / MONUMENT using the survey record layout.
+     *
+     * <p>Page 1 — Survey Record: name, type label, world, coords, discovered by, recorded date.
+     * <p>Page 2+ — Description: prose with section header.
+     * <p>Optional — Notes page from metadata key "notes".
+     */
+    private List<String> buildLandmarkPages(LoreEntry entry, BookRarity rarity) {
+        List<String> pages = new ArrayList<>();
+        DateTimeFormatter dateFmt = DateTimeFormatter.ofPattern("MMM dd, yyyy");
+
+        // --- Page 1: Survey Record ---
+        StringBuilder record = new StringBuilder();
+        record.append(ChatColor.DARK_GRAY).append(ChatColor.ITALIC)
+                .append("\u2014 Survey Record \u2014\n\n");
+        record.append(rarity.getColor()).append(ChatColor.BOLD)
+                .append(entry.getName()).append(ChatColor.RESET).append("\n");
+        record.append(ChatColor.DARK_GRAY).append(ChatColor.ITALIC)
+                .append(formatTypeName(entry.getType())).append(ChatColor.RESET).append("\n\n");
+
+        if (entry.getLocation() != null) {
+            record.append(ChatColor.DARK_GRAY).append("World: ")
+                    .append(ChatColor.GRAY).append(entry.getLocation().getWorld().getName()).append("\n");
+            record.append(ChatColor.DARK_GRAY).append("Coords: ")
+                    .append(ChatColor.GRAY)
+                    .append(String.format("%d, %d, %d",
+                            (int) entry.getLocation().getX(),
+                            (int) entry.getLocation().getY(),
+                            (int) entry.getLocation().getZ()))
+                    .append("\n");
+        }
+
+        if (entry.getSubmittedBy() != null) {
+            record.append(ChatColor.DARK_GRAY).append("Discovered by: ")
+                    .append(ChatColor.GRAY).append(entry.getSubmittedBy()).append("\n");
+        }
+
+        if (entry.getCreatedAt() != null) {
+            record.append(ChatColor.DARK_GRAY).append("Recorded: ")
+                    .append(ChatColor.GRAY)
+                    .append(entry.getCreatedAt().toLocalDateTime().format(dateFmt));
+        }
+
+        pages.add(record.toString());
+
+        // --- Pages 2+: Description ---
+        String description = entry.getDescription();
+        if (description != null && !description.isEmpty()) {
+            String descHeader = ChatColor.DARK_GRAY + "" + ChatColor.ITALIC
+                    + "\u25c6 Description\n\n" + ChatColor.BLACK;
+            int firstPageCapacity = MAX_CHARS_PER_PAGE - descHeader.length();
+            if (description.length() <= firstPageCapacity) {
+                pages.add(descHeader + description);
+            } else {
+                int end = firstPageCapacity;
+                int lastSpace = description.lastIndexOf(' ', end);
+                if (lastSpace > 0) end = lastSpace;
+                pages.add(descHeader + description.substring(0, end).trim());
+                String remaining = description.substring(end).trim();
+                if (!remaining.isEmpty()) pages.addAll(splitIntoPages(remaining));
+            }
+        }
+
+        // --- Optional: Notes ---
+        String notes = entry.getMetadata("notes");
+        if (notes != null && !notes.isEmpty()) {
+            pages.add(ChatColor.DARK_GRAY + "" + ChatColor.ITALIC
+                    + "\u25c6 Notes\n\n" + ChatColor.GRAY + notes);
+        }
+
+        return pages;
+    }
+
+    /**
+     * Build pages for CITY / TAVERN / GUILD using a settlement record layout.
+     *
+     * <p>Header label varies: Settlement Record (CITY), Establishment Record (TAVERN), Guild Charter (GUILD).
+     * <p>Page 1 — Record: name, region or world, coords, founder/proprietor/guildmaster, est. date.
+     * <p>Page 2+ — History/About/Charter: prose with section header.
+     * <p>Optional — Notable page from metadata key "notable".
+     */
+    private List<String> buildSettlementPages(LoreEntry entry, BookRarity rarity) {
+        List<String> pages = new ArrayList<>();
+        DateTimeFormatter dateFmt = DateTimeFormatter.ofPattern("MMM dd, yyyy");
+
+        // Type-specific framing
+        String frameHeader;
+        String historyLabel;
+        String founderLabel;
+        switch (entry.getType()) {
+            case TAVERN:
+                frameHeader = "\u2014 Establishment Record \u2014";
+                historyLabel = "\u25c6 About";
+                founderLabel = "Proprietor: ";
+                break;
+            case GUILD:
+                frameHeader = "\u2014 Guild Charter \u2014";
+                historyLabel = "\u25c6 Charter";
+                founderLabel = "Guildmaster: ";
+                break;
+            default: // CITY
+                frameHeader = "\u2014 Settlement Record \u2014";
+                historyLabel = "\u25c6 History";
+                founderLabel = "Founded by: ";
+                break;
+        }
+
+        // --- Page 1 ---
+        StringBuilder record = new StringBuilder();
+        record.append(ChatColor.DARK_GRAY).append(ChatColor.ITALIC)
+                .append(frameHeader).append("\n\n");
+        record.append(rarity.getColor()).append(ChatColor.BOLD)
+                .append(entry.getName()).append(ChatColor.RESET).append("\n\n");
+
+        // Region from metadata preferred; fall back to world name
+        String region = entry.getMetadata("region");
+        if (region != null && !region.isEmpty()) {
+            record.append(ChatColor.DARK_GRAY).append("Region: ")
+                    .append(ChatColor.GRAY).append(region).append("\n");
+        } else if (entry.getLocation() != null) {
+            record.append(ChatColor.DARK_GRAY).append("World: ")
+                    .append(ChatColor.GRAY).append(entry.getLocation().getWorld().getName()).append("\n");
+        }
+
+        if (entry.getLocation() != null) {
+            record.append(ChatColor.DARK_GRAY).append("Coords: ")
+                    .append(ChatColor.GRAY)
+                    .append(String.format("%d, %d, %d",
+                            (int) entry.getLocation().getX(),
+                            (int) entry.getLocation().getY(),
+                            (int) entry.getLocation().getZ()))
+                    .append("\n");
+        }
+
+        if (entry.getSubmittedBy() != null) {
+            record.append(ChatColor.DARK_GRAY).append(founderLabel)
+                    .append(ChatColor.GRAY).append(entry.getSubmittedBy()).append("\n");
+        }
+
+        if (entry.getCreatedAt() != null) {
+            record.append(ChatColor.DARK_GRAY).append("Est.: ")
+                    .append(ChatColor.GRAY)
+                    .append(entry.getCreatedAt().toLocalDateTime().format(dateFmt));
+        }
+
+        pages.add(record.toString());
+
+        // --- Pages 2+: History / About / Charter ---
+        String description = entry.getDescription();
+        if (description != null && !description.isEmpty()) {
+            String histHeader = ChatColor.DARK_GRAY + "" + ChatColor.ITALIC
+                    + historyLabel + "\n\n" + ChatColor.BLACK;
+            int firstPageCapacity = MAX_CHARS_PER_PAGE - histHeader.length();
+            if (description.length() <= firstPageCapacity) {
+                pages.add(histHeader + description);
+            } else {
+                int end = firstPageCapacity;
+                int lastSpace = description.lastIndexOf(' ', end);
+                if (lastSpace > 0) end = lastSpace;
+                pages.add(histHeader + description.substring(0, end).trim());
+                String remaining = description.substring(end).trim();
+                if (!remaining.isEmpty()) pages.addAll(splitIntoPages(remaining));
+            }
+        }
+
+        // --- Optional: Notable features ---
+        String notable = entry.getMetadata("notable");
+        if (notable != null && !notable.isEmpty()) {
+            pages.add(ChatColor.DARK_GRAY + "" + ChatColor.ITALIC
+                    + "\u25c6 Notable\n\n" + ChatColor.GRAY + notable);
+        }
+
+        return pages;
+    }
+
+    /**
+     * Build pages for SHRINE using the sacred site layout.
+     *
+     * <p>Page 1 — Sacred Site: name, world, coords, consecrated by, date.
+     * <p>Page 2+ — Inscription: description prose with section header.
+     */
+    private List<String> buildShrinePages(LoreEntry entry, BookRarity rarity) {
+        List<String> pages = new ArrayList<>();
+        DateTimeFormatter dateFmt = DateTimeFormatter.ofPattern("MMM dd, yyyy");
+
+        // --- Page 1: Sacred Site ---
+        StringBuilder record = new StringBuilder();
+        record.append(ChatColor.DARK_GRAY).append(ChatColor.ITALIC)
+                .append("\u2014 Sacred Site \u2014\n\n");
+        record.append(rarity.getColor()).append(ChatColor.BOLD)
+                .append(entry.getName()).append(ChatColor.RESET).append("\n\n");
+
+        if (entry.getLocation() != null) {
+            record.append(ChatColor.DARK_GRAY).append("World: ")
+                    .append(ChatColor.GRAY).append(entry.getLocation().getWorld().getName()).append("\n");
+            record.append(ChatColor.DARK_GRAY).append("Coords: ")
+                    .append(ChatColor.GRAY)
+                    .append(String.format("%d, %d, %d",
+                            (int) entry.getLocation().getX(),
+                            (int) entry.getLocation().getY(),
+                            (int) entry.getLocation().getZ()))
+                    .append("\n");
+        }
+
+        if (entry.getSubmittedBy() != null) {
+            record.append(ChatColor.DARK_GRAY).append("Consecrated by: ")
+                    .append(ChatColor.GRAY).append(entry.getSubmittedBy()).append("\n");
+        }
+
+        if (entry.getCreatedAt() != null) {
+            record.append(ChatColor.DARK_GRAY).append("Date: ")
+                    .append(ChatColor.GRAY)
+                    .append(entry.getCreatedAt().toLocalDateTime().format(dateFmt));
+        }
+
+        pages.add(record.toString());
+
+        // --- Pages 2+: Inscription ---
+        String description = entry.getDescription();
+        if (description != null && !description.isEmpty()) {
+            String inscHeader = ChatColor.DARK_GRAY + "" + ChatColor.ITALIC
+                    + "\u25c6 Inscription\n\n" + ChatColor.BLACK;
+            int firstPageCapacity = MAX_CHARS_PER_PAGE - inscHeader.length();
+            if (description.length() <= firstPageCapacity) {
+                pages.add(inscHeader + description);
+            } else {
+                int end = firstPageCapacity;
+                int lastSpace = description.lastIndexOf(' ', end);
+                if (lastSpace > 0) end = lastSpace;
+                pages.add(inscHeader + description.substring(0, end).trim());
+                String remaining = description.substring(end).trim();
+                if (!remaining.isEmpty()) pages.addAll(splitIntoPages(remaining));
+            }
+        }
+
+        return pages;
+    }
+
+    /**
+     * Build pages for FACTION using the faction codex layout.
+     *
+     * <p>Page 1 — Codex: name, optional motto, leader, status, est. date.
+     * <p>Page 2+ — Charter: description prose with section header.
+     * <p>Optional — Territories page from metadata key "territories".
+     */
+    private List<String> buildFactionPages(LoreEntry entry, BookRarity rarity) {
+        List<String> pages = new ArrayList<>();
+        DateTimeFormatter dateFmt = DateTimeFormatter.ofPattern("MMM dd, yyyy");
+
+        // --- Page 1: Faction Codex ---
+        StringBuilder codex = new StringBuilder();
+        codex.append(ChatColor.DARK_GRAY).append(ChatColor.ITALIC)
+                .append("\u2014 Faction Codex \u2014\n\n");
+        codex.append(rarity.getColor()).append(ChatColor.BOLD)
+                .append(entry.getName()).append(ChatColor.RESET).append("\n");
+
+        String motto = entry.getMetadata("motto");
+        if (motto != null && !motto.isEmpty()) {
+            codex.append(ChatColor.GRAY).append(ChatColor.ITALIC)
+                    .append("\u201c").append(motto).append("\u201d")
+                    .append(ChatColor.RESET).append("\n");
+        }
+        codex.append("\n");
+
+        // Leader: prefer metadata "leader", fall back to submittedBy
+        String leader = entry.getMetadata("leader");
+        if (leader == null || leader.isEmpty()) leader = entry.getSubmittedBy();
+        if (leader != null) {
+            codex.append(ChatColor.DARK_GRAY).append("Leader: ")
+                    .append(ChatColor.GRAY).append(leader).append("\n");
+        }
+
+        String status = entry.getMetadata("status");
+        codex.append(ChatColor.DARK_GRAY).append("Status: ")
+                .append(ChatColor.GRAY).append(status != null ? status : "Active").append("\n");
+
+        if (entry.getCreatedAt() != null) {
+            codex.append(ChatColor.DARK_GRAY).append("Est.: ")
+                    .append(ChatColor.GRAY)
+                    .append(entry.getCreatedAt().toLocalDateTime().format(dateFmt));
+        }
+
+        pages.add(codex.toString());
+
+        // --- Pages 2+: Charter ---
+        String description = entry.getDescription();
+        if (description != null && !description.isEmpty()) {
+            String charterHeader = ChatColor.DARK_GRAY + "" + ChatColor.ITALIC
+                    + "\u25c6 Charter\n\n" + ChatColor.BLACK;
+            int firstPageCapacity = MAX_CHARS_PER_PAGE - charterHeader.length();
+            if (description.length() <= firstPageCapacity) {
+                pages.add(charterHeader + description);
+            } else {
+                int end = firstPageCapacity;
+                int lastSpace = description.lastIndexOf(' ', end);
+                if (lastSpace > 0) end = lastSpace;
+                pages.add(charterHeader + description.substring(0, end).trim());
+                String remaining = description.substring(end).trim();
+                if (!remaining.isEmpty()) pages.addAll(splitIntoPages(remaining));
+            }
+        }
+
+        // --- Optional: Territories ---
+        String territories = entry.getMetadata("territories");
+        if (territories != null && !territories.isEmpty()) {
+            pages.add(ChatColor.DARK_GRAY + "" + ChatColor.ITALIC
+                    + "\u25c6 Territories\n\n" + ChatColor.GRAY + territories);
         }
 
         return pages;
@@ -456,6 +1108,24 @@ public class LoreBookManager {
     }
 
     /**
+     * Format a slug name (underscore_separated) into Title Case for display.
+     * e.g. "grotsnouts_journal" → "Grotsnouts Journal"
+     */
+    private String formatSlugName(String slug) {
+        if (slug == null || slug.isEmpty()) return slug;
+        String[] words = slug.replace("_", " ").split(" ");
+        StringBuilder sb = new StringBuilder();
+        for (String word : words) {
+            if (!word.isEmpty()) {
+                sb.append(Character.toUpperCase(word.charAt(0)));
+                sb.append(word.substring(1));
+                sb.append(" ");
+            }
+        }
+        return sb.toString().trim();
+    }
+
+    /**
      * Format a lore type name for display.
      */
     private String formatTypeName(LoreType type) {
@@ -485,6 +1155,6 @@ public class LoreBookManager {
      */
     public void shutdown() {
         clearCache();
-        logger.info("LoreBookManager shutdown complete");
+        logger.debug("LoreBookManager shutdown complete");
     }
 }

@@ -26,7 +26,6 @@ import java.util.logging.Logger;
  *   <li>player_collection_progress - Progress tracking</li>
  *   <li>collection_reward - Rewards</li>
  *   <li>lore_metadata - Key-value pairs</li>
- *   <li>lore_entries - Legacy compatibility</li>
  * </ul>
  * </p>
  */
@@ -149,11 +148,7 @@ public class LoreTestDataGenerator extends TestDataGenerator {
                     // 7. Seed collection_reward
                     totalRecords += seedCollectionRewards(conn);
 
-                    // 8. Seed legacy lore_entries (must come before metadata due to FK)
-                    int legacyCount = seedLegacyLoreEntries(conn, category.getBaseCount());
-                    totalRecords += legacyCount;
-
-                    // 9. Seed lore_metadata (FK references lore_entries, not lore_entry)
+                    // 8. Seed lore_metadata (references lore_entry UUIDs)
                     totalRecords += seedLoreMetadata(conn, category.getBaseCount());
 
                     conn.commit();
@@ -234,8 +229,21 @@ public class LoreTestDataGenerator extends TestDataGenerator {
                 String approvalStatus = APPROVAL_STATUSES[i % APPROVAL_STATUSES.length];
                 int contentVersion = 1;
                 boolean isCurrent = true;
-                String content = "This is test lore content for entry " + i + ". " +
-                    "It contains some interesting lore about the world of Ravenkraft.";
+                // Content must be JSON matching LoreEntryRepository expectations
+                String loreType = LORE_TYPES[i % LORE_TYPES.length];
+                StringBuilder contentJson = new StringBuilder();
+                contentJson.append("{\"description\":\"Test lore content for entry ").append(i)
+                    .append(". Interesting lore about the world of Ravenkraft.\",\"nbt_data\":null");
+                // Add location for location-capable types
+                if ("LANDMARK".equals(loreType) || "CITY".equals(loreType) ||
+                    "MONUMENT".equals(loreType) || "PATH".equals(loreType) ||
+                    "EVENT".equals(loreType) || "FACTION".equals(loreType)) {
+                    contentJson.append(",\"location\":{\"world\":\"world\",\"x\":")
+                        .append(100 + i * 50).append(",\"y\":64,\"z\":")
+                        .append(200 + i * 50).append("}");
+                }
+                contentJson.append("}");
+                String content = contentJson.toString();
 
                 stmt.setString(1, entryId.toString());
                 stmt.setString(2, slug);
@@ -486,8 +494,7 @@ public class LoreTestDataGenerator extends TestDataGenerator {
     }
 
     private int seedLoreMetadata(Connection conn, int count) throws SQLException {
-        // lore_metadata.lore_id has FK to lore_entries(id), NOT lore_entry(id)
-        // So we must use UUIDs from the legacy lore_entries range (testUUID(5000+i))
+        // lore_metadata.lore_id references lore_entry(id) - use same UUID range as seedLoreEntries
         String sql;
         if (isMySQL()) {
             sql = "INSERT INTO " + table("lore_metadata") +
@@ -499,11 +506,11 @@ public class LoreTestDataGenerator extends TestDataGenerator {
         }
 
         int inserted = 0;
-        int legacyCount = count / 5;  // Same as seedLegacyLoreEntries count
+        int metaCount = count / 5;
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-            // 2-3 metadata entries per legacy lore entry
-            for (int i = 0; i < legacyCount; i++) {
-                UUID loreId = testUUID(5000 + i);  // Must match lore_entries IDs
+            // 2-3 metadata entries per lore_entry record
+            for (int i = 0; i < metaCount; i++) {
+                UUID loreId = testUUID(i);  // Matches lore_entry IDs from seedLoreEntries
                 int numMeta = 2 + (i % 2);
 
                 String[] keys = {"author", "creation_date", "revision", "tags", "category"};
@@ -527,58 +534,6 @@ public class LoreTestDataGenerator extends TestDataGenerator {
             stmt.executeBatch();
         }
         logSeeded("lore_metadata", inserted);
-        return inserted;
-    }
-
-    private int seedLegacyLoreEntries(Connection conn, int count) throws SQLException {
-        String sql;
-        if (isMySQL()) {
-            sql = "INSERT INTO " + table("lore_entries") +
-                " (id, type, name, description, world, x, y, z, submitted_by, approved) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
-                "ON DUPLICATE KEY UPDATE name = VALUES(name)";
-        } else {
-            sql = "INSERT OR REPLACE INTO " + table("lore_entries") +
-                " (id, type, name, description, world, x, y, z, submitted_by, approved) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        }
-
-        int inserted = 0;
-        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-            // Legacy entries - 20% of count
-            int legacyCount = count / 5;
-            for (int i = 0; i < legacyCount; i++) {
-                UUID id = testUUID(5000 + i);  // Different range to avoid conflicts
-                String type = LORE_TYPES[i % LORE_TYPES.length];
-                String name = "Legacy Lore " + i;
-                String description = "This is a legacy lore entry for testing migration compatibility.";
-                String world = testWorldName(i % 3);
-                double x = 100.0 + (i * 50);
-                double y = 64.0;
-                double z = 100.0 + (i * 50);
-                UUID submittedBy = testUUID(i);
-                boolean approved = i % 3 == 0;  // 33% approved
-
-                stmt.setString(1, id.toString());
-                stmt.setString(2, type);
-                stmt.setString(3, name);
-                stmt.setString(4, description);
-                stmt.setString(5, world);
-                stmt.setDouble(6, x);
-                stmt.setDouble(7, y);
-                stmt.setDouble(8, z);
-                stmt.setString(9, submittedBy.toString());
-                stmt.setInt(10, approved ? 1 : 0);
-                stmt.addBatch();
-                inserted++;
-
-                if (inserted % 100 == 0) {
-                    stmt.executeBatch();
-                }
-            }
-            stmt.executeBatch();
-        }
-        logSeeded("lore_entries", inserted);
         return inserted;
     }
 
@@ -609,8 +564,7 @@ public class LoreTestDataGenerator extends TestDataGenerator {
                         {"lore_metadata", "meta_value LIKE '%test%' OR meta_key = 'tags'"},
                         {"lore_item", "name LIKE 'Test Item%'"},
                         {"lore_submission", "slug LIKE 'test-entry-%'"},
-                        {"lore_entry", "name LIKE 'Test %'"},
-                        {"lore_entries", "name LIKE 'Legacy Lore%'"}
+                        {"lore_entry", "name LIKE 'Test %'"}
                     };
 
                     for (String[] tableInfo : tablesToClean) {
@@ -674,10 +628,11 @@ public class LoreTestDataGenerator extends TestDataGenerator {
                         totalDeleted += stmt.executeUpdate();
                     }
 
-                    // Delete legacy entries by this player
-                    String legacySql = "DELETE FROM " + table("lore_entries") +
-                        " WHERE submitted_by = ?";
-                    try (PreparedStatement stmt = conn.prepareStatement(legacySql)) {
+                    // Delete lore_entry records by this player (via submission)
+                    String entrySql = "DELETE FROM " + table("lore_entry") +
+                        " WHERE id IN (SELECT entry_id FROM " + table("lore_submission") +
+                        " WHERE submitter_uuid = ?)";
+                    try (PreparedStatement stmt = conn.prepareStatement(entrySql)) {
                         stmt.setString(1, playerUuid.toString());
                         totalDeleted += stmt.executeUpdate();
                     }

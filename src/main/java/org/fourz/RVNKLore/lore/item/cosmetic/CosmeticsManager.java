@@ -46,9 +46,9 @@ public class CosmeticsManager {
      * Initialize the cosmetic manager and load default collections.
      */
     public void initialize() {
-        logger.info("Initializing cosmetics manager");
+        logger.debug("Initializing cosmetics manager");
         loadDefaultCollections();
-        logger.info("Loaded " + collections.size() + " head collections with " + 
+        logger.debug("Loaded " + collections.size() + " head collections with " +
                    headVariants.size() + " total variants");
     }
       /**
@@ -107,7 +107,7 @@ public class CosmeticsManager {
             headVariants.put(variant.getId(), variant);
         }
         
-        logger.info("Registered collection: " + collection.getName() + " (" + collection.getId() + ")");
+        logger.debug("Registered collection: " + collection.getName() + " (" + collection.getId() + ")");
         return true;
     }
     
@@ -127,7 +127,7 @@ public class CosmeticsManager {
                 headVariants.remove(variant.getId());
             }
             
-            logger.info("Unregistered collection: " + collection.getName());
+            logger.debug("Unregistered collection: " + collection.getName());
             return true;
         }
         return false;
@@ -272,7 +272,7 @@ public class CosmeticsManager {
         if (variant.requiresPermission()) {
             String permission = variant.getRequiredPermission();
             if (permission != null && !player.hasPermission(permission)) {
-                logger.info("Player " + player.getName() + " lacks permission for head: " + variantId);
+                logger.debug("Player " + player.getName() + " lacks permission for head: " + variantId);
                 return false;
             }
         }
@@ -292,7 +292,7 @@ public class CosmeticsManager {
         // Check for completed collections
         checkCollectionCompletion(player);
         
-        logger.info("Granted head variant " + variantId + " to player " + player.getName());
+        logger.debug("Granted head variant " + variantId + " to player " + player.getName());
         return true;
     }
     
@@ -389,7 +389,7 @@ public class CosmeticsManager {
         } else {
             player.sendMessage("Â§aâœ“ Completed collection: " + collection.getName());
         }
-        logger.info("Awarded collection completion rewards to " + player.getName() +
+        logger.debug("Awarded collection completion rewards to " + player.getName() +
                    " for collection: " + collection.getName());
     }
     
@@ -423,14 +423,14 @@ public class CosmeticsManager {
         
         registerCollection(mobCollection);
         
-        logger.info("Loaded default collections");
+        logger.debug("Loaded default collections");
     }
     
     /**
      * Cleanup and shutdown the cosmetic manager.
      */
     public void shutdown() {
-        logger.info("Shutting down cosmetic manager");
+        logger.debug("Shutting down cosmetic manager");
         // Here you would save player data to database
         // For now, just log the shutdown
     }

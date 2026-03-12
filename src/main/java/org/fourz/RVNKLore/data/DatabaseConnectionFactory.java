@@ -1,10 +1,14 @@
 package org.fourz.RVNKLore.data;
 
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.rvnkcore.config.dto.DatabaseSettingsDTO;
+import org.fourz.rvnkcore.config.dto.SQLiteSettingsDTO;
 import org.fourz.RVNKLore.data.dialect.MySQLDialect;
 import org.fourz.RVNKLore.data.dialect.SQLDialect;
 import org.fourz.RVNKLore.data.dialect.SQLiteDialect;
 import org.fourz.rvnkcore.util.log.LogManager;
+
+import java.io.File;
 
 /**
  * Factory for creating database connections with appropriate SQL dialects.
@@ -35,19 +39,19 @@ public class DatabaseConnectionFactory {
      * @return DatabaseConnection configured for the storage type
      */
     public DatabaseConnection createConnection() {
-        String storageType = plugin.getConfigManager().getStorageType();
-        logger.debug("Creating database connection for storage type: " + storageType);
+        DatabaseSettingsDTO settings = plugin.getConfigManager().getDatabaseSettings();
+        logger.debug("Creating database connection for storage type: " + settings.getType());
 
-        if (storageType.equalsIgnoreCase("mysql")) {
+        if (settings.getType() == DatabaseSettingsDTO.DatabaseType.MYSQL) {
             this.dialect = new MySQLDialect();
             logger.debug("Using MySQL dialect");
             this.usingFallback = false;
-            return new MySQLConnection(plugin, dialect);
+            return new MySQLConnection(plugin, dialect, settings.getMysqlSettings());
         } else {
             this.dialect = new SQLiteDialect();
             logger.debug("Using SQLite dialect");
             this.usingFallback = false;
-            return new SQLiteConnection(plugin, dialect);
+            return new SQLiteConnection(plugin, dialect, settings.getSqliteSettings());
         }
     }
 
@@ -61,7 +65,15 @@ public class DatabaseConnectionFactory {
         logger.warning("Creating SQLite fallback connection");
         this.dialect = new SQLiteDialect();
         this.usingFallback = true;
-        return new SQLiteConnection(plugin, dialect);
+
+        String dbFile = plugin.getConfig().getString("storage.sqlite.database", "lore.db");
+        String filePath = new File(plugin.getDataFolder(), dbFile).getAbsolutePath();
+        SQLiteSettingsDTO fallbackSettings = new SQLiteSettingsDTO(
+            filePath,
+            plugin.getConfig().getString("storage.sqlite.tablePrefix", "")
+        );
+
+        return new SQLiteConnection(plugin, dialect, fallbackSettings);
     }
 
     /**

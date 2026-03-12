@@ -4,6 +4,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.rvnkcore.data.FallbackTracker;
 import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
@@ -36,7 +37,10 @@ public class LoreEntryRepository implements ILoreEntryRepository {
         this.dbConnection = dbConnection;
         this.logger = LogManager.getInstance(plugin, "LoreEntryRepository");
         this.jsonParser = new JSONParser();
-        this.fallbackTracker = new FallbackTracker(plugin);
+        this.fallbackTracker = new FallbackTracker(
+                plugin.getConfig().getInt("database.fallback.maxFailuresBeforeFallback", 3),
+                plugin.getConfig().getInt("database.fallback.recoveryTimeMinutes", 5) * 60 * 1000L,
+                LogManager.getInstance(plugin, "FallbackTracker"));
     }
 
     /** Helper to get prefixed table name */
@@ -87,7 +91,11 @@ public class LoreEntryRepository implements ILoreEntryRepository {
                     return true;
                 } catch (SQLException e) {
                     conn.rollback();
-                    logger.error("Failed to add lore entry to database", e);
+                    if (e instanceof java.sql.SQLIntegrityConstraintViolationException) {
+                        logger.debug("Duplicate entry rejected: " + entry.getName() + " (" + entry.getType() + ")");
+                    } else {
+                        logger.error("Failed to add lore entry to database", e);
+                    }
                     return false;
                 } finally {
                     conn.setAutoCommit(true);
@@ -501,6 +509,10 @@ public class LoreEntryRepository implements ILoreEntryRepository {
             stmt.setString(3, entry.getName());
             int affected = stmt.executeUpdate();
             return affected > 0 ? entry.getId() : null;
+        } catch (java.sql.SQLIntegrityConstraintViolationException e) {
+            entry.addMetadata("validation_errors",
+                "A " + entry.getType().name() + " entry named '" + entry.getName() + "' already exists.");
+            throw e;
         }
     }
 
@@ -583,7 +595,7 @@ public class LoreEntryRepository implements ILoreEntryRepository {
             content.put("nbt_data", entry.getNbtData());
             // Include location if available
             Location loc = entry.getLocation();
-            if (loc != null) {
+            if (loc != null && loc.getWorld() != null) {
                 JSONObject locJson = new JSONObject();
                 locJson.put("world", loc.getWorld().getName());
                 locJson.put("x", loc.getX());
@@ -599,8 +611,10 @@ public class LoreEntryRepository implements ILoreEntryRepository {
                 }
             }
             stmt.setString(3, content.toJSONString());
-            // Generate and set versioned slug to avoid UNIQUE constraint violations
-            String slug = generateVersionedSlug(entry.getName(), version);
+            // Generate and set versioned slug to avoid UNIQUE constraint violations.
+            // Append entry ID prefix to ensure uniqueness across entries with the same name
+            // (e.g. multiple death entries for the same player — bug-LO-01).
+            String slug = generateVersionedSlug(entry.getName(), version) + "-" + entryId.substring(0, Math.min(8, entryId.length()));
             stmt.setString(4, slug);
             stmt.setInt(5, version);
             return stmt.executeUpdate() > 0;
@@ -657,6 +671,7 @@ public class LoreEntryRepository implements ILoreEntryRepository {
         String description = null;
         String nbtData = null;
         Location location = null;
+        java.util.Map<String, String> metadata = null;
 
         // Parse the content JSON (with null/empty check)
         if (contentJson != null && !contentJson.trim().isEmpty()) {
@@ -680,6 +695,20 @@ public class LoreEntryRepository implements ILoreEntryRepository {
                             location = new Location(world, x, y, z);
                         }
                     }
+
+                    // Extract metadata if available
+                    if (content.containsKey("metadata")) {
+                        JSONObject metaJson = (JSONObject) content.get("metadata");
+                        if (metaJson != null) {
+                            metadata = new java.util.HashMap<>();
+                            for (Object key : metaJson.keySet()) {
+                                Object val = metaJson.get(key);
+                                if (val != null) {
+                                    metadata.put((String) key, val.toString());
+                                }
+                            }
+                        }
+                    }
                 }
             } catch (ParseException e) {
                 logger.warning("Skipping malformed JSON content for lore entry ID: " + id);
@@ -698,6 +727,13 @@ public class LoreEntryRepository implements ILoreEntryRepository {
             approved,
             createdAt != null ? createdAt.toString() : null
         );
+
+        // Populate metadata from JSON content
+        if (metadata != null) {
+            for (java.util.Map.Entry<String, String> meta : metadata.entrySet()) {
+                entry.addMetadata(meta.getKey(), meta.getValue());
+            }
+        }
 
         return entry;
     }

@@ -6,7 +6,7 @@
 
    <groupId>org.fourz.RVNKLore</groupId>
    <artifactId>RVNKLore</artifactId>
-   <version>1.0-SNAPSHOT</version>
+   <version>1.0.16</version>
 
    <name>RVNKLore</name>
    <description></description>
@@ -38,6 +38,22 @@
        <repository>
            <id>minecraft-libraries</id>
            <url>https://libraries.minecraft.net/</url>
+       </repository>
+       <repository>
+           <id>dynmap-repo</id>
+           <url>https://repo.mikeprimm.com/</url>
+       </repository>
+       <repository>
+           <id>bencodez-repo</id>
+           <url>https://nexus.bencodez.com/repository/maven-public/</url>
+       </repository>
+       <repository>
+           <id>jitpack.io</id>
+           <url>https://jitpack.io</url>
+       </repository>
+       <repository>
+           <id>citizens-repo</id>
+           <url>https://repo.citizensnpcs.co/</url>
        </repository>
    </repositories>
 
@@ -82,22 +98,57 @@
        <dependency>
            <groupId>org.fourz</groupId>
            <artifactId>rvnkcore</artifactId>
-           <version>1.3.0-alpha</version>
+           <version>1.3.5-alpha</version>
            <scope>provided</scope>
        </dependency>
-       <!-- Jakarta Servlet API (provided by RVNKCore's Jetty server at runtime) -->
+       <!-- RVNKQuests - for QuestCompleteEvent cross-plugin integration -->
        <dependency>
-           <groupId>jakarta.servlet</groupId>
-           <artifactId>jakarta.servlet-api</artifactId>
-           <version>6.0.0</version>
+           <groupId>org.fourz.RVNKQuests</groupId>
+           <artifactId>RVNKQuests</artifactId>
+           <version>1.0-SNAPSHOT</version>
            <scope>provided</scope>
        </dependency>
+       <!-- Jakarta Servlet API removed — API routing handled by RVNKCore's LoreController -->
        <!-- PlaceholderAPI for placeholder integration -->
        <dependency>
            <groupId>me.clip</groupId>
            <artifactId>placeholderapi</artifactId>
            <version>2.11.6</version>
            <scope>provided</scope>
+       </dependency>
+       <!-- Dynmap API for map marker integration -->
+       <dependency>
+           <groupId>us.dynmap</groupId>
+           <artifactId>DynmapCoreAPI</artifactId>
+           <version>3.8</version>
+           <scope>provided</scope>
+       </dependency>
+       <!-- VotingPlugin API for vote reward integration -->
+       <dependency>
+           <groupId>com.bencodez</groupId>
+           <artifactId>votingplugin</artifactId>
+           <version>7.0-SNAPSHOT</version>
+           <scope>provided</scope>
+       </dependency>
+       <!-- GriefPrevention API for claim integration -->
+       <dependency>
+           <groupId>com.github.TechFortress</groupId>
+           <artifactId>GriefPrevention</artifactId>
+           <version>16.18</version>
+           <scope>provided</scope>
+       </dependency>
+       <!-- Citizens API for NPC integration -->
+       <dependency>
+           <groupId>net.citizensnpcs</groupId>
+           <artifactId>citizens-main</artifactId>
+           <version>2.0.34-SNAPSHOT</version>
+           <scope>provided</scope>
+           <exclusions>
+               <exclusion>
+                   <groupId>*</groupId>
+                   <artifactId>*</artifactId>
+               </exclusion>
+           </exclusions>
        </dependency>
 
        <!-- Test Dependencies -->
@@ -119,12 +170,11 @@
            <version>5.8.0</version>
            <scope>test</scope>
        </dependency>
-       <!-- MySQL JDBC Driver for integration tests -->
+       <!-- MySQL JDBC Driver -->
        <dependency>
            <groupId>com.mysql</groupId>
            <artifactId>mysql-connector-j</artifactId>
            <version>8.2.0</version>
-           <scope>test</scope>
        </dependency>
        <!-- HikariCP connection pool -->
        <dependency>
@@ -140,6 +190,13 @@
        </dependency>
    </dependencies>
    <build>
+       <finalName>${project.artifactId}</finalName>
+       <resources>
+           <resource>
+               <directory>src/main/resources</directory>
+               <filtering>true</filtering>
+           </resource>
+       </resources>
        <plugins>
            <plugin>
                <groupId>org.apache.maven.plugins</groupId>

@@ -27,7 +27,6 @@ public class EnchantedItemLoreHandler extends DefaultLoreHandler {
     
     @Override
     public void initialize() {
-        //logger.debug("Initializing enchanted item lore handler");
     }
 
     /**
@@ -98,6 +97,6 @@ public class EnchantedItemLoreHandler extends DefaultLoreHandler {
 
     @Override
     public LoreType getHandlerType() {
-        return LoreType.ITEM;
+        return LoreType.ENCHANTMENT;
     }
 }

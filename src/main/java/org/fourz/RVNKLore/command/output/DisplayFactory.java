@@ -92,7 +92,7 @@ public class DisplayFactory {
      * @return true if the display was successful
      */
     public static boolean displayLoreEntry(CommandSender sender, LoreEntry entry) {
-        sender.sendMessage(ChatColor.GOLD + "===== Item Info: " + entry.getName() + " =====");
+        sender.sendMessage(ChatColor.GOLD + "===== Item Info: " + entry.getDisplayName() + " =====");
         sender.sendMessage(ChatColor.YELLOW + "Type: " + entry.getType());
         sender.sendMessage(ChatColor.YELLOW + "ID: " + entry.getId());
         

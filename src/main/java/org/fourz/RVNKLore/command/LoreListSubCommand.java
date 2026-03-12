@@ -5,6 +5,7 @@ import org.bukkit.command.CommandSender;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
+import org.fourz.RVNKLore.search.LoreSearchService;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -17,10 +18,12 @@ import java.util.stream.Collectors;
  */
 public class LoreListSubCommand implements SubCommand {
     private final RVNKLore plugin;
+    private final TabCompletionUtil tabCompletionUtil;
     private static final int ITEMS_PER_PAGE = 10;
 
     public LoreListSubCommand(RVNKLore plugin) {
         this.plugin = plugin;
+        this.tabCompletionUtil = new TabCompletionUtil(new LoreSearchService(plugin));
     }
 
     @Override
@@ -66,11 +69,11 @@ public class LoreListSubCommand implements SubCommand {
 
         // If sender is an admin, include unapproved entries
         if (sender.hasPermission("rvnklore.admin")) {
-            entries = type != null ? 
-                    plugin.getLoreManager().getLoreEntriesByTypeSync(type) : 
+            entries = type != null ?
+                    plugin.getLoreManager().getLoreEntriesByTypeSync(type) :
                     new ArrayList<>(plugin.getDatabaseManager().getAllLoreEntries());
         } else {
-            // Filter out unapproved entries for non-admins            
+            // Filter out unapproved entries for non-admins
             entries = entries.stream()
                     .filter(LoreEntry::isApproved)
                     .collect(Collectors.toList());
@@ -78,12 +81,15 @@ public class LoreListSubCommand implements SubCommand {
 
         // Calculate pagination
         int totalPages = (int) Math.ceil(entries.size() / (double) ITEMS_PER_PAGE);
+        if (totalPages > 0 && page > totalPages) {
+            page = totalPages;
+        }
         int startIndex = (page - 1) * ITEMS_PER_PAGE;
         int endIndex = Math.min(startIndex + ITEMS_PER_PAGE, entries.size());
 
         // Display header
-        sender.sendMessage(ChatColor.GOLD + "=== Lore Entries" + 
-                (type != null ? " (" + type + ")" : "") + 
+        sender.sendMessage(ChatColor.GOLD + "=== Lore Entries" +
+                (type != null ? " (" + type + ")" : "") +
                 " - Page " + page + "/" + Math.max(1, totalPages) + " ===");
 
         // Display entries
@@ -92,32 +98,25 @@ public class LoreListSubCommand implements SubCommand {
         } else {
             for (int i = startIndex; i < endIndex; i++) {
                 LoreEntry entry = entries.get(i);
-                String approvalStatus = entry.isApproved() ? 
-                        ChatColor.GREEN + "[✓]" : 
+                String approvalStatus = entry.isApproved() ?
+                        ChatColor.GREEN + "[✓]" :
                         ChatColor.RED + "[✗]";
-                
-                // Get shortened UUID (first 8 characters)
-                String uuid = entry.getId().toString();
-                // Fix: Only take substring if long enough
-                String shortId = uuid.length() >= 8 ? uuid.substring(0, 8) : uuid;
-                        
+
                 if (sender.hasPermission("rvnklore.admin")) {
-                    sender.sendMessage(approvalStatus + " " + 
-                            ChatColor.YELLOW + entry.getName() + 
-                            ChatColor.GRAY + " (" + entry.getType() + ") - " + 
-                            ChatColor.WHITE + shortId);
+                    sender.sendMessage(approvalStatus + " " +
+                            ChatColor.YELLOW + entry.getDisplayName() +
+                            ChatColor.GRAY + " (" + entry.getType() + ")");
                 } else {
-                    sender.sendMessage(ChatColor.YELLOW + entry.getName() + 
-                            ChatColor.GRAY + " (" + entry.getType() + ") - " + 
-                            ChatColor.WHITE + shortId);
+                    sender.sendMessage(ChatColor.YELLOW + entry.getDisplayName() +
+                            ChatColor.GRAY + " (" + entry.getType() + ")");
                 }
             }
         }
 
         // Pagination navigation help
         if (totalPages > 1) {
-            sender.sendMessage(ChatColor.GRAY + "Use /lore list" + 
-                    (type != null ? " " + type : "") + 
+            sender.sendMessage(ChatColor.GRAY + "Use /lore list" +
+                    (type != null ? " " + type : "") +
                     " <page> to navigate pages");
         }
 
@@ -137,18 +136,30 @@ public class LoreListSubCommand implements SubCommand {
     @Override
     public List<String> getTabCompletions(CommandSender sender, String[] args) {
         if (args.length == 1) {
-            String partial = args[0].toUpperCase();
-            List<String> completions = Arrays.stream(LoreType.values())
-                    .map(LoreType::name)
-                    .filter(type -> type.startsWith(partial))
-                    .collect(Collectors.toList());
-            
+            String partial = args[0];
+            List<String> completions = new ArrayList<>();
+
+            // Add type suggestions
+            completions.addAll(tabCompletionUtil.completeEnum(LoreType.class, partial));
+
+            // Add lore entry name suggestions
+            completions.addAll(tabCompletionUtil.completeLoreEntryNames(partial));
+
             // Add page number suggestion
             if ("1".startsWith(partial)) {
                 completions.add("1");
             }
-            
+
             return completions;
+        } else if (args.length == 2) {
+            // Second arg: if first arg is a type, suggest names filtered by that type
+            try {
+                LoreType type = LoreType.valueOf(args[0].toUpperCase());
+                return tabCompletionUtil.completeLoreEntryNames(args[1], type);
+            } catch (IllegalArgumentException e) {
+                // Not a valid type, suggest page numbers
+                return Arrays.asList("1", "2", "3");
+            }
         }
         return new ArrayList<>();
     }

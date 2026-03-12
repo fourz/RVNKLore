@@ -1,8 +1,12 @@
 # RVNKLore Database Schema
 
-**Authoritative Reference** - Single source of truth for RVNKLore database schema.
+> **DEPRECATED** — This file is outdated (January 30, 2026) and references tables that no longer exist.
+> The authoritative schema reference is [`docs/database-schema.md`](database-schema.md).
+> This file is retained for historical reference only and should not be used for development.
 
-**Last Updated**: January 30, 2026
+~~**Authoritative Reference**~~ - **STALE** — see `docs/database-schema.md` instead.
+
+**Last Updated**: January 30, 2026 (stale)
 **Database Support**: SQLite (primary), MySQL (planned)
 **Applies To**: RVNKLore plugin
 

@@ -5,6 +5,7 @@ import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.item.book.BookRarity;
 import org.fourz.RVNKLore.lore.item.book.LoreBookManager;
 import org.fourz.rvnkcore.util.log.LogManager;
@@ -37,7 +38,7 @@ public class LoreBookGiveSubCommand implements SubCommand {
         }
 
         String playerName = args[0];
-        String entryId = args[1];
+        String entryArg = args[1];
         BookRarity rarity = args.length > 2 ? BookRarity.fromString(args[2]) : null;
 
         // Find target player
@@ -46,6 +47,10 @@ public class LoreBookGiveSubCommand implements SubCommand {
             sender.sendMessage(ChatColor.RED + "✖ Player not found: " + playerName);
             return true;
         }
+
+        // Resolve slug name to entry ID (fall back to treating arg as ID)
+        LoreEntry namedEntry = plugin.getLoreManager().getLoreEntryByNameSync(entryArg);
+        String entryId = (namedEntry != null) ? namedEntry.getId() : entryArg;
 
         sender.sendMessage(ChatColor.YELLOW + "⚙ Creating lore book...");
 
@@ -66,7 +71,7 @@ public class LoreBookGiveSubCommand implements SubCommand {
                         plugin.getServer().getScheduler().runTask(plugin, () -> {
                             target.getInventory().addItem(book);
                             sender.sendMessage(ChatColor.GREEN + "✓ Gave " + rarity.getColoredName() + ChatColor.GREEN + " lore book to " + target.getName());
-                            target.sendMessage(ChatColor.GREEN + "You received a lore book: " + rarity.getColor() + entry.getName());
+                            target.sendMessage(ChatColor.GREEN + "You received a lore book: " + rarity.getColor() + entry.getDisplayName());
                         });
                     }
                 });
@@ -116,12 +121,11 @@ public class LoreBookGiveSubCommand implements SubCommand {
                 }
             }
         } else if (args.length == 2) {
-            // Entry IDs (short form)
+            // Slug names (entry names)
             String partial = args[1].toLowerCase();
             for (var entry : plugin.getLoreManager().getAllLoreEntriesSync()) {
-                String shortId = entry.getId().substring(0, 8);
-                if (shortId.startsWith(partial)) {
-                    completions.add(shortId);
+                if (entry.getName() != null && entry.getName().toLowerCase().startsWith(partial)) {
+                    completions.add(entry.getName());
                 }
             }
         } else if (args.length == 3) {

@@ -3,6 +3,7 @@ package org.fourz.RVNKLore.data;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.rvnkcore.config.dto.MySQLSettingsDTO;
 import org.fourz.RVNKLore.data.dialect.SQLDialect;
 
 import java.sql.*;
@@ -15,21 +16,19 @@ import java.sql.*;
  * during concurrent async operations.
  */
 public class MySQLConnection extends DatabaseConnection {
-    private final String host;
-    private final int port;
-    private final String database;
-    private final String username;
-    private final String password;
-    private final boolean useSSL;
+    private final MySQLSettingsDTO settings;
+    private final int poolSize;
+    private final int connectionTimeout;
+    private final int idleTimeout;
+    private final int maxLifetime;
 
-    public MySQLConnection(RVNKLore plugin, SQLDialect dialect) {
+    public MySQLConnection(RVNKLore plugin, SQLDialect dialect, MySQLSettingsDTO settings) {
         super(plugin, dialect);
-        this.host = plugin.getConfig().getString("storage.mysql.host", "localhost");
-        this.port = plugin.getConfig().getInt("storage.mysql.port", 3306);
-        this.database = plugin.getConfig().getString("storage.mysql.database", "minecraft");
-        this.username = plugin.getConfig().getString("storage.mysql.username", "root");
-        this.password = plugin.getConfig().getString("storage.mysql.password", "");
-        this.useSSL = plugin.getConfig().getBoolean("storage.mysql.useSSL", false);
+        this.settings = settings;
+        this.poolSize = plugin.getConfig().getInt("storage.mysql.poolSize", 10);
+        this.connectionTimeout = plugin.getConfig().getInt("storage.mysql.connectionTimeout", 30000);
+        this.idleTimeout = plugin.getConfig().getInt("storage.mysql.idleTimeout", 600000);
+        this.maxLifetime = plugin.getConfig().getInt("storage.mysql.maxLifetime", 1800000);
     }
 
     @Override
@@ -37,21 +36,15 @@ public class MySQLConnection extends DatabaseConnection {
         logger.debug("Initializing MySQL connection pool...");
         lastConnectionError = null;
 
-        // Load pool configuration from config.yml
-        int poolSize = plugin.getConfig().getInt("storage.mysql.poolSize", 10);
-        int connectionTimeout = plugin.getConfig().getInt("storage.mysql.connectionTimeout", 30000);
-        int idleTimeout = plugin.getConfig().getInt("storage.mysql.idleTimeout", 600000);
-        int maxLifetime = plugin.getConfig().getInt("storage.mysql.maxLifetime", 1800000);
-
-        // Build JDBC URL
+        // Build JDBC URL using DTO
         String jdbcUrl = String.format("jdbc:mysql://%s:%d/%s?useSSL=%s&allowPublicKeyRetrieval=true",
-                host, port, database, useSSL);
+                settings.getHost(), settings.getPort(), settings.getDatabase(), settings.isUseSSL());
 
         // Set up HikariCP configuration for MySQL
         HikariConfig config = new HikariConfig();
         config.setJdbcUrl(jdbcUrl);
-        config.setUsername(username);
-        config.setPassword(password);
+        config.setUsername(settings.getUsername());
+        config.setPassword(settings.getPassword());
         config.setConnectionTestQuery("SELECT 1");
         config.setMaximumPoolSize(poolSize);
         config.setMinimumIdle(Math.max(2, poolSize / 2));

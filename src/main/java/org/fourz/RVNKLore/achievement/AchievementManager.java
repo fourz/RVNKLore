@@ -6,8 +6,11 @@ import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.achievement.reward.*;
+import org.fourz.RVNKLore.data.repository.AchievementRepository;
 import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
+import org.fourz.rvnkcore.RVNKCore;
 import org.fourz.rvnkcore.util.log.LogManager;
+import org.fourz.rvnkcore.api.service.PlayerPreferencesService;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -15,11 +18,14 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Manages achievements, progress tracking, and reward distribution.
+ *
+ * Respects PlayerPreferencesService from RVNKCore (Phase 3 integration).
  */
 public class AchievementManager {
 
     private final RVNKLore plugin;
     private final LogManager logger;
+    private AchievementRepository achievementRepository;
 
     // Achievement registry
     private final Map<String, Achievement> achievements = new ConcurrentHashMap<>();
@@ -44,7 +50,7 @@ public class AchievementManager {
      * Initialize the achievement system.
      */
     public void initialize() {
-        logger.info("Initializing AchievementManager...");
+        logger.debug("Initializing AchievementManager...");
 
         // Register default reward handlers
         registerRewardHandler(new ItemRewardHandler(plugin));
@@ -58,10 +64,24 @@ public class AchievementManager {
         // Create default achievements
         createDefaultAchievements();
 
-        // Load player progress from database (async)
-        // TODO: Implement database persistence
+        // Load player progress from database
+        try {
+            this.achievementRepository = plugin.getDatabaseManager().getAchievementRepository();
+            if (achievementRepository != null) {
+                Map<UUID, List<AchievementProgress>> allProgress = achievementRepository.loadAllProgress().join();
+                for (Map.Entry<UUID, List<AchievementProgress>> entry : allProgress.entrySet()) {
+                    Map<String, AchievementProgress> progressMap = playerProgress.computeIfAbsent(entry.getKey(), k -> new ConcurrentHashMap<>());
+                    for (AchievementProgress progress : entry.getValue()) {
+                        progressMap.put(progress.getAchievementId(), progress);
+                    }
+                }
+                logger.debug("Loaded achievement progress for " + allProgress.size() + " players from database");
+            }
+        } catch (Exception e) {
+            logger.warning("Failed to load achievement progress from database: " + e.getMessage());
+        }
 
-        logger.info("AchievementManager initialized with " + achievements.size() + " achievements");
+        logger.debug("AchievementManager initialized with " + achievements.size() + " achievements");
     }
 
     /**
@@ -212,6 +232,9 @@ public class AchievementManager {
             handleAchievementUnlock(player, achievementId, progress);
         }
 
+        // Persist progress to database
+        persistProgress(progress);
+
         return completed;
     }
 
@@ -235,7 +258,7 @@ public class AchievementManager {
     }
 
     /**
-     * Handle achievement unlock: fire event, notify, grant rewards.
+     * Handle achievement unlock: fire event, notify (with preference checks), grant rewards.
      */
     private void handleAchievementUnlock(Player player, String achievementId, AchievementProgress progress) {
         Achievement achievement = achievements.get(achievementId);
@@ -252,7 +275,7 @@ public class AchievementManager {
             return;
         }
 
-        // Send notification
+        // Send notification with preference checks
         if (!event.isSuppressNotification() && enableNotifications) {
             sendUnlockNotification(player, achievement);
         }
@@ -262,13 +285,81 @@ public class AchievementManager {
             grantRewards(player, achievement);
         }
 
-        logger.info(player.getName() + " unlocked achievement: " + achievement.getName());
+        logger.debug(player.getName() + " unlocked achievement: " + achievement.getName());
     }
 
     /**
      * Send unlock notification to player.
+     * Respects PlayerPreferencesService if available, falls back to config-based settings.
      */
     private void sendUnlockNotification(Player player, Achievement achievement) {
+        PlayerPreferencesService prefs = RVNKCore.getServiceSafe(PlayerPreferencesService.class);
+        if (prefs != null) {
+            UUID playerId = player.getUniqueId();
+
+            // Check if achievement notifications are enabled for this player
+            prefs.isNotificationEnabled(playerId, "rvnklore", "achievement")
+                .thenAccept(enabled -> {
+                    if (!enabled) {
+                        logger.debug("Achievement notification suppressed for " + player.getName() +
+                                " (notifications disabled in preferences)");
+                        return;
+                    }
+
+                    // Check individual channel preferences
+                    CompletableFuture<Boolean> titleEnabled = prefs.isChannelEnabled(playerId, "rvnklore", "achievement", "TITLE");
+                    CompletableFuture<Boolean> chatEnabled = prefs.isChannelEnabled(playerId, "rvnklore", "achievement", "CHAT");
+                    CompletableFuture<Boolean> soundEnabled = prefs.isChannelEnabled(playerId, "rvnklore", "achievement", "SOUND");
+
+                    CompletableFuture.allOf(titleEnabled, chatEnabled, soundEnabled)
+                        .thenRun(() -> {
+                            try {
+                                if (titleEnabled.join()) {
+                                    player.sendTitle(
+                                        ChatColor.GOLD + "Achievement Unlocked!",
+                                        ChatColor.YELLOW + achievement.getName(),
+                                        10, 40, 10
+                                    );
+                                }
+                                if (chatEnabled.join()) {
+                                    player.sendMessage("");
+                                    player.sendMessage(ChatColor.GOLD + "★ " + ChatColor.BOLD + "Achievement Unlocked!" + ChatColor.GOLD + " ★");
+                                    player.sendMessage(ChatColor.YELLOW + achievement.getName());
+                                    player.sendMessage(ChatColor.GRAY + achievement.getDescription());
+                                    player.sendMessage(ChatColor.DARK_GRAY + "+" + achievement.getPoints() + " achievement points");
+                                    player.sendMessage("");
+                                }
+                                if (soundEnabled.join()) {
+                                    player.playSound(player.getLocation(), Sound.UI_TOAST_CHALLENGE_COMPLETE, 1.0f, 1.0f);
+                                }
+                            } catch (Exception e) {
+                                logger.debug("Error sending achievement notification: " + e.getMessage());
+                            }
+                        })
+                        .exceptionally(ex -> {
+                            logger.debug("Error checking achievement notification preferences: " + ex.getMessage());
+                            // Fallback to config-based settings
+                            sendUnlockNotificationFallback(player, achievement);
+                            return null;
+                        });
+                })
+                .exceptionally(ex -> {
+                    logger.debug("Error checking achievement notification enable status: " + ex.getMessage());
+                    // Fallback to config-based settings
+                    sendUnlockNotificationFallback(player, achievement);
+                    return null;
+                });
+        } else {
+            // No preferences service available - use config flags
+            sendUnlockNotificationFallback(player, achievement);
+        }
+    }
+
+    /**
+     * Send unlock notification using config-based settings (fallback).
+     * Used when PlayerPreferencesService is not available.
+     */
+    private void sendUnlockNotificationFallback(Player player, Achievement achievement) {
         // Title
         player.sendTitle(
             ChatColor.GOLD + "Achievement Unlocked!",
@@ -426,15 +517,40 @@ public class AchievementManager {
     }
 
     /**
+     * Persist a single progress entry to the database.
+     */
+    private void persistProgress(AchievementProgress progress) {
+        if (achievementRepository != null) {
+            achievementRepository.saveProgress(progress).exceptionally(ex -> {
+                logger.warning("Failed to persist achievement progress: " + ex.getMessage());
+                return false;
+            });
+        }
+    }
+
+    /**
      * Shutdown the achievement manager.
      */
     public void shutdown() {
-        // Save progress to database
-        // TODO: Implement persistence
+        // Save all progress to database
+        if (achievementRepository != null) {
+            int saved = 0;
+            for (Map.Entry<UUID, Map<String, AchievementProgress>> playerEntry : playerProgress.entrySet()) {
+                for (AchievementProgress progress : playerEntry.getValue().values()) {
+                    try {
+                        achievementRepository.saveProgress(progress).join();
+                        saved++;
+                    } catch (Exception e) {
+                        logger.warning("Failed to save progress on shutdown: " + e.getMessage());
+                    }
+                }
+            }
+            logger.debug("Saved " + saved + " achievement progress records to database");
+        }
 
         achievements.clear();
         playerProgress.clear();
         rewardHandlers.clear();
-        logger.info("AchievementManager shutdown complete");
+        logger.debug("AchievementManager shutdown complete");
     }
 }

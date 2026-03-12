@@ -28,8 +28,8 @@ public class LoreBookSubCommand implements SubCommand {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "LoreBookSubCommand");
 
-        // Initialize book manager
-        this.bookManager = new LoreBookManager(plugin);
+        // Use plugin-level singleton to avoid double-instantiation
+        this.bookManager = plugin.getLoreBookManager();
 
         // Register child commands
         this.subCommands = new HashMap<>();

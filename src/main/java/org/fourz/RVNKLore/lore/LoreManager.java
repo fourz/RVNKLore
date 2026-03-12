@@ -50,22 +50,21 @@ public class LoreManager implements ILoreService {
      * Initialize the lore system and load handlers
      */    public void initializeLore() {
         if (initializing) {
-            logger.info("Lore system initialization already in progress, skipping recursive call");
+            logger.debug("Lore system initialization already in progress, skipping recursive call");
             return;
         }
         try {
             initializing = true;
-            logger.info("Initializing lore system...");
+            logger.debug("Initializing lore system...");
 
             // Initialize the unified item management system
             this.itemManager = new ItemManager(plugin);
-            logger.info("Item management system initialized");
 
             // First load entries from database (doesn't require handlers)
             loadLoreEntries();
             // Then create the LoreFinder (should be after entries are loaded)
             this.loreFinder = new LoreFinder(plugin, this);
-            logger.info("Lore system initialized successfully");
+            logger.debug("Lore system initialized successfully");
         } catch (Exception e) {
             logger.error("Error initializing lore system", e);
         } finally {
@@ -77,7 +76,7 @@ public class LoreManager implements ILoreService {
      * Load all lore entries from the database
      */
     private void loadLoreEntries() {
-        logger.info("Loading lore entries from database...");
+        logger.debug("Loading lore entries from database...");
         cachedEntries.clear();
         List<LoreEntry> entries = plugin.getDatabaseManager().getAllLoreEntries();
         cachedEntries.addAll(entries);
@@ -85,7 +84,7 @@ public class LoreManager implements ILoreService {
         for (LoreEntry entry : entries) {
             loreByType.get(entry.getType()).add(entry);
         }
-        logger.info("Loaded " + cachedEntries.size() + " lore entries");
+        logger.debug("Loaded " + cachedEntries.size() + " lore entries");
     }    /**
      * Add a new lore entry (synchronous internal method).
      *
@@ -101,7 +100,7 @@ public class LoreManager implements ILoreService {
             logger.warning("Lore entry has null type: " + entry.getName());
             return false;
         }
-        logger.info("Adding lore entry: " + entry.getName() + " of type " + entry.getType());
+        logger.debug("Adding lore entry: " + entry.getName() + " of type " + entry.getType());
         // Validate the entry using the appropriate handler from HandlerFactory
         LoreHandler handler = plugin.getHandlerFactory().getHandler(entry.getType());
         if (handler == null) {
@@ -119,31 +118,63 @@ public class LoreManager implements ILoreService {
         if (success) {
             cachedEntries.add(entry);
             loreByType.get(entry.getType()).add(entry);
-            logger.info("Lore entry added successfully: " + entry.getId());
+            logger.debug("Lore entry added successfully: " + entry.getId());
               // For ITEM type entries, register the item in the ItemManager
             if (entry.getType() == LoreType.ITEM && itemManager != null) {
                 try {
-                    // Create basic item properties
-                    org.fourz.RVNKLore.lore.item.ItemProperties itemProps =
-                        new org.fourz.RVNKLore.lore.item.ItemProperties(
-                            org.bukkit.Material.valueOf("DIAMOND_SWORD"), // Default, should be extracted from entry
-                            entry.getName()
-                        );
+                    // Resolve material from entry metadata (set by LoreAddSubCommand)
+                    org.bukkit.Material material = org.bukkit.Material.DIAMOND_SWORD;
+                    String materialName = entry.getMetadata("material");
+                    if (materialName != null) {
+                        try {
+                            material = org.bukkit.Material.valueOf(materialName);
+                        } catch (IllegalArgumentException ignored) {}
+                    }
 
-                    // Set additional properties
-                    itemProps.setLoreEntryId(entry.getId()); // Important: Link to lore entry ID
+                    org.fourz.RVNKLore.lore.item.ItemProperties itemProps =
+                        new org.fourz.RVNKLore.lore.item.ItemProperties(material, entry.getName());
+
+                    itemProps.setLoreEntryId(entry.getId());
                     if (entry.getNbtData() != null) {
                         itemProps.setNbtData(entry.getNbtData());
                     }
-                      // Register the item with reference to lore_entry.id
-                    // Use the entry ID to link items to lore entries
-                    java.util.UUID entryUUID = java.util.UUID.fromString(entry.getId());
-                    itemManager.registerLoreItem(entryUUID, itemProps);
 
-                    logger.info("Registered item in ItemManager: " + entry.getName() + " with lore entry ID: " + entry.getId());
+                    java.util.UUID entryUUID = java.util.UUID.fromString(entry.getId());
+                    boolean itemSuccess = itemManager.registerLoreItem(entryUUID, itemProps).join();
+
+                    if (!itemSuccess) {
+                        // Rollback: remove lore_entry since item registration failed
+                        logger.warning("Item registration failed for: " + entry.getName() + " - rolling back lore entry");
+                        plugin.getDatabaseManager().deleteLoreEntry(entryUUID);
+                        cachedEntries.remove(entry);
+                        loreByType.get(entry.getType()).remove(entry);
+                        entry.addMetadata("validation_errors", "Item registration failed in database");
+                        return false;
+                    }
+
+                    logger.debug("Registered item in ItemManager: " + entry.getName() + " with lore entry ID: " + entry.getId());
                 } catch (Exception e) {
+                    // Rollback: remove lore_entry since item registration failed
                     logger.warning("Failed to register item in ItemManager: " + e.getMessage());
-                    // Continue even if item registration fails
+                    try {
+                        java.util.UUID entryUUID = java.util.UUID.fromString(entry.getId());
+                        plugin.getDatabaseManager().deleteLoreEntry(entryUUID);
+                        cachedEntries.remove(entry);
+                        loreByType.get(entry.getType()).remove(entry);
+                    } catch (Exception rollbackEx) {
+                        logger.warning("Rollback failed: " + rollbackEx.getMessage());
+                    }
+                    entry.addMetadata("validation_errors", "Item registration failed: " + e.getMessage());
+                    return false;
+                }
+            }
+
+            // Create Dynmap marker if integration is available
+            if (plugin.isDynmapAvailable()) {
+                try {
+                    plugin.getDynmapIntegration().getMarkerManager().createOrUpdateMarker(entry);
+                } catch (Exception e) {
+                    logger.debug("Failed to create Dynmap marker: " + e.getMessage());
                 }
             }
         } else {
@@ -210,10 +241,23 @@ public class LoreManager implements ILoreService {
             logger.warning("Attempted to approve non-existent lore entry: " + id);
             return false;
         }
-        entry.setApproved(true);
-        boolean success = plugin.getDatabaseManager().updateLoreEntry(entry);
+
+        // Use the dedicated approval method that only updates approval_status.
+        // Previously this called updateLoreEntry() which created a new submission
+        // version, causing slug UNIQUE constraint violations (bug-01/bug-02).
+        boolean success = plugin.getDatabaseManager().approveLoreEntry(id.toString(), "Server");
         if (success) {
-            logger.info("Lore entry approved: " + id);
+            entry.setApproved(true);
+            logger.debug("Lore entry approved: " + id);
+
+            // Create Dynmap marker now that entry is approved
+            if (plugin.isDynmapAvailable()) {
+                try {
+                    plugin.getDynmapIntegration().getMarkerManager().createOrUpdateMarker(entry);
+                } catch (Exception e) {
+                    logger.debug("Failed to create Dynmap marker on approval: " + e.getMessage());
+                }
+            }
         } else {
             logger.warning("Failed to approve lore entry: " + id);
         }
@@ -224,7 +268,7 @@ public class LoreManager implements ILoreService {
      * Reload all lore entries from the database
      */
     public void reloadLore() {
-        logger.info("Reloading lore entries...");
+        logger.debug("Reloading lore entries...");
         loadLoreEntries();
     }
 
@@ -269,7 +313,7 @@ public class LoreManager implements ILoreService {
      * Clean up resources when the plugin is disabled
      */
     public void cleanup() {
-        logger.info("Cleaning up lore manager...");
+        logger.debug("Cleaning up lore manager...");
 
         // Cleanup item manager first
         if (itemManager != null) {
@@ -411,7 +455,7 @@ public class LoreManager implements ILoreService {
      * @return The lore entry, or null if not found
      */
     public LoreEntry getLoreEntryByNameSync(String name) {
-        logger.info("Looking up lore entry by name: " + name);
+        logger.debug("Looking up lore entry by name: " + name);
 
         return cachedEntries.stream()
             .filter(entry -> entry.getName().equalsIgnoreCase(name))

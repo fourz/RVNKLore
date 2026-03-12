@@ -35,10 +35,10 @@ public class PermissionRewardHandler implements RewardHandler {
                 Method getMethod = providerClass.getMethod("get");
                 luckPermsApi = getMethod.invoke(null);
                 luckPermsAvailable = true;
-                logger.info("LuckPerms integration enabled");
+                logger.debug("LuckPerms integration enabled");
             } else {
                 luckPermsAvailable = false;
-                logger.info("LuckPerms not found - permission rewards will use fallback");
+                logger.debug("LuckPerms not found - permission rewards will use fallback");
             }
         } catch (Exception e) {
             luckPermsAvailable = false;
@@ -99,7 +99,7 @@ public class PermissionRewardHandler implements RewardHandler {
                 Method saveUser = userManager.getClass().getMethod("saveUser", user.getClass().getInterfaces()[0]);
                 saveUser.invoke(userManager, user);
 
-                logger.info("Granted permission via LuckPerms to " + player.getName() + ": " + permission);
+                logger.debug("Granted permission via LuckPerms to " + player.getName() + ": " + permission);
                 return true;
             }
         } catch (Exception e) {
@@ -114,7 +114,7 @@ public class PermissionRewardHandler implements RewardHandler {
         plugin.getServer().getScheduler().runTask(plugin, () -> {
             Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command);
         });
-        logger.info("Granted permission via command to " + player.getName() + ": " + permission);
+        logger.debug("Granted permission via command to " + player.getName() + ": " + permission);
         return true;
     }
 

@@ -27,7 +27,7 @@ public class EnchantManager {
         this.logger = LogManager.getInstance(plugin, "EnchantManager");
         this.generator = new EnchantedItemGenerator(plugin);
         
-        logger.info("EnchantManager initialized");
+        logger.debug("EnchantManager initialized");
     }
     
     /**
@@ -182,6 +182,6 @@ public class EnchantManager {
      * Shutdown the enchant manager and clean up resources.
      */
     public void shutdown() {
-        logger.info("EnchantManager shutdown");
+        logger.debug("EnchantManager shutdown");
     }
 }

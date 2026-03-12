@@ -37,12 +37,6 @@ public class LoreCollectionListSubCommand implements SubCommand {
 
     @Override
     public boolean execute(CommandSender sender, String[] args) {
-        if (!(sender instanceof Player)) {
-            sender.sendMessage(ChatColor.RED + "â–¶ This command can only be used by players");
-            return true;
-        }
-        Player player = (Player) sender;
-
         String themeFilter = null;
         if (args.length > 0) {
             themeFilter = args[0];
@@ -52,8 +46,10 @@ public class LoreCollectionListSubCommand implements SubCommand {
         if (themeFilter != null) {
             CollectionTheme theme = CollectionTheme.fromDisplayName(themeFilter);
             if (theme == null || theme == CollectionTheme.CUSTOM) {
-                player.sendMessage(ChatColor.RED + "âœ– Unknown theme: " + themeFilter);
-                listThemes(player);
+                sender.sendMessage(ChatColor.RED + "Unknown theme: " + themeFilter);
+                if (sender instanceof Player) {
+                    listThemes((Player) sender);
+                }
                 return true;
             }
             for (ItemCollection collection : collectionManager.getAllCollectionsSync().values()) {
@@ -68,8 +64,16 @@ public class LoreCollectionListSubCommand implements SubCommand {
         // Sort newest to oldest
         collectionsToShow.sort(Comparator.comparingLong(ItemCollection::getCreatedAt).reversed());
 
-        // Output via DisplayFactory
-        DisplayFactory.displayCollectionList(player, collectionsToShow);
+        // Output via DisplayFactory (player only) or console output
+        if (sender instanceof Player) {
+            DisplayFactory.displayCollectionList((Player) sender, collectionsToShow);
+        } else {
+            // Console output: simple list format
+            sender.sendMessage(ChatColor.YELLOW + "Collections (" + collectionsToShow.size() + " total):");
+            for (ItemCollection collection : collectionsToShow) {
+                sender.sendMessage("  - [" + collection.getId() + "] " + collection.getName() + " (" + collection.getItemCount() + " items)");
+            }
+        }
 
         return true;
     }

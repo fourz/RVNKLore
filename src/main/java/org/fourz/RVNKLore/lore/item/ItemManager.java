@@ -47,36 +47,23 @@ public class ItemManager implements IItemService {
     public ItemManager(RVNKLore plugin) {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "ItemManager");
-        logger.info("Initializing ItemManager...");
-
         // Initialize database repository
         if (plugin.getDatabaseManager() != null && plugin.getDatabaseManager().isConnected()) {
             DatabaseConnection dbConnection = plugin.getDatabaseManager().getDatabaseConnection();
             if (dbConnection != null) {
                 this.itemRepository = new ItemRepository(plugin, dbConnection);
-                logger.info("ItemRepository initialized");
             } else {
                 logger.warning("Database connection is null, ItemRepository will not be available");
             }
         } else {
             logger.warning("Database not available - some item features may be limited");
         }
-        
-        // Initialize cosmetic manager
+
+        // Initialize subsystems
         this.cosmeticItem = new CosmeticsManager(plugin);
-        logger.info("CosmeticItem initialized");
-        
-        // Initialize enchant manager
         this.enchantManager = new EnchantManager(plugin);
-        logger.info("EnchantManager initialized");
-        
-        // Initialize model data manager
         this.modelDataManager = new CustomModelDataManager(plugin);
-        logger.info("ModelDataManager initialized");
-        
-        // Initialize collection manager after other managers
         this.collectionManager = new CollectionManager(plugin);
-        logger.info("CollectionManager initialized");
         
         // Initial cache load in async task to avoid blocking startup
         plugin.getServer().getScheduler().runTaskAsynchronously(plugin, this::initializeCache);
@@ -343,7 +330,7 @@ public class ItemManager implements IItemService {
         }
         
         try {
-            logger.info("Initializing item cache from database...");
+            logger.debug("Initializing item cache from database...");
             
             itemNameCache.clear();
             collectionCache.clear();
@@ -365,7 +352,7 @@ public class ItemManager implements IItemService {
             }
             
             cacheInitialized = true;
-            logger.info("Item cache initialized with " + itemNameCache.size() + " item names and " + collectionCache.size() + " collections");
+            logger.debug("Item cache initialized with " + itemNameCache.size() + " item names and " + collectionCache.size() + " collections");
         } catch (Exception e) {
             logger.error("Error initializing item cache", e);
         }
@@ -382,25 +369,18 @@ public class ItemManager implements IItemService {
      * Shutdown all sub-managers and clean up resources.
      */
     public void shutdown() {
-        logger.info("Shutting down ItemManager...");
-        
         if (modelDataManager != null) {
             modelDataManager.shutdown();
         }
-        
         if (collectionManager != null) {
             collectionManager.shutdown();
         }
-        
         if (cosmeticItem != null) {
             cosmeticItem.shutdown();
         }
-        
         if (enchantManager != null) {
             enchantManager.shutdown();
         }
-        
-        logger.info("ItemManager shutdown complete");
     }
     
     /**
@@ -478,7 +458,7 @@ public class ItemManager implements IItemService {
             logger.warning("Cannot register lore item with null ID or properties");
             return false;
         }
-        logger.info("Registering lore item: " + properties.getDisplayName() + " with lore entry ID: " + loreEntryId);
+        logger.debug("Registering lore item: " + properties.getDisplayName() + " with lore entry ID: " + loreEntryId);
         // Add lore entry ID reference to item properties
         properties.setLoreEntryId(loreEntryId.toString());
         // Store in database
@@ -491,7 +471,7 @@ public class ItemManager implements IItemService {
                     itemNameCache.computeIfAbsent(key, k -> new ArrayList<>()).add(properties);
                     // Add to loreEntryId cache
                     loreEntryIdCache.put(loreEntryId.toString(), properties);
-                    logger.info("Registered item in database with ID: " + itemId);
+                    logger.debug("Registered item in database with ID: " + itemId);
                     return true;
                 } else {
                     logger.warning("Failed to insert item into database");

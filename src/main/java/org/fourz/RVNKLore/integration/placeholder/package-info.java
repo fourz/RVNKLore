@@ -34,7 +34,7 @@
  * }</pre>
  *
  * @see org.fourz.RVNKLore.integration.placeholder.RVNKLorePlaceholderExpansion
- * @see org.fourz.RVNKLore.service.IPlayerService
+ * @see org.fourz.RVNKLore.service.IPlayerLoreService
  * @see org.fourz.RVNKLore.service.ILoreService
  * @see org.fourz.RVNKLore.service.ICollectionService
  * @since feat-06 PlaceholderAPI Integration

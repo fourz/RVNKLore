@@ -56,7 +56,7 @@ public class CustomModelDataManager {
         this.logger = LogManager.getInstance(plugin, "ModelDataManager");
         
         initializeCategoryCounters();
-        logger.info("ModelDataManager initialized");
+        logger.debug("ModelDataManager initialized");
     }
     
     /**
@@ -102,7 +102,7 @@ public class CustomModelDataManager {
         itemModelIds.put(itemKey, modelId);
         modelIdItems.put(modelId, itemKey);
         
-        logger.info("Allocated model ID " + modelId + " to item: " + itemKey + " (category: " + category + ")");
+        logger.debug("Allocated model ID " + modelId + " to item: " + itemKey + " (category: " + category + ")");
         return modelId;
     }
     
@@ -211,7 +211,7 @@ public class CustomModelDataManager {
         Integer modelId = itemModelIds.remove(itemKey);
         if (modelId != null) {
             modelIdItems.remove(modelId);
-            logger.info("Released model ID " + modelId + " for item: " + itemKey);
+            logger.debug("Released model ID " + modelId + " for item: " + itemKey);
             return true;
         }
         return false;
@@ -243,6 +243,6 @@ public class CustomModelDataManager {
         itemModelIds.clear();
         modelIdItems.clear();
         categoryCounters.clear();
-        logger.info("ModelDataManager shutdown");
+        logger.debug("ModelDataManager shutdown");
     }
 }

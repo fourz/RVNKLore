@@ -30,7 +30,7 @@ public class PlayerJoinLoreHandler extends DefaultLoreHandler {
     }
       @Override
     public void initialize() {
-        logger.info("Initializing player join event handler - this is the primary handler for PlayerJoinEvent");
+        logger.debug("Initializing player join event handler - this is the primary handler for PlayerJoinEvent");
     }    /**
      * Handle player join events - only logs for first joins and name changes
      */
@@ -45,7 +45,7 @@ public class PlayerJoinLoreHandler extends DefaultLoreHandler {
             
             // Only log if an action was taken (first join or name change)
             if (processed) {
-                logger.info("Player join event created lore entry for: " + player.getName());
+                logger.debug("Player join event created lore entry for: " + player.getName());
             }
         } catch (Exception e) {
             logger.error("Error processing player join event: " + player.getName(), e);

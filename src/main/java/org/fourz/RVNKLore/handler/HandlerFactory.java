@@ -3,6 +3,10 @@ package org.fourz.RVNKLore.handler;
 import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.PluginManager;
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.handler.event.AnvilArtifactLoreHandler;
+import org.fourz.RVNKLore.handler.event.ArmorStandLoreHandler;
+import org.fourz.RVNKLore.handler.event.BossKillLoreHandler;
+import org.fourz.RVNKLore.handler.event.LecternBookLoreHandler;
 import org.fourz.RVNKLore.handler.event.PlayerDeathLoreHandler;
 import org.fourz.RVNKLore.handler.PlayerLoreHandler;
 
@@ -90,22 +94,41 @@ public class HandlerFactory {
             // Event-specific handlers - register these first to ensure they take precedence
             handlerClasses.put("PLAYER_JOIN", PlayerJoinLoreHandler.class);
             handlerClasses.put("PLAYER_DEATH", PlayerDeathLoreHandler.class);
+            handlerClasses.put("ANVIL_ARTIFACT", AnvilArtifactLoreHandler.class);
+            handlerClasses.put("ARMOR_STAND", ArmorStandLoreHandler.class);
+            handlerClasses.put("BOSS_KILL", BossKillLoreHandler.class);
+            handlerClasses.put("LECTERN_BOOK", LecternBookLoreHandler.class);
             
             // Core handlers - only register the ones we have actual implementations for
             handlerClasses.put("GENERIC", DefaultLoreHandler.class);
             handlerClasses.put("PLAYER", PlayerLoreHandler.class);
             handlerClasses.put("CITY", CityLoreHandler.class);
             handlerClasses.put("LANDMARK", LandmarkLoreHandler.class);
+            handlerClasses.put("MONUMENT", MonumentLoreHandler.class);
             handlerClasses.put("PATH", PathLoreHandler.class);
             handlerClasses.put("FACTION", FactionLoreHandler.class);
             handlerClasses.put("ITEM", ItemLoreHandler.class);
-            handlerClasses.put("ENCHANTED_ITEM", EnchantedItemLoreHandler.class);
+            handlerClasses.put("EVENT", EventLoreHandler.class);
+            handlerClasses.put("ENCHANTMENT", EnchantedItemLoreHandler.class);
             
             // Replace individual head handlers with the unified CommonHeadHandler
             handlerClasses.put("HEAD", CommonHeadHandler.class);
-            
+
+            // Quest handler
+            handlerClasses.put("QUEST", QuestLoreHandler.class);
+
+            // Location-based handlers
+            handlerClasses.put("TAVERN", TavernLoreHandler.class);
+            handlerClasses.put("GUILD", GuildLoreHandler.class);
+            handlerClasses.put("SHRINE", ShrineLoreHandler.class);
+
             // Sign handlers
             handlerClasses.put("SIGN_LANDMARK", org.fourz.RVNKLore.handler.sign.HandlerSignLandmark.class);
+            handlerClasses.put("SIGN_MONUMENT", org.fourz.RVNKLore.handler.sign.HandlerSignMonument.class);
+            handlerClasses.put("SIGN_TAVERN", org.fourz.RVNKLore.handler.sign.HandlerSignTavern.class);
+            handlerClasses.put("SIGN_GUILD", org.fourz.RVNKLore.handler.sign.HandlerSignGuild.class);
+            handlerClasses.put("SIGN_SHRINE", org.fourz.RVNKLore.handler.sign.HandlerSignShrine.class);
+            handlerClasses.put("SIGN_CITY", org.fourz.RVNKLore.handler.sign.HandlerSignCity.class);
             
             // Check for missing handlers but don't log warnings yet - will use default
             for (LoreType type : LoreType.values()) {
@@ -125,8 +148,9 @@ public class HandlerFactory {
     private void preCreateCoreHandlers() {
         logger.debug("Pre-creating core handlers");
         LoreType[] coreTypes = {
-            LoreType.GENERIC, LoreType.CITY, 
-            LoreType.LANDMARK, LoreType.FACTION, LoreType.EVENT
+            LoreType.GENERIC, LoreType.CITY,
+            LoreType.LANDMARK, LoreType.FACTION, LoreType.EVENT,
+            LoreType.ENCHANTMENT // Pre-create so @EventHandler onItemEnchant is registered
         };
         
         for (LoreType type : coreTypes) {
@@ -137,11 +161,11 @@ public class HandlerFactory {
                         logger.debug("No handler class for " + type + ", using default");
                         handlerClass = DefaultLoreHandler.class;
                     }
-                    
+
                     // Direct instantiation without initialization to avoid circular dependencies
                     LoreHandler handler = handlerClass.getConstructor(RVNKLore.class).newInstance(plugin);
                     handlerCache.put(type, handler);
-                    
+
                     // Register as listener but don't initialize yet
                     if (!registeredListeners.contains(handler)) {
                         PluginManager pm = plugin.getServer().getPluginManager();
@@ -151,6 +175,28 @@ public class HandlerFactory {
                 } catch (Exception e) {
                     logger.error("Failed to pre-create handler for " + type, e);
                 }
+            }
+        }
+
+        // Create event-driven handlers that need listener registration
+        // These aren't tied to a LoreType but must receive Bukkit events
+        String[] eventHandlerKeys = {
+            "ANVIL_ARTIFACT", "ARMOR_STAND", "BOSS_KILL", "LECTERN_BOOK", "PLAYER_DEATH", "PLAYER_JOIN",
+            "SIGN_LANDMARK", "SIGN_MONUMENT", "SIGN_TAVERN", "SIGN_GUILD", "SIGN_SHRINE",
+            "SIGN_CITY"
+        };
+        for (String key : eventHandlerKeys) {
+            try {
+                Class<? extends LoreHandler> handlerClass = handlerClasses.get(key);
+                if (handlerClass != null) {
+                    LoreHandler handler = handlerClass.getConstructor(RVNKLore.class).newInstance(plugin);
+                    PluginManager pm = plugin.getServer().getPluginManager();
+                    pm.registerEvents(handler, plugin);
+                    registeredListeners.add(handler);
+                    logger.debug("Registered event handler: " + key);
+                }
+            } catch (Exception e) {
+                logger.error("Failed to create event handler: " + key, e);
             }
         }
     }
@@ -255,6 +301,19 @@ public class HandlerFactory {
      */
     public Map<LoreType, LoreHandler> getAllHandlers() {
         return new EnumMap<>(handlerCache);
+    }
+
+    /**
+     * Get all registered handler class names, including those not yet instantiated.
+     *
+     * @return Map of handler key names to their implementation class names
+     */
+    public Map<String, String> getRegisteredHandlerClasses() {
+        Map<String, String> result = new java.util.LinkedHashMap<>();
+        for (Map.Entry<String, Class<? extends LoreHandler>> entry : handlerClasses.entrySet()) {
+            result.put(entry.getKey(), entry.getValue().getSimpleName());
+        }
+        return result;
     }
     
     /**

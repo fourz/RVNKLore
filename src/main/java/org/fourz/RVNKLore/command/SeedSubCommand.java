@@ -1,11 +1,12 @@
 package org.fourz.RVNKLore.command;
 
-import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.data.DatabaseManager;
 import org.fourz.RVNKLore.data.LoreTestDataGenerator;
 import org.fourz.rvnkcore.testing.TestDataGenerator.DataCategory;
+import org.fourz.rvnkcore.util.chat.ChatService;
+import org.fourz.rvnkcore.util.log.LogManager;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -30,11 +31,15 @@ public class SeedSubCommand implements SubCommand {
     private static final String PERMISSION = "rvnklore.admin.seed";
 
     private final RVNKLore plugin;
+    private final LogManager logger;
+    private final ChatService chatService;
     private LoreTestDataGenerator generator;
     private boolean seeding = false;
 
     public SeedSubCommand(RVNKLore plugin) {
         this.plugin = plugin;
+        this.logger = LogManager.getInstance(plugin, "SeedSubCommand");
+        this.chatService = new ChatService();
     }
 
     @Override
@@ -50,7 +55,7 @@ public class SeedSubCommand implements SubCommand {
     @Override
     public boolean execute(CommandSender sender, String[] args) {
         if (!hasPermission(sender)) {
-            sender.sendMessage(ChatColor.RED + "You don't have permission to use this command.");
+            chatService.sendError(sender, "You don't have permission to use this command.");
             return true;
         }
 
@@ -64,7 +69,7 @@ public class SeedSubCommand implements SubCommand {
         // Initialize generator if needed
         DatabaseManager dbManager = plugin.getDatabaseManager();
         if (dbManager == null || !dbManager.isConnected()) {
-            sender.sendMessage(ChatColor.RED + "Database is not available. Cannot perform seed operations.");
+            chatService.sendError(sender, "Database is not available. Cannot perform seed operations.");
             return true;
         }
 
@@ -85,42 +90,42 @@ public class SeedSubCommand implements SubCommand {
             case "status":
                 return executeStatus(sender);
             default:
-                sender.sendMessage(ChatColor.RED + "Unknown action: " + action);
+                chatService.sendError(sender, "Unknown action: " + action);
                 showUsage(sender);
                 return true;
         }
     }
 
     private void showUsage(CommandSender sender) {
-        sender.sendMessage(ChatColor.GOLD + "=== Lore Seed Commands ===");
-        sender.sendMessage(ChatColor.GRAY + "/lore debug seed minimal" + ChatColor.DARK_GRAY + " - Seed 10 base records");
-        sender.sendMessage(ChatColor.GRAY + "/lore debug seed standard" + ChatColor.DARK_GRAY + " - Seed 100 base records");
-        sender.sendMessage(ChatColor.GRAY + "/lore debug seed stress" + ChatColor.DARK_GRAY + " - Seed 1000 base records");
-        sender.sendMessage(ChatColor.GRAY + "/lore debug seed cleanup" + ChatColor.DARK_GRAY + " - Remove all test data");
-        sender.sendMessage(ChatColor.GRAY + "/lore debug seed cleanup <uuid>" + ChatColor.DARK_GRAY + " - Remove player's test data");
-        sender.sendMessage(ChatColor.GRAY + "/lore debug seed status" + ChatColor.DARK_GRAY + " - Show current status");
+        chatService.sendMessage(sender, "&6=== Lore Seed Commands ===");
+        chatService.sendMessage(sender, "&7/lore debug seed minimal&8 - Seed 10 base records");
+        chatService.sendMessage(sender, "&7/lore debug seed standard&8 - Seed 100 base records");
+        chatService.sendMessage(sender, "&7/lore debug seed stress&8 - Seed 1000 base records");
+        chatService.sendMessage(sender, "&7/lore debug seed cleanup&8 - Remove all test data");
+        chatService.sendMessage(sender, "&7/lore debug seed cleanup <uuid>&8 - Remove player's test data");
+        chatService.sendMessage(sender, "&7/lore debug seed status&8 - Show current status");
     }
 
     private boolean executeSeed(CommandSender sender, DataCategory category) {
         if (seeding) {
-            sender.sendMessage(ChatColor.RED + "A seed operation is already in progress.");
+            chatService.sendError(sender, "A seed operation is already in progress.");
             return true;
         }
 
         seeding = true;
-        sender.sendMessage(ChatColor.GOLD + "Seeding " + category.name() + " test data...");
+        chatService.sendInfo(sender, "Seeding " + category.name() + " test data...");
 
         generator.seed(category).thenAccept(count -> {
             seeding = false;
             if (count > 0) {
-                sender.sendMessage(ChatColor.GREEN + "Seed complete: " + count + " total records created");
+                chatService.sendSuccess(sender, "Seed complete: " + count + " total records created");
             } else {
-                sender.sendMessage(ChatColor.RED + "Seed failed. Check console for details.");
+                chatService.sendError(sender, "Seed failed. Check console for details.");
             }
         }).exceptionally(ex -> {
             seeding = false;
-            sender.sendMessage(ChatColor.RED + "Seed failed: " + ex.getMessage());
-            plugin.getLogger().severe("Seed operation failed: " + ex.getMessage());
+            chatService.sendError(sender, "Seed failed: " + ex.getMessage());
+            logger.error("Seed operation failed: " + ex.getMessage());
             return null;
         });
 
@@ -129,24 +134,24 @@ public class SeedSubCommand implements SubCommand {
 
     private boolean executeCleanup(CommandSender sender) {
         if (seeding) {
-            sender.sendMessage(ChatColor.RED + "A seed operation is in progress. Wait for it to complete.");
+            chatService.sendError(sender, "A seed operation is in progress. Wait for it to complete.");
             return true;
         }
 
         seeding = true;
-        sender.sendMessage(ChatColor.GOLD + "Cleaning up all test data...");
+        chatService.sendInfo(sender, "Cleaning up all test data...");
 
         generator.cleanup().thenAccept(success -> {
             seeding = false;
             if (success) {
-                sender.sendMessage(ChatColor.GREEN + "Cleanup complete");
+                chatService.sendSuccess(sender, "Cleanup complete");
             } else {
-                sender.sendMessage(ChatColor.RED + "Cleanup failed. Check console for details.");
+                chatService.sendError(sender, "Cleanup failed. Check console for details.");
             }
         }).exceptionally(ex -> {
             seeding = false;
-            sender.sendMessage(ChatColor.RED + "Cleanup failed: " + ex.getMessage());
-            plugin.getLogger().severe("Cleanup operation failed: " + ex.getMessage());
+            chatService.sendError(sender, "Cleanup failed: " + ex.getMessage());
+            logger.error("Cleanup operation failed: " + ex.getMessage());
             return null;
         });
 
@@ -158,25 +163,25 @@ public class SeedSubCommand implements SubCommand {
         try {
             playerUuid = UUID.fromString(uuidStr);
         } catch (IllegalArgumentException e) {
-            sender.sendMessage(ChatColor.RED + "Invalid UUID format: " + uuidStr);
+            chatService.sendError(sender, "Invalid UUID format: " + uuidStr);
             return true;
         }
 
         if (seeding) {
-            sender.sendMessage(ChatColor.RED + "A seed operation is in progress. Wait for it to complete.");
+            chatService.sendError(sender, "A seed operation is in progress. Wait for it to complete.");
             return true;
         }
 
         seeding = true;
-        sender.sendMessage(ChatColor.GOLD + "Cleaning up data for player: " + uuidStr.substring(0, 8) + "...");
+        chatService.sendInfo(sender, "Cleaning up data for player: " + uuidStr.substring(0, 8) + "...");
 
         generator.cleanupByPlayer(playerUuid).thenAccept(count -> {
             seeding = false;
-            sender.sendMessage(ChatColor.GREEN + "Cleaned up " + count + " records for player");
+            chatService.sendSuccess(sender, "Cleaned up " + count + " records for player");
         }).exceptionally(ex -> {
             seeding = false;
-            sender.sendMessage(ChatColor.RED + "Cleanup failed: " + ex.getMessage());
-            plugin.getLogger().severe("Player cleanup operation failed: " + ex.getMessage());
+            chatService.sendError(sender, "Cleanup failed: " + ex.getMessage());
+            logger.error("Player cleanup operation failed: " + ex.getMessage());
             return null;
         });
 
@@ -186,14 +191,14 @@ public class SeedSubCommand implements SubCommand {
     private boolean executeStatus(CommandSender sender) {
         DatabaseManager dbManager = plugin.getDatabaseManager();
 
-        sender.sendMessage(ChatColor.GOLD + "=== Lore Seed Status ===");
-        sender.sendMessage(ChatColor.GRAY + "Database Connected: " + (dbManager != null && dbManager.isConnected() ? ChatColor.GREEN + "Yes" : ChatColor.RED + "No"));
-        sender.sendMessage(ChatColor.GRAY + "Generator Initialized: " + (generator != null ? ChatColor.GREEN + "Yes" : ChatColor.GRAY + "No"));
-        sender.sendMessage(ChatColor.GRAY + "Seeding In Progress: " + (seeding ? ChatColor.YELLOW + "Yes" : ChatColor.GRAY + "No"));
+        chatService.sendMessage(sender, "&6=== Lore Seed Status ===");
+        chatService.sendMessage(sender, "&7Database Connected: " + (dbManager != null && dbManager.isConnected() ? "&aYes" : "&cNo"));
+        chatService.sendMessage(sender, "&7Generator Initialized: " + (generator != null ? "&aYes" : "&7No"));
+        chatService.sendMessage(sender, "&7Seeding In Progress: " + (seeding ? "&eYes" : "&7No"));
 
         if (dbManager != null) {
-            sender.sendMessage(ChatColor.GRAY + "Database Info: " + ChatColor.WHITE + dbManager.getDatabaseInfo());
-            sender.sendMessage(ChatColor.GRAY + "Entry Count: " + ChatColor.WHITE + dbManager.getEntryCount());
+            chatService.sendMessage(sender, "&7Database Info: &f" + dbManager.getDatabaseInfo());
+            chatService.sendMessage(sender, "&7Entry Count: &f" + dbManager.getEntryCount());
         }
 
         return true;

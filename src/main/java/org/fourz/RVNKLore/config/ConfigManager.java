@@ -2,13 +2,18 @@ package org.fourz.RVNKLore.config;
 
 import org.bukkit.configuration.file.FileConfiguration;
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.rvnkcore.config.dto.DatabaseSettingsDTO;
+import org.fourz.rvnkcore.config.dto.MySQLSettingsDTO;
+import org.fourz.rvnkcore.config.dto.SQLiteSettingsDTO;
 import org.fourz.RVNKLore.handler.DefaultLoreHandler;
 import org.fourz.RVNKLore.handler.HandlerFactory;
 import org.fourz.RVNKLore.handler.LoreHandler;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
+import org.bukkit.configuration.ConfigurationSection;
 import org.fourz.rvnkcore.util.log.LogManager;
 
+import java.io.File;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -19,6 +24,7 @@ public class ConfigManager {
     private FileConfiguration config;
     private HandlerFactory handlerFactory;
     private LogManager logger;
+    private DatabaseSettingsDTO databaseSettings;
 
     public ConfigManager(RVNKLore plugin) {
         this.plugin = plugin;
@@ -35,6 +41,15 @@ public class ConfigManager {
         // Apply log level from config to all LogManager instances
         java.util.logging.Level configLevel = getLogLevel();
         updateAllLogManagers(configLevel);
+
+        // Initialize and validate database settings DTO
+        try {
+            this.databaseSettings = createDatabaseSettings();
+            logger.debug("Database configuration validated successfully");
+        } catch (IllegalArgumentException e) {
+            logger.error("Invalid database configuration: " + e.getMessage());
+            logger.warning("Plugin will continue but database features may be unavailable");
+        }
     }
     
     private void validateConfig() {
@@ -77,13 +92,71 @@ public class ConfigManager {
     }
 
     /**
+     * Create DatabaseSettingsDTO from configuration.
+     * Called during initialization and config reload.
+     * @return Configured DatabaseSettingsDTO instance
+     * @throws IllegalArgumentException if configuration is invalid
+     */
+    private DatabaseSettingsDTO createDatabaseSettings() {
+        String storageType = config.getString("storage.type", "sqlite");
+        DatabaseSettingsDTO.DatabaseType type = storageType.equalsIgnoreCase("mysql")
+            ? DatabaseSettingsDTO.DatabaseType.MYSQL
+            : DatabaseSettingsDTO.DatabaseType.SQLITE;
+
+        int connectionTimeout = config.getInt("storage.mysql.connectionTimeout", 30000);
+        int maxRetries = config.getInt("storage.connection.retryAttempts", 5);
+
+        MySQLSettingsDTO mysqlSettings = null;
+        if (type == DatabaseSettingsDTO.DatabaseType.MYSQL) {
+            mysqlSettings = new MySQLSettingsDTO(
+                config.getString("storage.mysql.host", "localhost"),
+                config.getInt("storage.mysql.port", 3306),
+                config.getString("storage.mysql.database", "minecraft"),
+                config.getString("storage.mysql.username", "root"),
+                config.getString("storage.mysql.password", ""),
+                config.getBoolean("storage.mysql.useSSL", false),
+                config.getString("storage.mysql.tablePrefix", "")
+            );
+        }
+
+        SQLiteSettingsDTO sqliteSettings = null;
+        if (type == DatabaseSettingsDTO.DatabaseType.SQLITE) {
+            String dbFile = config.getString("storage.sqlite.database", "lore.db");
+            String filePath = new File(plugin.getDataFolder(), dbFile).getAbsolutePath();
+            sqliteSettings = new SQLiteSettingsDTO(
+                filePath,
+                config.getString("storage.sqlite.tablePrefix", "")
+            );
+        }
+
+        DatabaseSettingsDTO dto = new DatabaseSettingsDTO(
+            type, mysqlSettings, sqliteSettings, connectionTimeout, maxRetries
+        );
+        dto.validate();
+        return dto;
+    }
+
+    /**
+     * Get the database configuration settings as a strongly-typed DTO.
+     * The DTO is cached and only recreated when the configuration is reloaded.
+     *
+     * @return DatabaseSettingsDTO instance with validated settings
+     */
+    public DatabaseSettingsDTO getDatabaseSettings() {
+        if (databaseSettings == null) {
+            databaseSettings = createDatabaseSettings();
+        }
+        return databaseSettings;
+    }
+
+    /**
      * Initialize logging system and apply configuration.
      * This method ensures LogManager instances use the correct log level from config.
      */
     public void initDebugLogging() {
         Level configLevel = getLogLevel();
         updateAllLogManagers(configLevel);
-        logger.info("Configuration system initialized with log level: " + configLevel.getName());
+        logger.debug("Configuration system initialized with log level: " + configLevel.getName());
     }
 
     /**
@@ -132,14 +205,14 @@ public class ConfigManager {
         if (handlerFactory == null) {
             initHandlerFactory();
         }
-        logger.info("Loading lore handlers from configuration...");
+        logger.debug("Loading lore handlers from configuration...");
         Map<LoreType, LoreHandler> handlers = new HashMap<>();
         // Register handlers for all lore types
         for (LoreType type : LoreType.values()) {
             try {
                 LoreHandler handler = handlerFactory.getHandler(type);
                 handlers.put(type, handler);
-                logger.info("Registered handler for " + type + ": " + handler.getClass().getSimpleName());
+                logger.debug("Registered handler for " + type + ": " + handler.getClass().getSimpleName());
             } catch (Exception e) {
                 logger.error("Failed to create handler for type " + type + ", using default handler", e);
                 handlers.put(type, new DefaultLoreHandler(plugin));
@@ -183,6 +256,15 @@ public class ConfigManager {
     }    public void reloadConfig() {
         plugin.reloadConfig();
         config = plugin.getConfig();
+
+        // Refresh database settings DTO
+        try {
+            this.databaseSettings = createDatabaseSettings();
+            logger.info("Database configuration reloaded and validated");
+        } catch (IllegalArgumentException e) {
+            logger.error("Invalid database configuration after reload: " + e.getMessage());
+        }
+
         java.util.logging.Level newLevel = getLogLevel();
         updateAllLogManagers(newLevel);
         logger.info("Configuration reloaded with log level: " + newLevel.getName());
@@ -222,33 +304,59 @@ public class ConfigManager {
     }
     
     /**
-     * Get database connection settings for MySQL
-     */
-    public Map<String, Object> getMySQLSettings() {
-        Map<String, Object> settings = new HashMap<>();
-        settings.put("host", config.getString("storage.mysql.host", "localhost"));
-        settings.put("port", config.getInt("storage.mysql.port", 3306));
-        settings.put("database", config.getString("storage.mysql.database", "minecraft"));
-        settings.put("username", config.getString("storage.mysql.username", "root"));
-        settings.put("password", config.getString("storage.mysql.password", ""));
-        settings.put("useSSL", config.getBoolean("storage.mysql.useSSL", false));
-        settings.put("tablePrefix", config.getString("storage.mysql.tablePrefix", ""));
-        return settings;
-    }
-    
-    /**
-     * Get database connection settings for SQLite
-     */
-    public Map<String, Object> getSQLiteSettings() {
-        Map<String, Object> settings = new HashMap<>();
-        settings.put("database", config.getString("storage.sqlite.database", "data.db"));
-        return settings;
-    }
-    
-    /**
      * Get test mode setting
      */
     public boolean isTestMode() {
         return "yes".equalsIgnoreCase(config.getString("storage.test-mode", "no"));
+    }
+
+    // ==================== Dynmap Configuration ====================
+
+    public boolean isDynmapEnabled() {
+        return config.getBoolean("dynmap.enabled", true);
+    }
+
+    public String getDynmapMarkerSetId() {
+        return config.getString("dynmap.marker-set.id", "rvnklore");
+    }
+
+    public String getDynmapMarkerSetLabel() {
+        return config.getString("dynmap.marker-set.label", "Lore Entries");
+    }
+
+    public boolean isDynmapMarkerSetHidden() {
+        return config.getBoolean("dynmap.marker-set.hide-by-default", false);
+    }
+
+    public int getDynmapLayerPriority() {
+        return config.getInt("dynmap.marker-set.layer-priority", 10);
+    }
+
+    public String getDynmapIcon(LoreType type) {
+        String key = "dynmap.icons." + type.name();
+        return config.getString(key, config.getString("dynmap.icons.default", "sign"));
+    }
+
+    public boolean isDynmapOnlyApproved() {
+        return config.getBoolean("dynmap.only-approved", true);
+    }
+
+    public boolean isDynmapPopupEnabled() {
+        return config.getBoolean("dynmap.popup.enabled", true);
+    }
+
+    public int getDynmapMaxDescriptionLength() {
+        return config.getInt("dynmap.popup.max-description-length", 200);
+    }
+
+    // ==================== Collection Marker Configuration ====================
+
+    public boolean isCollectionMarkersEnabled() {
+        return config.getBoolean("dynmap.collection-markers.enabled", true);
+    }
+
+    public String getCollectionMarkerIcon(String theme) {
+        String key = "dynmap.collection-markers.icons." + theme;
+        return config.getString(key, config.getString("dynmap.collection-markers.icons.default", "pin"));
     }
 }

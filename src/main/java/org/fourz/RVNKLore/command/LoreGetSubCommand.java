@@ -6,42 +6,61 @@ import org.bukkit.entity.Player;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.handler.LoreHandler;
 import org.fourz.RVNKLore.lore.LoreEntry;
+import org.fourz.RVNKLore.search.LoreSearchService;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
 /**
- * Subcommand for getting lore entries by ID
- * Usage: /lore get <id>
+ * Subcommand for getting lore entries by name or ID.
+ * Usage: /lore get <name|id>
  *
- * Supports both full UUIDs and short ID prefixes (as shown in /lore list).
+ * Supports lore entry names (case-insensitive), full UUIDs, and short ID prefixes.
  */
 public class LoreGetSubCommand implements SubCommand {
     private final RVNKLore plugin;
+    private final TabCompletionUtil tabCompletionUtil;
 
     public LoreGetSubCommand(RVNKLore plugin) {
         this.plugin = plugin;
+        this.tabCompletionUtil = new TabCompletionUtil(new LoreSearchService(plugin));
     }
 
     @Override
     public boolean execute(CommandSender sender, String[] args) {
         if (args.length < 1) {
-            sender.sendMessage(ChatColor.RED + "▶ Usage: /lore get <id>");
+            sender.sendMessage(ChatColor.RED + "▶ Usage: /lore get <name|id>");
             return true;
         }
 
-        String idStr = args[0].toLowerCase();
+        String input = args[0];
 
-        // First, try exact ID match
-        Optional<LoreEntry> exactMatch = plugin.getLoreManager().getLoreById(idStr);
-        LoreEntry entry = exactMatch.orElse(null);
+        // If multiple args, join them as a name (supports "Fort Ravenkeep" etc.)
+        if (args.length > 1 && !args[1].equalsIgnoreCase("item")) {
+            StringBuilder nameBuilder = new StringBuilder(args[0]);
+            for (int i = 1; i < args.length; i++) {
+                if (args[i].equalsIgnoreCase("item")) break;
+                nameBuilder.append(" ").append(args[i]);
+            }
+            input = nameBuilder.toString();
+        }
 
-        // If no exact match, try prefix search
+        // Try name lookup first (case-insensitive)
+        LoreEntry entry = plugin.getLoreManager().getLoreEntryByNameSync(input);
+
+        // Fallback to exact ID match
         if (entry == null) {
+            Optional<LoreEntry> exactMatch = plugin.getLoreManager().getLoreById(input.toLowerCase());
+            entry = exactMatch.orElse(null);
+        }
+
+        // Fallback to ID prefix search
+        if (entry == null) {
+            String idStr = input.toLowerCase();
             List<LoreEntry> matches = plugin.getLoreManager().findLoreEntriesSync(idStr);
 
-            // Filter to only entries whose ID starts with the search term (not name matches)
+            // Filter to only entries whose ID starts with the search term
             List<LoreEntry> idMatches = new ArrayList<>();
             for (LoreEntry e : matches) {
                 if (e.getId().toLowerCase().startsWith(idStr)) {
@@ -49,21 +68,22 @@ public class LoreGetSubCommand implements SubCommand {
                 }
             }
 
-            if (idMatches.isEmpty()) {
-                sender.sendMessage(ChatColor.RED + "✖ No lore entry found with ID starting with: " + idStr);
-                return true;
-            } else if (idMatches.size() == 1) {
+            if (idMatches.size() == 1) {
                 entry = idMatches.get(0);
-            } else {
-                // Multiple matches - show them to the user
-                sender.sendMessage(ChatColor.YELLOW + "⚠ Multiple entries match '" + idStr + "'. Please be more specific:");
+            } else if (idMatches.size() > 1) {
+                sender.sendMessage(ChatColor.YELLOW + "⚠ Multiple entries match '" + input + "'. Please be more specific:");
                 for (LoreEntry e : idMatches) {
-                    String shortId = e.getId().length() >= 8 ? e.getId().substring(0, 8) : e.getId();
                     sender.sendMessage(ChatColor.GRAY + "  - " + ChatColor.YELLOW + e.getName() +
-                            ChatColor.GRAY + " (" + shortId + ")");
+                            ChatColor.GRAY + " (" + e.getType() + ")");
                 }
                 return true;
             }
+        }
+
+        if (entry == null) {
+            sender.sendMessage(ChatColor.RED + "✖ Lore entry not found: " + input);
+            sender.sendMessage(ChatColor.GRAY + "   Use /lore search or /lore list to find entries");
+            return true;
         }
 
         // If the entry is not approved and the sender is not an admin, deny access
@@ -81,15 +101,20 @@ public class LoreGetSubCommand implements SubCommand {
                 handler.displayLore(entry, player);
             } else {
                 // Fallback display if no handler exists
-                player.sendMessage(ChatColor.GOLD + "=== " + entry.getName() + " ===");
+                player.sendMessage(ChatColor.GOLD + "=== " + entry.getDisplayName() + " ===");
                 player.sendMessage(ChatColor.GRAY + "   Type: " + ChatColor.YELLOW + entry.getType());
                 player.sendMessage(ChatColor.WHITE + entry.getDescription());
             }
 
             // If requested as an item and the player has permission
-            if (args.length > 1 && args[1].equalsIgnoreCase("item") &&
-                    player.hasPermission("rvnklore.command.getitem")) {
-
+            boolean hasItemArg = false;
+            for (String arg : args) {
+                if (arg.equalsIgnoreCase("item")) {
+                    hasItemArg = true;
+                    break;
+                }
+            }
+            if (hasItemArg && player.hasPermission("rvnklore.command.getitem")) {
                 if (handler != null) {
                     player.getInventory().addItem(handler.createLoreItem(entry));
                     player.sendMessage(ChatColor.GREEN + "✓ Added lore item to your inventory.");
@@ -99,7 +124,7 @@ public class LoreGetSubCommand implements SubCommand {
             }
         } else {
             // Console display
-            sender.sendMessage("=== " + entry.getName() + " ===");
+            sender.sendMessage("=== " + entry.getDisplayName() + " ===");
             sender.sendMessage("Type: " + entry.getType());
             sender.sendMessage("Description: " + entry.getDescription());
             sender.sendMessage("Submitted by: " + entry.getSubmittedBy());
@@ -111,7 +136,7 @@ public class LoreGetSubCommand implements SubCommand {
 
     @Override
     public String getDescription() {
-        return "Gets a lore entry by ID (full or partial)";
+        return "Gets a lore entry by name or ID";
     }
 
     @Override
@@ -121,7 +146,9 @@ public class LoreGetSubCommand implements SubCommand {
 
     @Override
     public List<String> getTabCompletions(CommandSender sender, String[] args) {
-        // No tab completions for UUIDs
+        if (args.length == 1) {
+            return tabCompletionUtil.completeLoreEntryNames(args[0]);
+        }
         return new ArrayList<>();
     }
 }

@@ -26,12 +26,15 @@ public class LoreReloadSubCommand implements SubCommand {
         logger.debug("Executing reload command");
         sender.sendMessage(ChatColor.YELLOW + "Reloading RVNKLore plugin...");
         
+        // Drain any in-flight async discovery writes before reloading
+        plugin.getDiscoveryManager().awaitPendingWrites();
+
         // Reload configuration
         plugin.getConfigManager().reloadConfig();
-        
+
         // Update log level
         logger.setLogLevel(plugin.getConfigManager().getLogLevel());
-        
+
         // Reload lore data
         plugin.getLoreManager().reloadLore();
         

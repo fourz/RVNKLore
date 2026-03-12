@@ -43,5 +43,30 @@ public enum ItemType {
     /**
      * Seasonal items available during specific events or time periods.
      */
-    SEASONAL
+    SEASONAL,
+
+    /**
+     * Uncommon items with slightly elevated rarity.
+     */
+    UNCOMMON,
+
+    /**
+     * Unique one-of-a-kind items.
+     */
+    UNIQUE,
+
+    /**
+     * Rare items with low drop rates or limited availability.
+     */
+    RARE,
+
+    /**
+     * Event-specific items earned during server events.
+     */
+    EVENT,
+
+    /**
+     * Items awarded as quest completion rewards.
+     */
+    QUEST_REWARD
 }
