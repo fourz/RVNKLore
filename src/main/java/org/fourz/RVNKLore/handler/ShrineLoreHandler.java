@@ -28,7 +28,7 @@ public class ShrineLoreHandler implements LoreHandler {
 
     @Override
     public void initialize() {
-        logger.info("Initializing shrine lore handler");
+        logger.debug("Initializing shrine lore handler");
     }
 
     @Override

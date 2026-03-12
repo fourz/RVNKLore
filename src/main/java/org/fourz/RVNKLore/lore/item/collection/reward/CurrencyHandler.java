@@ -61,7 +61,7 @@ public class CurrencyHandler implements CollectionRewardHandler {
             boolean success = depositMoney(economyProvider, player.getName(), amount);
 
             if (success) {
-                logger.info("Gave " + amount + " currency to " + player.getName());
+                logger.debug("Gave " + amount + " currency to " + player.getName());
             } else {
                 logger.warning("Failed to deposit currency for " + player.getName());
             }

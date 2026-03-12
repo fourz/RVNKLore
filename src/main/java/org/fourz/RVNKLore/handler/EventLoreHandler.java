@@ -28,7 +28,7 @@ public class EventLoreHandler implements LoreHandler {
 
     @Override
     public void initialize() {
-        logger.info("Initializing event lore handler");
+        logger.debug("Initializing event lore handler");
     }
 
     @Override

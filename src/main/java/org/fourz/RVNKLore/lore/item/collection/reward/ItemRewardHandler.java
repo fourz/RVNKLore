@@ -47,7 +47,7 @@ public class ItemRewardHandler implements CollectionRewardHandler {
             }
 
             player.getInventory().addItem(item);
-            logger.info("Gave " + quantity + "x " + materialName + " to " + player.getName());
+            logger.debug("Gave " + quantity + "x " + materialName + " to " + player.getName());
             return true;
 
         } catch (Exception e) {

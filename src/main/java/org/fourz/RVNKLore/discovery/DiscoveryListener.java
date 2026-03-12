@@ -377,7 +377,7 @@ public class DiscoveryListener implements Listener {
                 return;
             }
 
-            logger.info("Granting " + starterEntries.size() + " starter discoveries to " + player.getName());
+            logger.debug("Granting " + starterEntries.size() + " starter discoveries to " + player.getName());
 
             for (LoreEntry entry : starterEntries) {
                 discoveryManager.triggerDiscovery(

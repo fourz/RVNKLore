@@ -49,7 +49,7 @@ public class VotingPluginIntegration implements Listener {
             }
 
             enabled = true;
-            logger.info("VotingPlugin integration enabled");
+            logger.debug("VotingPlugin integration activated");
             return true;
         } catch (Exception e) {
             logger.warning("Failed to initialize VotingPlugin integration: " + e.getMessage());

@@ -112,7 +112,7 @@ public class AnvilArtifactLoreHandler extends DefaultLoreHandler {
                 if (success) {
                     player.sendMessage(ChatColor.GREEN + "Artifact '" + artifactName + "' has been " +
                         (entry.isApproved() ? "registered in the lore." : "submitted for approval."));
-                    logger.info("Artifact lore entry created: " + artifactName + " by " + player.getName());
+                    logger.debug("Artifact lore entry created: " + artifactName + " by " + player.getName());
                 } else {
                     logger.debug("Artifact entry not saved (may already exist): " + artifactName);
                 }

@@ -249,22 +249,17 @@ public class LoreDebugSubCommand implements SubCommand {
             plugin.getPlayerManager().getPlayerName(playerUuid);
         CompletableFuture<List<NameChangeRecord>> nameHistoryFuture =
             plugin.getPlayerManager().getNameChangeHistory(playerUuid);
-        CompletableFuture<List<String>> loreIdsFuture =
-            plugin.getPlayerManager().getPlayerLoreEntryIds(playerUuid);
+        CompletableFuture<List<LoreEntry>> discoveryFuture =
+            plugin.getDiscoveryManager() != null && plugin.getDiscoveryManager().isInitialized()
+                ? plugin.getDiscoveryManager().getPlayerDiscoveries(playerUuid)
+                : CompletableFuture.completedFuture(new ArrayList<>());
 
         // Wait for all futures to complete
-        CompletableFuture.allOf(nameFuture, nameHistoryFuture, loreIdsFuture).thenRun(() -> {
+        CompletableFuture.allOf(nameFuture, nameHistoryFuture, discoveryFuture).thenRun(() -> {
             try {
                 Optional<String> storedName = nameFuture.join();
                 List<NameChangeRecord> nameHistory = nameHistoryFuture.join();
-                List<String> loreEntryIds = loreIdsFuture.join();
-
-                // Retrieve full lore entries for type breakdown
-                List<LoreEntry> playerLore = loreEntryIds.stream()
-                    .map(id -> plugin.getLoreManager().getLoreById(id))
-                    .filter(Optional::isPresent)
-                    .map(Optional::get)
-                    .collect(Collectors.toList());
+                List<LoreEntry> playerLore = discoveryFuture.join();
 
                 // Calculate statistics
                 Map<LoreType, Long> typeBreakdown = playerLore.stream()

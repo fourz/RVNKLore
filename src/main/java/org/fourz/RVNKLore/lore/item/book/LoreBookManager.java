@@ -58,7 +58,7 @@ public class LoreBookManager implements ILoreBookService {
         this.signedByKey = new NamespacedKey(plugin, "signed_by");
         this.createdAtKey = new NamespacedKey(plugin, "created_at");
 
-        logger.info("LoreBookManager initialized");
+        logger.debug("LoreBookManager initialized");
     }
 
     /**
@@ -251,7 +251,7 @@ public class LoreBookManager implements ILoreBookService {
                     logger.warning("Failed to create lore entry for quest book: " + questItemKey);
                     return Optional.empty();
                 }
-                logger.info("Auto-created lore entry for quest book: " + questItemKey);
+                logger.debug("Auto-created lore entry for quest book: " + questItemKey);
             }
             ItemStack book = createLoreBook(entry);
             if (book != null && title != null && !title.isEmpty()) {
@@ -1155,6 +1155,6 @@ public class LoreBookManager implements ILoreBookService {
      */
     public void shutdown() {
         clearCache();
-        logger.info("LoreBookManager shutdown complete");
+        logger.debug("LoreBookManager shutdown complete");
     }
 }

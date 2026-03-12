@@ -13,6 +13,7 @@ import org.fourz.rvnkcore.util.log.LogManager;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Core manager for the lore discovery system.
@@ -44,6 +45,10 @@ public class DiscoveryManager {
     // Discovery cooldowns to prevent spam (player UUID -> entry ID -> timestamp)
     private final Map<UUID, Map<String, Long>> discoveryCooldowns = new ConcurrentHashMap<>();
     private static final long DISCOVERY_COOLDOWN_MS = 60000; // 1 minute cooldown
+    private static final long PENDING_WRITE_TIMEOUT_MS = 5000; // 5 second drain timeout
+
+    // Track in-flight async writes to prevent data loss on reload/shutdown
+    private final Set<CompletableFuture<?>> pendingWrites = ConcurrentHashMap.newKeySet();
 
     private boolean initialized = false;
 
@@ -83,14 +88,14 @@ public class DiscoveryManager {
             try {
                 QuestDiscoveryListener questListener = new QuestDiscoveryListener(plugin, this);
                 Bukkit.getPluginManager().registerEvents(questListener, plugin);
-                logger.info("RVNKQuests integration enabled - QUEST_COMPLETE discoveries active");
+                logger.debug("RVNKQuests integration enabled - QUEST_COMPLETE discoveries active");
             } catch (NoClassDefFoundError e) {
                 logger.warning("RVNKQuests found but event class not available - quest discoveries disabled");
             }
         }
 
         initialized = true;
-        logger.info("DiscoveryManager initialized");
+        logger.debug("DiscoveryManager initialized");
     }
 
     /**
@@ -104,7 +109,7 @@ public class DiscoveryManager {
         try {
             Map<String, UUID> loaded = discoveryRepository.loadAllFirstDiscoverers().join();
             firstDiscoverers.putAll(loaded);
-            logger.info("Loaded " + loaded.size() + " first discoverers from database");
+            logger.debug("Loaded " + loaded.size() + " first discoverers from database");
         } catch (Exception e) {
             logger.warning("Failed to load first discoverers: " + e.getMessage());
         }
@@ -166,7 +171,7 @@ public class DiscoveryManager {
                             notificationManager.sendDiscoveryNotification(evt);
                         });
 
-                        logger.info("Player " + player.getName() + " discovered: " + entry.getName() +
+                        logger.debug("Player " + player.getName() + " discovered: " + entry.getName() +
                             (isFirstDiscovery ? " (FIRST DISCOVERY)" : ""));
                     }
                     return recorded;
@@ -191,7 +196,7 @@ public class DiscoveryManager {
         }
 
         // Record in PlayerManager (legacy player_discoveries table)
-        CompletableFuture<Boolean> legacyRecord = playerManager.recordLoreDiscovery(playerUuid, entryId);
+        CompletableFuture<Boolean> legacyRecord = trackWrite(playerManager.recordLoreDiscovery(playerUuid, entryId));
 
         // Also persist to enriched lore_discovery table with full context
         if (discoveryRepository != null) {
@@ -200,13 +205,13 @@ public class DiscoveryManager {
             Double y = location != null ? location.getY() : null;
             Double z = location != null ? location.getZ() : null;
 
-            discoveryRepository.recordDiscovery(playerUuid, entryId,
+            trackWrite(discoveryRepository.recordDiscovery(playerUuid, entryId,
                     triggerType != null ? triggerType.name() : "UNKNOWN",
                     world, x, y, z, isFirstDiscovery)
                 .exceptionally(ex -> {
                     logger.warning("Failed to persist enriched discovery: " + ex.getMessage());
                     return false;
-                });
+                }));
         }
 
         return legacyRecord;
@@ -216,8 +221,11 @@ public class DiscoveryManager {
      * Checks if a player has already discovered an entry.
      */
     public CompletableFuture<Boolean> hasPlayerDiscoveredAsync(UUID playerUuid, String entryId) {
-        return playerManager.getPlayerLoreEntryIds(playerUuid)
-            .thenApply(entries -> entries.contains(entryId));
+        if (discoveryRepository != null) {
+            return discoveryRepository.hasDiscovered(playerUuid, entryId);
+        }
+        // Fallback to legacy player_discoveries table
+        return playerManager.hasDiscoveredEntry(playerUuid, entryId);
     }
 
     /**
@@ -246,31 +254,67 @@ public class DiscoveryManager {
      * Gets all entries discovered by a player.
      */
     public CompletableFuture<List<LoreEntry>> getPlayerDiscoveries(UUID playerUuid) {
-        return playerManager.getPlayerLoreEntryIds(playerUuid)
-            .thenApply(ids -> {
-                List<LoreEntry> entries = new ArrayList<>();
-                for (String id : ids) {
-                    loreManager.getLoreById(id).ifPresent(entries::add);
-                }
-                return entries;
-            });
+        CompletableFuture<List<String>> idsFuture;
+        if (discoveryRepository != null) {
+            idsFuture = discoveryRepository.getDiscoveredEntryIds(playerUuid);
+        } else {
+            idsFuture = playerManager.getPlayerLoreEntryIds(playerUuid);
+        }
+        return idsFuture.thenApply(ids -> {
+            List<LoreEntry> entries = new ArrayList<>();
+            for (String id : ids) {
+                loreManager.getLoreById(id).ifPresent(entries::add);
+            }
+            return entries;
+        });
     }
 
     /**
      * Gets discovery statistics for a player.
      */
     public CompletableFuture<DiscoveryStats> getPlayerStats(UUID playerUuid) {
+        if (discoveryRepository != null) {
+            CompletableFuture<Integer> countFuture = discoveryRepository.countPlayerDiscoveries(playerUuid);
+            CompletableFuture<Integer> firstFuture = discoveryRepository.countFirstDiscoveries(playerUuid);
+            return countFuture.thenCombine(firstFuture, (discovered, firstCount) -> {
+                int totalEntries = loreManager.getAllLoreEntriesSync().size();
+                return new DiscoveryStats(playerUuid, discovered, totalEntries, firstCount);
+            });
+        }
         return getPlayerDiscoveries(playerUuid).thenApply(discoveries -> {
             int totalEntries = loreManager.getAllLoreEntriesSync().size();
             int discovered = discoveries.size();
-
-            // Count first discoveries
             long firstDiscoveries = discoveries.stream()
                 .filter(entry -> playerUuid.equals(firstDiscoverers.get(entry.getId())))
                 .count();
-
             return new DiscoveryStats(playerUuid, discovered, totalEntries, (int) firstDiscoveries);
         });
+    }
+
+    // Pending write tracking
+
+    private <T> CompletableFuture<T> trackWrite(CompletableFuture<T> future) {
+        pendingWrites.add(future);
+        future.whenComplete((result, ex) -> pendingWrites.remove(future));
+        return future;
+    }
+
+    /**
+     * Blocks until all in-flight discovery writes complete (or timeout).
+     * Call before reload or shutdown to prevent data loss.
+     */
+    public void awaitPendingWrites() {
+        if (pendingWrites.isEmpty()) {
+            return;
+        }
+        logger.debug("Awaiting " + pendingWrites.size() + " pending discovery writes...");
+        try {
+            CompletableFuture.allOf(pendingWrites.toArray(new CompletableFuture[0]))
+                .get(PENDING_WRITE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            logger.debug("All pending discovery writes completed");
+        } catch (Exception e) {
+            logger.warning("Timed out waiting for pending writes: " + e.getMessage());
+        }
     }
 
     // Cooldown management
@@ -325,6 +369,7 @@ public class DiscoveryManager {
      * Shuts down the discovery manager.
      */
     public void shutdown() {
+        awaitPendingWrites();
         discoveryCooldowns.clear();
         initialized = false;
         logger.debug("DiscoveryManager shut down");

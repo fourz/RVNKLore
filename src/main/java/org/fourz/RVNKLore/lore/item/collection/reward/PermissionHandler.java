@@ -49,7 +49,7 @@ public class PermissionHandler implements CollectionRewardHandler {
             // Fallback: Use Bukkit's attachment system (temporary only)
             logger.warning("LuckPerms not found - granting permission temporarily (until restart)");
             player.addAttachment(pluginManager.getPlugin("RVNKLore"), permission, true);
-            logger.info("Granted permission " + permission + " to " + player.getName() + " (temporary)");
+            logger.debug("Granted permission " + permission + " to " + player.getName() + " (temporary)");
             return true;
 
         } catch (Exception e) {
@@ -91,7 +91,7 @@ public class PermissionHandler implements CollectionRewardHandler {
             userManager.getClass().getMethod("saveUser", Class.forName("net.luckperms.api.user.User")).invoke(userManager, user);
 
             String duration = durationDays > 0 ? " (" + durationDays + " days)" : " (permanent)";
-            logger.info("Granted permission " + permission + " to " + player.getName() + duration);
+            logger.debug("Granted permission " + permission + " to " + player.getName() + duration);
             return true;
 
         } catch (Exception e) {

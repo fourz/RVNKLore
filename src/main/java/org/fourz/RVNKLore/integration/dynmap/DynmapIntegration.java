@@ -70,7 +70,7 @@ public class DynmapIntegration implements Listener {
 
             markerReader = new DynmapMarkerReader(markerApi, logger);
             enabled = true;
-            logger.info("Dynmap integration enabled - marker set '" + config.getDynmapMarkerSetId() + "' active");
+            logger.debug("Dynmap integration activated - marker set '" + config.getDynmapMarkerSetId() + "'");
             return true;
         } catch (Exception e) {
             logger.warning("Failed to initialize Dynmap integration: " + e.getMessage());

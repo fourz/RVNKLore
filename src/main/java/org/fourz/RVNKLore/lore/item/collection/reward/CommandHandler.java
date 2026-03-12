@@ -49,7 +49,7 @@ public class CommandHandler implements CollectionRewardHandler {
             boolean result = Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command);
 
             if (result) {
-                logger.info("Executed reward command for " + player.getName() + ": " + command);
+                logger.debug("Executed reward command for " + player.getName() + ": " + command);
             } else {
                 logger.warning("Failed to execute reward command: " + command);
             }

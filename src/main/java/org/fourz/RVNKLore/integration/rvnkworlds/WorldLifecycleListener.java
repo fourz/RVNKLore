@@ -69,7 +69,7 @@ public class WorldLifecycleListener implements Listener {
                     (listener, event) -> handleWorldPostDelete(event), plugin);
 
             enabled = true;
-            logger.info("RVNKWorlds event integration enabled");
+            logger.debug("RVNKWorlds event integration activated");
             return true;
         } catch (ClassNotFoundException e) {
             logger.debug("RVNKWorlds event classes not found - world lifecycle integration disabled");

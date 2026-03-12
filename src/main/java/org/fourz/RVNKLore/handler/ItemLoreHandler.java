@@ -27,7 +27,7 @@ public class ItemLoreHandler implements LoreHandler {
 
     @Override
     public void initialize() {
-        logger.info("Initializing item lore handler");
+        logger.debug("Initializing item lore handler");
     }
 
     @Override
