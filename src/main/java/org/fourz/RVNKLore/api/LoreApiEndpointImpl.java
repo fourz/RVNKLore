@@ -11,6 +11,9 @@ import org.fourz.RVNKLore.lore.LoreType;
 import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
 import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
 import org.fourz.RVNKLore.lore.player.PlayerManager;
+import org.fourz.RVNKLore.search.LoreSearchService;
+import org.fourz.RVNKLore.search.SearchCriteria;
+import org.fourz.RVNKLore.search.SearchResult;
 import org.fourz.rvnkcore.api.model.response.ApiResponse;
 import org.fourz.rvnkcore.api.service.ILoreApiService;
 import org.fourz.rvnkcore.util.log.LogManager;
@@ -36,6 +39,7 @@ public class LoreApiEndpointImpl implements ILoreApiService {
     private final LoreManager loreManager;
     private final PlayerManager playerManager;
     private final CollectionManager collectionManager;
+    private final LoreSearchService searchService;
     private final Gson gson;
     private final LogManager logger;
 
@@ -44,6 +48,7 @@ public class LoreApiEndpointImpl implements ILoreApiService {
         this.loreManager = plugin.getLoreManager();
         this.playerManager = plugin.getPlayerManager();
         this.collectionManager = loreManager.getItemManager().getCollectionManager();
+        this.searchService = new LoreSearchService(plugin);
         this.gson = new GsonBuilder().create();
         this.logger = LogManager.getInstance(plugin, "LoreApiEndpoint");
     }
@@ -132,18 +137,41 @@ public class LoreApiEndpointImpl implements ILoreApiService {
         int offset = parseIntOrDefault(params.get("offset"), 0);
         int limit = parseIntOrDefault(params.get("limit"), 50);
 
-        return loreManager.findLoreEntries(query)
-            .<ApiResponse<?>>handle((entries, ex) -> {
-                if (ex != null) return ApiResponse.error("INTERNAL_ERROR",
-                    "Failed to search lore entries: " + unwrapMessage(ex));
-                int total = entries.size();
-                List<LoreEntryResponse> data = entries.stream()
-                    .skip(offset)
-                    .limit(limit)
-                    .map(LoreEntryResponse::from)
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                SearchCriteria.Builder criteriaBuilder = new SearchCriteria.Builder()
+                    .query(query)
+                    .offset(offset)
+                    .limit(limit);
+
+                // Support optional type filter via query param
+                String typeParam = params.get("type");
+                if (typeParam != null && !typeParam.isEmpty()) {
+                    for (String t : typeParam.split(",")) {
+                        try {
+                            criteriaBuilder.addTypeFilter(LoreType.valueOf(t.trim().toUpperCase()));
+                        } catch (IllegalArgumentException e) {
+                            return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST",
+                                "Invalid lore type: " + t.trim());
+                        }
+                    }
+                }
+
+                SearchCriteria criteria = criteriaBuilder.build();
+                int total = searchService.countMatches(criteria);
+                List<SearchResult> results = searchService.search(criteria);
+
+                List<LoreEntryResponse> data = results.stream()
+                    .map(r -> LoreEntryResponse.from(r.getEntry()))
                     .collect(Collectors.toList());
-                return ApiResponse.success(new PagedLoreResponse(data, offset, limit, total));
-            });
+
+                return (ApiResponse<?>) ApiResponse.success(new PagedLoreResponse(data, offset, limit, total));
+            } catch (Exception e) {
+                logger.error("Error searching lore entries", e);
+                return (ApiResponse<?>) ApiResponse.error("INTERNAL_ERROR",
+                    "Failed to search lore entries: " + e.getMessage());
+            }
+        });
     }
 
     @Override
