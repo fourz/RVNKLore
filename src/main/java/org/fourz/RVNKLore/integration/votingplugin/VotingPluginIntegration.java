@@ -110,36 +110,6 @@ public class VotingPluginIntegration implements Listener {
         }
     }
 
-    /**
-     * Get the vote points for a player.
-     *
-     * @param player The player
-     * @return The player's vote points, or 0 if unavailable
-     */
-    public int getVotePoints(Player player) {
-        return getUser(player).map(VotingPluginUser::getPoints).orElse(0);
-    }
-
-    /**
-     * Add vote points to a player.
-     *
-     * @param player The player
-     * @param points The number of points to add
-     */
-    public void addVotePoints(Player player, int points) {
-        getUser(player).ifPresent(user -> user.addPoints(points));
-    }
-
-    /**
-     * Remove vote points from a player.
-     *
-     * @param player The player
-     * @param points The number of points to remove
-     */
-    public void removeVotePoints(Player player, int points) {
-        getUser(player).ifPresent(user -> user.removePoints(points));
-    }
-
     public void cleanup() {
         hooks = null;
         enabled = false;
