@@ -211,6 +211,11 @@ public class LoreApiEndpointImpl implements ILoreApiService {
 
                 entry.setApproved(false);
 
+                String validationError = loreManager.validateEntry(entry);
+                if (validationError != null) {
+                    return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", validationError);
+                }
+
                 boolean success = loreManager.addLoreEntry(entry).get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
                 if (success) {
                     logger.info("New lore entry submitted via API: " + entry.getName() + " by " + entry.getSubmittedBy());

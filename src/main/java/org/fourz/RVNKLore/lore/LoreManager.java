@@ -85,7 +85,32 @@ public class LoreManager implements ILoreService {
             loreByType.get(entry.getType()).add(entry);
         }
         logger.debug("Loaded " + cachedEntries.size() + " lore entries");
-    }    /**
+    }
+
+    /**
+     * Validate a lore entry against its handler without persisting.
+     *
+     * @param entry The lore entry to validate
+     * @return null if valid, or an error message describing the validation failure
+     */
+    public String validateEntry(LoreEntry entry) {
+        if (entry == null) {
+            return "Entry is null";
+        }
+        if (entry.getType() == null) {
+            return "Entry type is required";
+        }
+        LoreHandler handler = plugin.getHandlerFactory().getHandler(entry.getType());
+        if (handler == null) {
+            return "No handler found for lore type: " + entry.getType();
+        }
+        if (!handler.validateEntry(entry)) {
+            return "Validation failed for type " + entry.getType();
+        }
+        return null;
+    }
+
+    /**
      * Add a new lore entry (synchronous internal method).
      *
      * @param entry The lore entry to add
