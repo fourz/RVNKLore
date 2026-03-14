@@ -7,21 +7,21 @@ import java.util.List;
  * Follows RVNK REST API standards.
  */
 public class PagedLoreResponse {
-    private List<LoreEntryResponse> data;
+    private List<LoreEntryResponse> entries;
     private int offset;
     private int limit;
     private int total;
     private boolean hasMore;
 
-    public PagedLoreResponse(List<LoreEntryResponse> data, int offset, int limit, int total) {
-        this.data = data;
+    public PagedLoreResponse(List<LoreEntryResponse> entries, int offset, int limit, int total) {
+        this.entries = entries;
         this.offset = offset;
         this.limit = limit;
         this.total = total;
-        this.hasMore = (offset + data.size()) < total;
+        this.hasMore = (offset + entries.size()) < total;
     }
 
-    public List<LoreEntryResponse> getData() { return data; }
+    public List<LoreEntryResponse> getEntries() { return entries; }
     public int getOffset() { return offset; }
     public int getLimit() { return limit; }
     public int getTotal() { return total; }

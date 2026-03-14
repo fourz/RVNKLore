@@ -323,12 +323,15 @@ public class LoreApiEndpointImpl implements ILoreApiService {
     public CompletableFuture<ApiResponse<?>> getStats() {
         return CompletableFuture.supplyAsync(() -> {
             try {
+                int totalEntries = loreManager.getLoreEntryCount();
                 List<LoreEntry> allEntries = loreManager.getAllLoreEntriesSync();
 
+                long approvedCount = allEntries.stream().filter(LoreEntry::isApproved).count();
+
                 Map<String, Object> stats = new HashMap<>();
-                stats.put("total_entries", allEntries.size());
-                stats.put("approved_entries", allEntries.stream().filter(LoreEntry::isApproved).count());
-                stats.put("pending_entries", allEntries.stream().filter(e -> !e.isApproved()).count());
+                stats.put("total_entries", totalEntries);
+                stats.put("approved_entries", approvedCount);
+                stats.put("pending_entries", totalEntries - approvedCount);
 
                 Map<String, Long> byType = allEntries.stream()
                     .collect(Collectors.groupingBy(
