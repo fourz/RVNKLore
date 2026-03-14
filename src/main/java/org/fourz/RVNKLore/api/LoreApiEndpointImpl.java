@@ -5,6 +5,7 @@ import com.google.gson.GsonBuilder;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.api.model.request.LoreSubmissionRequest;
 import org.fourz.RVNKLore.api.model.response.*;
+import org.fourz.RVNKLore.lore.LoreCategory;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreManager;
 import org.fourz.RVNKLore.lore.LoreType;
@@ -354,6 +355,30 @@ public class LoreApiEndpointImpl implements ILoreApiService {
             health.put("fallback_mode", loreManager.isInFallbackMode());
             health.put("timestamp", LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
             return (ApiResponse<?>) ApiResponse.success(health);
+        });
+    }
+
+    @Override
+    public CompletableFuture<ApiResponse<?>> getCategories() {
+        return CompletableFuture.supplyAsync(() -> {
+            List<Map<String, Object>> categories = new ArrayList<>();
+            for (LoreCategory category : LoreCategory.values()) {
+                Map<String, Object> catInfo = new HashMap<>();
+                catInfo.put("name", category.name());
+                catInfo.put("display_name", formatDisplayName(category.name()));
+
+                // List which LoreTypes belong to this category
+                List<String> types = new ArrayList<>();
+                for (LoreType type : LoreType.values()) {
+                    if (type.getCategory() == category) {
+                        types.add(type.name());
+                    }
+                }
+                catInfo.put("types", types);
+                catInfo.put("type_count", types.size());
+                categories.add(catInfo);
+            }
+            return (ApiResponse<?>) ApiResponse.success(categories);
         });
     }
 
