@@ -25,6 +25,7 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.achievement.AchievementManager;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreManager;
 import org.fourz.RVNKLore.lore.LoreType;
@@ -387,6 +388,20 @@ public class DiscoveryListener implements Listener {
                 );
             }
         }, 100L);
+    }
+
+    /**
+     * Bridges lore discovery events to the achievement system.
+     * Only processes first-time discoveries for the player.
+     */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onLoreDiscovery(LoreDiscoveryEvent event) {
+        if (!event.isFirstForPlayer()) return;
+
+        AchievementManager achievementManager = plugin.getAchievementManager();
+        if (achievementManager != null) {
+            achievementManager.onLoreDiscovery(event.getPlayer(), event.getLoreEntry());
+        }
     }
 
     /**
