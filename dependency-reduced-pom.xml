@@ -4,7 +4,7 @@
   <groupId>org.fourz.RVNKLore</groupId>
   <artifactId>RVNKLore</artifactId>
   <name>RVNKLore</name>
-  <version>1.0.16</version>
+  <version>1.0.17</version>
   <url>http://www.example.com</url>
   <build>
     <resources>
