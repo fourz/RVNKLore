@@ -18,6 +18,7 @@ import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
@@ -402,6 +403,16 @@ public class DiscoveryListener implements Listener {
         if (achievementManager != null) {
             achievementManager.onLoreDiscovery(event.getPlayer(), event.getLoreEntry());
         }
+    }
+
+    /**
+     * Cleans up player tracking data on quit to prevent memory leaks.
+     */
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onPlayerQuit(PlayerQuitEvent event) {
+        UUID playerUuid = event.getPlayer().getUniqueId();
+        clearPlayerData(playerUuid);
+        discoveryManager.clearCooldowns(playerUuid);
     }
 
     /**
