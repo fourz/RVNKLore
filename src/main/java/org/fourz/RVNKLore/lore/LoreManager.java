@@ -473,6 +473,23 @@ public class LoreManager implements ILoreService {
     }
 
     /**
+     * Get total count of cached lore entries without copying the list.
+     */
+    public int getLoreEntryCount() {
+        return cachedEntries.size();
+    }
+
+    /**
+     * Get a paginated subset of cached lore entries.
+     */
+    public List<LoreEntry> getLoreEntriesPaginated(int offset, int limit) {
+        return cachedEntries.stream()
+            .skip(offset)
+            .limit(limit)
+            .collect(Collectors.toList());
+    }
+
+    /**
      * Find lore entries whose name or UUID starts with the given fragment (case-insensitive).
      *
      * @param startsWith The string fragment to match at the start of name or UUID

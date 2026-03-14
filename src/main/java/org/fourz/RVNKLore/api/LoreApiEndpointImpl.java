@@ -59,22 +59,25 @@ public class LoreApiEndpointImpl implements ILoreApiService {
         int limit = parseIntOrDefault(params.get("limit"), 50);
         boolean approvedOnly = "true".equalsIgnoreCase(params.get("approved"));
 
-        CompletableFuture<List<LoreEntry>> entriesFuture = approvedOnly
-            ? loreManager.getApprovedLoreEntries()
-            : loreManager.getAllLoreEntries();
-
-        return entriesFuture
-            .<ApiResponse<?>>handle((entries, ex) -> {
-                if (ex != null) return ApiResponse.error("INTERNAL_ERROR",
-                    "Failed to retrieve lore entries: " + unwrapMessage(ex));
-                int total = entries.size();
-                List<LoreEntryResponse> data = entries.stream()
-                    .skip(offset)
-                    .limit(limit)
-                    .map(LoreEntryResponse::from)
-                    .collect(Collectors.toList());
-                return ApiResponse.success(new PagedLoreResponse(data, offset, limit, total));
-            });
+        return CompletableFuture.supplyAsync(() -> {
+            List<LoreEntry> page;
+            int total;
+            if (approvedOnly) {
+                // Approved entries require filtering — use full list
+                List<LoreEntry> approved = loreManager.getApprovedLoreEntriesSync();
+                total = approved.size();
+                int end = Math.min(offset + limit, total);
+                page = offset < total ? approved.subList(offset, end) : List.of();
+            } else {
+                // All entries — use paginated access to avoid full list copy
+                total = loreManager.getLoreEntryCount();
+                page = loreManager.getLoreEntriesPaginated(offset, limit);
+            }
+            List<LoreEntryResponse> data = page.stream()
+                .map(LoreEntryResponse::from)
+                .collect(Collectors.toList());
+            return (ApiResponse<?>) ApiResponse.success(new PagedLoreResponse(data, offset, limit, total));
+        });
     }
 
     @Override
@@ -239,8 +242,7 @@ public class LoreApiEndpointImpl implements ILoreApiService {
                 List<String> loreIds = playerManager.getPlayerLoreEntryIds(playerId)
                     .get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
 
-                List<LoreEntry> allEntries = loreManager.getAllLoreEntriesSync();
-                int totalAvailable = allEntries.size();
+                int totalAvailable = loreManager.getLoreEntryCount();
                 int totalDiscovered = loreIds.size();
 
                 List<LoreEntryResponse> recentDiscoveries = loreIds.stream()
