@@ -182,6 +182,10 @@ public class LoreApiEndpointImpl implements ILoreApiService {
         return CompletableFuture.supplyAsync(() -> {
             LoreSubmissionRequest request = gson.fromJson(requestBody, LoreSubmissionRequest.class);
 
+            if (request != null) {
+                request.sanitize();
+            }
+
             if (request == null || !request.isValid()) {
                 return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST",
                     "Invalid submission: name, description, and type are required");
