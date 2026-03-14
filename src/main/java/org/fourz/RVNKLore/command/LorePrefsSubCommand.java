@@ -255,7 +255,7 @@ public class LorePrefsSubCommand implements SubCommand {
     @Override
     public boolean hasPermission(CommandSender sender) {
         if (!(sender instanceof Player)) {
-            return false;
+            return true; // Let execute() handle player-only check with proper message
         }
         return sender.hasPermission("rvnklore.prefs") || sender.hasPermission("rvnklore.*");
     }
