@@ -82,6 +82,45 @@ dynmap:
     FACTION: castle
     default: sign
   only-approved: true
+  # Per-type layer configuration for Dynmap sidebar
+  # Each location-capable type gets its own toggleable layer
+  layers:
+    CITY:
+      label: "Cities"
+      hidden: false
+      priority: 10
+    LANDMARK:
+      label: "Landmarks"
+      hidden: false
+      priority: 11
+    MONUMENT:
+      label: "Monuments"
+      hidden: false
+      priority: 12
+    TAVERN:
+      label: "Taverns & Inns"
+      hidden: true
+      priority: 13
+    GUILD:
+      label: "Guilds"
+      hidden: true
+      priority: 14
+    SHRINE:
+      label: "Shrines"
+      hidden: true
+      priority: 15
+    PATH:
+      label: "Paths & Roads"
+      hidden: true
+      priority: 16
+    EVENT:
+      label: "Events"
+      hidden: true
+      priority: 17
+    FACTION:
+      label: "Factions"
+      hidden: true
+      priority: 18
   popup:
     enabled: true
     max-description-length: 200

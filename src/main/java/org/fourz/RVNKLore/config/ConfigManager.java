@@ -282,6 +282,39 @@ public class ConfigManager {
         return config.getInt("dynmap.marker-set.layer-priority", 10);
     }
 
+    // ==================== Per-Type Dynmap Layer Configuration ====================
+
+    /**
+     * Default display labels for each location-capable LoreType.
+     */
+    private static final java.util.Map<LoreType, String> DEFAULT_LAYER_LABELS;
+    static {
+        java.util.Map<LoreType, String> m = new java.util.EnumMap<>(LoreType.class);
+        m.put(LoreType.CITY, "Cities");
+        m.put(LoreType.LANDMARK, "Landmarks");
+        m.put(LoreType.MONUMENT, "Monuments");
+        m.put(LoreType.TAVERN, "Taverns & Inns");
+        m.put(LoreType.GUILD, "Guilds");
+        m.put(LoreType.SHRINE, "Shrines");
+        m.put(LoreType.PATH, "Paths & Roads");
+        m.put(LoreType.EVENT, "Events");
+        m.put(LoreType.FACTION, "Factions");
+        DEFAULT_LAYER_LABELS = java.util.Collections.unmodifiableMap(m);
+    }
+
+    public String getDynmapLayerLabel(LoreType type) {
+        String defaultLabel = DEFAULT_LAYER_LABELS.getOrDefault(type, type.name());
+        return config.getString("dynmap.layers." + type.name() + ".label", defaultLabel);
+    }
+
+    public boolean isDynmapLayerHidden(LoreType type) {
+        return config.getBoolean("dynmap.layers." + type.name() + ".hidden", false);
+    }
+
+    public int getDynmapLayerPriority(LoreType type) {
+        return config.getInt("dynmap.layers." + type.name() + ".priority", getDynmapLayerPriority());
+    }
+
     public String getDynmapIcon(LoreType type) {
         String key = "dynmap.icons." + type.name();
         return config.getString(key, config.getString("dynmap.icons.default", "sign"));

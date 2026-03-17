@@ -14,6 +14,7 @@ import org.fourz.rvnkcore.util.log.LogManager;
 import java.text.SimpleDateFormat;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -31,13 +32,13 @@ public class LoreMarkerManager {
     private final RVNKLore plugin;
     private final LogManager logger;
     private final MarkerAPI markerApi;
-    private final MarkerSet markerSet;
+    private final Map<LoreType, MarkerSet> markerSets;
     private final ConcurrentHashMap<String, Marker> markerCache = new ConcurrentHashMap<>();
 
-    public LoreMarkerManager(RVNKLore plugin, MarkerAPI markerApi, MarkerSet markerSet) {
+    public LoreMarkerManager(RVNKLore plugin, MarkerAPI markerApi, Map<LoreType, MarkerSet> markerSets) {
         this.plugin = plugin;
         this.markerApi = markerApi;
-        this.markerSet = markerSet;
+        this.markerSets = markerSets;
         this.logger = LogManager.getInstance(plugin, "LoreMarkerManager");
     }
 
@@ -57,6 +58,12 @@ public class LoreMarkerManager {
             return;
         }
 
+        MarkerSet targetSet = markerSets.get(entry.getType());
+        if (targetSet == null) {
+            logger.debug("No marker set for type " + entry.getType() + " - skipping");
+            return;
+        }
+
         String markerId = MARKER_ID_PREFIX + entry.getId();
         ConfigManager config = plugin.getConfigManager();
 
@@ -67,14 +74,11 @@ public class LoreMarkerManager {
             icon = markerApi.getMarkerIcon("sign"); // fallback
         }
 
-        // Delete existing marker if present
-        Marker existing = markerSet.findMarker(markerId);
-        if (existing != null) {
-            existing.deleteMarker();
-        }
+        // Delete existing marker if present (search across all sets for type changes)
+        deleteExistingMarker(markerId);
 
         // Create marker
-        Marker marker = markerSet.createMarker(
+        Marker marker = targetSet.createMarker(
             markerId,
             entry.getName(),
             loc.getWorld().getName(),
@@ -110,12 +114,22 @@ public class LoreMarkerManager {
             return;
         }
 
-        // Try to find directly in marker set
+        // Try to find directly across all marker sets
         String markerId = MARKER_ID_PREFIX + entryId;
-        Marker marker = markerSet.findMarker(markerId);
-        if (marker != null) {
-            marker.deleteMarker();
-            logger.debug("Deleted marker (uncached) for lore entry: " + entryId);
+        deleteExistingMarker(markerId);
+    }
+
+    /**
+     * Delete a marker by ID, searching across all per-type marker sets.
+     */
+    private void deleteExistingMarker(String markerId) {
+        for (MarkerSet set : markerSets.values()) {
+            Marker marker = set.findMarker(markerId);
+            if (marker != null) {
+                marker.deleteMarker();
+                logger.debug("Deleted marker (uncached): " + markerId);
+                return;
+            }
         }
     }
 
@@ -219,7 +233,7 @@ public class LoreMarkerManager {
     }
 
     /**
-     * Remove all managed markers.
+     * Remove all managed markers from all per-type sets.
      */
     public void cleanup() {
         int count = markerCache.size();
@@ -231,7 +245,7 @@ public class LoreMarkerManager {
             }
         }
         markerCache.clear();
-        logger.debug("Cleaned up " + count + " Dynmap markers");
+        logger.debug("Cleaned up " + count + " Dynmap markers across " + markerSets.size() + " layers");
     }
 
     /**

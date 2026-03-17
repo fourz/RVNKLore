@@ -9,7 +9,11 @@ import org.dynmap.markers.MarkerAPI;
 import org.dynmap.markers.MarkerSet;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.config.ConfigManager;
+import org.fourz.RVNKLore.lore.LoreType;
 import org.fourz.rvnkcore.util.log.LogManager;
+
+import java.util.EnumMap;
+import java.util.Map;
 
 /**
  * Manages Dynmap API lifecycle using the DynmapCommonAPIListener pattern.
@@ -21,7 +25,8 @@ public class DynmapIntegration implements Listener {
     private final LogManager logger;
     private DynmapCommonAPI dynmapApi;
     private MarkerAPI markerApi;
-    private MarkerSet markerSet;
+    private Map<LoreType, MarkerSet> loreMarkerSets;
+    private MarkerSet collectionMarkerSet;
     private LoreMarkerManager markerManager;
     private CollectionMarkerManager collectionMarkerManager;
     private DynmapMarkerReader markerReader;
@@ -59,18 +64,19 @@ public class DynmapIntegration implements Listener {
                 return false;
             }
 
-            initMarkerSet();
-            markerManager = new LoreMarkerManager(plugin, markerApi, markerSet);
+            initMarkerSets();
+            markerManager = new LoreMarkerManager(plugin, markerApi, loreMarkerSets);
             markerManager.populateAllMarkers();
 
-            // Initialize collection marker manager
-            collectionMarkerManager = new CollectionMarkerManager(plugin, markerApi, markerSet);
+            // Initialize collection marker manager with its own dedicated set
+            initCollectionMarkerSet();
+            collectionMarkerManager = new CollectionMarkerManager(plugin, markerApi, collectionMarkerSet);
             collectionMarkerManager.populateAllCollectionMarkers();
             plugin.getServer().getPluginManager().registerEvents(collectionMarkerManager, plugin);
 
             markerReader = new DynmapMarkerReader(markerApi, logger);
             enabled = true;
-            logger.debug("Dynmap integration activated - marker set '" + config.getDynmapMarkerSetId() + "'");
+            logger.debug("Dynmap integration activated - " + loreMarkerSets.size() + " per-type marker layers created");
             return true;
         } catch (Exception e) {
             logger.warning("Failed to initialize Dynmap integration: " + e.getMessage());
@@ -79,20 +85,48 @@ public class DynmapIntegration implements Listener {
         }
     }
 
-    private void initMarkerSet() {
+    private void initMarkerSets() {
         ConfigManager config = plugin.getConfigManager();
-        String setId = config.getDynmapMarkerSetId();
-        String setLabel = config.getDynmapMarkerSetLabel();
+        loreMarkerSets = new EnumMap<>(LoreType.class);
 
-        markerSet = markerApi.getMarkerSet(setId);
-        if (markerSet == null) {
-            markerSet = markerApi.createMarkerSet(setId, setLabel, null, false);
+        for (LoreType type : LoreType.values()) {
+            if (!type.isLocationCapable()) {
+                continue;
+            }
+
+            String setId = "rvnklore_" + type.name().toLowerCase();
+            String setLabel = config.getDynmapLayerLabel(type);
+
+            MarkerSet set = markerApi.getMarkerSet(setId);
+            if (set == null) {
+                set = markerApi.createMarkerSet(setId, setLabel, null, false);
+            }
+
+            if (set != null) {
+                set.setMarkerSetLabel(setLabel);
+                set.setHideByDefault(config.isDynmapLayerHidden(type));
+                set.setLayerPriority(config.getDynmapLayerPriority(type));
+                loreMarkerSets.put(type, set);
+                logger.debug("Created marker layer: " + setLabel + " (" + setId + ")");
+            }
         }
 
-        if (markerSet != null) {
-            markerSet.setMarkerSetLabel(setLabel);
-            markerSet.setHideByDefault(config.isDynmapMarkerSetHidden());
-            markerSet.setLayerPriority(config.getDynmapLayerPriority());
+        logger.info("Initialized " + loreMarkerSets.size() + " per-type Dynmap layers");
+    }
+
+    private void initCollectionMarkerSet() {
+        ConfigManager config = plugin.getConfigManager();
+        String setId = config.getDynmapMarkerSetId() + "_collections";
+        String setLabel = "Collections";
+
+        collectionMarkerSet = markerApi.getMarkerSet(setId);
+        if (collectionMarkerSet == null) {
+            collectionMarkerSet = markerApi.createMarkerSet(setId, setLabel, null, false);
+        }
+        if (collectionMarkerSet != null) {
+            collectionMarkerSet.setMarkerSetLabel(setLabel);
+            collectionMarkerSet.setHideByDefault(true);
+            collectionMarkerSet.setLayerPriority(20);
         }
     }
 
@@ -121,7 +155,8 @@ public class DynmapIntegration implements Listener {
             collectionMarkerManager.cleanup();
             collectionMarkerManager = null;
         }
-        markerSet = null;
+        loreMarkerSets = null;
+        collectionMarkerSet = null;
         markerApi = null;
         dynmapApi = null;
         enabled = false;
