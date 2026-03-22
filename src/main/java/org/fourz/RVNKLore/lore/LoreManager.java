@@ -335,6 +335,19 @@ public class LoreManager implements ILoreService {
     public String exportToJson() {
         return plugin.getDatabaseManager().exportLoreEntriesToJson();
     }    /**
+     * Remove a lore entry from the in-memory caches.
+     *
+     * @param entry The lore entry to remove
+     */
+    public void removeLoreEntry(LoreEntry entry) {
+        cachedEntries.remove(entry);
+        List<LoreEntry> typeList = loreByType.get(entry.getType());
+        if (typeList != null) {
+            typeList.remove(entry);
+        }
+    }
+
+    /**
      * Clean up resources when the plugin is disabled
      */
     public void cleanup() {
