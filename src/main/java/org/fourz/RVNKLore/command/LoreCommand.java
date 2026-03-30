@@ -40,6 +40,7 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
         commands.put("list", new LoreListSubCommand(plugin));
         commands.put("search", new LoreSearchSubCommand(plugin));
         commands.put("approve", new LoreApproveSubCommand(plugin));
+        commands.put("delete", new LoreDeleteSubCommand(plugin));
         commands.put("reload", new LoreReloadSubCommand(plugin));
         commands.put("export", new LoreExportSubCommand(plugin));
         commands.put("import", new LoreImportSubCommand(plugin));
@@ -152,6 +153,9 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
                 } else if ("import".equals(entry.getKey())) {
                     sender.sendMessage(ChatColor.YELLOW + "/lore import <file> [--preview]" +
                         ChatColor.WHITE + " - Import lore entries from file");
+                } else if ("delete".equals(entry.getKey())) {
+                    sender.sendMessage(ChatColor.YELLOW + "/lore delete <name> [confirm]" +
+                        ChatColor.WHITE + " - Permanently delete a lore entry");
                 } else if ("dynmap".equals(entry.getKey())) {
                     sender.sendMessage(ChatColor.YELLOW + "/lore dynmap <diff|import> [set]" +
                         ChatColor.WHITE + " - Dynmap marker integration");

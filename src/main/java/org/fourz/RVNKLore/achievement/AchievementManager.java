@@ -12,6 +12,9 @@ import org.fourz.rvnkcore.RVNKCore;
 import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.rvnkcore.api.service.PlayerPreferencesService;
 
+import org.fourz.RVNKLore.lore.LoreCategory;
+import org.fourz.RVNKLore.lore.LoreEntry;
+
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -32,6 +35,9 @@ public class AchievementManager {
 
     // Player progress cache (player UUID -> achievement ID -> progress)
     private final Map<UUID, Map<String, AchievementProgress>> playerProgress = new ConcurrentHashMap<>();
+
+    // Track unique categories discovered per player (for MULTI_CATEGORY achievements)
+    private final Map<UUID, Set<LoreCategory>> playerDiscoveredCategories = new ConcurrentHashMap<>();
 
     // Reward handlers
     private final List<RewardHandler> rewardHandlers = new ArrayList<>();
@@ -254,6 +260,9 @@ public class AchievementManager {
             handleAchievementUnlock(player, achievementId, progress);
         }
 
+        // Persist progress to database
+        persistProgress(progress);
+
         return completed;
     }
 
@@ -468,6 +477,7 @@ public class AchievementManager {
 
         // Force complete
         progress.setProgress(progress.getTargetProgress());
+        persistProgress(progress);
         handleAchievementUnlock(player, achievementId, progress);
         return true;
     }
@@ -488,15 +498,22 @@ public class AchievementManager {
      * Called when a player discovers a lore entry.
      * Updates relevant achievement progress.
      */
-    public void onLoreDiscovery(Player player, String loreType) {
+    public void onLoreDiscovery(Player player, LoreEntry entry) {
         // Increment discovery count achievements
         incrementProgress(player, "first_discovery");
         incrementProgress(player, "lore_seeker_10");
         incrementProgress(player, "lore_master_50");
         incrementProgress(player, "lore_sage_100");
 
-        // Track category discovery for explorer achievements
-        // TODO: Track unique categories discovered
+        // Track unique categories discovered for MULTI_CATEGORY achievements
+        LoreCategory category = entry.getType().getCategory();
+        Set<LoreCategory> categories = playerDiscoveredCategories.computeIfAbsent(
+            player.getUniqueId(), k -> ConcurrentHashMap.newKeySet()
+        );
+        if (categories.add(category)) {
+            // New category discovered — set progress to total unique categories
+            setProgress(player, "explorer_5", categories.size());
+        }
     }
 
     /**
@@ -550,6 +567,7 @@ public class AchievementManager {
 
         achievements.clear();
         playerProgress.clear();
+        playerDiscoveredCategories.clear();
         rewardHandlers.clear();
         logger.debug("AchievementManager shutdown complete");
     }

@@ -85,7 +85,32 @@ public class LoreManager implements ILoreService {
             loreByType.get(entry.getType()).add(entry);
         }
         logger.debug("Loaded " + cachedEntries.size() + " lore entries");
-    }    /**
+    }
+
+    /**
+     * Validate a lore entry against its handler without persisting.
+     *
+     * @param entry The lore entry to validate
+     * @return null if valid, or an error message describing the validation failure
+     */
+    public String validateEntry(LoreEntry entry) {
+        if (entry == null) {
+            return "Entry is null";
+        }
+        if (entry.getType() == null) {
+            return "Entry type is required";
+        }
+        LoreHandler handler = plugin.getHandlerFactory().getHandler(entry.getType());
+        if (handler == null) {
+            return "No handler found for lore type: " + entry.getType();
+        }
+        if (!handler.validateEntry(entry)) {
+            return "Validation failed for type " + entry.getType();
+        }
+        return null;
+    }
+
+    /**
      * Add a new lore entry (synchronous internal method).
      *
      * @param entry The lore entry to add
@@ -310,6 +335,19 @@ public class LoreManager implements ILoreService {
     public String exportToJson() {
         return plugin.getDatabaseManager().exportLoreEntriesToJson();
     }    /**
+     * Remove a lore entry from the in-memory caches.
+     *
+     * @param entry The lore entry to remove
+     */
+    public void removeLoreEntry(LoreEntry entry) {
+        cachedEntries.remove(entry);
+        List<LoreEntry> typeList = loreByType.get(entry.getType());
+        if (typeList != null) {
+            typeList.remove(entry);
+        }
+    }
+
+    /**
      * Clean up resources when the plugin is disabled
      */
     public void cleanup() {
@@ -470,6 +508,23 @@ public class LoreManager implements ILoreService {
      */
     public List<LoreEntry> getAllLoreEntriesSync() {
         return new ArrayList<>(cachedEntries);
+    }
+
+    /**
+     * Get total count of cached lore entries without copying the list.
+     */
+    public int getLoreEntryCount() {
+        return cachedEntries.size();
+    }
+
+    /**
+     * Get a paginated subset of cached lore entries.
+     */
+    public List<LoreEntry> getLoreEntriesPaginated(int offset, int limit) {
+        return cachedEntries.stream()
+            .skip(offset)
+            .limit(limit)
+            .collect(Collectors.toList());
     }
 
     /**

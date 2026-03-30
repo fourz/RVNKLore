@@ -5,12 +5,16 @@ import com.google.gson.GsonBuilder;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.api.model.request.LoreSubmissionRequest;
 import org.fourz.RVNKLore.api.model.response.*;
+import org.fourz.RVNKLore.lore.LoreCategory;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreManager;
 import org.fourz.RVNKLore.lore.LoreType;
 import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
 import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
 import org.fourz.RVNKLore.lore.player.PlayerManager;
+import org.fourz.RVNKLore.search.LoreSearchService;
+import org.fourz.RVNKLore.search.SearchCriteria;
+import org.fourz.RVNKLore.search.SearchResult;
 import org.fourz.rvnkcore.api.model.response.ApiResponse;
 import org.fourz.rvnkcore.api.service.ILoreApiService;
 import org.fourz.rvnkcore.util.log.LogManager;
@@ -36,6 +40,7 @@ public class LoreApiEndpointImpl implements ILoreApiService {
     private final LoreManager loreManager;
     private final PlayerManager playerManager;
     private final CollectionManager collectionManager;
+    private final LoreSearchService searchService;
     private final Gson gson;
     private final LogManager logger;
 
@@ -44,6 +49,7 @@ public class LoreApiEndpointImpl implements ILoreApiService {
         this.loreManager = plugin.getLoreManager();
         this.playerManager = plugin.getPlayerManager();
         this.collectionManager = loreManager.getItemManager().getCollectionManager();
+        this.searchService = new LoreSearchService(plugin);
         this.gson = new GsonBuilder().create();
         this.logger = LogManager.getInstance(plugin, "LoreApiEndpoint");
     }
@@ -54,22 +60,25 @@ public class LoreApiEndpointImpl implements ILoreApiService {
         int limit = parseIntOrDefault(params.get("limit"), 50);
         boolean approvedOnly = "true".equalsIgnoreCase(params.get("approved"));
 
-        CompletableFuture<List<LoreEntry>> entriesFuture = approvedOnly
-            ? loreManager.getApprovedLoreEntries()
-            : loreManager.getAllLoreEntries();
-
-        return entriesFuture
-            .<ApiResponse<?>>handle((entries, ex) -> {
-                if (ex != null) return ApiResponse.error("INTERNAL_ERROR",
-                    "Failed to retrieve lore entries: " + unwrapMessage(ex));
-                int total = entries.size();
-                List<LoreEntryResponse> data = entries.stream()
-                    .skip(offset)
-                    .limit(limit)
-                    .map(LoreEntryResponse::from)
-                    .collect(Collectors.toList());
-                return ApiResponse.success(new PagedLoreResponse(data, offset, limit, total));
-            });
+        return CompletableFuture.supplyAsync(() -> {
+            List<LoreEntry> page;
+            int total;
+            if (approvedOnly) {
+                // Approved entries require filtering — use full list
+                List<LoreEntry> approved = loreManager.getApprovedLoreEntriesSync();
+                total = approved.size();
+                int end = Math.min(offset + limit, total);
+                page = offset < total ? approved.subList(offset, end) : List.of();
+            } else {
+                // All entries — use paginated access to avoid full list copy
+                total = loreManager.getLoreEntryCount();
+                page = loreManager.getLoreEntriesPaginated(offset, limit);
+            }
+            List<LoreEntryResponse> data = page.stream()
+                .map(LoreEntryResponse::from)
+                .collect(Collectors.toList());
+            return (ApiResponse<?>) ApiResponse.success(new PagedLoreResponse(data, offset, limit, total));
+        });
     }
 
     @Override
@@ -132,24 +141,51 @@ public class LoreApiEndpointImpl implements ILoreApiService {
         int offset = parseIntOrDefault(params.get("offset"), 0);
         int limit = parseIntOrDefault(params.get("limit"), 50);
 
-        return loreManager.findLoreEntries(query)
-            .<ApiResponse<?>>handle((entries, ex) -> {
-                if (ex != null) return ApiResponse.error("INTERNAL_ERROR",
-                    "Failed to search lore entries: " + unwrapMessage(ex));
-                int total = entries.size();
-                List<LoreEntryResponse> data = entries.stream()
-                    .skip(offset)
-                    .limit(limit)
-                    .map(LoreEntryResponse::from)
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                SearchCriteria.Builder criteriaBuilder = new SearchCriteria.Builder()
+                    .query(query)
+                    .offset(offset)
+                    .limit(limit);
+
+                // Support optional type filter via query param
+                String typeParam = params.get("type");
+                if (typeParam != null && !typeParam.isEmpty()) {
+                    for (String t : typeParam.split(",")) {
+                        try {
+                            criteriaBuilder.addTypeFilter(LoreType.valueOf(t.trim().toUpperCase()));
+                        } catch (IllegalArgumentException e) {
+                            return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST",
+                                "Invalid lore type: " + t.trim());
+                        }
+                    }
+                }
+
+                SearchCriteria criteria = criteriaBuilder.build();
+                int total = searchService.countMatches(criteria);
+                List<SearchResult> results = searchService.search(criteria);
+
+                List<LoreEntryResponse> data = results.stream()
+                    .map(r -> LoreEntryResponse.from(r.getEntry()))
                     .collect(Collectors.toList());
-                return ApiResponse.success(new PagedLoreResponse(data, offset, limit, total));
-            });
+
+                return (ApiResponse<?>) ApiResponse.success(new PagedLoreResponse(data, offset, limit, total));
+            } catch (Exception e) {
+                logger.error("Error searching lore entries", e);
+                return (ApiResponse<?>) ApiResponse.error("INTERNAL_ERROR",
+                    "Failed to search lore entries: " + e.getMessage());
+            }
+        });
     }
 
     @Override
     public CompletableFuture<ApiResponse<?>> submitEntry(String requestBody) {
         return CompletableFuture.supplyAsync(() -> {
             LoreSubmissionRequest request = gson.fromJson(requestBody, LoreSubmissionRequest.class);
+
+            if (request != null) {
+                request.sanitize();
+            }
 
             if (request == null || !request.isValid()) {
                 return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST",
@@ -174,6 +210,11 @@ public class LoreApiEndpointImpl implements ILoreApiService {
                 }
 
                 entry.setApproved(false);
+
+                String validationError = loreManager.validateEntry(entry);
+                if (validationError != null) {
+                    return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", validationError);
+                }
 
                 boolean success = loreManager.addLoreEntry(entry).get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
                 if (success) {
@@ -211,8 +252,7 @@ public class LoreApiEndpointImpl implements ILoreApiService {
                 List<String> loreIds = playerManager.getPlayerLoreEntryIds(playerId)
                     .get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
 
-                List<LoreEntry> allEntries = loreManager.getAllLoreEntriesSync();
-                int totalAvailable = allEntries.size();
+                int totalAvailable = loreManager.getLoreEntryCount();
                 int totalDiscovered = loreIds.size();
 
                 List<LoreEntryResponse> recentDiscoveries = loreIds.stream()
@@ -283,12 +323,15 @@ public class LoreApiEndpointImpl implements ILoreApiService {
     public CompletableFuture<ApiResponse<?>> getStats() {
         return CompletableFuture.supplyAsync(() -> {
             try {
+                int totalEntries = loreManager.getLoreEntryCount();
                 List<LoreEntry> allEntries = loreManager.getAllLoreEntriesSync();
 
+                long approvedCount = allEntries.stream().filter(LoreEntry::isApproved).count();
+
                 Map<String, Object> stats = new HashMap<>();
-                stats.put("total_entries", allEntries.size());
-                stats.put("approved_entries", allEntries.stream().filter(LoreEntry::isApproved).count());
-                stats.put("pending_entries", allEntries.stream().filter(e -> !e.isApproved()).count());
+                stats.put("total_entries", totalEntries);
+                stats.put("approved_entries", approvedCount);
+                stats.put("pending_entries", totalEntries - approvedCount);
 
                 Map<String, Long> byType = allEntries.stream()
                     .collect(Collectors.groupingBy(
@@ -320,6 +363,30 @@ public class LoreApiEndpointImpl implements ILoreApiService {
             health.put("fallback_mode", loreManager.isInFallbackMode());
             health.put("timestamp", LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
             return (ApiResponse<?>) ApiResponse.success(health);
+        });
+    }
+
+    @Override
+    public CompletableFuture<ApiResponse<?>> getCategories() {
+        return CompletableFuture.supplyAsync(() -> {
+            List<Map<String, Object>> categories = new ArrayList<>();
+            for (LoreCategory category : LoreCategory.values()) {
+                Map<String, Object> catInfo = new HashMap<>();
+                catInfo.put("name", category.name());
+                catInfo.put("display_name", formatDisplayName(category.name()));
+
+                // List which LoreTypes belong to this category
+                List<String> types = new ArrayList<>();
+                for (LoreType type : LoreType.values()) {
+                    if (type.getCategory() == category) {
+                        types.add(type.name());
+                    }
+                }
+                catInfo.put("types", types);
+                catInfo.put("type_count", types.size());
+                categories.add(catInfo);
+            }
+            return (ApiResponse<?>) ApiResponse.success(categories);
         });
     }
 

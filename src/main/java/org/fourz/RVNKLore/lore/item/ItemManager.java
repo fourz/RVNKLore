@@ -13,6 +13,7 @@ import org.fourz.RVNKLore.lore.item.custommodeldata.CustomModelDataManager;
 import org.fourz.RVNKLore.service.IItemService;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -345,10 +346,15 @@ public class ItemManager implements IItemService {
                 }
             }
             
-            // Load all collections
+            // Load all collections in parallel
             Map<Integer, String> collections = itemRepository.getAllCollections().join();
+            Map<Integer, CompletableFuture<List<ItemProperties>>> collectionFutures = new HashMap<>();
             for (Integer collectionId : collections.keySet()) {
-                collectionCache.put(collectionId, itemRepository.getItemsByCollection(collectionId).join());
+                collectionFutures.put(collectionId, itemRepository.getItemsByCollection(collectionId));
+            }
+            CompletableFuture.allOf(collectionFutures.values().toArray(new CompletableFuture[0])).join();
+            for (Map.Entry<Integer, CompletableFuture<List<ItemProperties>>> entry : collectionFutures.entrySet()) {
+                collectionCache.put(entry.getKey(), entry.getValue().join());
             }
             
             cacheInitialized = true;

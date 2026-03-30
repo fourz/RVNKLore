@@ -17,13 +17,40 @@ public class LoreSubmissionRequest {
     // Default constructor for Gson
     public LoreSubmissionRequest() {}
 
+    private static final int MAX_NAME_LENGTH = 64;
+    private static final int MAX_DESCRIPTION_LENGTH = 2000;
+
     /**
-     * Validates the request has required fields.
+     * Validates the request has required fields and enforces length limits.
      */
     public boolean isValid() {
         return name != null && !name.trim().isEmpty()
             && description != null && !description.trim().isEmpty()
-            && type != null && !type.trim().isEmpty();
+            && type != null && !type.trim().isEmpty()
+            && name.length() <= MAX_NAME_LENGTH
+            && description.length() <= MAX_DESCRIPTION_LENGTH;
+    }
+
+    /**
+     * Sanitizes input fields by stripping control characters and Minecraft color codes.
+     * Call after deserialization and before processing.
+     */
+    public void sanitize() {
+        if (name != null) {
+            name = stripControlChars(name.trim());
+        }
+        if (description != null) {
+            description = stripControlChars(description.trim());
+        }
+        if (submittedBy != null) {
+            submittedBy = stripControlChars(submittedBy.trim());
+        }
+    }
+
+    private static String stripControlChars(String input) {
+        // Remove Minecraft color codes (§X) and ASCII control characters
+        return input.replaceAll("[§&][0-9a-fk-or]", "")
+                     .replaceAll("[\\x00-\\x1F\\x7F]", "");
     }
 
     /**
