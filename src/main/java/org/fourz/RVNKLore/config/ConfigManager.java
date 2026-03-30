@@ -5,24 +5,18 @@ import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.rvnkcore.config.dto.DatabaseSettingsDTO;
 import org.fourz.rvnkcore.config.dto.MySQLSettingsDTO;
 import org.fourz.rvnkcore.config.dto.SQLiteSettingsDTO;
-import org.fourz.RVNKLore.handler.DefaultLoreHandler;
-import org.fourz.RVNKLore.handler.HandlerFactory;
-import org.fourz.RVNKLore.handler.LoreHandler;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
 import org.bukkit.configuration.ConfigurationSection;
 import org.fourz.rvnkcore.util.log.LogManager;
 
 import java.io.File;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.logging.Level;
 
 public class ConfigManager {
     private final RVNKLore plugin;
     private FileConfiguration config;
-    private HandlerFactory handlerFactory;
     private LogManager logger;
     private DatabaseSettingsDTO databaseSettings;
 
@@ -190,38 +184,6 @@ public class ConfigManager {
     }
 
     /**
-     * Initialize the handler factory
-     */
-    public void initHandlerFactory() {
-        this.handlerFactory = new HandlerFactory(plugin);
-    }
-
-    /**
-     * Load lore handlers from configuration
-     * 
-     * @return A map of lore types to their handlers
-     */
-    public Map<LoreType, LoreHandler> loadLoreHandlers() {
-        if (handlerFactory == null) {
-            initHandlerFactory();
-        }
-        logger.debug("Loading lore handlers from configuration...");
-        Map<LoreType, LoreHandler> handlers = new HashMap<>();
-        // Register handlers for all lore types
-        for (LoreType type : LoreType.values()) {
-            try {
-                LoreHandler handler = handlerFactory.getHandler(type);
-                handlers.put(type, handler);
-                logger.debug("Registered handler for " + type + ": " + handler.getClass().getSimpleName());
-            } catch (Exception e) {
-                logger.error("Failed to create handler for type " + type + ", using default handler", e);
-                handlers.put(type, new DefaultLoreHandler(plugin));
-            }
-        }
-        return handlers;
-    }
-    
-    /**
      * Export lore entries to file
      * 
      * @param entries The entries to export
@@ -268,18 +230,6 @@ public class ConfigManager {
         java.util.logging.Level newLevel = getLogLevel();
         updateAllLogManagers(newLevel);
         logger.info("Configuration reloaded with log level: " + newLevel.getName());
-    }
-
-    /**
-     * Get the handler factory
-     * 
-     * @return The handler factory
-     */
-    public HandlerFactory getHandlerFactory() {
-        if (handlerFactory == null) {
-            initHandlerFactory();
-        }
-        return handlerFactory;
     }
 
     /**
@@ -330,6 +280,39 @@ public class ConfigManager {
 
     public int getDynmapLayerPriority() {
         return config.getInt("dynmap.marker-set.layer-priority", 10);
+    }
+
+    // ==================== Per-Type Dynmap Layer Configuration ====================
+
+    /**
+     * Default display labels for each location-capable LoreType.
+     */
+    private static final java.util.Map<LoreType, String> DEFAULT_LAYER_LABELS;
+    static {
+        java.util.Map<LoreType, String> m = new java.util.EnumMap<>(LoreType.class);
+        m.put(LoreType.CITY, "Cities");
+        m.put(LoreType.LANDMARK, "Landmarks");
+        m.put(LoreType.MONUMENT, "Monuments");
+        m.put(LoreType.TAVERN, "Taverns & Inns");
+        m.put(LoreType.GUILD, "Guilds");
+        m.put(LoreType.SHRINE, "Shrines");
+        m.put(LoreType.PATH, "Paths & Roads");
+        m.put(LoreType.EVENT, "Events");
+        m.put(LoreType.FACTION, "Factions");
+        DEFAULT_LAYER_LABELS = java.util.Collections.unmodifiableMap(m);
+    }
+
+    public String getDynmapLayerLabel(LoreType type) {
+        String defaultLabel = DEFAULT_LAYER_LABELS.getOrDefault(type, type.name());
+        return config.getString("dynmap.layers." + type.name() + ".label", defaultLabel);
+    }
+
+    public boolean isDynmapLayerHidden(LoreType type) {
+        return config.getBoolean("dynmap.layers." + type.name() + ".hidden", false);
+    }
+
+    public int getDynmapLayerPriority(LoreType type) {
+        return config.getInt("dynmap.layers." + type.name() + ".priority", getDynmapLayerPriority());
     }
 
     public String getDynmapIcon(LoreType type) {

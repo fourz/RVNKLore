@@ -7,7 +7,7 @@
 
 ## Project Overview
 
-**RVNKLore** is a comprehensive lore and history plugin for Bukkit/Spigot/Paper servers. It provides player lore tracking, custom item generation with enchantments and custom model data, a thematic collections system, lore discovery and achievement systems, a submission approval workflow, Dynmap marker integration, and database-backed storage for all lore entries covering landmarks, cities, players, factions, items, events, quests, enchantments, and special entities.
+**RVNKLore** is a comprehensive lore and history plugin for Bukkit/Spigot/Paper servers. It provides player lore tracking, custom item generation with enchantments and custom model data, a thematic collections system, lore discovery and achievement systems, a submission approval workflow, Dynmap marker integration, and database-backed storage for all lore entries covering landmarks, cities, players, factions, items, events, quests, enchantments, monuments, taverns, guilds, and shrines.
 
 ## Build Commands
 
@@ -119,9 +119,9 @@ org.fourz.RVNKLore
 ├── lore/
 │   ├── LoreManager.java             # Core lore orchestration (implements ILoreService)
 │   ├── LoreEntry.java               # Lore entry model
-│   ├── LoreType.java                # Enum: 11 types (LANDMARK, CITY, PLAYER, FACTION,
-│   │                                #   ITEM, HEAD, EVENT, PATH, QUEST, ENCHANTMENT,
-│   │                                #   SPECIAL_ENTITY)
+│   ├── LoreType.java                # Enum: 15 types (GENERIC, PLAYER, CITY, LANDMARK,
+│   │                                #   FACTION, PATH, ITEM, EVENT, QUEST, ENCHANTMENT,
+│   │                                #   MONUMENT, HEAD, TAVERN, GUILD, SHRINE)
 │   ├── LoreCategory.java
 │   ├── LoreSubmission.java          # Submission model for approval workflow
 │   ├── LoreFinder.java              # Search and retrieval utilities
@@ -329,8 +329,8 @@ Base path: `/api/lore/*` — registered via `IServletRegistrationService` at plu
 
 ### Lore Types
 
-11 types defined in `LoreType` enum:
-`LANDMARK`, `CITY`, `PLAYER`, `FACTION`, `ITEM`, `HEAD`, `EVENT`, `PATH`, `QUEST`, `ENCHANTMENT`, `SPECIAL_ENTITY`
+15 types defined in `LoreType` enum:
+`GENERIC`, `PLAYER`, `CITY`, `LANDMARK`, `FACTION`, `PATH`, `ITEM`, `EVENT`, `QUEST`, `ENCHANTMENT`, `MONUMENT`, `HEAD`, `TAVERN`, `GUILD`, `SHRINE`
 
 ### External Integrations (Soft Dependencies)
 

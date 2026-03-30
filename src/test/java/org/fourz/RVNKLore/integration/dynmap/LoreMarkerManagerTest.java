@@ -20,6 +20,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.sql.Timestamp;
 import java.util.Arrays;
+import java.util.EnumMap;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -44,6 +46,8 @@ class LoreMarkerManagerTest {
 
     private LoreMarkerManager manager;
 
+    private Map<LoreType, MarkerSet> markerSets;
+
     @BeforeEach
     void setUp() {
         lenient().when(plugin.getConfigManager()).thenReturn(configManager);
@@ -51,7 +55,15 @@ class LoreMarkerManagerTest {
         lenient().when(plugin.getLoreManager()).thenReturn(loreManager);
         lenient().when(world.getName()).thenReturn("world");
 
-        manager = new LoreMarkerManager(plugin, markerApi, markerSet);
+        // Create per-type marker sets — all location types share the same mock for simplicity
+        markerSets = new EnumMap<>(LoreType.class);
+        for (LoreType type : LoreType.values()) {
+            if (type.isLocationCapable()) {
+                markerSets.put(type, markerSet);
+            }
+        }
+
+        manager = new LoreMarkerManager(plugin, markerApi, markerSets);
     }
 
     private LoreEntry createEntry(LoreType type, boolean approved, boolean hasLocation) {

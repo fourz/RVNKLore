@@ -11,7 +11,9 @@ import org.fourz.rvnkcore.util.log.LogManager;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Debug subcommand for seeding test data into the RVNKLore database.
@@ -30,11 +32,15 @@ public class SeedSubCommand implements SubCommand {
     private static final List<String> ACTIONS = Arrays.asList("minimal", "standard", "stress", "cleanup", "status");
     private static final String PERMISSION = "rvnklore.admin.seed";
 
+    private static final long CONFIRM_TIMEOUT_MS = 15000; // 15 seconds to confirm
+
     private final RVNKLore plugin;
     private final LogManager logger;
     private final ChatService chatService;
     private LoreTestDataGenerator generator;
     private boolean seeding = false;
+    // Stress confirmation tracking (sender name -> timestamp)
+    private final Map<String, Long> pendingStressConfirmations = new ConcurrentHashMap<>();
 
     public SeedSubCommand(RVNKLore plugin) {
         this.plugin = plugin;
@@ -80,8 +86,9 @@ public class SeedSubCommand implements SubCommand {
         switch (action) {
             case "minimal":
             case "standard":
-            case "stress":
                 return executeSeed(sender, DataCategory.valueOf(action.toUpperCase()));
+            case "stress":
+                return executeStressWithConfirmation(sender);
             case "cleanup":
                 if (args.length > 1) {
                     return executeCleanupPlayer(sender, args[1]);
@@ -104,6 +111,24 @@ public class SeedSubCommand implements SubCommand {
         chatService.sendMessage(sender, "&7/lore debug seed cleanup&8 - Remove all test data");
         chatService.sendMessage(sender, "&7/lore debug seed cleanup <uuid>&8 - Remove player's test data");
         chatService.sendMessage(sender, "&7/lore debug seed status&8 - Show current status");
+    }
+
+    private boolean executeStressWithConfirmation(CommandSender sender) {
+        String senderName = sender.getName();
+        Long pendingTime = pendingStressConfirmations.get(senderName);
+        long now = System.currentTimeMillis();
+
+        if (pendingTime != null && (now - pendingTime) < CONFIRM_TIMEOUT_MS) {
+            // Confirmed — proceed
+            pendingStressConfirmations.remove(senderName);
+            return executeSeed(sender, DataCategory.STRESS);
+        }
+
+        // First invocation — warn and require re-run
+        pendingStressConfirmations.put(senderName, now);
+        chatService.sendMessage(sender, "&e⚠ WARNING: &fStress mode will insert &c1000 records &finto the database.");
+        chatService.sendMessage(sender, "&7Run the command again within 15 seconds to confirm.");
+        return true;
     }
 
     private boolean executeSeed(CommandSender sender, DataCategory category) {
