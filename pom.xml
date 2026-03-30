@@ -88,7 +88,7 @@
        <dependency>
            <groupId>org.fourz</groupId>
            <artifactId>rvnkcore</artifactId>
-           <version>1.4.0-alpha</version>
+           <version>1.4.5-alpha</version>
            <scope>provided</scope>
        </dependency>
        <!-- RVNKQuests - for QuestCompleteEvent cross-plugin integration -->
