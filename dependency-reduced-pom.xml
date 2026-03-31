@@ -99,7 +99,7 @@
     <dependency>
       <groupId>org.fourz</groupId>
       <artifactId>rvnkcore</artifactId>
-      <version>1.4.0-alpha</version>
+      <version>1.4.5-alpha</version>
       <scope>provided</scope>
     </dependency>
     <dependency>
@@ -118,12 +118,6 @@
       <groupId>us.dynmap</groupId>
       <artifactId>DynmapCoreAPI</artifactId>
       <version>3.8</version>
-      <scope>provided</scope>
-    </dependency>
-    <dependency>
-      <groupId>com.bencodez</groupId>
-      <artifactId>votingplugin</artifactId>
-      <version>7.0-SNAPSHOT</version>
       <scope>provided</scope>
     </dependency>
     <dependency>
