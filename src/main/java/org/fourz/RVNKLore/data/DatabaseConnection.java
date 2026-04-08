@@ -1,8 +1,8 @@
 package org.fourz.RVNKLore.data;
 
-import com.zaxxer.hikari.HikariDataSource;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.data.dialect.SQLDialect;
+import org.fourz.rvnkcore.database.connection.ConnectionProvider;
 import org.fourz.rvnkcore.util.log.LogManager;
 
 import java.sql.Connection;
@@ -22,7 +22,7 @@ public abstract class DatabaseConnection {
     protected final RVNKLore plugin;
     protected final LogManager logger;
     protected final SQLDialect dialect;
-    protected HikariDataSource connectionPool;
+    protected ConnectionProvider rvnkProvider;
     protected String lastConnectionError = null;
     protected String tablePrefix = "";
 
@@ -178,7 +178,7 @@ public abstract class DatabaseConnection {
         String createLoreItemEntryIndex =
                 "CREATE INDEX IF NOT EXISTS idx_" + tablePrefix + "lore_item_entry_id ON " + loreItem + "(lore_entry_id)";
 
-        try (Connection conn = connectionPool.getConnection();
+        try (Connection conn = rvnkProvider.getConnection();
              Statement stmt = conn.createStatement()) {
             // Create new schema tables
             stmt.execute(createLoreEntryTable);
@@ -337,9 +337,10 @@ public abstract class DatabaseConnection {
      * Close the database connection pool
      */
     public void close() {
-        if (connectionPool != null && !connectionPool.isClosed()) {
+        if (rvnkProvider != null) {
             try {
-                connectionPool.close();
+                rvnkProvider.close();
+                rvnkProvider = null;
                 logger.debug("Database connection pool closed");
             } catch (Exception e) {
                 logger.error("Failed to close database connection pool", e);
@@ -352,12 +353,12 @@ public abstract class DatabaseConnection {
      * @return true if connected, false otherwise
      */
     public boolean isConnected() {
-        if (connectionPool == null || connectionPool.isClosed()) {
+        if (rvnkProvider == null || !rvnkProvider.isValid()) {
             return false;
         }
 
         // Test the pool with a quick connection check
-        try (Connection conn = connectionPool.getConnection()) {
+        try (Connection conn = rvnkProvider.getConnection()) {
             return conn != null && conn.isValid(2);
         } catch (SQLException e) {
             logger.debug("Database connection check failed: " + e.getMessage());
@@ -378,8 +379,9 @@ public abstract class DatabaseConnection {
             lastConnectionError = null;
 
             // Close existing pool if present
-            if (connectionPool != null && !connectionPool.isClosed()) {
-                connectionPool.close();
+            if (rvnkProvider != null) {
+                rvnkProvider.close();
+                rvnkProvider = null;
             }
 
             // Reinitialize
@@ -409,24 +411,16 @@ public abstract class DatabaseConnection {
      * @throws IllegalStateException if the pool is not available
      */
     public Connection getConnection() {
-        if (connectionPool == null || connectionPool.isClosed()) {
+        if (rvnkProvider == null) {
             throw new IllegalStateException("Database connection pool is not available");
         }
 
         try {
-            return connectionPool.getConnection();
+            return rvnkProvider.getConnection();
         } catch (SQLException e) {
             lastConnectionError = e.getMessage();
             throw new IllegalStateException("Failed to get connection from pool: " + e.getMessage(), e);
         }
-    }
-
-    /**
-     * Get the HikariCP connection pool for direct access.
-     * @return The HikariDataSource, or null if not initialized
-     */
-    public HikariDataSource getConnectionPool() {
-        return connectionPool;
     }
 
     /**

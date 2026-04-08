@@ -1,20 +1,19 @@
 package org.fourz.RVNKLore.data;
 
-import com.zaxxer.hikari.HikariConfig;
-import com.zaxxer.hikari.HikariDataSource;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.rvnkcore.config.dto.SQLiteSettingsDTO;
+import org.fourz.rvnkcore.database.config.DatabaseConfig;
+import org.fourz.rvnkcore.database.connection.ConnectionProviderFactory;
 import org.fourz.RVNKLore.data.dialect.SQLDialect;
 
 import java.io.File;
 import java.sql.*;
 
 /**
- * SQLite implementation of database connection using HikariCP connection pooling.
+ * SQLite implementation of database connection using RVNKCore's ConnectionProvider.
  *
  * <p>Uses the SQLiteDialect for database-specific SQL generation.
- * HikariCP manages connection lifecycle, preventing "connection closed" errors
- * during concurrent async operations.
+ * RVNKCore manages connection pooling and lifecycle.
  */
 public class SQLiteConnection extends DatabaseConnection {
     private final SQLiteSettingsDTO settings;
@@ -26,7 +25,7 @@ public class SQLiteConnection extends DatabaseConnection {
 
     @Override
     public void initialize() throws SQLException, ClassNotFoundException {
-        logger.debug("Initializing SQLite connection pool...");
+        logger.debug("Initializing SQLite connection via RVNKCore ConnectionProviderFactory...");
         lastConnectionError = null;
 
         // Ensure plugin data folder exists
@@ -34,38 +33,17 @@ public class SQLiteConnection extends DatabaseConnection {
             plugin.getDataFolder().mkdirs();
         }
 
-        // Load pool configuration from config.yml (pool tuning not in DTO)
-        int poolSize = plugin.getConfig().getInt("storage.sqlite.poolSize", 10);
-        int connectionTimeout = plugin.getConfig().getInt("storage.sqlite.connectionTimeout", 30000);
-        int idleTimeout = plugin.getConfig().getInt("storage.sqlite.idleTimeout", 600000);
-        int maxLifetime = plugin.getConfig().getInt("storage.sqlite.maxLifetime", 1800000);
+        // DatabaseConfig.sqlite() resolves the filename relative to plugin.getDataFolder()
+        String filename = new File(settings.getFilePath()).getName();
+        DatabaseConfig config = DatabaseConfig.sqlite(filename);
+
+        rvnkProvider = new ConnectionProviderFactory(plugin).createConnectionProvider(config);
+
+        // Apply SQLite PRAGMAs after pool is established
         boolean useWAL = plugin.getConfig().getBoolean("storage.sqlite.optimizations.useWAL", true);
         boolean normalSync = plugin.getConfig().getBoolean("storage.sqlite.optimizations.normalSync", true);
 
-        // Set up HikariCP configuration for SQLite using DTO file path
-        HikariConfig config = new HikariConfig();
-        config.setJdbcUrl("jdbc:sqlite:" + settings.getFilePath());
-        config.setConnectionTestQuery("SELECT 1");
-        config.setMaximumPoolSize(poolSize);
-        config.setMinimumIdle(Math.max(1, poolSize / 2));
-        config.setConnectionTimeout(connectionTimeout);
-        config.setIdleTimeout(idleTimeout);
-        config.setMaxLifetime(maxLifetime);
-
-        // SQLite optimizations
-        if (useWAL) {
-            config.addDataSourceProperty("journal_mode", "WAL");
-        }
-        if (normalSync) {
-            config.addDataSourceProperty("synchronous", "NORMAL");
-        }
-        config.addDataSourceProperty("foreign_keys", "ON");
-
-        // Create the connection pool
-        connectionPool = new HikariDataSource(config);
-
-        // Verify connection and set PRAGMAs
-        try (Connection conn = connectionPool.getConnection();
+        try (Connection conn = rvnkProvider.getConnection();
              Statement stmt = conn.createStatement()) {
             stmt.execute("PRAGMA foreign_keys = ON");
             if (useWAL) {
@@ -76,16 +54,16 @@ public class SQLiteConnection extends DatabaseConnection {
             }
         }
 
-        logger.debug("Connected to SQLite database with HikariCP pool (size: " + poolSize + ")");
+        logger.debug("Connected to SQLite database via RVNKCore (" + filename + ")");
     }
 
     @Override
     public String getDatabaseInfo() {
-        if (connectionPool == null || connectionPool.isClosed()) {
-            return "No active SQLite connection pool";
+        if (rvnkProvider == null || !rvnkProvider.isValid()) {
+            return "No active SQLite connection";
         }
 
-        try (Connection conn = connectionPool.getConnection()) {
+        try (Connection conn = rvnkProvider.getConnection()) {
             DatabaseMetaData metaData = conn.getMetaData();
             StringBuilder info = new StringBuilder();
 
@@ -104,13 +82,6 @@ public class SQLiteConnection extends DatabaseConnection {
                 // Not critical if this fails
             }
 
-            // Add pool stats
-            info.append(", Pool: ")
-                .append(connectionPool.getHikariPoolMXBean().getActiveConnections())
-                .append("/")
-                .append(connectionPool.getHikariPoolMXBean().getTotalConnections())
-                .append(" active/total");
-
             return info.toString();
         } catch (SQLException e) {
             logger.error("Failed to get database info", e);
@@ -120,23 +91,23 @@ public class SQLiteConnection extends DatabaseConnection {
 
     @Override
     public boolean isReadOnly() {
-        if (connectionPool == null || connectionPool.isClosed()) {
-            return true; // No connection means effectively read-only
+        if (rvnkProvider == null || !rvnkProvider.isValid()) {
+            return true;
         }
 
-        try (Connection conn = connectionPool.getConnection();
+        try (Connection conn = rvnkProvider.getConnection();
              Statement stmt = conn.createStatement()) {
             // Check if we can write to the database
             stmt.execute("CREATE TABLE IF NOT EXISTS rw_test (id INTEGER)");
             stmt.execute("INSERT INTO rw_test VALUES (1)");
             stmt.execute("DELETE FROM rw_test WHERE id = 1");
-            return false; // If we get here, it's not read-only
+            return false;
         } catch (SQLException e) {
             logger.debug("Database appears to be read-only: " + e.getMessage());
             return true;
         }
     }
-    
+
     @Override
     public String getDatabaseType() {
         return "sqlite";
