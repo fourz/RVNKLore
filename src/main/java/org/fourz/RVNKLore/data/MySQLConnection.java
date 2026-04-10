@@ -1,19 +1,18 @@
 package org.fourz.RVNKLore.data;
 
-import com.zaxxer.hikari.HikariConfig;
-import com.zaxxer.hikari.HikariDataSource;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.rvnkcore.config.dto.MySQLSettingsDTO;
+import org.fourz.rvnkcore.database.config.DatabaseConfig;
+import org.fourz.rvnkcore.database.connection.ConnectionProviderFactory;
 import org.fourz.RVNKLore.data.dialect.SQLDialect;
 
 import java.sql.*;
 
 /**
- * MySQL implementation of database connection using HikariCP connection pooling.
+ * MySQL implementation of database connection using RVNKCore's ConnectionProvider.
  *
  * <p>Uses the MySQLDialect for database-specific SQL generation.
- * HikariCP manages connection lifecycle, preventing "connection closed" errors
- * during concurrent async operations.
+ * RVNKCore manages connection pooling and lifecycle.
  */
 public class MySQLConnection extends DatabaseConnection {
     private final MySQLSettingsDTO settings;
@@ -33,50 +32,35 @@ public class MySQLConnection extends DatabaseConnection {
 
     @Override
     public void initialize() throws SQLException, ClassNotFoundException {
-        logger.debug("Initializing MySQL connection pool...");
+        logger.debug("Initializing MySQL connection via RVNKCore ConnectionProviderFactory...");
         lastConnectionError = null;
 
-        // Build JDBC URL using DTO
-        String jdbcUrl = String.format("jdbc:mysql://%s:%d/%s?useSSL=%s&allowPublicKeyRetrieval=true",
-                settings.getHost(), settings.getPort(), settings.getDatabase(), settings.isUseSSL());
+        DatabaseConfig config = DatabaseConfig.builder()
+                .type("mysql")
+                .host(settings.getHost())
+                .port(settings.getPort())
+                .database(settings.getDatabase())
+                .username(settings.getUsername())
+                .password(settings.getPassword())
+                .useSSL(settings.isUseSSL())
+                .maxConnections(poolSize)
+                .minIdleConnections(Math.max(2, poolSize / 2))
+                .connectionTimeoutMs(connectionTimeout)
+                .idleTimeoutMs((long) idleTimeout)
+                .maxLifetimeMs((long) maxLifetime)
+                .build();
 
-        // Set up HikariCP configuration for MySQL
-        HikariConfig config = new HikariConfig();
-        config.setJdbcUrl(jdbcUrl);
-        config.setUsername(settings.getUsername());
-        config.setPassword(settings.getPassword());
-        config.setConnectionTestQuery("SELECT 1");
-        config.setMaximumPoolSize(poolSize);
-        config.setMinimumIdle(Math.max(2, poolSize / 2));
-        config.setConnectionTimeout(connectionTimeout);
-        config.setIdleTimeout(idleTimeout);
-        config.setMaxLifetime(maxLifetime);
-
-        // MySQL performance optimizations
-        config.addDataSourceProperty("cachePrepStmts", "true");
-        config.addDataSourceProperty("prepStmtCacheSize", "250");
-        config.addDataSourceProperty("prepStmtCacheSqlLimit", "2048");
-        config.addDataSourceProperty("useServerPrepStmts", "true");
-        config.addDataSourceProperty("useLocalSessionState", "true");
-        config.addDataSourceProperty("rewriteBatchedStatements", "true");
-        config.addDataSourceProperty("cacheResultSetMetadata", "true");
-        config.addDataSourceProperty("cacheServerConfiguration", "true");
-        config.addDataSourceProperty("elideSetAutoCommits", "true");
-        config.addDataSourceProperty("maintainTimeStats", "false");
-
-        // Create the connection pool
-        connectionPool = new HikariDataSource(config);
-
-        logger.debug("Connected to MySQL database with HikariCP pool (size: " + poolSize + ")");
+        rvnkProvider = new ConnectionProviderFactory(plugin).createConnectionProvider(config);
+        logger.debug("Connected to MySQL database via RVNKCore (pool size: " + poolSize + ")");
     }
 
     @Override
     public String getDatabaseInfo() {
-        if (connectionPool == null || connectionPool.isClosed()) {
-            return "No active MySQL connection pool";
+        if (rvnkProvider == null || !rvnkProvider.isValid()) {
+            return "No active MySQL connection";
         }
 
-        try (Connection conn = connectionPool.getConnection()) {
+        try (Connection conn = rvnkProvider.getConnection()) {
             DatabaseMetaData metaData = conn.getMetaData();
             StringBuilder info = new StringBuilder();
 
@@ -95,13 +79,6 @@ public class MySQLConnection extends DatabaseConnection {
                 // Not critical if this fails
             }
 
-            // Add pool stats
-            info.append(", Pool: ")
-                .append(connectionPool.getHikariPoolMXBean().getActiveConnections())
-                .append("/")
-                .append(connectionPool.getHikariPoolMXBean().getTotalConnections())
-                .append(" active/total");
-
             return info.toString();
         } catch (SQLException e) {
             logger.error("Failed to get database info", e);
@@ -111,18 +88,18 @@ public class MySQLConnection extends DatabaseConnection {
 
     @Override
     public boolean isReadOnly() {
-        if (connectionPool == null || connectionPool.isClosed()) {
-            return true; // No connection means effectively read-only
+        if (rvnkProvider == null || !rvnkProvider.isValid()) {
+            return true;
         }
 
-        try (Connection conn = connectionPool.getConnection()) {
+        try (Connection conn = rvnkProvider.getConnection()) {
             return conn.isReadOnly();
         } catch (SQLException e) {
             logger.error("Error checking if database is read-only", e);
-            return true; // Assume read-only in case of error
+            return true;
         }
     }
-    
+
     @Override
     public String getDatabaseType() {
         return "mysql";
