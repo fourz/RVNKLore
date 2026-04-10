@@ -68,7 +68,7 @@ public class PlayerRepository implements IPlayerRepository {
             try (Connection conn = dbConnection.getConnection();
                  PreparedStatement stmt = conn.prepareStatement(sql)) {
                 stmt.setString(1, LoreType.PLAYER.name());
-                stmt.setString(2, "%\"player_uuid\":\"" + playerUuid.toString() + "\"%");
+                stmt.setString(2, "%\"player_uuid\"%" + playerUuid.toString() + "%");
 
                 try (ResultSet rs = stmt.executeQuery()) {
                     if (rs.next()) {
@@ -105,7 +105,7 @@ public class PlayerRepository implements IPlayerRepository {
             try (Connection conn = dbConnection.getConnection();
                  PreparedStatement stmt = conn.prepareStatement(sql)) {
                 stmt.setString(1, LoreType.PLAYER.name());
-                stmt.setString(2, "%\"player_uuid\":\"" + playerUuid.toString() + "\"%");
+                stmt.setString(2, "%\"player_uuid\"%" + playerUuid.toString() + "%");
 
                 try (ResultSet rs = stmt.executeQuery()) {
                     if (rs.next()) {
@@ -145,7 +145,7 @@ public class PlayerRepository implements IPlayerRepository {
             try (Connection conn = dbConnection.getConnection();
                  PreparedStatement stmt = conn.prepareStatement(sql)) {
                 stmt.setString(1, LoreType.PLAYER.name());
-                stmt.setString(2, "%\"player_uuid\":\"" + playerUuid.toString() + "\"%");
+                stmt.setString(2, "%\"player_uuid\"%" + playerUuid.toString() + "%");
 
                 try (ResultSet rs = stmt.executeQuery()) {
                     while (rs.next()) {
@@ -185,8 +185,8 @@ public class PlayerRepository implements IPlayerRepository {
             try (Connection conn = dbConnection.getConnection();
                  PreparedStatement stmt = conn.prepareStatement(sql)) {
                 stmt.setString(1, LoreType.PLAYER.name());
-                stmt.setString(2, "%\"player_uuid\":\"" + playerUuid.toString() + "\"%");
-                stmt.setString(3, "%\"entry_type\":\"" + entryType + "\"%");
+                stmt.setString(2, "%\"player_uuid\"%" + playerUuid.toString() + "%");
+                stmt.setString(3, "%\"entry_type\"%" + entryType + "%");
 
                 try (ResultSet rs = stmt.executeQuery()) {
                     while (rs.next()) {
@@ -238,8 +238,8 @@ public class PlayerRepository implements IPlayerRepository {
             try (Connection conn = dbConnection.getConnection();
                  PreparedStatement stmt = conn.prepareStatement(sql)) {
                 stmt.setString(1, LoreType.PLAYER.name());
-                stmt.setString(2, "%\"player_uuid\":\"" + playerUuid.toString() + "\"%");
-                stmt.setString(3, "%\"entry_type\":\"name_change\"%");
+                stmt.setString(2, "%\"player_uuid\"%" + playerUuid.toString() + "%");
+                stmt.setString(3, "%\"entry_type\"%name_change%");
 
                 try (ResultSet rs = stmt.executeQuery()) {
                     while (rs.next()) {
