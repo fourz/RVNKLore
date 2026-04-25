@@ -114,7 +114,7 @@ public class LoreGetSubCommand implements SubCommand {
                     break;
                 }
             }
-            if (hasItemArg && player.hasPermission("rvnklore.command.getitem")) {
+            if (hasItemArg && player.hasPermission("rvnklore.getitem")) {
                 if (handler != null) {
                     player.getInventory().addItem(handler.createLoreItem(entry));
                     player.sendMessage(ChatColor.GREEN + "✓ Added lore item to your inventory.");
@@ -141,7 +141,7 @@ public class LoreGetSubCommand implements SubCommand {
 
     @Override
     public boolean hasPermission(CommandSender sender) {
-        return sender.hasPermission("rvnklore.command.get") || sender.isOp();
+        return sender.hasPermission("rvnklore.get") || sender.isOp();
     }
 
     @Override

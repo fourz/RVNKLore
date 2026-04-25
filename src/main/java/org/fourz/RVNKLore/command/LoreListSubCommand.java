@@ -130,7 +130,7 @@ public class LoreListSubCommand implements SubCommand {
 
     @Override
     public boolean hasPermission(CommandSender sender) {
-        return sender.hasPermission("rvnklore.command.list") || sender.isOp();
+        return sender.hasPermission("rvnklore.list") || sender.isOp();
     }
 
     @Override

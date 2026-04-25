@@ -37,7 +37,7 @@ public class LoreCollectionRemoveItemSubCommand implements SubCommand {
 
     @Override
     public boolean hasPermission(CommandSender sender) {
-        return sender.hasPermission("rvnklore.admin.collection.removeitem");
+        return sender.hasPermission("rvnklore.admin.collection.removeitem") || sender.hasPermission("rvnklore.admin");
     }
 
     @Override

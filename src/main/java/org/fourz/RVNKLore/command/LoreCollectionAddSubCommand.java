@@ -31,7 +31,7 @@ public class LoreCollectionAddSubCommand implements SubCommand {
 
     @Override
     public boolean hasPermission(CommandSender sender) {
-        return sender.hasPermission("rvnklore.admin.collection.add");
+        return sender.hasPermission("rvnklore.admin.collection.add") || sender.hasPermission("rvnklore.admin");
     }
 
     @Override

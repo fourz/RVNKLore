@@ -34,7 +34,7 @@ public class LoreItemInfoSubCommand implements SubCommand {
 
     @Override
     public boolean hasPermission(CommandSender sender) {
-        return sender.hasPermission("rvnklore.admin.item.give") || sender.hasPermission("rvnklore.command.collection");
+        return sender.hasPermission("rvnklore.admin.item.give") || sender.hasPermission("rvnklore.collection");
     }
 
     @Override

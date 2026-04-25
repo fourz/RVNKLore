@@ -20,64 +20,168 @@ commands:
     usage: /lore <subcommand> [args...]
 
 permissions:
-  rvnklore.*:
-    description: Gives access to all RVNKLore commands
-  rvnklore.admin:
-    description: Gives access to administrative commands
-    default: op
-    children: {}
-  rvnklore.command.*:
-    description: Gives access to all basic lore commands
-  rvnklore.register.*:
-    description: Gives access to all registration commands
-  rvnklore.command.add:
-    description: Allows adding new lore entries
-  rvnklore.command.get:
-    description: Allows viewing lore entries
-  rvnklore.command.list:
-    description: Allows listing lore entries
-  rvnklore.command.getitem:
-    description: Allows getting lore items
-    default: op
-  rvnklore.register.city:
-    description: Allows registering new cities
-  rvnklore.register.faction:
-    description: Allows registering new factions with territory claims
-  rvnklore.faction.*:
-    description: Gives access to all faction management commands
-    children:
-      rvnklore.faction.manage: true
-  rvnklore.faction.manage:
-    description: Allows managing faction territories and members
-  rvnklore.sign.landmark:
-    description: Allows players to create landmark signs
-    default: op
-  rvnklore.sign.city:
-    description: Allows players to create city signs
-    default: op
-  rvnklore.sign.tavern:
-    description: Allows players to create tavern signs
-    default: op
-  rvnklore.approve.own:
-    description: Allows players to auto-approve their own submissions
-    default: op
-  rvnklore.admin.item.give:
-    description: Allows giving any lore item via /lore item give
-    default: op
-  rvnklore.command.collection:
-    description: Allows viewing and claiming collection progress and rewards
-  rvnklore.admin.dynmap:
-    description: Allows using dynmap integration commands (diff, import)
-    default: op
+  # ── General access ────────────────────────────────────────────────────────
   rvnklore.use:
-    description: General access to basic lore commands
+    description: General access to basic lore commands (read-only baseline)
     default: true
   rvnklore.book:
     description: Access to lore book commands
     default: true
+  rvnklore.share:
+    description: Share button visible in the lore browse GUI
+    default: true
+
+  # ── Player commands ───────────────────────────────────────────────────────
+  rvnklore.add:
+    description: Submit new lore entries (/lore add)
+    default: true
+  rvnklore.get:
+    description: View lore entries (/lore get)
+    default: true
+  rvnklore.list:
+    description: List lore entries (/lore list)
+    default: true
+  rvnklore.search:
+    description: Search lore entries (/lore search)
+    default: true
+  rvnklore.browse:
+    description: Browse lore in GUI (/lore browse)
+    default: true
+  rvnklore.prefs:
+    description: Manage lore notification preferences (/lore prefs)
+    default: true
+  rvnklore.achievement:
+    description: View achievement progress (/lore achievement)
+    default: true
+  rvnklore.collection:
+    description: View and claim collection progress and rewards (/lore collection)
+    default: true
+  rvnklore.discover:
+    description: Use discover command — self-targeting (/lore discover)
+    default: true
+
+  # ── Book commands ─────────────────────────────────────────────────────────
   rvnklore.book.list:
-    description: Allows listing available lore books
+    description: List available lore books (/lore book list)
     default: true
   rvnklore.book.give:
-    description: Allows giving lore books to players
+    description: Give lore books to other players (/lore book give)
+    default: op
+
+  # ── Item commands ─────────────────────────────────────────────────────────
+  rvnklore.getitem:
+    description: Receive the item when viewing an item lore entry (/lore get --item)
+    default: op
+
+  # ── Registration ──────────────────────────────────────────────────────────
+  rvnklore.register.faction:
+    description: Register factions with territory claims (/lore registerfaction)
+    default: op
+
+  # ── Faction management ────────────────────────────────────────────────────
+  rvnklore.faction.*:
+    description: All faction management permissions
+    default: op
+    children:
+      rvnklore.faction.manage: true
+  rvnklore.faction.manage:
+    description: Manage faction territories and members (/lore faction)
+    default: op
+
+  # ── Sign creation ─────────────────────────────────────────────────────────
+  rvnklore.sign.landmark:
+    description: Create landmark signs ([landmark] sign tag)
+    default: op
+  rvnklore.sign.city:
+    description: Create city signs ([city] sign tag)
+    default: op
+  rvnklore.sign.tavern:
+    description: Create tavern signs ([tavern] sign tag)
+    default: op
+  rvnklore.sign.guild:
+    description: Create guild signs ([guild] sign tag)
+    default: op
+  rvnklore.sign.monument:
+    description: Create monument signs ([monument] sign tag)
+    default: op
+  rvnklore.sign.shrine:
+    description: Create shrine signs ([shrine] sign tag)
+    default: op
+
+  # ── Approval ──────────────────────────────────────────────────────────────
+  rvnklore.approve.own:
+    description: Auto-approve own lore submissions on sign placement and event triggers
+    default: op
+
+  # ── Event-triggered content creation ─────────────────────────────────────
+  rvnklore.artifact.name:
+    description: Trigger artifact lore recording when renaming items on an anvil
+    default: op
+  rvnklore.statue.create:
+    description: Trigger lore recording when placing an armor stand
+    default: op
+  rvnklore.library.submit:
+    description: Trigger lore recording when placing a written book on a lectern
+    default: op
+  rvnklore.notable:
+    description: Deaths by this player are recorded as lore entries
+    default: op
+
+  # ── Achievement actions ───────────────────────────────────────────────────
+  rvnklore.achievement.seehidden:
+    description: See hidden and locked achievements in the achievement list
+    default: op
+  rvnklore.achievement.grant:
+    description: Grant achievements to players (/lore achievement grant)
+    default: op
+  rvnklore.achievement.revoke:
+    description: Revoke achievements from players (/lore achievement revoke)
+    default: op
+
+  # ── Title grants (awarded by achievement system) ──────────────────────────
+  rvnklore.title.loremaster:
+    description: Granted automatically on 50 lore discoveries (achievement reward)
+    default: false
+  rvnklore.title.loresage:
+    description: Granted automatically on 100 lore discoveries (achievement reward)
+    default: false
+
+  # ── Admin — general ───────────────────────────────────────────────────────
+  rvnklore.admin:
+    description: Catch-all admin access — grants all lore management commands
+    default: op
+  rvnklore.admin.delete:
+    description: Delete lore entries (/lore delete)
+    default: op
+  rvnklore.admin.seed:
+    description: Seed test lore data (/lore debug seed)
+    default: op
+  rvnklore.discover.grant:
+    description: Grant lore discoveries to other players (/lore discover grant)
+    default: op
+
+  # ── Admin — items ─────────────────────────────────────────────────────────
+  rvnklore.admin.item.give:
+    description: Give any lore item to players via /lore item give
+    default: op
+
+  # ── Admin — collections ───────────────────────────────────────────────────
+  rvnklore.admin.collection.add:
+    description: Create new collections (/lore collection add)
+    default: op
+  rvnklore.admin.collection.additem:
+    description: Add items to a collection (/lore collection additem)
+    default: op
+  rvnklore.admin.collection.removeitem:
+    description: Remove items from a collection (/lore collection removeitem)
+    default: op
+
+  # ── Admin — Dynmap ────────────────────────────────────────────────────────
+  rvnklore.admin.dynmap:
+    description: Dynmap integration commands — diff, import, refresh (/lore dynmap)
+    default: op
+
+  # ── Wildcard ──────────────────────────────────────────────────────────────
+  rvnklore.*:
+    description: All RVNKLore permissions
     default: op

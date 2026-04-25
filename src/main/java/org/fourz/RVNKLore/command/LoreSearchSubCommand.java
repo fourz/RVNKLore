@@ -349,7 +349,7 @@ public class LoreSearchSubCommand implements SubCommand {
 
     @Override
     public boolean hasPermission(CommandSender sender) {
-        return sender.hasPermission("rvnklore.search") || sender.hasPermission("rvnklore.user");
+        return sender.hasPermission("rvnklore.search") || sender.hasPermission("rvnklore.use");
     }
 
     @Override

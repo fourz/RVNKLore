@@ -46,6 +46,7 @@ public class LoreDebugSubCommand implements SubCommand {
             sender.sendMessage(ChatColor.YELLOW + "/lore debug seed <action>" + ChatColor.WHITE + " - Seed test data");
             sender.sendMessage(ChatColor.YELLOW + "/lore debug loglevel [level]" + ChatColor.WHITE + " - View/change runtime log level");
             sender.sendMessage(ChatColor.YELLOW + "/lore debug dynmap [refresh]" + ChatColor.WHITE + " - Dynmap integration status / refresh markers");
+            sender.sendMessage(ChatColor.YELLOW + "/lore debug setup" + ChatColor.WHITE + " - Bootstrap LuckPerms permission defaults");
             return true;
         }
 
@@ -84,6 +85,9 @@ public class LoreDebugSubCommand implements SubCommand {
 
             case "dynmap":
                 return dynmapDiagnostics(sender, args);
+
+            case "setup":
+                return executeSetup(sender);
 
             default:
                 sender.sendMessage(ChatColor.RED + "Unknown debug command: " + action);
@@ -503,6 +507,52 @@ public class LoreDebugSubCommand implements SubCommand {
         }
 
         return null;
+    }
+
+    private boolean executeSetup(CommandSender sender) {
+        if (plugin.getServer().getPluginManager().getPlugin("LuckPerms") == null) {
+            sender.sendMessage(ChatColor.RED + "✖ LuckPerms is not installed — cannot apply permission defaults.");
+            sender.sendMessage(ChatColor.GRAY + "Install LuckPerms and run this command again.");
+            return true;
+        }
+
+        sender.sendMessage(ChatColor.GOLD + "=== RVNKLore Permission Setup ===");
+        sender.sendMessage(ChatColor.GRAY + "Applying LuckPerms defaults...");
+
+        String[][] assignments = {
+            {"admin",     "rvnklore.admin",           "true"},
+            {"default",   "rvnklore.use",             "true"},
+            {"default",   "rvnklore.add",             "true"},
+            {"default",   "rvnklore.get",             "true"},
+            {"default",   "rvnklore.list",            "true"},
+            {"default",   "rvnklore.search",          "true"},
+            {"default",   "rvnklore.browse",          "true"},
+            {"default",   "rvnklore.book",            "true"},
+            {"default",   "rvnklore.achievement",     "true"},
+            {"default",   "rvnklore.collection",      "true"},
+            {"default",   "rvnklore.prefs",           "true"},
+            {"default",   "rvnklore.share",           "true"},
+        };
+
+        org.bukkit.command.ConsoleCommandSender console = plugin.getServer().getConsoleSender();
+        int ok = 0, fail = 0;
+
+        for (String[] row : assignments) {
+            String cmd = "lp group " + row[0] + " permission set " + row[1] + " " + row[2];
+            try {
+                plugin.getServer().dispatchCommand(console, cmd);
+                sender.sendMessage(ChatColor.GREEN + "✓ " + ChatColor.GRAY + row[0] + " " + ChatColor.DARK_GRAY + "← " + ChatColor.WHITE + row[1]);
+                ok++;
+            } catch (Exception e) {
+                sender.sendMessage(ChatColor.RED + "✖ Failed: " + cmd + " (" + e.getMessage() + ")");
+                fail++;
+            }
+        }
+
+        sender.sendMessage(ChatColor.GRAY + "Done. " + ChatColor.WHITE + ok + " applied" +
+                (fail > 0 ? ChatColor.RED + ", " + fail + " failed" : "") + ".");
+        sender.sendMessage(ChatColor.DARK_GRAY + "Run " + ChatColor.GRAY + "lp editor" + ChatColor.DARK_GRAY + " to review or adjust group assignments.");
+        return true;
     }
 
     @Override

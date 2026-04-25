@@ -43,7 +43,7 @@ public class LoreCollectionSubCommand implements SubCommand {
     @Override
     public boolean hasPermission(CommandSender sender) {
         // Only allow players with the base collection permission or admin
-        return sender.hasPermission("rvnklore.command.collection") || sender.hasPermission("rvnklore.admin");
+        return sender.hasPermission("rvnklore.collection") || sender.hasPermission("rvnklore.admin");
     }
 
     @Override
