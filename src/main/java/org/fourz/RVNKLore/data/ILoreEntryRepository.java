@@ -97,6 +97,14 @@ public interface ILoreEntryRepository {
     CompletableFuture<Boolean> approveLoreEntry(String entryId, String approvedBy);
 
     /**
+     * Reject a lore entry (sets approval_status = 'REJECTED').
+     *
+     * @param entryId The ID of the entry to reject
+     * @return CompletableFuture that completes with true if successful, false otherwise
+     */
+    CompletableFuture<Boolean> rejectLoreEntry(String entryId);
+
+    /**
      * Check if the repository is operating in fallback mode.
      * Fallback mode indicates degraded operation due to database connectivity issues.
      *

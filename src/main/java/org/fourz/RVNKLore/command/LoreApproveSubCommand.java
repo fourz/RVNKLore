@@ -1,7 +1,9 @@
 package org.fourz.RVNKLore.command;
 
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.lore.LoreEntry;
@@ -34,16 +36,38 @@ public class LoreApproveSubCommand implements SubCommand {
     @Override
     public boolean execute(CommandSender sender, String[] args) {
         if (args.length < 1) {
-            sender.sendMessage(ChatColor.RED + "▶ Usage: /lore approve <name|id>");
+            sender.sendMessage(ChatColor.RED + "▶ Usage: /lore approve <name|id> [reject]");
             return true;
         }
 
-        // Join all args to support multi-word names (e.g., "Fort Ravenkeep")
-        String idInput = String.join(" ", args);
+        // Detect optional action suffix: last arg may be "approve" or "reject"
+        boolean reject = false;
+        String[] nameArgs = args;
+        String lastArg = args[args.length - 1].toLowerCase();
+        if ("reject".equals(lastArg)) {
+            reject = true;
+            nameArgs = Arrays.copyOf(args, args.length - 1);
+        } else if ("approve".equals(lastArg) && args.length > 1) {
+            nameArgs = Arrays.copyOf(args, args.length - 1);
+        }
+
+        if (nameArgs.length == 0) {
+            sender.sendMessage(ChatColor.RED + "▶ Usage: /lore approve <name|id> [reject]");
+            return true;
+        }
+
+        String idInput = String.join(" ", nameArgs);
         LoreEntry matchedEntry = null;
 
-        // Try name lookup first (case-insensitive)
+        // Try name lookup first (case-insensitive, cache)
         matchedEntry = plugin.getLoreManager().getLoreEntryByNameSync(idInput);
+
+        // Cache miss — fall back to full DB scan (covers unapproved entries not in cache)
+        if (matchedEntry == null) {
+            matchedEntry = plugin.getDatabaseManager().getAllLoreEntries().stream()
+                    .filter(e -> e.getName() != null && e.getName().equalsIgnoreCase(idInput))
+                    .findFirst().orElse(null);
+        }
 
         // Try to match by full UUID
         if (matchedEntry == null) {
@@ -53,18 +77,13 @@ public class LoreApproveSubCommand implements SubCommand {
             } catch (IllegalArgumentException ignored) {}
         }
 
-        // Try to match by short UUID (first 8 chars)
+        // Try to match by short UUID (first 8 chars) — DB scan
         if (matchedEntry == null && idInput.length() >= 8) {
-            String shortUuidPart = idInput.substring(0, 8);
-            for (LoreEntry entry : plugin.getLoreManager().findLoreEntriesSync(shortUuidPart)) {
-                if (!entry.isApproved()) {
-                    String entryShortId = entry.getId().toString().substring(0, 8);
-                    if (entryShortId.equalsIgnoreCase(shortUuidPart)) {
-                        matchedEntry = entry;
-                        break;
-                    }
-                }
-            }
+            String shortUuidPart = idInput.substring(0, 8).toLowerCase();
+            matchedEntry = plugin.getDatabaseManager().getAllLoreEntries().stream()
+                    .filter(e -> !e.isApproved() && e.getId() != null &&
+                                 e.getId().toLowerCase().startsWith(shortUuidPart))
+                    .findFirst().orElse(null);
         }
 
         if (matchedEntry == null) {
@@ -73,6 +92,9 @@ public class LoreApproveSubCommand implements SubCommand {
             return true;
         }
 
+        if (reject) {
+            return processRejection(sender, matchedEntry);
+        }
         return processApproval(sender, matchedEntry.getUUID());
     }
 
@@ -110,38 +132,62 @@ public class LoreApproveSubCommand implements SubCommand {
         return true;
     }
 
+    private boolean processRejection(CommandSender sender, LoreEntry entry) {
+        if (entry.isApproved()) {
+            sender.sendMessage(ChatColor.YELLOW + "⚠ This entry is already approved and cannot be rejected.");
+            return true;
+        }
+
+        boolean success = plugin.getLoreManager().rejectLoreEntrySync(entry.getUUID());
+        if (success) {
+            sender.sendMessage(ChatColor.GREEN + "✓ Lore entry rejected: " + entry.getName());
+            logger.info("Lore entry '" + entry.getName() + "' (" + entry.getType() + ") rejected by " + sender.getName());
+
+            // Notify submitter if online
+            String submittedBy = entry.getSubmittedBy();
+            if (submittedBy != null) {
+                Player submitter = Bukkit.getPlayerExact(submittedBy);
+                if (submitter != null && submitter.isOnline()) {
+                    submitter.sendMessage(ChatColor.YELLOW + "⚠ Your lore submission '" + entry.getName() + "' was not approved.");
+                }
+            }
+        } else {
+            sender.sendMessage(ChatColor.RED + "✖ Failed to reject lore entry. Check console for errors.");
+        }
+        return true;
+    }
+
     @Override
     public String getDescription() {
-        return "Approves a lore entry for public viewing";
+        return "Approve or reject a lore entry";
     }
 
     @Override
     public boolean hasPermission(CommandSender sender) {
-        return sender.hasPermission("rvnklore.admin") || sender.isOp();
+        return sender.hasPermission("rvnklore.admin");
     }
 
     @Override
     public List<String> getTabCompletions(CommandSender sender, String[] args) {
         if (args.length == 1) {
-            // Suggest only unapproved entry names
             String partial = args[0].toLowerCase();
-
-            return plugin.getLoreManager().getAllLoreEntriesSync().stream()
+            // Suggest unapproved entry names + "reject" keyword
+            List<String> completions = plugin.getLoreManager().getAllLoreEntriesSync().stream()
                     .filter(entry -> !entry.isApproved())
                     .map(LoreEntry::getName)
                     .filter(name -> name != null && name.toLowerCase().startsWith(partial))
                     .sorted(String.CASE_INSENSITIVE_ORDER)
                     .limit(5)
                     .collect(Collectors.toList());
+            return completions;
         }
 
-        if (args.length == 2) {
-            // Second arg: approve/reject action
-            String partial = args[1].toLowerCase();
-            List<String> actions = Arrays.asList("approve", "reject");
-            return actions.stream()
-                    .filter(action -> action.startsWith(partial))
-                    .collect(Collectors.toList());
+        if (args.length >= 2) {
+            // Last arg may be the "reject" action suffix
+            String partial = args[args.length - 1].toLowerCase();
+            if ("reject".startsWith(partial)) {
+                return List.of("reject");
+            }
         }
 
         return new ArrayList<>();

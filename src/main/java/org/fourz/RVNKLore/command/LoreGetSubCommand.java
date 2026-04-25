@@ -141,7 +141,7 @@ public class LoreGetSubCommand implements SubCommand {
 
     @Override
     public boolean hasPermission(CommandSender sender) {
-        return sender.hasPermission("rvnklore.get") || sender.isOp();
+        return sender.hasPermission("rvnklore.get") || sender.hasPermission("rvnklore.admin");
     }
 
     @Override

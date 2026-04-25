@@ -22,7 +22,6 @@ import java.sql.Connection;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -234,6 +233,14 @@ public class DatabaseManager {
             return false;
         }
         return loreRepository.approveLoreEntry(entryId, approvedBy).join();
+    }
+
+    public boolean rejectLoreEntry(String entryId) {
+        if (!validateConnection()) {
+            logger.warning("Database connection invalid, cannot reject lore entry");
+            return false;
+        }
+        return loreRepository.rejectLoreEntry(entryId).join();
     }
 
     /**

@@ -443,6 +443,37 @@ public class LoreEntryRepository implements ILoreEntryRepository {
      * @return CompletableFuture that completes with true if successful, false otherwise
      */
     @Override
+    public CompletableFuture<Boolean> rejectLoreEntry(String entryId) {
+        return CompletableFuture.supplyAsync(() -> {
+            try (Connection conn = dbConnection.getConnection()) {
+                conn.setAutoCommit(false);
+                try {
+                    String sql = "UPDATE " + t("lore_submission") + " " +
+                                 "SET approval_status = 'REJECTED', approved_at = CURRENT_TIMESTAMP " +
+                                 "WHERE entry_id = ? AND is_current_version = TRUE";
+                    try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                        stmt.setString(1, entryId);
+                        int rowsAffected = stmt.executeUpdate();
+                        if (rowsAffected == 0) {
+                            throw new java.sql.SQLException("No current submission found for entry: " + entryId);
+                        }
+                        conn.commit();
+                        return true;
+                    }
+                } catch (java.sql.SQLException e) {
+                    conn.rollback();
+                    logger.error("Failed to reject lore entry: " + entryId, e);
+                    return false;
+                } finally {
+                    conn.setAutoCommit(true);
+                }
+            } catch (java.sql.SQLException e) {
+                logger.error("Database connection error rejecting lore entry: " + entryId, e);
+                return false;
+            }
+        });
+    }
+
     public CompletableFuture<Boolean> approveLoreEntry(String entryId, String approvedBy) {
         return CompletableFuture.supplyAsync(() -> {
             try (Connection conn = dbConnection.getConnection()) {

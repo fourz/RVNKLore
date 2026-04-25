@@ -30,53 +30,65 @@ public class LoreListSubCommand implements SubCommand {
     public boolean execute(CommandSender sender, String[] args) {
         LoreType type = null;
         int page = 1;
+        boolean pendingOnly = false;
 
-        // Parse arguments
-        if (args.length > 0) {
+        // Parse arguments — strip --pending flag first
+        List<String> remaining = new ArrayList<>(Arrays.asList(args));
+        if (remaining.remove("--pending")) {
+            pendingOnly = true;
+        }
+
+        String[] filtered = remaining.toArray(new String[0]);
+
+        if (filtered.length > 0) {
             try {
-                type = LoreType.valueOf(args[0].toUpperCase());
+                type = LoreType.valueOf(filtered[0].toUpperCase());
             } catch (IllegalArgumentException e) {
                 try {
-                    // If first arg isn't a valid type, try to parse as a page number
-                    page = Integer.parseInt(args[0]);
+                    page = Integer.parseInt(filtered[0]);
                 } catch (NumberFormatException ex) {
-                    sender.sendMessage(ChatColor.RED + "Invalid lore type or page number: " + args[0]);
+                    sender.sendMessage(ChatColor.RED + "Invalid lore type or page number: " + filtered[0]);
                     return true;
                 }
             }
         }
 
-        // If both type and page are specified
-        if (args.length > 1 && type != null) {
+        if (filtered.length > 1 && type != null) {
             try {
-                page = Integer.parseInt(args[1]);
+                page = Integer.parseInt(filtered[1]);
             } catch (NumberFormatException e) {
-                sender.sendMessage(ChatColor.RED + "Invalid page number: " + args[1]);
+                sender.sendMessage(ChatColor.RED + "Invalid page number: " + filtered[1]);
                 return true;
             }
         }
 
-        // Ensure page is at least 1
         page = Math.max(1, page);
 
         // Get lore entries
         List<LoreEntry> entries;
-        if (type != null) {
-            entries = plugin.getLoreManager().getLoreEntriesByTypeSync(type);
-        } else {
-            entries = plugin.getLoreManager().getApprovedLoreEntriesSync();
-        }
+        boolean isAdmin = sender.hasPermission("rvnklore.admin");
 
-        // If sender is an admin, include unapproved entries
-        if (sender.hasPermission("rvnklore.admin")) {
+        if (pendingOnly) {
+            // --pending: show unapproved entries (admin sees all, player sees own submissions)
+            List<LoreEntry> all = new ArrayList<>(plugin.getDatabaseManager().getAllLoreEntries());
+            entries = all.stream()
+                    .filter(e -> !e.isApproved())
+                    .collect(Collectors.toList());
+            if (!isAdmin) {
+                String senderName = sender.getName();
+                entries = entries.stream()
+                        .filter(e -> senderName.equalsIgnoreCase(e.getSubmittedBy()))
+                        .collect(Collectors.toList());
+            }
+        } else if (isAdmin) {
             entries = type != null ?
                     plugin.getLoreManager().getLoreEntriesByTypeSync(type) :
                     new ArrayList<>(plugin.getDatabaseManager().getAllLoreEntries());
         } else {
-            // Filter out unapproved entries for non-admins
-            entries = entries.stream()
-                    .filter(LoreEntry::isApproved)
-                    .collect(Collectors.toList());
+            entries = type != null ?
+                    plugin.getLoreManager().getLoreEntriesByTypeSync(type).stream()
+                            .filter(LoreEntry::isApproved).collect(Collectors.toList()) :
+                    plugin.getLoreManager().getApprovedLoreEntriesSync();
         }
 
         // Calculate pagination
@@ -88,8 +100,9 @@ public class LoreListSubCommand implements SubCommand {
         int endIndex = Math.min(startIndex + ITEMS_PER_PAGE, entries.size());
 
         // Display header
+        String pendingLabel = pendingOnly ? " [PENDING]" : "";
         sender.sendMessage(ChatColor.GOLD + "=== Lore Entries" +
-                (type != null ? " (" + type + ")" : "") +
+                (type != null ? " (" + type + ")" : "") + pendingLabel +
                 " - Page " + page + "/" + Math.max(1, totalPages) + " ===");
 
         // Display entries
@@ -130,7 +143,7 @@ public class LoreListSubCommand implements SubCommand {
 
     @Override
     public boolean hasPermission(CommandSender sender) {
-        return sender.hasPermission("rvnklore.list") || sender.isOp();
+        return sender.hasPermission("rvnklore.list") || sender.hasPermission("rvnklore.admin");
     }
 
     @Override
@@ -139,13 +152,11 @@ public class LoreListSubCommand implements SubCommand {
             String partial = args[0];
             List<String> completions = new ArrayList<>();
 
-            // Add type suggestions
+            if ("--pending".startsWith(partial.toLowerCase())) {
+                completions.add("--pending");
+            }
             completions.addAll(tabCompletionUtil.completeEnum(LoreType.class, partial));
-
-            // Add lore entry name suggestions
             completions.addAll(tabCompletionUtil.completeLoreEntryNames(partial));
-
-            // Add page number suggestion
             if ("1".startsWith(partial)) {
                 completions.add("1");
             }

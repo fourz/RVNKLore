@@ -9,7 +9,7 @@ import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.rvnkcore.util.log.LogManager;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -20,7 +20,7 @@ import java.util.Map;
 public class LoreCommand implements CommandExecutor, TabCompleter {
     private final RVNKLore plugin;
     private final LogManager logger;
-    private final Map<String, SubCommand> subCommands = new HashMap<>();
+    private final Map<String, SubCommand> subCommands = new LinkedHashMap<>();
 
     public LoreCommand(RVNKLore plugin) {
         this.plugin = plugin;
@@ -33,12 +33,13 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
      */
     private void registerSubCommands() {
         logger.debug("Registering subcommands...");
-          // Register all subcommands at once to reduce debug log spam
-        Map<String, SubCommand> commands = new HashMap<>();
-        commands.put("add", new LoreAddSubCommand(plugin));
+        // Ordered insertion: player-facing first, admin last
+        Map<String, SubCommand> commands = new java.util.LinkedHashMap<>();
+        commands.put("browse", new LoreBrowseSubCommand(plugin));
         commands.put("get", new LoreGetSubCommand(plugin));
-        commands.put("list", new LoreListSubCommand(plugin));
         commands.put("search", new LoreSearchSubCommand(plugin));
+        commands.put("list", new LoreListSubCommand(plugin));
+        commands.put("add", new LoreAddSubCommand(plugin));
         commands.put("approve", new LoreApproveSubCommand(plugin));
         commands.put("delete", new LoreDeleteSubCommand(plugin));
         commands.put("reload", new LoreReloadSubCommand(plugin));
@@ -46,41 +47,24 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
         commands.put("import", new LoreImportSubCommand(plugin));
         commands.put("debug", new LoreDebugSubCommand(plugin));
 
-        // Add cosmetic management commands using the new ItemManager-based API
-        //if (plugin.getItemManager() != null && plugin.getItemManager().getCosmeticManager() != null) {
-        if (plugin.getLoreManager().getItemManager() != null && plugin.getLoreManager().getItemManager().getCosmeticItem() != null) {
-            commands.put("collection", new LoreCollectionSubCommand(plugin));
-            // Register the /lore item parent subcommand and its children
-            commands.put("item", new LoreItemSubCommand(plugin));
-            // Remove /lore itemgive registration
-        }
-
-        // Register the /lore book command for lore book management
-        commands.put("book", new LoreBookSubCommand(plugin));
-
-        // Register the /lore achievement command for achievement management
-        if (plugin.getAchievementManager() != null) {
-            commands.put("achievement", new LoreAchievementSubCommand(plugin, plugin.getAchievementManager()));
-        }
-
-        // Register the /lore browse command for GUI browser
-        commands.put("browse", new LoreBrowseSubCommand(plugin));
-
-        // Register the /lore dynmap command for dynmap integration
-        // Always register — availability checked at execution time since Dynmap enables after RVNKLore
-        commands.put("dynmap", new LoreDynmapSubCommand(plugin));
-
-        // Register faction commands (GP territory integration)
-        commands.put("registerfaction", new LoreRegisterFactionSubCommand(plugin));
-        commands.put("faction", new org.fourz.RVNKLore.command.faction.LoreFactionSubCommand(plugin));
-
-        // Register the /lore discover command for manual discovery granting
         if (plugin.getDiscoveryManager() != null) {
             commands.put("discover", new LoreDiscoverSubCommand(plugin));
         }
 
-        // Register the /lore prefs command for player notification preferences (Phase 3)
+        if (plugin.getAchievementManager() != null) {
+            commands.put("achievement", new LoreAchievementSubCommand(plugin, plugin.getAchievementManager()));
+        }
+
+        if (plugin.getLoreManager().getItemManager() != null && plugin.getLoreManager().getItemManager().getCosmeticItem() != null) {
+            commands.put("collection", new LoreCollectionSubCommand(plugin));
+            commands.put("item", new LoreItemSubCommand(plugin));
+        }
+
+        commands.put("book", new LoreBookSubCommand(plugin));
         commands.put("prefs", new LorePrefsSubCommand(plugin));
+        commands.put("dynmap", new LoreDynmapSubCommand(plugin));
+        commands.put("registerfaction", new LoreRegisterFactionSubCommand(plugin));
+        commands.put("faction", new org.fourz.RVNKLore.command.faction.LoreFactionSubCommand(plugin));
 
         // Register the /lore npc command for Citizens collection vendors (Phase 8)
         // TODO: Implement Citizens integration in future phase
@@ -171,7 +155,7 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
                 }
             }
         }
-        sender.sendMessage(ChatColor.GRAY + "\nSee /lore item give and /lore collection for item and collection management.");
+        sender.sendMessage(ChatColor.GRAY + "See /lore item and /lore collection for item and collection management.");
     }
 
     @Override
