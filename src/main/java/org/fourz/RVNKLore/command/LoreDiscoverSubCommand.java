@@ -54,6 +54,11 @@ public class LoreDiscoverSubCommand implements SubCommand {
             return true;
         }
 
+        if (!sender.hasPermission("rvnklore.discover.grant") && !sender.hasPermission("rvnklore.admin")) {
+            sender.sendMessage(ChatColor.RED + "✖ You don't have permission to grant discoveries.");
+            return true;
+        }
+
         String playerName = args[0];
         String entryRef = joinArgs(args, 1);
 
@@ -93,6 +98,10 @@ public class LoreDiscoverSubCommand implements SubCommand {
     private boolean handleList(CommandSender sender, String[] args, DiscoveryManager discoveryManager) {
         Player target;
         if (args.length >= 2) {
+            if (!sender.hasPermission("rvnklore.discover.grant") && !sender.hasPermission("rvnklore.admin")) {
+                sender.sendMessage(ChatColor.RED + "✖ You don't have permission to view other players' discoveries.");
+                return true;
+            }
             target = Bukkit.getPlayer(args[1]);
             if (target == null) {
                 sender.sendMessage(ChatColor.RED + "✖ Player not found or not online: " + args[1]);
@@ -150,9 +159,13 @@ public class LoreDiscoverSubCommand implements SubCommand {
     }
 
     private void showUsage(CommandSender sender) {
+        boolean canGrant = sender.hasPermission("rvnklore.discover.grant") || sender.hasPermission("rvnklore.admin");
         sender.sendMessage(ChatColor.RED + "▶ Usage:");
-        sender.sendMessage(ChatColor.RED + "  /lore discover <player> <entry_id|name>" + ChatColor.GRAY + " - Grant a discovery");
-        sender.sendMessage(ChatColor.RED + "  /lore discover list [player]" + ChatColor.GRAY + " - View discovery stats");
+        sender.sendMessage(ChatColor.RED + "  /lore discover list" + ChatColor.GRAY + " - View your discovery stats");
+        if (canGrant) {
+            sender.sendMessage(ChatColor.RED + "  /lore discover list <player>" + ChatColor.GRAY + " - View another player's stats");
+            sender.sendMessage(ChatColor.RED + "  /lore discover <player> <entry_id|name>" + ChatColor.GRAY + " - Grant a discovery");
+        }
     }
 
     @Override
@@ -161,11 +174,13 @@ public class LoreDiscoverSubCommand implements SubCommand {
 
         if (args.length == 1) {
             String partial = args[0].toLowerCase();
-            // Suggest "list" and online player names
             if ("list".startsWith(partial)) completions.add("list");
-            for (Player player : Bukkit.getOnlinePlayers()) {
-                if (player.getName().toLowerCase().startsWith(partial)) {
-                    completions.add(player.getName());
+            // Only suggest player names for the grant path (staff+)
+            if (sender.hasPermission("rvnklore.discover.grant") || sender.hasPermission("rvnklore.admin")) {
+                for (Player player : Bukkit.getOnlinePlayers()) {
+                    if (player.getName().toLowerCase().startsWith(partial)) {
+                        completions.add(player.getName());
+                    }
                 }
             }
         } else if (args.length == 2) {
@@ -197,7 +212,9 @@ public class LoreDiscoverSubCommand implements SubCommand {
 
     @Override
     public boolean hasPermission(CommandSender sender) {
-        return sender.hasPermission("rvnklore.discover.grant") || sender.hasPermission("rvnklore.admin");
+        return sender.hasPermission("rvnklore.discover")
+            || sender.hasPermission("rvnklore.discover.grant")
+            || sender.hasPermission("rvnklore.admin");
     }
 
     @Override

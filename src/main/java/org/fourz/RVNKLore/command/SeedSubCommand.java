@@ -55,7 +55,7 @@ public class SeedSubCommand implements SubCommand {
 
     @Override
     public boolean hasPermission(CommandSender sender) {
-        return sender.hasPermission(PERMISSION);
+        return sender.hasPermission(PERMISSION) || sender.hasPermission("rvnklore.admin");
     }
 
     @Override
