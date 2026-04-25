@@ -28,6 +28,7 @@ public class LoreItemSubCommand implements SubCommand {
         subCommands.put("give", new LoreItemGiveSubCommand(plugin, plugin.getLoreManager().getItemManager()));
         subCommands.put("info", new LoreItemInfoSubCommand(plugin, plugin.getLoreManager().getItemManager()));
         subCommands.put("list", new LoreItemListSubCommand(plugin));
+        subCommands.put("tag", new LoreItemTagSubCommand(plugin));
     }
 
     @Override

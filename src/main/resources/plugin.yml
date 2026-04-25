@@ -160,6 +160,11 @@ permissions:
     description: Grant lore discoveries to other players (/lore discover grant)
     default: op
 
+  # ── Item commands ─────────────────────────────────────────────────────────
+  rvnklore.item.tag:
+    description: Tag a held item with a lore entry's display name, description, and entry ID (/lore item tag)
+    default: op
+
   # ── Admin — items ─────────────────────────────────────────────────────────
   rvnklore.admin.item.give:
     description: Give any lore item to players via /lore item give
