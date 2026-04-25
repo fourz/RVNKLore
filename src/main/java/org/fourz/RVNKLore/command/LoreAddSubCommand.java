@@ -9,6 +9,7 @@ import org.bukkit.entity.Player;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
+import org.fourz.RVNKLore.lore.LoreTypePermission;
 import org.fourz.RVNKLore.search.LoreSearchService;
 import org.fourz.rvnkcore.util.log.LogManager;
 
@@ -58,6 +59,12 @@ public class LoreAddSubCommand implements SubCommand {
             sender.sendMessage(ChatColor.RED + "\u2716 Invalid lore type: " + typeStr);
             sender.sendMessage(ChatColor.RED + "\u25b6 Valid types: " +
                     Arrays.stream(LoreType.values()).map(LoreType::name).collect(Collectors.joining(", ")));
+            return true;
+        }
+
+        // Type-permission matrix gate (spec \u00a71)
+        if (LoreTypePermission.isAdminOnly(type) && !sender.hasPermission("rvnklore.admin")) {
+            sender.sendMessage(ChatColor.RED + "\u2716 " + type.name() + " entries require admin permission.");
             return true;
         }
 
@@ -159,9 +166,9 @@ public class LoreAddSubCommand implements SubCommand {
             return true;
         }
 
-        // Check --approve permission
-        if (autoApprove && !sender.hasPermission("rvnklore.admin") && !sender.isOp()) {
-            sender.sendMessage(ChatColor.RED + "\u2716 --approve requires admin permission.");
+        // Check --approve permission (admin-only flag)
+        if (autoApprove && !sender.hasPermission("rvnklore.admin")) {
+            sender.sendMessage(ChatColor.RED + "\u2716 --approve requires rvnklore.admin.");
             autoApprove = false;
         }
 
@@ -234,12 +241,22 @@ public class LoreAddSubCommand implements SubCommand {
         if (success) {
             sender.sendMessage(ChatColor.GREEN + "\u2713 Lore entry added: " + entry.getName() + " (" + entry.getType() + ")");
 
-            // Auto-approve via DB after successful add
+            // Admin --approve flag: force-approve any type
             if (autoApprove) {
                 boolean approved = plugin.getLoreManager().approveLoreEntrySync(entry.getUUID());
                 if (approved) {
                     sender.sendMessage(ChatColor.GREEN + "   Auto-approved and published.");
                     logger.info("Lore entry '" + name + "' (" + type + ") added and auto-approved by " + sender.getName());
+                } else {
+                    sender.sendMessage(ChatColor.YELLOW + "   \u26a0 Entry added but auto-approve failed. Use /lore approve " + name);
+                }
+            // rvnklore.approve.own: implicit auto-approve for player-writable types
+            } else if (LoreTypePermission.isPlayerWritable(type)
+                    && sender.hasPermission("rvnklore.approve.own")) {
+                boolean approved = plugin.getLoreManager().approveLoreEntrySync(entry.getUUID());
+                if (approved) {
+                    sender.sendMessage(ChatColor.GREEN + "   Published immediately.");
+                    logger.info("Lore entry '" + name + "' (" + type + ") auto-approved via approve.own for " + sender.getName());
                 } else {
                     sender.sendMessage(ChatColor.YELLOW + "   \u26a0 Entry added but auto-approve failed. Use /lore approve " + name);
                 }
@@ -266,14 +283,21 @@ public class LoreAddSubCommand implements SubCommand {
 
     @Override
     public boolean hasPermission(CommandSender sender) {
-        return sender.hasPermission("rvnklore.add") || sender.isOp();
+        return sender.hasPermission("rvnklore.add") || sender.hasPermission("rvnklore.admin");
     }
 
     @Override
     public List<String> getTabCompletions(CommandSender sender, String[] args) {
         if (args.length == 1) {
-            // First arg: lore type
-            return tabCompletionUtil.completeEnum(LoreType.class, args[0]);
+            // Admins see all types; players see only types they can create
+            if (sender.hasPermission("rvnklore.admin")) {
+                return tabCompletionUtil.completeEnum(LoreType.class, args[0]);
+            }
+            String prefix = args[0].toLowerCase();
+            return LoreTypePermission.PLAYER_WRITABLE_TAB.stream()
+                    .map(LoreType::name)
+                    .filter(n -> n.toLowerCase().startsWith(prefix))
+                    .collect(Collectors.toList());
         }
         if (args.length >= 3) {
             String lastArg = args[args.length - 1].toLowerCase();

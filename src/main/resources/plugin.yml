@@ -110,7 +110,7 @@ permissions:
 
   # ── Approval ──────────────────────────────────────────────────────────────
   rvnklore.approve.own:
-    description: Auto-approve own lore submissions on sign placement and event triggers
+    description: Auto-approve own player-writable lore submissions (command, sign, event triggers)
     default: op
 
   # ── Event-triggered content creation ─────────────────────────────────────
