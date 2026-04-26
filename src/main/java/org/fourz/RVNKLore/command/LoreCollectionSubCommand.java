@@ -4,14 +4,11 @@ import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
-import org.bukkit.inventory.ItemStack;
 import org.fourz.RVNKLore.lore.item.cosmetic.CosmeticsManager;
 import org.fourz.RVNKLore.lore.item.cosmetic.HeadCollection;
-import org.fourz.RVNKLore.lore.item.cosmetic.HeadVariant;
-import org.fourz.RVNKLore.lore.item.cosmetic.HeadRarity;
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
-import org.fourz.RVNKLore.lore.item.collection.CollectionTheme;
 import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
 
 import java.util.ArrayList;
@@ -19,6 +16,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * Sub-command for managing and viewing head collections.
@@ -61,47 +59,52 @@ public class LoreCollectionSubCommand implements SubCommand {
             }
         }
 
-        // If not a subcommand, handle with existing logic
+        // If not a subcommand, handle direct view/claim/list routing via CollectionManager
         if (!hasPermission(sender)) {
             sender.sendMessage(ChatColor.RED + "✖ You don't have permission to use this command");
             return true;
         }
         if (args.length == 0) {
-            if (sender instanceof Player) {
-                sender.sendMessage(ChatColor.RED + "▶ Usage: /lore collection <view|claim|list|add> [collection_id]");
-            } else {
-                sender.sendMessage("Usage: /lore collection <view|claim|list>");
-                sender.sendMessage("  view <collection_id>              - View collection details");
-                sender.sendMessage("  claim <player> <collection_id>   - Claim rewards for a player");
-                sender.sendMessage("  list                              - List all available collections");
-            }
-            sender.sendMessage(ChatColor.GRAY + "   View, claim, list, or add item collections.");
+            sender.sendMessage(ChatColor.RED + "▶ Usage: /lore collection <view|claim|list|add|additem|removeitem> [collection_id]");
             return true;
         }
-        
-        // Original switch case handling remains the same
+
+        CollectionManager cmgr = plugin.getLoreManager().getItemManager().getCollectionManager();
         String sub = args[0].toLowerCase();
-        HeadCollection collection = null;
+        String collectionId;
+
         switch (sub) {
             case "view":
                 if (args.length < 2) {
                     sender.sendMessage(ChatColor.RED + "▶ Usage: /lore collection view <collection_id>");
                     return true;
                 }
-                String collectionId = args[1];
-                org.fourz.RVNKLore.lore.item.collection.CollectionManager cmgr =
-                        plugin.getLoreManager().getItemManager().getCollectionManager();
-                org.fourz.RVNKLore.lore.item.collection.ItemCollection itemCollection =
-                        cmgr.getAllCollectionsSync().get(collectionId);
+                collectionId = args[1];
+                ItemCollection itemCollection = cmgr.getCollectionSync(collectionId);
                 if (itemCollection == null) {
                     sender.sendMessage(ChatColor.RED + "✖ Collection not found: " + collectionId);
                     sender.sendMessage(ChatColor.GRAY + "   Use /lore collection list to see available IDs");
                     return true;
                 }
-                sender.sendMessage(ChatColor.GREEN + "✓ Collection: " + ChatColor.YELLOW + itemCollection.getName());
+                sender.sendMessage(ChatColor.GREEN + "Collection: " + ChatColor.YELLOW + itemCollection.getName());
                 sender.sendMessage(ChatColor.GRAY + "ID: " + ChatColor.WHITE + itemCollection.getId());
-                sender.sendMessage(ChatColor.GRAY + "Items: " + ChatColor.WHITE + itemCollection.getItemCount());
+                List<UUID> requiredEntries = itemCollection.getRequiredEntryIds();
+                if (!requiredEntries.isEmpty()) {
+                    sender.sendMessage(ChatColor.GRAY + "Required entries (" + requiredEntries.size() + "):");
+                    for (UUID entryId : requiredEntries) {
+                        LoreEntry entry = plugin.getLoreManager().getLoreEntrySync(entryId);
+                        String entryName = entry != null ? entry.getName() : entryId.toString().substring(0, 8) + "...";
+                        sender.sendMessage(ChatColor.GRAY + "  • " + ChatColor.WHITE + entryName);
+                    }
+                    if (sender instanceof Player) {
+                        int collected = cmgr.getCollectedEntryCountSync(((Player) sender).getUniqueId(), collectionId);
+                        sender.sendMessage(ChatColor.GRAY + "Your progress: " + ChatColor.WHITE + collected + "/" + requiredEntries.size());
+                    }
+                } else {
+                    sender.sendMessage(ChatColor.GRAY + "Items: " + ChatColor.WHITE + itemCollection.getItemCount());
+                }
                 break;
+
             case "claim":
                 Player claimTarget;
                 if (sender instanceof Player) {
@@ -123,299 +126,55 @@ public class LoreCollectionSubCommand implements SubCommand {
                     }
                     collectionId = args[2];
                 }
-                collection = cosmeticItem.getCollection(collectionId);
-                if (collection == null) {
+                ItemCollection claimColl = cmgr.getCollectionSync(collectionId);
+                if (claimColl == null) {
                     sender.sendMessage(ChatColor.RED + "✖ Collection not found: " + collectionId);
                     return true;
                 }
-                Map<String, Double> progress = cosmeticItem.getPlayerCollectionProgress(claimTarget);
-                double completionPercent = progress.getOrDefault(collection.getId(), 0.0) * 100;
-                if (completionPercent < 100.0) {
-                    sender.sendMessage(ChatColor.YELLOW + "⚠ " + claimTarget.getName() + " must complete the collection to claim rewards.");
-                    return true;
+                int required = claimColl.getRequiredEntryCount();
+                if (required > 0) {
+                    int collected = cmgr.getCollectedEntryCountSync(claimTarget.getUniqueId(), collectionId);
+                    if (collected < required) {
+                        sender.sendMessage(ChatColor.YELLOW + "⚠ " + claimTarget.getName() + " must collect all " + required + " required entries (" + collected + "/" + required + ").");
+                        return true;
+                    }
                 }
-                if (!collection.getRewards().hasRewards()) {
-                    sender.sendMessage(ChatColor.YELLOW + "⚠ No rewards available for this collection.");
-                    return true;
+                boolean rewarded = cmgr.grantCollectionRewardSync(claimTarget.getUniqueId(), collectionId);
+                if (rewarded) {
+                    sender.sendMessage(ChatColor.GREEN + "✓ Claimed rewards for collection: " + ChatColor.YELLOW + collectionId);
+                } else {
+                    // Fallback: HEAD cosmetic rewards via CosmeticsManager
+                    HeadCollection headColl = cosmeticItem.getCollection(collectionId);
+                    if (headColl != null && headColl.getRewards().hasRewards()) {
+                        cosmeticItem.awardCollectionRewards(claimTarget, headColl, headColl.getRewards());
+                        sender.sendMessage(ChatColor.GREEN + "✓ Claimed rewards for collection: " + ChatColor.YELLOW + collectionId);
+                    } else {
+                        sender.sendMessage(ChatColor.YELLOW + "⚠ No rewards available for this collection.");
+                    }
                 }
-                // Award rewards (delegates to CosmeticItem)
-                cosmeticItem.awardCollectionRewards(claimTarget, collection, collection.getRewards());
-                sender.sendMessage(ChatColor.GREEN + "✓ Claimed rewards for collection: " + ChatColor.YELLOW + collectionId);
                 break;
+
             case "list":
-                List<HeadCollection> collections = cosmeticItem.getAvailableCollections();
-                if (collections.isEmpty()) {
+                Map<String, ItemCollection> allColls = cmgr.getAllCollectionsSync();
+                if (allColls.isEmpty()) {
                     sender.sendMessage(ChatColor.YELLOW + "⚠ No collections available");
                     return true;
                 }
-                sender.sendMessage(ChatColor.GREEN + "✓ Available Collections:");
-                for (HeadCollection coll : collections) {
-                    sender.sendMessage(ChatColor.GRAY + "• " + ChatColor.YELLOW + coll.getId());
+                sender.sendMessage(ChatColor.GREEN + "Collections (" + allColls.size() + " total):");
+                for (ItemCollection coll : allColls.values()) {
+                    int entryCount = coll.getRequiredEntryCount();
+                    String countStr = entryCount > 0 ? entryCount + " entries" : coll.getItemCount() + " items";
+                    sender.sendMessage(ChatColor.GRAY + "  - [" + ChatColor.WHITE + coll.getId() + ChatColor.GRAY + "] "
+                            + ChatColor.YELLOW + coll.getName() + ChatColor.GRAY + " (" + countStr + ")");
                 }
                 break;
+
             default:
                 sender.sendMessage(ChatColor.RED + "✖ Unknown subcommand: " + sub);
-                sender.sendMessage(ChatColor.GRAY + "   Use /lore collection <view|claim|list>");
+                sender.sendMessage(ChatColor.GRAY + "   Use /lore collection <view|claim|list|add|additem|removeitem>");
                 break;
         }
         return true;
-    }
-
-    /**
-     * Show general overview of collections and player's progress.
-     */
-    private void showCollectionOverview(Player player) {
-        player.sendMessage(ChatColor.YELLOW + "⚙ " + ChatColor.BOLD + "Head Collections Overview");
-        player.sendMessage("");
-
-        Map<String, Double> progress = cosmeticItem.getPlayerCollectionProgress(player);
-        int totalCollections = cosmeticItem.getAvailableCollections().size();
-        int completedCollections = (int) progress.values().stream().mapToLong(p -> p >= 1.0 ? 1 : 0).sum();
-
-        player.sendMessage(ChatColor.GREEN + "✓ Completed Collections: " + ChatColor.WHITE + completedCollections + ChatColor.GRAY + "/" + ChatColor.WHITE + totalCollections);
-        
-        double overallProgress = progress.values().stream().mapToDouble(Double::doubleValue).average().orElse(0.0);
-        player.sendMessage(ChatColor.YELLOW + "⚠ Overall Progress: " + ChatColor.WHITE + String.format("%.1f%%", overallProgress * 100));
-        
-        player.sendMessage("");
-        player.sendMessage(ChatColor.GRAY + "   Use " + ChatColor.WHITE + "/lore collection list " + ChatColor.GRAY + "to see all collections");
-        player.sendMessage(ChatColor.GRAY + "   Use " + ChatColor.WHITE + "/lore collection progress " + ChatColor.GRAY + "for detailed progress");
-        player.sendMessage(ChatColor.GRAY + "   Use " + ChatColor.WHITE + "/lore collection theme " + ChatColor.GRAY + "to browse by theme");
-    }
-
-    /**
-     * List available collections, optionally filtered by theme.
-     */
-    private void listCollections(Player player, String themeFilter) {
-        List<HeadCollection> collections;
-        
-        if (themeFilter != null) {
-            CollectionTheme theme = CollectionTheme.fromDisplayName(themeFilter);
-            if (theme == null) {
-                player.sendMessage(ChatColor.RED + "✖ Unknown theme: " + themeFilter);
-                listThemes(player);
-                return;
-            }
-            collections = cosmeticItem.getCollectionsByTheme(theme);
-            player.sendMessage(ChatColor.YELLOW + "⚙ " + ChatColor.BOLD + "Collections - " + theme.getDisplayName());
-        } else {
-            collections = cosmeticItem.getAvailableCollections();
-            player.sendMessage(ChatColor.YELLOW + "⚙ " + ChatColor.BOLD + "All Available Collections");
-        }
-
-        if (collections.isEmpty()) {
-            player.sendMessage(ChatColor.YELLOW + "⚠ No collections available" + (themeFilter != null ? " for theme: " + themeFilter : ""));
-            return;
-        }
-
-        player.sendMessage("");
-        Map<String, Double> progress = cosmeticItem.getPlayerCollectionProgress(player);
-
-        for (HeadCollection collection : collections) {
-            double completionPercent = progress.getOrDefault(collection.getId(), 0.0) * 100;
-            String status = completionPercent >= 100.0 ? ChatColor.GREEN + "✓" : ChatColor.YELLOW + String.format("%.0f%%", completionPercent);
-            
-            player.sendMessage(ChatColor.WHITE + collection.getName() + " " + ChatColor.GRAY + "(" + collection.getId() + ") " + status);
-            player.sendMessage(ChatColor.GRAY + "   " + collection.getDescription());
-            player.sendMessage(ChatColor.GRAY + "   " + collection.getHeadCount() + " heads • " + collection.getTheme().getDisplayName());
-            
-            if (collection.isSeasonal()) {
-                player.sendMessage(ChatColor.YELLOW + "   ⏰ Seasonal Collection");
-            }
-        }
-        
-        player.sendMessage("");
-        player.sendMessage(ChatColor.GRAY + "   Use " + ChatColor.WHITE + "/lore collection view <id> " + ChatColor.GRAY + "for details");
-    }
-
-    /**
-     * View detailed information about a specific collection.
-     */
-    private void viewCollection(Player player, String collectionId) {
-        HeadCollection collection = cosmeticItem.getCollection(collectionId);
-        if (collection == null) {
-            player.sendMessage(ChatColor.RED + "✖ Collection not found: " + collectionId);
-            return;
-        }
-
-        if (!collection.isAvailable()) {
-            player.sendMessage(ChatColor.YELLOW + "⚠ This collection is not currently available");
-        }
-
-        player.sendMessage(ChatColor.YELLOW + "⚙ " + ChatColor.BOLD + collection.getName());
-        player.sendMessage(ChatColor.GRAY + collection.getDescription());
-        player.sendMessage("");
-
-        // Show progress
-        Map<String, Double> progress = cosmeticItem.getPlayerCollectionProgress(player);
-        double completionPercent = progress.getOrDefault(collection.getId(), 0.0) * 100;
-        boolean isComplete = completionPercent >= 100.0;
-        
-        player.sendMessage(ChatColor.WHITE + "Progress: " + (isComplete ? ChatColor.GREEN + "✓ COMPLETE" : ChatColor.YELLOW + String.format("%.1f%%", completionPercent)));
-        player.sendMessage(ChatColor.WHITE + "Theme: " + ChatColor.GRAY + collection.getTheme().getDisplayName());
-        player.sendMessage(ChatColor.WHITE + "Heads: " + ChatColor.GRAY + collection.getHeadCount());
-        
-        if (collection.isSeasonal()) {
-            player.sendMessage(ChatColor.WHITE + "Availability: " + ChatColor.YELLOW + "⏰ Seasonal");
-        }
-
-        // Show requirements if any
-        if (!collection.getRequirements().isEmpty()) {
-            player.sendMessage("");
-            player.sendMessage(ChatColor.WHITE + "Requirements:");
-            for (String requirement : collection.getRequirements()) {
-                player.sendMessage(ChatColor.GRAY + "  • " + requirement);
-            }
-        }
-
-        // Show heads in collection
-        player.sendMessage("");
-        player.sendMessage(ChatColor.WHITE + "Heads in Collection:");
-        
-        for (HeadVariant variant : collection.getAllHeads()) {
-            boolean owned = cosmeticItem.playerOwnsHead(player, variant.getId());
-            String status = owned ? ChatColor.GREEN + "✓" : ChatColor.RED + "✖";
-            String rarity = variant.getRarity().getColoredDisplayName();
-            
-            player.sendMessage(ChatColor.GRAY + "  " + status + " " + ChatColor.WHITE + variant.getName() + " " + ChatColor.GRAY + "(" + rarity + ChatColor.GRAY + ")");
-            
-            if (owned) {
-                continue;
-            }
-            
-            // Show acquisition info for unowned heads
-            if (variant.requiresPermission()) {
-                player.sendMessage(ChatColor.GRAY + "     Requires special permission");
-            }
-            
-            if (variant.getRarity() == HeadRarity.EVENT) {
-                player.sendMessage(ChatColor.GRAY + "     Event exclusive");
-            }
-        }
-
-        // Show rewards if complete
-        if (isComplete && collection.getRewards().hasRewards()) {
-            player.sendMessage("");
-            player.sendMessage(ChatColor.GREEN + "✓ Collection Complete! Rewards claimed.");
-        }
-    }
-
-    /**
-     * Allow players to claim rewards for a completed collection.
-     */
-    private void claimCollectionReward(Player player, String collectionId) {
-        HeadCollection collection = cosmeticItem.getCollection(collectionId);
-        if (collection == null) {
-            player.sendMessage(ChatColor.RED + "✖ Collection not found: " + collectionId);
-            return;
-        }
-        Map<String, Double> progress = cosmeticItem.getPlayerCollectionProgress(player);
-        double completionPercent = progress.getOrDefault(collection.getId(), 0.0) * 100;
-        if (completionPercent < 100.0) {
-            player.sendMessage(ChatColor.YELLOW + "⚠ You must complete the collection to claim rewards.");
-            return;
-        }
-        if (!collection.getRewards().hasRewards()) {
-            player.sendMessage(ChatColor.YELLOW + "⚠ No rewards available for this collection.");
-            return;
-        }
-        // Award rewards (delegates to CosmeticItem)
-        cosmeticItem.awardCollectionRewards(player, collection, collection.getRewards());
-        player.sendMessage(ChatColor.GREEN + "✓ Rewards claimed for collection: " + collection.getName());
-    }
-
-    /**
-     * Show detailed progress for all collections.
-     */
-    private void showProgress(Player player) {
-        player.sendMessage(ChatColor.YELLOW + "⚙ " + ChatColor.BOLD + "Your Collection Progress");
-        player.sendMessage("");
-
-        // Use CollectionManager from ItemManager for progress tracking
-        CollectionManager collectionManager = plugin.getLoreManager().getItemManager().getCollectionManager();
-        Map<String, ItemCollection> allCollections = collectionManager.getAllCollectionsSync();
-
-        if (allCollections.isEmpty()) {
-            player.sendMessage(ChatColor.YELLOW + "⚠ No collections available");
-            return;
-        }
-
-        for (org.fourz.RVNKLore.lore.item.collection.ItemCollection collection : allCollections.values()) {
-            // Get actual item-based progress using new Phase 4 system
-            int collectedCount = collectionManager.getCollectedItemCountSync(player.getUniqueId(), collection.getId());
-            int totalItems = collection.getItemCount();
-            double itemBasedProgress = totalItems > 0 ? (double) collectedCount / totalItems : 0.0;
-            double percent = itemBasedProgress * 100;
-
-            String status = percent >= 100.0 ? ChatColor.GREEN + "✓ COMPLETE" : ChatColor.YELLOW + String.format("%.1f%%", percent);
-
-            player.sendMessage(ChatColor.WHITE + collection.getName() + ": " + status);
-            player.sendMessage(ChatColor.GRAY + "   " + collectedCount + "/" + totalItems + " items collected");
-
-            // Show missing items if collection not complete
-            if (percent < 100.0) {
-                List<ItemStack> missingItems = collectionManager.getMissingItemsSync(player.getUniqueId(), collection.getId());
-                if (!missingItems.isEmpty() && missingItems.size() <= 5) {
-                    StringBuilder missingNames = new StringBuilder();
-                    for (int i = 0; i < missingItems.size(); i++) {
-                        ItemStack item = missingItems.get(i);
-                        String itemName = item.getItemMeta() != null && item.getItemMeta().hasDisplayName()
-                                ? item.getItemMeta().getDisplayName()
-                                : item.getType().name();
-                        missingNames.append(itemName);
-                        if (i < missingItems.size() - 1) missingNames.append(", ");
-                    }
-                    player.sendMessage(ChatColor.GRAY + "   Still need: " + missingNames);
-                } else if (missingItems.size() > 5) {
-                    player.sendMessage(ChatColor.GRAY + "   Still need: " + missingItems.size() + " more items");
-                }
-            }
-        }
-    }
-
-    /**
-     * List all available themes.
-     */
-    private void listThemes(Player player) {
-        player.sendMessage(ChatColor.YELLOW + "⚙ " + ChatColor.BOLD + "Available Themes");
-        player.sendMessage("");
-        
-        for (CollectionTheme theme : CollectionTheme.values()) {
-            int collectionCount = cosmeticItem.getCollectionsByTheme(theme).size();
-            if (collectionCount > 0) {
-                player.sendMessage(ChatColor.WHITE + theme.getDisplayName() + " " + ChatColor.GRAY + "(" + collectionCount + " collections)");
-                player.sendMessage(ChatColor.GRAY + "   " + theme.getDescription());
-            }
-        }
-        
-        player.sendMessage("");
-        player.sendMessage(ChatColor.GRAY + "   Use " + ChatColor.WHITE + "/lore collection theme <name> " + ChatColor.GRAY + "to view theme collections");
-    }
-
-    /**
-     * Show collections for a specific theme.
-     */
-    private void showThemeCollections(Player player, String themeName) {
-        CollectionTheme theme = CollectionTheme.fromDisplayName(themeName);
-        if (theme == null) {
-            player.sendMessage(ChatColor.RED + "✖ Unknown theme: " + themeName);
-            listThemes(player);
-            return;
-        }
-
-        listCollections(player, themeName);
-    }
-
-    /**
-     * Show command usage information.
-     */
-    private void showUsage(Player player) {
-        player.sendMessage(ChatColor.RED + "▶ Head Collection Commands:");
-        player.sendMessage(ChatColor.WHITE + "/lore collection " + ChatColor.GRAY + "- Overview of all collections");
-        player.sendMessage(ChatColor.WHITE + "/lore collection list [theme] " + ChatColor.GRAY + "- List collections");
-        player.sendMessage(ChatColor.WHITE + "/lore collection view <id> " + ChatColor.GRAY + "- View collection details");
-        player.sendMessage(ChatColor.WHITE + "/lore collection progress " + ChatColor.GRAY + "- Show your progress");
-        player.sendMessage(ChatColor.WHITE + "/lore collection theme [name] " + ChatColor.GRAY + "- Browse by theme");
     }
 
     @Override
@@ -452,10 +211,10 @@ public class LoreCollectionSubCommand implements SubCommand {
 
     @Override
     public String getDescription() {
-        return "Manage and view head collections";
+        return "Manage and view lore collections";
     }
 
     public String getUsage() {
-        return "/lore collection [list|view|progress|theme] [args...]";
+        return "/lore collection <view|claim|list|add|additem|removeitem> [args...]";
     }
 }

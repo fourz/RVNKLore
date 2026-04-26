@@ -15,6 +15,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
+
 /**
  * Central management system for head collections and cosmetic items.
  * Handles registration, retrieval, and player progress tracking for all head variants.
@@ -25,7 +26,6 @@ public class CosmeticsManager {
     private final LogManager logger;
     private final Map<String, HeadCollection> collections;
     private final Map<String, HeadVariant> headVariants;
-    private final Map<UUID, Set<String>> playerOwnedHeads;
     private final Map<CollectionTheme, List<HeadCollection>> themeIndex;
 
     public CosmeticsManager(RVNKLore plugin) {
@@ -33,7 +33,6 @@ public class CosmeticsManager {
         this.logger = LogManager.getInstance(plugin, "CosmeticItem");
         this.collections = new ConcurrentHashMap<>();
         this.headVariants = new ConcurrentHashMap<>();
-        this.playerOwnedHeads = new ConcurrentHashMap<>();
         this.themeIndex = new EnumMap<>(CollectionTheme.class);
         
         // Initialize theme index
@@ -255,11 +254,8 @@ public class CosmeticsManager {
     }
     
     /**
-     * Grant a head variant to a player.
-     *
-     * @param player The player to grant the head to
-     * @param variantId The head variant ID
-     * @return True if successfully granted
+     * Grant a head variant item to a player.
+     * Ownership tracking is handled by CollectionManager/player_collection_items.
      */
     public boolean grantHeadToPlayer(Player player, String variantId) {
         HeadVariant variant = headVariants.get(variantId);
@@ -267,8 +263,6 @@ public class CosmeticsManager {
             logger.warning("Attempted to grant unknown head variant: " + variantId);
             return false;
         }
-        
-        // Check permissions if required
         if (variant.requiresPermission()) {
             String permission = variant.getRequiredPermission();
             if (permission != null && !player.hasPermission(permission)) {
@@ -276,66 +270,10 @@ public class CosmeticsManager {
                 return false;
             }
         }
-        
-        Set<String> ownedHeads = playerOwnedHeads.computeIfAbsent(player.getUniqueId(), k -> new HashSet<>());
-        
-        if (ownedHeads.contains(variantId)) {
-            return false; // Already owns this head
-        }
-        
-        ownedHeads.add(variantId);
-        
-        // Give the physical item to the player
         ItemStack headItem = createHeadItem(variant);
         player.getInventory().addItem(headItem);
-        
-        // Check for completed collections
-        checkCollectionCompletion(player);
-        
         logger.debug("Granted head variant " + variantId + " to player " + player.getName());
         return true;
-    }
-    
-    /**
-     * Check if a player owns a specific head variant.
-     *
-     * @param player The player to check
-     * @param variantId The head variant ID
-     * @return True if the player owns the head
-     */
-    public boolean playerOwnsHead(Player player, String variantId) {
-        Set<String> ownedHeads = playerOwnedHeads.get(player.getUniqueId());
-        return ownedHeads != null && ownedHeads.contains(variantId);
-    }
-    
-    /**
-     * Get all head variants owned by a player.
-     *
-     * @param player The player
-     * @return Set of owned head variant IDs
-     */
-    public Set<String> getPlayerOwnedHeads(Player player) {
-        return new HashSet<>(playerOwnedHeads.getOrDefault(player.getUniqueId(), new HashSet<>()));
-    }
-    
-    /**
-     * Get completion status for all collections for a player.
-     *
-     * @param player The player
-     * @return Map of collection ID to completion percentage
-     */
-    public Map<String, Double> getPlayerCollectionProgress(Player player) {
-        Set<String> ownedHeads = getPlayerOwnedHeads(player);
-        Map<String, Double> progress = new HashMap<>();
-        
-        for (HeadCollection collection : collections.values()) {
-            if (collection.isAvailable()) {
-                double percentage = collection.getCompletionPercentage(ownedHeads);
-                progress.put(collection.getId(), percentage);
-            }
-        }
-        
-        return progress;
     }
     
     /**
@@ -346,26 +284,7 @@ public class CosmeticsManager {
     public List<String> getAvailableCosmeticTypes() {
         return Arrays.asList("head", "hat", "accessory", "decoration");
     }
-    
-    /**
-     * Check for newly completed collections and award rewards.
-     *
-     * @param player The player to check
-     */
-    private void checkCollectionCompletion(Player player) {
-        Set<String> ownedHeads = getPlayerOwnedHeads(player);
-        
-        for (HeadCollection collection : collections.values()) {
-            if (collection.isAvailable() && collection.isComplete(ownedHeads)) {
-                // Award collection completion rewards
-                CollectionRewards rewards = collection.getRewards();
-                if (rewards.hasRewards()) {
-                    awardCollectionRewards(player, collection, rewards);
-                }
-            }
-        }
-    }
-    
+
     /**
      * Allow players to claim rewards for a completed collection.
      */

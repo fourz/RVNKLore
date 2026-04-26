@@ -1071,13 +1071,25 @@ public class CollectionManager implements ICollectionService {
         }
 
         DatabaseConnection dbConn = plugin.getDatabaseManager().getDatabaseConnection();
-        String sql = "INSERT INTO " + dbConn.table(DatabaseConnection.TABLE_COLLECTION_ITEM) +
-                     " (collection_id, item_id, entry_id) VALUES (?, 0, ?)";
-        try (Connection conn = dbConn.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setInt(1, collectionDbId);
-            stmt.setString(2, entryId.toString());
-            stmt.executeUpdate();
+        // item_id: use 0, -1, -2, ... to avoid PK collision with real lore_item rows (positive IDs)
+        String countSql = "SELECT COUNT(*) FROM " + dbConn.table(DatabaseConnection.TABLE_COLLECTION_ITEM) +
+                          " WHERE collection_id = ? AND entry_id IS NOT NULL";
+        String insertSql = "INSERT INTO " + dbConn.table(DatabaseConnection.TABLE_COLLECTION_ITEM) +
+                           " (collection_id, item_id, entry_id) VALUES (?, ?, ?)";
+        try (Connection conn = dbConn.getConnection()) {
+            int entryCount;
+            try (PreparedStatement cs = conn.prepareStatement(countSql)) {
+                cs.setInt(1, collectionDbId);
+                try (ResultSet rs = cs.executeQuery()) {
+                    entryCount = rs.next() ? rs.getInt(1) : 0;
+                }
+            }
+            try (PreparedStatement stmt = conn.prepareStatement(insertSql)) {
+                stmt.setInt(1, collectionDbId);
+                stmt.setInt(2, -entryCount); // 0, -1, -2, ...
+                stmt.setString(3, entryId.toString());
+                stmt.executeUpdate();
+            }
             logger.debug("Added entry " + entryId + " to collection " + collectionId);
             return true;
         } catch (SQLException e) {
