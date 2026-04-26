@@ -4,6 +4,7 @@ import org.bukkit.inventory.ItemStack;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
@@ -15,6 +16,7 @@ public class ItemCollection {
     private final String name;
     private final String description;
     private final List<ItemStack> items;
+    private final List<UUID> requiredEntryIds;
     private String themeId;
     private boolean isActive;
     private long createdAt;
@@ -24,6 +26,7 @@ public class ItemCollection {
         this.name = name;
         this.description = description;
         this.items = new CopyOnWriteArrayList<>();
+        this.requiredEntryIds = new CopyOnWriteArrayList<>();
         this.isActive = true;
         this.createdAt = System.currentTimeMillis();
     }
@@ -110,7 +113,25 @@ public class ItemCollection {
     public void clearItems() {
         items.clear();
     }
-    
+
+    public void addRequiredEntry(UUID entryId) {
+        if (entryId != null && !requiredEntryIds.contains(entryId)) {
+            requiredEntryIds.add(entryId);
+        }
+    }
+
+    public List<UUID> getRequiredEntryIds() {
+        return new ArrayList<>(requiredEntryIds);
+    }
+
+    public boolean hasRequiredEntry(UUID entryId) {
+        return entryId != null && requiredEntryIds.contains(entryId);
+    }
+
+    public int getRequiredEntryCount() {
+        return requiredEntryIds.size();
+    }
+
     /**
      * Get the theme identifier for this collection.
      * 

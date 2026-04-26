@@ -8,12 +8,14 @@ import org.bukkit.inventory.ItemStack;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.data.ItemRepository;
+import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
 import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Handles the /lore collection additem command.
@@ -47,34 +49,14 @@ public class LoreCollectionAddItemSubCommand implements SubCommand {
             return true;
         }
 
-        if (!(sender instanceof Player)) {
-            sender.sendMessage(ChatColor.RED + "▶ This command can only be used by players");
-            return true;
-        }
-
         if (args.length < 2) {
-            sender.sendMessage(ChatColor.RED + "▶ Usage: /lore collection additem <collection_id> <material> [quantity]");
-            sender.sendMessage(ChatColor.GRAY + "   Add an item to a collection by material type");
+            sender.sendMessage(ChatColor.RED + "▶ Usage: /lore collection additem <collection_id> <entry_name|material> [quantity]");
+            sender.sendMessage(ChatColor.GRAY + "   Add a lore entry or material item to a collection");
             return true;
         }
 
-        Player player = (Player) sender;
         String collectionId = args[0].toLowerCase();
-        String materialStr = args[1].toUpperCase();
-        int quantity = 1;
-
-        if (args.length > 2) {
-            try {
-                quantity = Integer.parseInt(args[2]);
-                if (quantity < 1 || quantity > 64) {
-                    sender.sendMessage(ChatColor.RED + "✖ Quantity must be between 1 and 64");
-                    return true;
-                }
-            } catch (NumberFormatException e) {
-                sender.sendMessage(ChatColor.RED + "✖ Invalid quantity: " + args[2]);
-                return true;
-            }
-        }
+        String itemArg = String.join(" ", Arrays.copyOfRange(args, 1, args.length));
 
         // Check if collection exists
         ItemCollection collection = collectionManager.getCollectionSync(collectionId);
@@ -83,28 +65,63 @@ public class LoreCollectionAddItemSubCommand implements SubCommand {
             return true;
         }
 
-        // Validate material
+        // Try lore entry name first
+        LoreEntry entry = plugin.getLoreManager().getLoreEntryByNameSync(itemArg);
+        if (entry == null) {
+            // DB fallback (handles unapproved entries not in cache)
+            entry = plugin.getDatabaseManager().getAllLoreEntries().stream()
+                    .filter(e -> e.getName() != null && e.getName().equalsIgnoreCase(itemArg))
+                    .findFirst().orElse(null);
+        }
+        if (entry != null) {
+            UUID entryUuid = entry.getUUID();
+            boolean added = collectionManager.addEntryToCollectionSync(collectionId, entryUuid);
+            if (added) {
+                sender.sendMessage(ChatColor.GREEN + "✓ Added lore entry '" + entry.getName() + "' to collection: " + collection.getName());
+                logger.info(sender.getName() + " added entry " + entry.getName() + " to collection " + collectionId);
+            } else {
+                sender.sendMessage(ChatColor.RED + "✖ Failed to add entry to collection (already present or DB error)");
+            }
+            return true;
+        }
+
+        // Fall back to material (single arg only)
+        if (!(sender instanceof Player)) {
+            sender.sendMessage(ChatColor.RED + "✖ Material-based additem requires a player. Use an entry name instead.");
+            return true;
+        }
+
+        Player player = (Player) sender;
+        String materialStr = args[1].toUpperCase();
+        int quantity = 1;
+        if (args.length > 2) {
+            try {
+                quantity = Integer.parseInt(args[2]);
+                if (quantity < 1 || quantity > 64) {
+                    sender.sendMessage(ChatColor.RED + "✖ Quantity must be between 1 and 64");
+                    return true;
+                }
+            } catch (NumberFormatException e) {
+                sender.sendMessage(ChatColor.RED + "✖ No lore entry found and invalid material: " + itemArg);
+                return true;
+            }
+        }
+
         Material material;
         try {
             material = Material.valueOf(materialStr);
         } catch (IllegalArgumentException e) {
-            sender.sendMessage(ChatColor.RED + "✖ Invalid material: " + materialStr);
+            sender.sendMessage(ChatColor.RED + "✖ No lore entry found and invalid material: " + itemArg);
             return true;
         }
 
         try {
-            // Create ItemStack with the specified material and quantity
             ItemStack item = new ItemStack(material, quantity);
-
-            // Add to in-memory collection
             collection.addItem(item);
 
-            // Get the database IDs and persist to database
             if (plugin.getDatabaseManager() != null && plugin.getDatabaseManager().isConnected()) {
                 ItemRepository repository = new ItemRepository(plugin, plugin.getDatabaseManager().getDatabaseConnection());
-
-                // Try to get collection ID from database
-                int nextSequence = collection.getItemCount(); // Use current count as sequence number
+                int nextSequence = collection.getItemCount();
                 boolean saved = repository.addItemToCollection(
                     getItemIdForMaterial(material),
                     getCollectionDatabaseId(collectionId),
@@ -114,17 +131,14 @@ public class LoreCollectionAddItemSubCommand implements SubCommand {
 
                 if (saved) {
                     sender.sendMessage(ChatColor.GREEN + "✓ Added " + quantity + "x " + materialStr + " to collection: " + collection.getName());
-                    sender.sendMessage(ChatColor.GRAY + "   Item count: " + collection.getItemCount());
                 } else {
-                    sender.sendMessage(ChatColor.YELLOW + "⚠ Added item to collection in memory, but database save failed.");
-                    sender.sendMessage(ChatColor.GRAY + "   Changes will not persist across restarts.");
+                    sender.sendMessage(ChatColor.YELLOW + "⚠ Added item in memory only — database save failed.");
                 }
             } else {
-                sender.sendMessage(ChatColor.YELLOW + "⚠ Added item to collection in memory only (database not available)");
-                sender.sendMessage(ChatColor.GRAY + "   Changes will not persist across restarts.");
+                sender.sendMessage(ChatColor.YELLOW + "⚠ Added item in memory only (database not available)");
             }
 
-            logger.info(player.getName() + " added item to collection: " + collectionId);
+            logger.info(player.getName() + " added material " + materialStr + " to collection: " + collectionId);
             return true;
         } catch (Exception e) {
             logger.error("Error adding item to collection: " + collectionId, e);
@@ -176,18 +190,26 @@ public class LoreCollectionAddItemSubCommand implements SubCommand {
         List<String> completions = new ArrayList<>();
 
         if (args.length == 1) {
-            // Complete collection IDs
-            completions.addAll(collectionManager.getAllCollectionsSync().keySet());
-        } else if (args.length == 2) {
-            // Complete material names
-            for (Material material : Material.values()) {
-                if (!material.isAir() && !material.isBlock()) {
-                    completions.add(material.name());
+            String partial = args[0].toLowerCase();
+            collectionManager.getAllCollectionsSync().keySet().stream()
+                    .filter(id -> id.startsWith(partial))
+                    .forEach(completions::add);
+        } else if (args.length >= 2) {
+            // Suggest approved lore entry names first, then materials
+            String partial = args[args.length - 1].toLowerCase();
+            plugin.getLoreManager().getAllLoreEntriesSync().stream()
+                    .filter(e -> e.isApproved() && e.getName() != null && e.getName().toLowerCase().startsWith(partial))
+                    .map(e -> e.getName())
+                    .sorted(String.CASE_INSENSITIVE_ORDER)
+                    .limit(10)
+                    .forEach(completions::add);
+            if (completions.isEmpty()) {
+                for (Material material : Material.values()) {
+                    if (!material.isAir() && material.name().toLowerCase().startsWith(partial)) {
+                        completions.add(material.name());
+                    }
                 }
             }
-        } else if (args.length == 3) {
-            // Complete quantity suggestions
-            completions.addAll(java.util.Arrays.asList("1", "8", "16", "32", "64"));
         }
 
         return completions;

@@ -8,8 +8,13 @@ import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.lore.item.ItemProperties;
 import org.fourz.RVNKLore.lore.item.cosmetic.HeadCollection;
+import org.fourz.RVNKLore.data.DatabaseConnection;
 import org.fourz.RVNKLore.data.ItemRepository;
 import org.fourz.RVNKLore.data.model.CollectionReward;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import org.fourz.RVNKLore.data.repository.CollectionRewardRepository;
 import org.fourz.RVNKLore.lore.item.collection.reward.RewardHandlerRegistry;
 import org.fourz.RVNKLore.lore.item.collection.event.CollectionChangeEvent;
@@ -478,24 +483,23 @@ public class CollectionManager implements ICollectionService {
 
     /**
      * Get the numeric database ID for a collection by its string ID.
-     * Helper method for looking up database collection IDs.
-     *
-     * @param collectionId The string collection ID
-     * @return The numeric database ID, or -1 if not found
+     * Queries collection.collection_id directly — avoids the getAllCollections()
+     * mismatch where that method returns display names, not string IDs.
      */
     private int getCollectionDatabaseId(String collectionId) {
-        try {
-            ItemRepository repository = new ItemRepository(plugin, plugin.getDatabaseManager().getDatabaseConnection());
-            Map<Integer, String> allCollections = repository.getAllCollections().join();
-            for (Map.Entry<Integer, String> entry : allCollections.entrySet()) {
-                if (entry.getValue().equals(collectionId)) {
-                    return entry.getKey();
-                }
+        if (!plugin.getDatabaseManager().isConnected()) return -1;
+        DatabaseConnection dbConn = plugin.getDatabaseManager().getDatabaseConnection();
+        String sql = "SELECT id FROM " + dbConn.table(DatabaseConnection.TABLE_COLLECTION) + " WHERE collection_id = ? LIMIT 1";
+        try (Connection conn = dbConn.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, collectionId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                return rs.next() ? rs.getInt(1) : -1;
             }
-        } catch (Exception e) {
+        } catch (SQLException e) {
             logger.debug("Failed to lookup collection database ID: " + collectionId);
+            return -1;
         }
-        return -1;
     }
 
     /**
@@ -1050,6 +1054,106 @@ public class CollectionManager implements ICollectionService {
     @Override
     public CompletableFuture<Double> calculateItemBasedProgress(UUID playerId, String collectionId) {
         return CompletableFuture.supplyAsync(() -> calculateItemBasedProgressSync(playerId, collectionId));
+    }
+
+    public boolean addEntryToCollectionSync(String collectionId, UUID entryId) {
+        if (collectionId == null || entryId == null) return false;
+        if (!plugin.getDatabaseManager().isConnected()) return false;
+
+        int collectionDbId = getCollectionDatabaseId(collectionId);
+        if (collectionDbId <= 0) {
+            logger.warning("Collection not found in database: " + collectionId);
+            return false;
+        }
+        if (isEntryInCollectionSync(collectionId, entryId)) {
+            logger.debug("Entry already in collection: " + collectionId + " / " + entryId);
+            return true;
+        }
+
+        DatabaseConnection dbConn = plugin.getDatabaseManager().getDatabaseConnection();
+        String sql = "INSERT INTO " + dbConn.table(DatabaseConnection.TABLE_COLLECTION_ITEM) +
+                     " (collection_id, item_id, entry_id) VALUES (?, 0, ?)";
+        try (Connection conn = dbConn.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, collectionDbId);
+            stmt.setString(2, entryId.toString());
+            stmt.executeUpdate();
+            logger.debug("Added entry " + entryId + " to collection " + collectionId);
+            return true;
+        } catch (SQLException e) {
+            logger.error("Failed to add entry to collection: " + e.getMessage());
+            return false;
+        }
+    }
+
+    public boolean isEntryInCollectionSync(String collectionId, UUID entryId) {
+        if (collectionId == null || entryId == null) return false;
+        if (!plugin.getDatabaseManager().isConnected()) return false;
+
+        int collectionDbId = getCollectionDatabaseId(collectionId);
+        if (collectionDbId <= 0) return false;
+
+        DatabaseConnection dbConn = plugin.getDatabaseManager().getDatabaseConnection();
+        String sql = "SELECT 1 FROM " + dbConn.table(DatabaseConnection.TABLE_COLLECTION_ITEM) +
+                     " WHERE collection_id = ? AND entry_id = ? LIMIT 1";
+        try (Connection conn = dbConn.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, collectionDbId);
+            stmt.setString(2, entryId.toString());
+            try (ResultSet rs = stmt.executeQuery()) {
+                return rs.next();
+            }
+        } catch (SQLException e) {
+            logger.error("Failed to check entry in collection: " + e.getMessage());
+            return false;
+        }
+    }
+
+    public int getCollectedEntryCountSync(UUID playerUuid, String collectionId) {
+        if (playerUuid == null || collectionId == null) return 0;
+        if (!plugin.getDatabaseManager().isConnected()) return 0;
+
+        int collectionDbId = getCollectionDatabaseId(collectionId);
+        if (collectionDbId <= 0) return 0;
+
+        DatabaseConnection dbConn = plugin.getDatabaseManager().getDatabaseConnection();
+        String sql = "SELECT COUNT(*) FROM " + dbConn.table(DatabaseConnection.TABLE_PLAYER_COLLECTION_ITEMS) +
+                     " WHERE player_uuid = ? AND collection_id = ? AND entry_uuid IS NOT NULL";
+        try (Connection conn = dbConn.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, playerUuid.toString());
+            stmt.setInt(2, collectionDbId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                return rs.next() ? rs.getInt(1) : 0;
+            }
+        } catch (SQLException e) {
+            logger.error("Failed to count collected entries: " + e.getMessage());
+            return 0;
+        }
+    }
+
+    public boolean recordEntryCollectedSync(UUID playerUuid, String collectionId, UUID entryId) {
+        if (playerUuid == null || collectionId == null || entryId == null) return false;
+        if (!plugin.getDatabaseManager().isConnected()) return false;
+
+        int collectionDbId = getCollectionDatabaseId(collectionId);
+        if (collectionDbId <= 0) return false;
+
+        DatabaseConnection dbConn = plugin.getDatabaseManager().getDatabaseConnection();
+        String sql = "INSERT INTO " + dbConn.table(DatabaseConnection.TABLE_PLAYER_COLLECTION_ITEMS) +
+                     " (player_uuid, collection_id, item_id, entry_uuid) VALUES (?, ?, 0, ?)";
+        try (Connection conn = dbConn.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, playerUuid.toString());
+            stmt.setInt(2, collectionDbId);
+            stmt.setString(3, entryId.toString());
+            stmt.executeUpdate();
+            logger.debug("Recorded entry collected: player=" + playerUuid + " collection=" + collectionId + " entry=" + entryId);
+            return true;
+        } catch (SQLException e) {
+            logger.error("Failed to record entry collected: " + e.getMessage());
+            return false;
+        }
     }
 }
 

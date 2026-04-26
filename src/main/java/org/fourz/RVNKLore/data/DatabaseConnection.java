@@ -329,7 +329,25 @@ public abstract class DatabaseConnection {
             stmt.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_" + tablePrefix + "reward_claim_unique ON " + playerRewardClaim + "(reward_id, player_uuid)");
             stmt.execute("CREATE INDEX IF NOT EXISTS idx_" + tablePrefix + "reward_claim_player ON " + playerRewardClaim + "(player_uuid)");
 
+            runMigrations(stmt);
             logger.debug("Database tables created/verified");
+        }
+    }
+
+    private void runMigrations(Statement stmt) {
+        addColumnIfMissing(stmt, table(TABLE_COLLECTION_ITEM), "entry_id", "CHAR(36) NULL");
+        addColumnIfMissing(stmt, table(TABLE_PLAYER_COLLECTION_ITEMS), "entry_uuid", "CHAR(36) NULL");
+    }
+
+    private void addColumnIfMissing(Statement stmt, String tableName, String column, String definition) {
+        try {
+            stmt.execute("ALTER TABLE " + tableName + " ADD COLUMN " + column + " " + definition);
+            logger.debug("Migration: added column " + column + " to " + tableName);
+        } catch (SQLException e) {
+            String msg = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
+            if (!msg.contains("duplicate column") && !msg.contains("already exists")) {
+                logger.warning("Migration warning [" + column + " on " + tableName + "]: " + e.getMessage());
+            }
         }
     }
 
