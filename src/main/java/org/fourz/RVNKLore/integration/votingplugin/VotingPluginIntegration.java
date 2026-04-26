@@ -1,15 +1,28 @@
 package org.fourz.RVNKLore.integration.votingplugin;
 
+import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Player;
+import org.bukkit.event.Event;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.server.PluginEnableEvent;
 import org.bukkit.event.server.PluginDisableEvent;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.persistence.PersistentDataType;
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.handler.CommonHeadHandler;
+import org.fourz.RVNKLore.lore.LoreEntry;
+import org.fourz.RVNKLore.lore.LoreType;
+import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
 import org.fourz.rvnkcore.util.log.LogManager;
 
 import java.lang.reflect.Method;
+import java.util.List;
+import java.util.Random;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Manages VotingPlugin API lifecycle for vote reward integration.
@@ -20,6 +33,7 @@ public class VotingPluginIntegration implements Listener {
 
     private final RVNKLore plugin;
     private final LogManager logger;
+    private final Random random = new Random();
     private Object hooks;          // VotingPluginHooks instance (reflective)
     private Object userManager;    // hooks.getUserManager() result (reflective)
     private boolean enabled = false;
@@ -53,6 +67,7 @@ public class VotingPluginIntegration implements Listener {
             userManager = getUserManagerMethod.invoke(hooks);
 
             enabled = true;
+            registerVoteEventListener();
             logger.debug("VotingPlugin integration activated");
             return true;
         } catch (ClassNotFoundException e) {
@@ -145,6 +160,91 @@ public class VotingPluginIntegration implements Listener {
             removePoints.invoke(user, points);
         } catch (Exception e) {
             logger.debug("Failed to remove vote points for " + player.getName() + ": " + e.getMessage());
+        }
+    }
+
+    /**
+     * Dynamically register a listener for VotingPlugin's VotingPluginEvent.
+     * Uses reflection + registerEvent so no compile-time dependency is needed.
+     */
+    @SuppressWarnings("unchecked")
+    private void registerVoteEventListener() {
+        if (!plugin.getConfig().getBoolean("voting.headsEnabled", true)) {
+            logger.debug("Vote head rewards disabled in config");
+            return;
+        }
+        try {
+            Class<? extends Event> voteEventClass = (Class<? extends Event>)
+                Class.forName("com.bencodez.votingplugin.events.VotingPluginEvent");
+
+            org.bukkit.plugin.EventExecutor executor = (listener, event) -> {
+                if (voteEventClass.isInstance(event)) {
+                    handleVoteEvent(event);
+                }
+            };
+
+            plugin.getServer().getPluginManager().registerEvent(
+                voteEventClass, this, EventPriority.NORMAL, executor, plugin
+            );
+            logger.debug("Registered VotingPlugin vote event listener");
+        } catch (ClassNotFoundException e) {
+            logger.debug("VotingPluginEvent class not found — vote head rewards disabled");
+        } catch (Exception e) {
+            logger.warning("Failed to register vote event listener: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Award a random approved HEAD lore entry to the voter.
+     */
+    private void handleVoteEvent(Event event) {
+        if (!plugin.getConfig().getBoolean("voting.headsEnabled", true)) return;
+
+        try {
+            // Extract the player name from the event via reflection
+            Method getPlayerNameMethod = event.getClass().getMethod("getPlayerName");
+            String playerName = (String) getPlayerNameMethod.invoke(event);
+            if (playerName == null) return;
+
+            Player player = plugin.getServer().getPlayer(playerName);
+            if (player == null || !player.isOnline()) return;
+
+            List<LoreEntry> headEntries = plugin.getLoreManager().getAllLoreEntriesSync().stream()
+                .filter(e -> e.isApproved() && e.getType() == LoreType.HEAD)
+                .collect(Collectors.toList());
+
+            if (headEntries.isEmpty()) {
+                logger.debug("No approved HEAD entries for vote reward");
+                return;
+            }
+
+            LoreEntry chosen = headEntries.get(random.nextInt(headEntries.size()));
+
+            // Build item and stamp PDC entry ID
+            CommonHeadHandler handler = new CommonHeadHandler(plugin);
+            ItemStack item = handler.createLoreItem(chosen);
+            ItemMeta meta = item.getItemMeta();
+            if (meta != null) {
+                NamespacedKey key = new NamespacedKey(plugin, "lore_entry_id");
+                meta.getPersistentDataContainer().set(key, PersistentDataType.STRING, chosen.getId());
+                item.setItemMeta(meta);
+            }
+
+            player.getInventory().addItem(item);
+
+            // Record in player_collection_items
+            CollectionManager cmgr = plugin.getLoreManager().getItemManager().getCollectionManager();
+            try {
+                UUID entryUuid = UUID.fromString(chosen.getId());
+                cmgr.recordEntryCollectedSync(player.getUniqueId(), "vote_rewards", entryUuid);
+            } catch (IllegalArgumentException ignored) {
+                // Entry ID not a valid UUID — skip recording
+            }
+
+            player.sendMessage("§aVote reward: §e" + chosen.getName());
+            logger.debug("Vote reward HEAD '" + chosen.getName() + "' given to " + player.getName());
+        } catch (Exception e) {
+            logger.warning("Error handling vote event: " + e.getMessage());
         }
     }
 

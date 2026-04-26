@@ -167,6 +167,10 @@ citizens:
     # Default stackable setting for new vendors
     default-stackable: true
 
+voting:
+  # Award a random approved HEAD lore entry to players when they vote
+  headsEnabled: true
+
 landmarks:
   signs:
     auto_approve: false
