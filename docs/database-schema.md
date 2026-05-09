@@ -3,7 +3,7 @@ title: RVNKLore Database Schema Reference
 category: schema
 tags: [database, schema, rvnklore]
 board: rvnklore
-last_updated: 2026-03-05
+last_updated: 2026-05-09
 source_of_truth: src/main/java/org/fourz/RVNKLore/data/DatabaseConnection.java
 ---
 
@@ -11,9 +11,9 @@ source_of_truth: src/main/java/org/fourz/RVNKLore/data/DatabaseConnection.java
 
 **Authoritative Reference** — Derived from `DatabaseConnection.java` `createTables()` method.
 
-**Last Updated**: March 5, 2026
-**Database Support**: SQLite (default), MySQL (configurable)
-**Applies To**: RVNKLore plugin v1.0.14+
+**Last Updated**: May 9, 2026
+**Database Support**: SQLite (default), MySQL/MariaDB (configurable)
+**Applies To**: RVNKLore plugin v1.0.25+
 
 > **Note**: The older `docs/rvnklore-schema.md` is outdated. This document supersedes it.
 > Always source schema truth from `DatabaseConnection.java`.
@@ -273,11 +273,14 @@ CREATE TABLE IF NOT EXISTS lore_entry (
 | `item_id` | INTEGER | NO | — | FK → `lore_item(id)` |
 | `sequence_number` | INTEGER | YES | `0` | Display order within collection |
 | `item_config` | TEXT | YES | NULL | JSON: per-collection item overrides |
+| `entry_id` | CHAR(36) | YES | NULL | FK → `lore_entry(id)` — direct lore entry association (added via migration) |
 
 **Constraints**:
 - PRIMARY KEY (`collection_id`, `item_id`)
 - FK: `collection_id` → `collection(id)` ON DELETE CASCADE
 - FK: `item_id` → `lore_item(id)` ON DELETE CASCADE
+
+> **Note**: `entry_id` is a nullable migration column. It is not yet used by any query and will be populated in a future phase when collection items are directly associated with lore entries rather than inferred through `lore_item`.
 
 ---
 
@@ -292,6 +295,7 @@ CREATE TABLE IF NOT EXISTS lore_entry (
 | `collection_id` | INTEGER | NO | — | FK → `collection(id)` |
 | `item_id` | INTEGER | NO | — | FK → `lore_item(id)` |
 | `discovered_at` | TIMESTAMP | NO | `CURRENT_TIMESTAMP` | Discovery timestamp |
+| `entry_uuid` | CHAR(36) | YES | NULL | Lore entry UUID for direct association (added via migration) |
 
 **Constraints**:
 - `uq_<prefix>player_collection_item` — UNIQUE(`player_uuid`, `collection_id`, `item_id`)
@@ -301,6 +305,8 @@ CREATE TABLE IF NOT EXISTS lore_entry (
 **Indexes**:
 - `idx_<prefix>player_collection_items_player` on `player_uuid`
 - `idx_<prefix>player_collection_items_collection` on `collection_id`
+
+> **Note**: `entry_uuid` is a nullable migration column, not yet used by any query.
 
 ---
 
@@ -474,6 +480,19 @@ Three timestamp storage types are used across the 13 tables. **New columns must 
 
 ---
 
+## Schema Initialization
+
+Collection tables (`collection`, `player_collection_progress`, `collection_reward`, `collection_item`, `player_collection_items`) are created via two paths:
+
+1. **`createTables()`** — Normal startup path. Calls `setupCollectionSchema()`, then `runMigrations()`.
+2. **`ensureCollectionTables()`** — Safety-net path. Called from `CollectionManager.loadCollectionsFromDatabase()` on every startup. Calls `setupCollectionSchema()` only (not `runMigrations()`). Idempotent via `CREATE TABLE IF NOT EXISTS`.
+
+The `runMigrations()` method handles additive schema changes via `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` (silent no-op if column already exists). Current migrations:
+- `collection_item.entry_id CHAR(36) NULL`
+- `player_collection_items.entry_uuid CHAR(36) NULL`
+
+---
+
 ## Known Schema Gaps
 
 | Gap | Affected Table(s) | Severity | Status |
@@ -483,6 +502,7 @@ Three timestamp storage types are used across the 13 tables. **New columns must 
 | No `player_name_history` table for name change tracking | — | Low | Open |
 | Missing index on `player_collection_progress.player_id` | `player_collection_progress` | Medium | **Fixed** (commit 4b03ff0) |
 | Missing index on `collection_reward.collection_id` | `collection_reward` | Low | **Fixed** (commit 4b03ff0) |
+| Collection tables not created on first startup (silent `createTableSafely` swallow) | All collection tables | High | **Fixed** v1.0.25 — `ensureCollectionTables()` safety net added; `saveCollection()` prefix bug fixed; `theme`/`theme_id` column name corrected throughout `ItemRepository` |
 
 ---
 
@@ -495,5 +515,5 @@ Three timestamp storage types are used across the 13 tables. **New columns must 
 
 ---
 
-**Document Version**: 2.0.0
+**Document Version**: 2.1.0
 **Maintainer**: Ravenkraft Development Team
