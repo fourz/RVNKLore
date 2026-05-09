@@ -7,7 +7,7 @@ import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.exception.LoreException;
 import org.fourz.RVNKLore.lore.item.ItemProperties;
 import org.fourz.RVNKLore.lore.item.ItemType;
-import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
+import org.fourz.RVNKLore.lore.item.collection.LoreCollection;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
@@ -894,7 +894,7 @@ public class ItemRepository implements IItemRepository {
      * @return CompletableFuture that completes with true if successfully saved
      */
     @Override
-    public CompletableFuture<Boolean> saveCollection(ItemCollection collection) {
+    public CompletableFuture<Boolean> saveCollection(LoreCollection collection) {
         return CompletableFuture.supplyAsync(() -> {
             if (collection == null) {
                 return false;
@@ -926,15 +926,15 @@ public class ItemRepository implements IItemRepository {
      * @return CompletableFuture that completes with a list of all collections
      */
     @Override
-    public CompletableFuture<List<ItemCollection>> loadAllCollections() {
+    public CompletableFuture<List<LoreCollection>> loadAllCollections() {
         return CompletableFuture.supplyAsync(() -> {
             String sql = "SELECT collection_id, name, description, theme_id, is_active, created_at FROM " + t("collection") + "";
 
             try {
                 return dbHelper.executeQuery(sql, null, rs -> {
-                    List<ItemCollection> collections = new ArrayList<>();
+                    List<LoreCollection> collections = new ArrayList<>();
                     while (rs.next()) {
-                        ItemCollection collection = new ItemCollection(
+                        LoreCollection collection = new LoreCollection(
                                 rs.getString("collection_id"),
                                 rs.getString("name"),
                                 rs.getString("description")

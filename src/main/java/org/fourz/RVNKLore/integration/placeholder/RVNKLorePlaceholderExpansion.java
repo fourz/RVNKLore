@@ -391,9 +391,9 @@ public class RVNKLorePlaceholderExpansion extends PlaceholderExpansion {
      */
     private String getCollectionCompletedCount(UUID playerId) {
         try {
-            CompletableFuture<java.util.Map<String, org.fourz.RVNKLore.lore.item.collection.ItemCollection>> future =
+            CompletableFuture<java.util.Map<String, org.fourz.RVNKLore.lore.item.collection.LoreCollection>> future =
                 collectionService.getAllCollections();
-            java.util.Map<String, org.fourz.RVNKLore.lore.item.collection.ItemCollection> allCollections =
+            java.util.Map<String, org.fourz.RVNKLore.lore.item.collection.LoreCollection> allCollections =
                 future.get(1, TimeUnit.SECONDS);
 
             int completedCount = 0;

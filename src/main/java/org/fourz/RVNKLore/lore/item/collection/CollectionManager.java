@@ -38,7 +38,7 @@ public class CollectionManager implements ICollectionService {
     private volatile boolean fallbackMode = false;
     private final RVNKLore plugin;
     private final LogManager logger;
-    private final Map<String, ItemCollection> collections = new ConcurrentHashMap<>();
+    private final Map<String, LoreCollection> collections = new ConcurrentHashMap<>();
     private final Map<String, CollectionTheme> themes = new ConcurrentHashMap<>();
     private final RewardHandlerRegistry rewardHandlers;
 
@@ -70,7 +70,7 @@ public class CollectionManager implements ICollectionService {
         }
 
         // Load items for all collections from database
-        for (ItemCollection collection : new ArrayList<>(collections.values())) {
+        for (LoreCollection collection : new ArrayList<>(collections.values())) {
             try {
                 loadItemsForCollectionSync(collection);
             } catch (Exception e) {
@@ -94,14 +94,14 @@ public class CollectionManager implements ICollectionService {
      * @param description Collection description
      * @return The created collection, or null if validation failed
      */
-    public ItemCollection createCollectionSync(String id, String name, String description) {
+    public LoreCollection createCollectionSync(String id, String name, String description) {
         // Validate the collection before creation
         if (!validateNewCollection(id, name, description)) {
             logger.warning("Failed to create collection due to validation errors: " + id);
             return null;
         }
         
-        ItemCollection collection = new ItemCollection(id, name, description);
+        LoreCollection collection = new LoreCollection(id, name, description);
         collections.put(id, collection);
         logger.debug("Created collection: " + name + " (" + id + ")");
         return collection;
@@ -112,7 +112,7 @@ public class CollectionManager implements ICollectionService {
      * Implements ICollectionService.createCollection().
      */
     @Override
-    public CompletableFuture<Optional<ItemCollection>> createCollection(String id, String name, String description) {
+    public CompletableFuture<Optional<LoreCollection>> createCollection(String id, String name, String description) {
         return CompletableFuture.supplyAsync(() -> Optional.ofNullable(createCollectionSync(id, name, description)));
     }
     
@@ -157,7 +157,7 @@ public class CollectionManager implements ICollectionService {
      * @param collection The collection to validate
      * @return True if valid, false otherwise
      */
-    private boolean validateCollection(ItemCollection collection) {
+    private boolean validateCollection(LoreCollection collection) {
         if (collection == null) {
             logger.warning("Collection validation failed: null collection");
             return false;
@@ -180,13 +180,13 @@ public class CollectionManager implements ICollectionService {
     /**
      * Gets a collection by its ID (sync internal method).
      */
-    public ItemCollection getCollectionSync(String id) {
+    public LoreCollection getCollectionSync(String id) {
         if (id == null || id.trim().isEmpty()) {
             logger.warning("Cannot retrieve collection: null or empty ID provided");
             return null;
         }
         
-        ItemCollection collection = collections.get(id);
+        LoreCollection collection = collections.get(id);
         if (collection == null) {
             logger.debug("Collection not found: " + id);
         }
@@ -199,14 +199,14 @@ public class CollectionManager implements ICollectionService {
      * Implements ICollectionService.getCollection().
      */
     @Override
-    public CompletableFuture<Optional<ItemCollection>> getCollection(String id) {
+    public CompletableFuture<Optional<LoreCollection>> getCollection(String id) {
         return CompletableFuture.supplyAsync(() -> Optional.ofNullable(getCollectionSync(id)));
     }
 
     /**
      * Gets all collections (sync internal method).
      */
-    public Map<String, ItemCollection> getAllCollectionsSync() {
+    public Map<String, LoreCollection> getAllCollectionsSync() {
         return new HashMap<>(collections);
     }
     
@@ -215,7 +215,7 @@ public class CollectionManager implements ICollectionService {
      * Implements ICollectionService.getAllCollections().
      */
     @Override
-    public CompletableFuture<Map<String, ItemCollection>> getAllCollections() {
+    public CompletableFuture<Map<String, LoreCollection>> getAllCollections() {
         return CompletableFuture.supplyAsync(this::getAllCollectionsSync);
     }
 
@@ -239,7 +239,7 @@ public class CollectionManager implements ICollectionService {
             }
             String collectionId = properties.getCollectionId();
             if (collectionId != null) {
-                ItemCollection collection = getCollectionSync(collectionId);
+                LoreCollection collection = getCollectionSync(collectionId);
                 if (collection != null) {
                     lore.add("Â§7Collection: Â§a" + collection.getName());
                 }
@@ -259,7 +259,7 @@ public class CollectionManager implements ICollectionService {
      * Adds an item to a collection (sync internal method).
      */
     public boolean addItemToCollectionSync(String collectionId, ItemStack item) {
-        ItemCollection collection = getCollectionSync(collectionId);
+        LoreCollection collection = getCollectionSync(collectionId);
         if (collection == null) {
             logger.warning("Cannot add item to non-existent collection: " + collectionId);
             return false;
@@ -282,7 +282,7 @@ public class CollectionManager implements ICollectionService {
      * Removes an item from a collection (sync internal method).
      */
     public boolean removeItemFromCollectionSync(String collectionId, ItemStack item) {
-        ItemCollection collection = getCollectionSync(collectionId);
+        LoreCollection collection = getCollectionSync(collectionId);
         if (collection == null) {
             return false;
         }
@@ -306,7 +306,7 @@ public class CollectionManager implements ICollectionService {
      * Gets items in a collection (sync internal method).
      */
     public List<ItemStack> getCollectionItemsSync(String collectionId) {
-        ItemCollection collection = getCollectionSync(collectionId);
+        LoreCollection collection = getCollectionSync(collectionId);
         return collection != null ? collection.getItems() : new ArrayList<>();
     }
     
@@ -320,7 +320,7 @@ public class CollectionManager implements ICollectionService {
     }
 
     public Integer getItemCount(String collectionId) {
-        ItemCollection collection = getCollectionSync(collectionId);
+        LoreCollection collection = getCollectionSync(collectionId);
         return collection != null ? collection.getItemCount() : 0;
     }
 
@@ -353,8 +353,8 @@ public class CollectionManager implements ICollectionService {
             return;
         }
         ItemRepository repository = new ItemRepository(plugin, plugin.getDatabaseManager().getDatabaseConnection());
-        List<ItemCollection> loadedCollections = repository.loadAllCollections().join();
-        for (ItemCollection collection : loadedCollections) {
+        List<LoreCollection> loadedCollections = repository.loadAllCollections().join();
+        for (LoreCollection collection : loadedCollections) {
             collections.put(collection.getId(), collection);
             logger.debug("Loaded collection from database: " + collection.getName());
         }
@@ -367,7 +367,7 @@ public class CollectionManager implements ICollectionService {
      * @param collection The collection to persist
      * @return True if successfully saved
      */
-    public boolean saveCollectionSync(ItemCollection collection) {
+    public boolean saveCollectionSync(LoreCollection collection) {
         if (!validateCollection(collection)) {
             logger.warning("Cannot save invalid collection");
             return false;
@@ -404,7 +404,7 @@ public class CollectionManager implements ICollectionService {
      * Implements ICollectionService.saveCollection().
      */
     @Override
-    public CompletableFuture<Boolean> saveCollection(ItemCollection collection) {
+    public CompletableFuture<Boolean> saveCollection(LoreCollection collection) {
         return CompletableFuture.supplyAsync(() -> saveCollectionSync(collection));
     }
 
@@ -415,7 +415,7 @@ public class CollectionManager implements ICollectionService {
      * @param collection The collection to load items into
      * @return True if items were loaded successfully
      */
-    public boolean loadItemsForCollectionSync(ItemCollection collection) {
+    public boolean loadItemsForCollectionSync(LoreCollection collection) {
         if (collection == null) {
             logger.warning("Cannot load items for null collection");
             return false;
@@ -477,7 +477,7 @@ public class CollectionManager implements ICollectionService {
      * @param collection The collection to load items into
      * @return CompletableFuture that completes with true if successful
      */
-    public CompletableFuture<Boolean> loadItemsForCollection(ItemCollection collection) {
+    public CompletableFuture<Boolean> loadItemsForCollection(LoreCollection collection) {
         return CompletableFuture.supplyAsync(() -> loadItemsForCollectionSync(collection));
     }
 
@@ -583,7 +583,7 @@ public class CollectionManager implements ICollectionService {
      * @param collectionId The completed collection
      */
     private void handleCollectionCompletion(UUID playerId, String collectionId) {
-        ItemCollection collection = getCollectionSync(collectionId);
+        LoreCollection collection = getCollectionSync(collectionId);
         if (collection == null) {
             logger.warning("Cannot handle completion for unknown collection: " + collectionId);
             return;
@@ -613,7 +613,7 @@ public class CollectionManager implements ICollectionService {
             return false;
         }
 
-        ItemCollection collection = getCollectionSync(collectionId);
+        LoreCollection collection = getCollectionSync(collectionId);
         if (collection == null) {
             logger.warning("Cannot grant rewards for unknown collection: " + collectionId);
             return false;
@@ -710,7 +710,7 @@ public class CollectionManager implements ICollectionService {
      * @param previousProgress Previous progress (0-1.0)
      * @param currentProgress Current progress (0-1.0)
      */
-    private void fireCollectionEvent(ItemCollection collection, UUID playerUuid, CollectionEventType eventType,
+    private void fireCollectionEvent(LoreCollection collection, UUID playerUuid, CollectionEventType eventType,
                                      double previousProgress, double currentProgress) {
         try {
             CollectionChangeEvent event = new CollectionChangeEvent(collection, playerUuid, eventType,
@@ -729,7 +729,7 @@ public class CollectionManager implements ICollectionService {
      * @param collection The collection
      * @param playerUuid The player who completed it
      */
-    public void fireCollectionCompleted(ItemCollection collection, UUID playerUuid) {
+    public void fireCollectionCompleted(LoreCollection collection, UUID playerUuid) {
         fireCollectionEvent(collection, playerUuid, CollectionEventType.COMPLETED, 0.99, 1.0);
     }
 
@@ -739,7 +739,7 @@ public class CollectionManager implements ICollectionService {
      * @param collection The collection
      * @param playerUuid The player receiving rewards
      */
-    public void fireRewardGranted(ItemCollection collection, UUID playerUuid) {
+    public void fireRewardGranted(LoreCollection collection, UUID playerUuid) {
         fireCollectionEvent(collection, playerUuid, CollectionEventType.REWARD_GRANTED, 1.0, 1.0);
     }
 
@@ -751,7 +751,7 @@ public class CollectionManager implements ICollectionService {
      * @param previousProgress Previous progress
      * @param currentProgress Current progress
      */
-    public void fireProgressUpdate(ItemCollection collection, UUID playerUuid, double previousProgress, double currentProgress) {
+    public void fireProgressUpdate(LoreCollection collection, UUID playerUuid, double previousProgress, double currentProgress) {
         fireCollectionEvent(collection, playerUuid, CollectionEventType.PROGRESS_UPDATE, previousProgress, currentProgress);
     }
 
@@ -786,14 +786,14 @@ public class CollectionManager implements ICollectionService {
      * Get all collections, optionally filtered by theme (sync internal method).
      * 
      * @param themeId The theme ID to filter by, or null for all
-     * @return Map of collection IDs to ItemCollection
+     * @return Map of collection IDs to LoreCollection
      */
-    public Map<String, ItemCollection> getCollectionsByThemeSync(String themeId) {
+    public Map<String, LoreCollection> getCollectionsByThemeSync(String themeId) {
         if (themeId == null) {
             return getAllCollectionsSync();
         }
-        Map<String, ItemCollection> filtered = new HashMap<>();
-        for (Map.Entry<String, ItemCollection> entry : collections.entrySet()) {
+        Map<String, LoreCollection> filtered = new HashMap<>();
+        for (Map.Entry<String, LoreCollection> entry : collections.entrySet()) {
             if (themeId.equalsIgnoreCase(entry.getValue().getThemeId())) {
                 filtered.put(entry.getKey(), entry.getValue());
             }
@@ -806,7 +806,7 @@ public class CollectionManager implements ICollectionService {
      * Implements ICollectionService.getCollectionsByTheme().
      */
     @Override
-    public CompletableFuture<Map<String, ItemCollection>> getCollectionsByTheme(String themeId) {
+    public CompletableFuture<Map<String, LoreCollection>> getCollectionsByTheme(String themeId) {
         return CompletableFuture.supplyAsync(() -> getCollectionsByThemeSync(themeId));
     }
     
@@ -829,9 +829,9 @@ public class CollectionManager implements ICollectionService {
             return;
         }
         ItemRepository repository = new ItemRepository(plugin, plugin.getDatabaseManager().getDatabaseConnection());
-        List<ItemCollection> loadedCollections = repository.loadAllCollections().join();
+        List<LoreCollection> loadedCollections = repository.loadAllCollections().join();
         collections.clear();
-        for (ItemCollection collection : loadedCollections) {
+        for (LoreCollection collection : loadedCollections) {
             collections.put(collection.getId(), collection);
         }
         logger.debug("Reloaded " + loadedCollections.size() + " collections from database");

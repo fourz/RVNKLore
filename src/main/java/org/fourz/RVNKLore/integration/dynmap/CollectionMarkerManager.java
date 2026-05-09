@@ -14,7 +14,7 @@ import org.fourz.RVNKLore.lore.item.ItemManager;
 import org.fourz.RVNKLore.lore.item.ItemProperties;
 import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
 import org.fourz.RVNKLore.lore.item.collection.CollectionTheme;
-import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
+import org.fourz.RVNKLore.lore.item.collection.LoreCollection;
 import org.fourz.RVNKLore.lore.item.collection.event.CollectionChangeEvent;
 import org.fourz.RVNKLore.lore.item.collection.event.CollectionEventType;
 import org.fourz.RVNKLore.data.ItemRepository;
@@ -93,8 +93,8 @@ public class CollectionMarkerManager implements Listener {
         }
 
         int count = 0;
-        Map<String, ItemCollection> allCollections = collectionManager.getAllCollectionsSync();
-        for (ItemCollection collection : allCollections.values()) {
+        Map<String, LoreCollection> allCollections = collectionManager.getAllCollectionsSync();
+        for (LoreCollection collection : allCollections.values()) {
             count += createMarkersForCollection(collection);
         }
 
@@ -109,7 +109,7 @@ public class CollectionMarkerManager implements Listener {
      * @param collection The collection to create markers for
      * @return Number of markers created
      */
-    private int createMarkersForCollection(ItemCollection collection) {
+    private int createMarkersForCollection(LoreCollection collection) {
         if (collection == null) {
             return 0;
         }
@@ -252,13 +252,13 @@ public class CollectionMarkerManager implements Listener {
         CollectionEventType eventType = event.getEventType();
         if (eventType == CollectionEventType.CREATED) {
             // When a collection is created, populate its markers
-            ItemCollection collection = event.getCollection();
+            LoreCollection collection = event.getCollection();
             if (collection != null) {
                 createMarkersForCollection(collection);
             }
         } else if (eventType == CollectionEventType.DELETED) {
             // When a collection is deleted, delete all its markers
-            ItemCollection collection = event.getCollection();
+            LoreCollection collection = event.getCollection();
             if (collection != null) {
                 deleteMarkersForCollection(collection.getId());
             }

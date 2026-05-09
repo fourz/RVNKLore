@@ -5,7 +5,7 @@ import net.citizensnpcs.api.util.DataKey;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
+import org.fourz.RVNKLore.lore.item.collection.LoreCollection;
 import org.fourz.rvnkcore.util.log.LogManager;
 
 import java.util.Optional;
@@ -49,7 +49,7 @@ public class CollectionVendorTrait extends Trait {
         }
 
         // Get the collection (async operation)
-        CompletableFuture<Optional<ItemCollection>> collectionFuture = plugin.getLoreManager()
+        CompletableFuture<Optional<LoreCollection>> collectionFuture = plugin.getLoreManager()
             .getItemManager()
             .getCollectionManager()
             .getCollection(collectionId);

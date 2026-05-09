@@ -11,7 +11,7 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
+import org.fourz.RVNKLore.lore.item.collection.LoreCollection;
 import org.fourz.rvnkcore.util.log.LogManager;
 
 import java.util.ArrayList;
@@ -29,7 +29,7 @@ public class CollectionShopGUI implements Listener {
 
     private final RVNKLore plugin;
     private final Player player;
-    private final ItemCollection collection;
+    private final LoreCollection collection;
     private final CollectionVendorTrait vendor;
     private final LogManager logger;
 
@@ -37,7 +37,7 @@ public class CollectionShopGUI implements Listener {
     private int currentPage = 0;
     private List<ItemStack> availableItems;
 
-    public CollectionShopGUI(RVNKLore plugin, Player player, ItemCollection collection, CollectionVendorTrait vendor) {
+    public CollectionShopGUI(RVNKLore plugin, Player player, LoreCollection collection, CollectionVendorTrait vendor) {
         this.plugin = plugin;
         this.player = player;
         this.collection = collection;

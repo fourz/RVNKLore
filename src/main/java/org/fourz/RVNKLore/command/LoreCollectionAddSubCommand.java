@@ -7,7 +7,7 @@ import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
 import org.fourz.RVNKLore.lore.item.collection.CollectionTheme;
-import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
+import org.fourz.RVNKLore.lore.item.collection.LoreCollection;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -60,7 +60,7 @@ public class LoreCollectionAddSubCommand implements SubCommand {
         }
 
         // Check if collection already exists
-        if (collectionManager.getCollection(collectionId) != null) {
+        if (collectionManager.getCollectionSync(collectionId) != null) {
             sender.sendMessage(ChatColor.RED + "âœ– A collection with ID '" + collectionId + "' already exists.");
             return true;
         }
@@ -77,7 +77,7 @@ public class LoreCollectionAddSubCommand implements SubCommand {
 
         try {
             // Create and validate the collection
-            ItemCollection collection = collectionManager.createCollectionSync(collectionId, name, description);
+            LoreCollection collection = collectionManager.createCollectionSync(collectionId, name, description);
             if (collection == null) {
                 sender.sendMessage(ChatColor.RED + "âœ– Failed to create collection: validation error");
                 return true;

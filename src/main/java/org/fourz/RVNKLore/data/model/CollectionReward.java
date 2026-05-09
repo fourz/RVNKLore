@@ -38,7 +38,9 @@ public class CollectionReward {
         ITEM,           // Give items to player inventory
         PERMISSION,     // Grant a permission node (LuckPerms)
         COMMAND,        // Execute console command with {player} and {uuid} placeholders
-        CURRENCY;       // Add economy currency (Vault Economy)
+        CURRENCY,       // Add economy currency (Vault Economy)
+        LORE_ITEM,      // Materialize lore entry as in-game item; data: {"entryId":"<uuid>"}
+        ACHIEVEMENT;    // Grant a named achievement; data: {"achievementId":"<id>"}
 
         public static RewardType fromString(String value) {
             try {

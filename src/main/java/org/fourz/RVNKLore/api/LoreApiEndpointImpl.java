@@ -10,7 +10,7 @@ import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreManager;
 import org.fourz.RVNKLore.lore.LoreType;
 import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
-import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
+import org.fourz.RVNKLore.lore.item.collection.LoreCollection;
 import org.fourz.RVNKLore.lore.player.PlayerManager;
 import org.fourz.RVNKLore.search.LoreSearchService;
 import org.fourz.RVNKLore.search.SearchCriteria;
@@ -285,8 +285,8 @@ public class LoreApiEndpointImpl implements ILoreApiService {
         return CompletableFuture.supplyAsync(() -> {
             try {
                 List<CollectionResponse> collections = new ArrayList<>();
-                Map<String, ItemCollection> all = collectionManager.getAllCollectionsSync();
-                for (ItemCollection col : all.values()) {
+                Map<String, LoreCollection> all = collectionManager.getAllCollectionsSync();
+                for (LoreCollection col : all.values()) {
                     collections.add(CollectionResponse.builder()
                         .id(col.getId())
                         .name(col.getName())

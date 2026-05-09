@@ -1,7 +1,7 @@
 package org.fourz.RVNKLore.service;
 
 import org.bukkit.inventory.ItemStack;
-import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
+import org.fourz.RVNKLore.lore.item.collection.LoreCollection;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
 
@@ -22,32 +22,32 @@ class ICollectionServiceContractTest {
      */
     private static class TestCollectionService implements ICollectionService {
         private boolean fallbackMode = false;
-        private final Map<String, ItemCollection> collections = new HashMap<>();
+        private final Map<String, LoreCollection> collections = new HashMap<>();
 
         public TestCollectionService() {
             // Add some test data
-            collections.put("test_collection", new ItemCollection("test_collection", "Test Collection", "A test collection"));
+            collections.put("test_collection", new LoreCollection("test_collection", "Test Collection", "A test collection"));
         }
 
         @Override
-        public CompletableFuture<Optional<ItemCollection>> createCollection(String id, String name, String description) {
-            ItemCollection collection = new ItemCollection(id, name, description);
+        public CompletableFuture<Optional<LoreCollection>> createCollection(String id, String name, String description) {
+            LoreCollection collection = new LoreCollection(id, name, description);
             collections.put(id, collection);
             return CompletableFuture.completedFuture(Optional.of(collection));
         }
 
         @Override
-        public CompletableFuture<Optional<ItemCollection>> getCollection(String id) {
+        public CompletableFuture<Optional<LoreCollection>> getCollection(String id) {
             return CompletableFuture.completedFuture(Optional.ofNullable(collections.get(id)));
         }
 
         @Override
-        public CompletableFuture<Map<String, ItemCollection>> getAllCollections() {
+        public CompletableFuture<Map<String, LoreCollection>> getAllCollections() {
             return CompletableFuture.completedFuture(new HashMap<>(collections));
         }
 
         @Override
-        public CompletableFuture<Map<String, ItemCollection>> getCollectionsByTheme(String themeId) {
+        public CompletableFuture<Map<String, LoreCollection>> getCollectionsByTheme(String themeId) {
             return CompletableFuture.completedFuture(new HashMap<>());
         }
 
@@ -82,7 +82,7 @@ class ICollectionServiceContractTest {
         }
 
         @Override
-        public CompletableFuture<Boolean> saveCollection(ItemCollection collection) {
+        public CompletableFuture<Boolean> saveCollection(LoreCollection collection) {
             if (collection != null) {
                 collections.put(collection.getId(), collection);
                 return CompletableFuture.completedFuture(true);
@@ -133,30 +133,30 @@ class ICollectionServiceContractTest {
     }
 
     @Test
-    @DisplayName("createCollection returns CompletableFuture<Optional<ItemCollection>>")
+    @DisplayName("createCollection returns CompletableFuture<Optional<LoreCollection>>")
     void testCreateCollection() {
         ICollectionService service = new TestCollectionService();
 
-        CompletableFuture<Optional<ItemCollection>> future = service.createCollection(
+        CompletableFuture<Optional<LoreCollection>> future = service.createCollection(
             "new_collection", "New Collection", "A new collection"
         );
 
         assertNotNull(future);
-        Optional<ItemCollection> result = future.join();
+        Optional<LoreCollection> result = future.join();
         assertTrue(result.isPresent());
         assertEquals("new_collection", result.get().getId());
         assertEquals("New Collection", result.get().getName());
     }
 
     @Test
-    @DisplayName("getCollection returns CompletableFuture<Optional<ItemCollection>>")
+    @DisplayName("getCollection returns CompletableFuture<Optional<LoreCollection>>")
     void testGetCollection() {
         ICollectionService service = new TestCollectionService();
 
-        CompletableFuture<Optional<ItemCollection>> future = service.getCollection("test_collection");
+        CompletableFuture<Optional<LoreCollection>> future = service.getCollection("test_collection");
 
         assertNotNull(future);
-        Optional<ItemCollection> result = future.join();
+        Optional<LoreCollection> result = future.join();
         assertTrue(result.isPresent());
         assertEquals("Test Collection", result.get().getName());
     }
@@ -166,21 +166,21 @@ class ICollectionServiceContractTest {
     void testGetNonExistentCollection() {
         ICollectionService service = new TestCollectionService();
 
-        CompletableFuture<Optional<ItemCollection>> future = service.getCollection("nonexistent");
+        CompletableFuture<Optional<LoreCollection>> future = service.getCollection("nonexistent");
 
-        Optional<ItemCollection> result = future.join();
+        Optional<LoreCollection> result = future.join();
         assertTrue(result.isEmpty());
     }
 
     @Test
-    @DisplayName("getAllCollections returns CompletableFuture<Map<String, ItemCollection>>")
+    @DisplayName("getAllCollections returns CompletableFuture<Map<String, LoreCollection>>")
     void testGetAllCollections() {
         ICollectionService service = new TestCollectionService();
 
-        CompletableFuture<Map<String, ItemCollection>> future = service.getAllCollections();
+        CompletableFuture<Map<String, LoreCollection>> future = service.getAllCollections();
 
         assertNotNull(future);
-        Map<String, ItemCollection> result = future.join();
+        Map<String, LoreCollection> result = future.join();
         assertNotNull(result);
         assertFalse(result.isEmpty());
         assertTrue(result.containsKey("test_collection"));
@@ -218,7 +218,7 @@ class ICollectionServiceContractTest {
     @DisplayName("saveCollection returns CompletableFuture<Boolean>")
     void testSaveCollection() {
         ICollectionService service = new TestCollectionService();
-        ItemCollection collection = new ItemCollection("save_test", "Save Test", "Testing save");
+        LoreCollection collection = new LoreCollection("save_test", "Save Test", "Testing save");
 
         CompletableFuture<Boolean> future = service.saveCollection(collection);
 
@@ -245,7 +245,7 @@ class ICollectionServiceContractTest {
         CompletableFuture<String> result = service.createCollection("composed", "Composed", "Test")
             .thenCompose(opt -> opt.map(c ->
                 service.getCollection(c.getId())
-                    .thenApply(found -> found.map(ItemCollection::getName).orElse("not found"))
+                    .thenApply(found -> found.map(LoreCollection::getName).orElse("not found"))
             ).orElse(CompletableFuture.completedFuture("creation failed")));
 
         assertEquals("Composed", result.join());
@@ -257,7 +257,7 @@ class ICollectionServiceContractTest {
         ICollectionService service = new TestCollectionService();
 
         CompletableFuture<String> result = service.getCollection("nonexistent")
-            .thenApply(opt -> opt.map(ItemCollection::getName).orElse("not found"))
+            .thenApply(opt -> opt.map(LoreCollection::getName).orElse("not found"))
             .exceptionally(ex -> "error: " + ex.getMessage());
 
         assertEquals("not found", result.join());

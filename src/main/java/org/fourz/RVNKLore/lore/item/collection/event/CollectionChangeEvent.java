@@ -2,7 +2,7 @@ package org.fourz.RVNKLore.lore.item.collection.event;
 
 import org.bukkit.event.Event;
 import org.bukkit.event.HandlerList;
-import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
+import org.fourz.RVNKLore.lore.item.collection.LoreCollection;
 
 import java.util.UUID;
 
@@ -27,7 +27,7 @@ public class CollectionChangeEvent extends Event {
 
     private static final HandlerList handlers = new HandlerList();
 
-    private final ItemCollection collection;
+    private final LoreCollection collection;
     private final UUID playerUuid;
     private final CollectionEventType eventType;
     private final long timestamp;
@@ -43,7 +43,7 @@ public class CollectionChangeEvent extends Event {
      * @param previousProgress Previous collection progress (0-1.0)
      * @param currentProgress Current collection progress (0-1.0)
      */
-    public CollectionChangeEvent(ItemCollection collection, UUID playerUuid, CollectionEventType eventType,
+    public CollectionChangeEvent(LoreCollection collection, UUID playerUuid, CollectionEventType eventType,
                                  double previousProgress, double currentProgress) {
         super(true); // async = true, allow async listeners
         this.collection = collection;
@@ -57,7 +57,7 @@ public class CollectionChangeEvent extends Event {
     /**
      * Get the collection that changed.
      */
-    public ItemCollection getCollection() {
+    public LoreCollection getCollection() {
         return collection;
     }
 

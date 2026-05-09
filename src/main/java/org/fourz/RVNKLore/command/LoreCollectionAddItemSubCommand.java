@@ -10,7 +10,7 @@ import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.data.ItemRepository;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
-import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
+import org.fourz.RVNKLore.lore.item.collection.LoreCollection;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -59,7 +59,7 @@ public class LoreCollectionAddItemSubCommand implements SubCommand {
         String itemArg = String.join(" ", Arrays.copyOfRange(args, 1, args.length));
 
         // Check if collection exists
-        ItemCollection collection = collectionManager.getCollectionSync(collectionId);
+        LoreCollection collection = collectionManager.getCollectionSync(collectionId);
         if (collection == null) {
             sender.sendMessage(ChatColor.RED + "✖ Collection not found: " + collectionId);
             return true;

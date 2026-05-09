@@ -1,7 +1,7 @@
 package org.fourz.RVNKLore.service;
 
 import org.bukkit.inventory.ItemStack;
-import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
+import org.fourz.RVNKLore.lore.item.collection.LoreCollection;
 
 import java.util.List;
 import java.util.Map;
@@ -23,7 +23,7 @@ public interface ICollectionService {
      * @param description The collection description
      * @return Future containing the created collection, or empty on failure
      */
-    CompletableFuture<Optional<ItemCollection>> createCollection(String id, String name, String description);
+    CompletableFuture<Optional<LoreCollection>> createCollection(String id, String name, String description);
 
     /**
      * Get a collection by its ID.
@@ -31,14 +31,14 @@ public interface ICollectionService {
      * @param id The collection ID
      * @return Future containing the collection, or empty if not found
      */
-    CompletableFuture<Optional<ItemCollection>> getCollection(String id);
+    CompletableFuture<Optional<LoreCollection>> getCollection(String id);
 
     /**
      * Get all collections.
      *
      * @return Future containing map of collection ID to collection
      */
-    CompletableFuture<Map<String, ItemCollection>> getAllCollections();
+    CompletableFuture<Map<String, LoreCollection>> getAllCollections();
 
     /**
      * Get collections by theme.
@@ -46,7 +46,7 @@ public interface ICollectionService {
      * @param themeId The theme ID to filter by
      * @return Future containing map of matching collections
      */
-    CompletableFuture<Map<String, ItemCollection>> getCollectionsByTheme(String themeId);
+    CompletableFuture<Map<String, LoreCollection>> getCollectionsByTheme(String themeId);
 
     /**
      * Add an item to a collection.
@@ -108,7 +108,7 @@ public interface ICollectionService {
      * @param collection The collection to save
      * @return Future containing true if successful
      */
-    CompletableFuture<Boolean> saveCollection(ItemCollection collection);
+    CompletableFuture<Boolean> saveCollection(LoreCollection collection);
 
     /**
      * Check if the service is in fallback mode due to errors.

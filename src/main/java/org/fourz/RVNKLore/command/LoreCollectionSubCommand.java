@@ -9,7 +9,7 @@ import org.fourz.RVNKLore.lore.item.cosmetic.HeadCollection;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
-import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
+import org.fourz.RVNKLore.lore.item.collection.LoreCollection;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -80,7 +80,7 @@ public class LoreCollectionSubCommand implements SubCommand {
                     return true;
                 }
                 collectionId = args[1];
-                ItemCollection itemCollection = cmgr.getCollectionSync(collectionId);
+                LoreCollection itemCollection = cmgr.getCollectionSync(collectionId);
                 if (itemCollection == null) {
                     sender.sendMessage(ChatColor.RED + "✖ Collection not found: " + collectionId);
                     sender.sendMessage(ChatColor.GRAY + "   Use /lore collection list to see available IDs");
@@ -126,7 +126,7 @@ public class LoreCollectionSubCommand implements SubCommand {
                     }
                     collectionId = args[2];
                 }
-                ItemCollection claimColl = cmgr.getCollectionSync(collectionId);
+                LoreCollection claimColl = cmgr.getCollectionSync(collectionId);
                 if (claimColl == null) {
                     sender.sendMessage(ChatColor.RED + "✖ Collection not found: " + collectionId);
                     return true;
@@ -155,13 +155,13 @@ public class LoreCollectionSubCommand implements SubCommand {
                 break;
 
             case "list":
-                Map<String, ItemCollection> allColls = cmgr.getAllCollectionsSync();
+                Map<String, LoreCollection> allColls = cmgr.getAllCollectionsSync();
                 if (allColls.isEmpty()) {
                     sender.sendMessage(ChatColor.YELLOW + "⚠ No collections available");
                     return true;
                 }
                 sender.sendMessage(ChatColor.GREEN + "Collections (" + allColls.size() + " total):");
-                for (ItemCollection coll : allColls.values()) {
+                for (LoreCollection coll : allColls.values()) {
                     int entryCount = coll.getRequiredEntryCount();
                     String countStr = entryCount > 0 ? entryCount + " entries" : coll.getItemCount() + " items";
                     sender.sendMessage(ChatColor.GRAY + "  - [" + ChatColor.WHITE + coll.getId() + ChatColor.GRAY + "] "
