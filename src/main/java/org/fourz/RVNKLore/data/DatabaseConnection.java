@@ -264,6 +264,8 @@ public abstract class DatabaseConnection {
     private void runMigrations(Statement stmt) {
         addColumnIfMissing(stmt, table(TABLE_COLLECTION_ITEM), "entry_id", "CHAR(36) NULL");
         addColumnIfMissing(stmt, table(TABLE_PLAYER_COLLECTION_ITEMS), "entry_uuid", "CHAR(36) NULL");
+        // MySQL INT(11) max is ~2.1B; System.currentTimeMillis() returns ~1.7T — must be BIGINT
+        modifyColumnType(stmt, table(TABLE_COLLECTION), "created_at", "BIGINT NOT NULL");
     }
 
     /**
@@ -289,7 +291,7 @@ public abstract class DatabaseConnection {
             "description TEXT, " +
             "theme_id VARCHAR(100), " +
             "is_active " + boolType + " DEFAULT 1, " +
-            "created_at INTEGER NOT NULL, " +
+            "created_at BIGINT NOT NULL, " +
             "CONSTRAINT uq_" + tablePrefix + "collection_id UNIQUE (collection_id)" +
             ")", "collection");
 
@@ -359,6 +361,18 @@ public abstract class DatabaseConnection {
             logger.debug("Collection tables ensured");
         } catch (SQLException e) {
             logger.error("Failed to ensure collection tables", e);
+        }
+    }
+
+    private void modifyColumnType(Statement stmt, String tableName, String column, String definition) {
+        try {
+            stmt.execute("ALTER TABLE " + tableName + " MODIFY COLUMN " + column + " " + definition);
+            logger.debug("Migration: modified column " + column + " on " + tableName);
+        } catch (SQLException e) {
+            String msg = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
+            if (!msg.contains("doesn't exist") && !msg.contains("unknown column")) {
+                logger.debug("Migration: column type already correct for " + column + " on " + tableName);
+            }
         }
     }
 
