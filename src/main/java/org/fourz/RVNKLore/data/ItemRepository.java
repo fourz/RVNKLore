@@ -638,7 +638,7 @@ public class ItemRepository implements IItemRepository {
     @Override
     public CompletableFuture<Map<String, String>> getCollectionDetails(int collectionId) {
         return CompletableFuture.supplyAsync(() -> {
-            String sql = "SELECT name, description, theme FROM " + t("collection") + " WHERE id = ?";
+            String sql = "SELECT name, description, theme_id FROM " + t("collection") + " WHERE id = ?";
 
             try {
                 return dbHelper.executeQuery(sql,
@@ -648,7 +648,7 @@ public class ItemRepository implements IItemRepository {
                         if (rs.next()) {
                             details.put("name", rs.getString("name"));
                             details.put("description", rs.getString("description"));
-                            details.put("theme", rs.getString("theme"));
+                            details.put("theme", rs.getString("theme_id"));
                         }
                         return details;
                     });
@@ -672,7 +672,7 @@ public class ItemRepository implements IItemRepository {
     public CompletableFuture<Integer> createCollection(String name, String description, String theme) {
         return CompletableFuture.supplyAsync(() -> {
             // Base INSERT without RETURNING clause - dialect handles key retrieval
-            String sql = "INSERT INTO " + t("collection") + " (name, description, theme) VALUES (?, ?, ?)";
+            String sql = "INSERT INTO " + t("collection") + " (name, description, theme_id, created_at) VALUES (?, ?, ?, ?)";
 
             try {
                 return dbHelper.executeInsertWithGeneratedKey(sql, "id",
@@ -680,6 +680,7 @@ public class ItemRepository implements IItemRepository {
                         stmt.setString(1, name);
                         stmt.setString(2, description);
                         stmt.setString(3, theme);
+                        stmt.setLong(4, System.currentTimeMillis());
                     });
             } catch (LoreException e) {
                 logger.error("Failed to create collection: " + name, e);
@@ -700,7 +701,7 @@ public class ItemRepository implements IItemRepository {
     @Override
     public CompletableFuture<Boolean> updateCollection(int collectionId, String name, String description, String theme) {
         return CompletableFuture.supplyAsync(() -> {
-            StringBuilder sql = new StringBuilder("UPDATE " + t("collection") + " SET updated_at = CURRENT_TIMESTAMP");
+            StringBuilder sql = new StringBuilder("UPDATE " + t("collection") + " SET name = name");
             List<String> params = new ArrayList<>();
 
             if (name != null) {
@@ -712,7 +713,7 @@ public class ItemRepository implements IItemRepository {
                 params.add(description);
             }
             if (theme != null) {
-                sql.append(", theme = ?");
+                sql.append(", theme_id = ?");
                 params.add(theme);
             }
 
@@ -902,7 +903,7 @@ public class ItemRepository implements IItemRepository {
 
             // Generate dialect-specific REPLACE SQL
             String[] columns = {"collection_id", "name", "description", "theme_id", "is_active", "created_at"};
-            String sql = dbConnection.getDialect().getReplaceSQL("collection", columns);
+            String sql = dbConnection.getDialect().getReplaceSQL(t("collection"), columns);
 
             try {
                 return dbHelper.executeUpdate(sql, stmt -> {

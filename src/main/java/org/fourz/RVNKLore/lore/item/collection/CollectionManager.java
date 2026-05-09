@@ -352,6 +352,8 @@ public class CollectionManager implements ICollectionService {
             logger.warning("Database not available - using default collections only");
             return;
         }
+        // Ensure collection tables exist — safety net if createTables() had issues at startup
+        plugin.getDatabaseManager().getDatabaseConnection().ensureCollectionTables();
         ItemRepository repository = new ItemRepository(plugin, plugin.getDatabaseManager().getDatabaseConnection());
         List<LoreCollection> loadedCollections = repository.loadAllCollections().join();
         for (LoreCollection collection : loadedCollections) {
