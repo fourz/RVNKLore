@@ -2,6 +2,7 @@ package org.fourz.RVNKLore;
 
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.fourz.RVNKLore.handler.HandlerFactory;
 import org.fourz.rvnkcore.RVNKCore;
 import org.fourz.rvnkcore.api.model.NotificationTypeDefinition;
@@ -54,6 +55,7 @@ public class RVNKLore extends JavaPlugin {
     private AchievementManager achievementManager;
     private LoreBookManager loreBookManager;
     private int healthCheckTaskId = -1;
+    private final AtomicBoolean isReconnecting = new AtomicBoolean(false);
     private Thread shutdownHook;
     private boolean shuttingDown = false;
     private final Object shutdownLock = new Object();
@@ -223,18 +225,28 @@ public class RVNKLore extends JavaPlugin {
                 return;
             }
 
-            // Check database connection
-            if (!databaseManager.isConnected()) {
-                logger.warning("Database connection lost, attempting reconnect");
-                databaseManager.reconnect();
-            }
+            boolean needsReconnect = !databaseManager.isConnected();
+            boolean needsPrimaryRecovery = !needsReconnect
+                    && databaseManager.isInFallbackMode()
+                    && databaseManager.getFallbackTracker() != null
+                    && !databaseManager.getFallbackTracker().isInFallbackMode();
 
-            // If in fallback mode, periodically attempt primary reconnection
-            if (databaseManager.isInFallbackMode()) {
-                var tracker = databaseManager.getFallbackTracker();
-                if (tracker != null && !tracker.isInFallbackMode()) {
+            if (needsReconnect || needsPrimaryRecovery) {
+                if (needsReconnect) {
+                    logger.warning("Database connection lost, attempting reconnect");
+                } else {
                     logger.info("Recovery period elapsed, attempting primary database reconnection");
-                    databaseManager.reconnect();
+                }
+                if (isReconnecting.compareAndSet(false, true)) {
+                    getServer().getScheduler().runTaskAsynchronously(this, () -> {
+                        try {
+                            databaseManager.reconnect();
+                        } finally {
+                            isReconnecting.set(false);
+                        }
+                    });
+                } else {
+                    logger.warning("Reconnect already in progress, skipping");
                 }
             }
         }, 1200L, 1200L); // Check every minute (20 ticks/sec * 60 sec)
