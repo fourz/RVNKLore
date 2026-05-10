@@ -32,11 +32,12 @@ public class LoreListSubCommand implements SubCommand {
         int page = 1;
         boolean pendingOnly = false;
 
-        // Parse arguments — strip --pending flag first
+        // Parse arguments — strip flags first
         List<String> remaining = new ArrayList<>(Arrays.asList(args));
         if (remaining.remove("--pending")) {
             pendingOnly = true;
         }
+        boolean archivedOnly = remaining.remove("--archived");
 
         String[] filtered = remaining.toArray(new String[0]);
 
@@ -68,7 +69,13 @@ public class LoreListSubCommand implements SubCommand {
         List<LoreEntry> entries;
         boolean isAdmin = sender.hasPermission("rvnklore.admin");
 
-        if (pendingOnly) {
+        if (archivedOnly) {
+            if (!isAdmin) {
+                sender.sendMessage(ChatColor.RED + "✖ --archived requires admin permission.");
+                return true;
+            }
+            entries = plugin.getDatabaseManager().getArchivedLoreEntries();
+        } else if (pendingOnly) {
             // --pending: show unapproved entries (admin sees all, player sees own submissions)
             List<LoreEntry> all = new ArrayList<>(plugin.getDatabaseManager().getAllLoreEntries());
             entries = all.stream()
@@ -100,9 +107,9 @@ public class LoreListSubCommand implements SubCommand {
         int endIndex = Math.min(startIndex + ITEMS_PER_PAGE, entries.size());
 
         // Display header
-        String pendingLabel = pendingOnly ? " [PENDING]" : "";
+        String modeLabel = archivedOnly ? " [ARCHIVED]" : (pendingOnly ? " [PENDING]" : "");
         sender.sendMessage(ChatColor.GOLD + "=== Lore Entries" +
-                (type != null ? " (" + type + ")" : "") + pendingLabel +
+                (type != null ? " (" + type + ")" : "") + modeLabel +
                 " - Page " + page + "/" + Math.max(1, totalPages) + " ===");
 
         // Display entries
@@ -154,6 +161,9 @@ public class LoreListSubCommand implements SubCommand {
 
             if ("--pending".startsWith(partial.toLowerCase())) {
                 completions.add("--pending");
+            }
+            if (sender.hasPermission("rvnklore.admin") && "--archived".startsWith(partial.toLowerCase())) {
+                completions.add("--archived");
             }
             completions.addAll(tabCompletionUtil.completeEnum(LoreType.class, partial));
             completions.addAll(tabCompletionUtil.completeLoreEntryNames(partial));

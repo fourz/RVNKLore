@@ -22,6 +22,8 @@ public class LoreEntry {
     private String submittedBy;
     private boolean approved;
     private Timestamp createdAt;
+    private String status = "ACTIVE";
+    private String visibility = "PUBLIC";
     // Missing metadata field
     private Map<String, String> metadata;
     
@@ -176,7 +178,27 @@ public class LoreEntry {
     public void setApproved(boolean approved) {
         this.approved = approved;
     }
-    
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
+    public String getVisibility() {
+        return visibility;
+    }
+
+    public void setVisibility(String visibility) {
+        this.visibility = visibility;
+    }
+
+    public boolean isArchived() {
+        return "ARCHIVED".equals(status);
+    }
+
     public Timestamp getCreatedAt() {
         return createdAt;
     }

@@ -231,7 +231,7 @@ public class LoreEntryRepository implements ILoreEntryRepository {
     public CompletableFuture<Optional<LoreEntry>> getLoreEntryById(String id) {
         return CompletableFuture.supplyAsync(() -> {
             String sql = "SELECT e.id, e.entry_type, e.name, s.content, s.submitter_uuid, " +
-                         "s.approval_status, s.created_at " +
+                         "s.approval_status, s.status, s.visibility, s.created_at " +
                          "FROM " + t("lore_entry") + " e " +
                          "JOIN " + t("lore_submission") + " s ON e.id = s.entry_id " +
                          "WHERE e.id = ? AND s.is_current_version = TRUE";
@@ -266,10 +266,10 @@ public class LoreEntryRepository implements ILoreEntryRepository {
 
             // FIXED bug-03: Added DISTINCT to prevent duplicate entries
             String sql = "SELECT DISTINCT e.id, e.entry_type, e.name, s.content, s.submitter_uuid, " +
-                         "s.approval_status, s.created_at " +
+                         "s.approval_status, s.status, s.visibility, s.created_at " +
                          "FROM " + t("lore_entry") + " e " +
                          "JOIN " + t("lore_submission") + " s ON e.id = s.entry_id " +
-                         "WHERE s.is_current_version = TRUE";
+                         "WHERE s.is_current_version = TRUE AND s.status != 'ARCHIVED'";
 
             try (Connection conn = dbConnection.getConnection();
                  PreparedStatement stmt = conn.prepareStatement(sql);
@@ -299,10 +299,10 @@ public class LoreEntryRepository implements ILoreEntryRepository {
 
             // FIXED bug-03: Added DISTINCT to prevent duplicate entries
             String sql = "SELECT DISTINCT e.id, e.entry_type, e.name, s.content, s.submitter_uuid, " +
-                         "s.approval_status, s.created_at " +
+                         "s.approval_status, s.status, s.visibility, s.created_at " +
                          "FROM " + t("lore_entry") + " e " +
                          "JOIN " + t("lore_submission") + " s ON e.id = s.entry_id " +
-                         "WHERE e.entry_type = ? AND s.is_current_version = TRUE";
+                         "WHERE e.entry_type = ? AND s.is_current_version = TRUE AND s.status != 'ARCHIVED'";
 
             try (Connection conn = dbConnection.getConnection();
                  PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -341,10 +341,10 @@ public class LoreEntryRepository implements ILoreEntryRepository {
 
             // FIXED bug-03: Added DISTINCT to prevent duplicate entries
             String sql = "SELECT DISTINCT e.id, e.entry_type, e.name, s.content, s.submitter_uuid, " +
-                         "s.approval_status, s.created_at " +
+                         "s.approval_status, s.status, s.visibility, s.created_at " +
                          "FROM " + t("lore_entry") + " e " +
                          "JOIN " + t("lore_submission") + " s ON e.id = s.entry_id " +
-                         "WHERE s.is_current_version = TRUE " +
+                         "WHERE s.is_current_version = TRUE AND s.status != 'ARCHIVED' " +
                          "AND (e.name LIKE ? OR s.content LIKE ?)";
 
             try (Connection conn = dbConnection.getConnection();
@@ -688,6 +688,8 @@ public class LoreEntryRepository implements ILoreEntryRepository {
         String contentJson = rs.getString("content");
         String submittedBy = rs.getString("submitter_uuid");
         boolean approved = "APPROVED".equalsIgnoreCase(rs.getString("approval_status"));
+        String status = rs.getString("status");
+        String visibility = rs.getString("visibility");
         Timestamp createdAt = rs.getTimestamp("created_at");
 
         LoreType type;
@@ -766,6 +768,51 @@ public class LoreEntryRepository implements ILoreEntryRepository {
             }
         }
 
+        if (status != null) entry.setStatus(status);
+        if (visibility != null) entry.setVisibility(visibility);
+
         return entry;
+    }
+
+    public CompletableFuture<Boolean> softDeleteEntry(UUID id) {
+        return CompletableFuture.supplyAsync(() -> {
+            String sql = "UPDATE " + t("lore_submission") +
+                         " SET status = 'ARCHIVED', visibility = 'HIDDEN'" +
+                         " WHERE entry_id = ? AND is_current_version = TRUE";
+            try (Connection conn = dbConnection.getConnection();
+                 PreparedStatement stmt = conn.prepareStatement(sql)) {
+                stmt.setString(1, id.toString());
+                int rows = stmt.executeUpdate();
+                if (rows == 0) {
+                    logger.warning("softDeleteEntry: no current submission for " + id);
+                    return false;
+                }
+                return true;
+            } catch (SQLException e) {
+                logger.error("Failed to soft-delete lore entry: " + id, e);
+                return false;
+            }
+        });
+    }
+
+    public CompletableFuture<List<LoreEntry>> getAllLoreEntriesIncludingArchived() {
+        return CompletableFuture.supplyAsync(() -> {
+            List<LoreEntry> entries = new ArrayList<>();
+            String sql = "SELECT DISTINCT e.id, e.entry_type, e.name, s.content, s.submitter_uuid, " +
+                         "s.approval_status, s.status, s.visibility, s.created_at " +
+                         "FROM " + t("lore_entry") + " e " +
+                         "JOIN " + t("lore_submission") + " s ON e.id = s.entry_id " +
+                         "WHERE s.is_current_version = TRUE AND s.status = 'ARCHIVED'";
+            try (Connection conn = dbConnection.getConnection();
+                 PreparedStatement stmt = conn.prepareStatement(sql);
+                 ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    entries.add(resultSetToLoreEntry(rs, conn));
+                }
+            } catch (SQLException e) {
+                logger.error("Error retrieving archived lore entries", e);
+            }
+            return entries;
+        });
     }
 }

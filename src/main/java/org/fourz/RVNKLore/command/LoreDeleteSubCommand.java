@@ -3,23 +3,27 @@ package org.fourz.RVNKLore.command;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.search.LoreSearchService;
 import org.fourz.rvnkcore.util.log.LogManager;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
  * Subcommand for deleting lore entries.
- * Usage: /lore delete <name> [confirm]
  *
- * Two-step confirmation: first run shows entry details and warning,
- * second run with "confirm" arg executes the deletion.
+ * Default (authors of unapproved entries + admins): soft-delete — archives the entry.
+ *   /lore delete <name>
+ *
+ * Hard-delete (admin only): two-step confirmation via --purge flag.
+ *   /lore delete <name> --purge          → shows confirmation prompt
+ *   /lore delete <name> --purge confirm  → permanently deletes
  */
 public class LoreDeleteSubCommand implements SubCommand {
     private final RVNKLore plugin;
@@ -35,26 +39,21 @@ public class LoreDeleteSubCommand implements SubCommand {
     @Override
     public boolean execute(CommandSender sender, String[] args) {
         if (args.length < 1) {
-            sender.sendMessage(ChatColor.RED + "\u25b6 Usage: /lore delete <name> [confirm]");
+            sender.sendMessage(ChatColor.RED + "▶ Usage: /lore delete <name> [--purge [confirm]]");
             return true;
         }
 
-        // Check if last arg is "confirm"
-        boolean confirm = args.length >= 2 && args[args.length - 1].equalsIgnoreCase("confirm");
+        List<String> argList = new ArrayList<>(Arrays.asList(args));
+        boolean purge = argList.remove("--purge");
+        boolean confirm = argList.remove("confirm");
 
-        // Build name from args (excluding "confirm" if present)
-        int nameEndIndex = confirm ? args.length - 1 : args.length;
-        StringBuilder nameBuilder = new StringBuilder();
-        for (int i = 0; i < nameEndIndex; i++) {
-            if (i > 0) nameBuilder.append(" ");
-            nameBuilder.append(args[i]);
+        String nameInput = String.join(" ", argList).trim();
+        if (nameInput.isEmpty()) {
+            sender.sendMessage(ChatColor.RED + "▶ Usage: /lore delete <name> [--purge [confirm]]");
+            return true;
         }
-        String nameInput = nameBuilder.toString();
 
-        // Lookup entry by name (case-insensitive)
         LoreEntry entry = plugin.getLoreManager().getLoreEntryByNameSync(nameInput);
-
-        // Fallback: try UUID
         if (entry == null) {
             try {
                 UUID id = UUID.fromString(nameInput);
@@ -63,90 +62,150 @@ public class LoreDeleteSubCommand implements SubCommand {
         }
 
         if (entry == null) {
-            sender.sendMessage(ChatColor.RED + "\u2716 No lore entry found matching: " + nameInput);
+            sender.sendMessage(ChatColor.RED + "✖ No lore entry found matching: " + nameInput);
             sender.sendMessage(ChatColor.GRAY + "   Use /lore search or /lore list to find entries");
             return true;
         }
 
-        if (!confirm) {
-            showPreview(sender, entry);
+        boolean isAdmin = isAdmin(sender);
+
+        if (purge) {
+            if (!isAdmin) {
+                sender.sendMessage(ChatColor.RED + "✖ --purge requires admin permission");
+                return true;
+            }
+            if (!confirm) {
+                showPurgePreview(sender, entry);
+                return true;
+            }
+            return executeHardDelete(sender, entry);
+        }
+
+        // Soft-delete path
+        if (!isAdmin && !isAuthorOfUnapproved(sender, entry)) {
+            sender.sendMessage(ChatColor.RED + "✖ You can only delete your own unapproved entries.");
             return true;
         }
 
-        return executeDelete(sender, entry);
+        return executeSoftDelete(sender, entry);
     }
 
-    private void showPreview(CommandSender sender, LoreEntry entry) {
-        sender.sendMessage(ChatColor.GOLD + "===== Delete Lore Entry =====");
-        sender.sendMessage(ChatColor.WHITE + "Name: " + ChatColor.YELLOW + entry.getName());
-        sender.sendMessage(ChatColor.WHITE + "Type: " + ChatColor.YELLOW + entry.getType());
-
-        Location loc = entry.getLocation();
-        if (loc != null && loc.getWorld() != null) {
-            sender.sendMessage(ChatColor.WHITE + "World: " + ChatColor.YELLOW + loc.getWorld().getName());
-            sender.sendMessage(ChatColor.WHITE + "Location: " + ChatColor.YELLOW +
-                    String.format("%.0f, %.0f, %.0f", loc.getX(), loc.getY(), loc.getZ()));
-        }
-
-        String creator = entry.getSubmittedBy();
-        if (creator != null) {
-            sender.sendMessage(ChatColor.WHITE + "Creator: " + ChatColor.YELLOW + creator);
-        }
-
-        sender.sendMessage(ChatColor.WHITE + "ID: " + ChatColor.GRAY + entry.getId());
-        sender.sendMessage("");
-        sender.sendMessage(ChatColor.YELLOW + "\u26a0 This will permanently delete this entry and its Dynmap marker.");
-        sender.sendMessage(ChatColor.GRAY + "   Run /lore delete " + entry.getName() + " confirm to proceed");
+    private boolean isAdmin(CommandSender sender) {
+        return sender.hasPermission("rvnklore.admin.delete")
+                || sender.hasPermission("rvnklore.admin")
+                || sender.isOp();
     }
 
-    private boolean executeDelete(CommandSender sender, LoreEntry entry) {
+    private boolean isAuthorOfUnapproved(CommandSender sender, LoreEntry entry) {
+        if (entry.isApproved()) return false;
+        if (!(sender instanceof Player)) return false;
+        String submittedBy = entry.getSubmittedBy();
+        if (submittedBy == null) return false;
+        Player player = (Player) sender;
+        // submittedBy may be UUID string or player name
+        return submittedBy.equals(player.getUniqueId().toString())
+                || submittedBy.equalsIgnoreCase(player.getName());
+    }
+
+    private boolean executeSoftDelete(CommandSender sender, LoreEntry entry) {
         String entryName = entry.getName();
         UUID entryUUID = entry.getUUID();
 
-        // Delete Dynmap marker
-        if (plugin.isDynmapAvailable()) {
-            try {
-                plugin.getDynmapIntegration().getMarkerManager().deleteMarker(entry.getId());
-            } catch (Exception e) {
-                logger.debug("Failed to delete Dynmap marker: " + e.getMessage());
-            }
-        }
-
-        // Delete from database (cascades to lore_submission, lore_item via FK)
-        boolean success = plugin.getDatabaseManager().deleteLoreEntry(entryUUID);
+        boolean success = plugin.getDatabaseManager().softDeleteLoreEntry(entryUUID);
 
         if (success) {
-            // Remove from in-memory cache
+            // Remove from in-memory cache so it stops appearing in lists/dynmap
             plugin.getLoreManager().removeLoreEntry(entry);
-
-            sender.sendMessage(ChatColor.GREEN + "\u2713 Lore entry '" + entryName + "' deleted");
-            logger.info("Lore entry '" + entryName + "' (" + entry.getType() + ") deleted by " +
+            if (plugin.isDynmapAvailable()) {
+                try {
+                    plugin.getDynmapIntegration().getMarkerManager().deleteMarker(entry.getId());
+                } catch (Exception e) {
+                    logger.debug("Failed to delete Dynmap marker on soft-delete: " + e.getMessage());
+                }
+            }
+            sender.sendMessage(ChatColor.GREEN + "✓ Lore entry '" + entryName + "' archived.");
+            sender.sendMessage(ChatColor.GRAY + "   Admins can view archived entries with /lore list --archived");
+            logger.info("Lore entry '" + entryName + "' (" + entry.getType() + ") soft-deleted by " +
                     sender.getName() + " [id=" + entry.getId() + "]");
         } else {
-            sender.sendMessage(ChatColor.RED + "\u2716 Failed to delete lore entry. Check console for errors.");
+            sender.sendMessage(ChatColor.RED + "✖ Failed to archive lore entry. Check console for errors.");
         }
 
         return true;
     }
 
+    private boolean executeHardDelete(CommandSender sender, LoreEntry entry) {
+        String entryName = entry.getName();
+        UUID entryUUID = entry.getUUID();
+
+        if (plugin.isDynmapAvailable()) {
+            try {
+                plugin.getDynmapIntegration().getMarkerManager().deleteMarker(entry.getId());
+            } catch (Exception e) {
+                logger.debug("Failed to delete Dynmap marker on hard-delete: " + e.getMessage());
+            }
+        }
+
+        boolean success = plugin.getDatabaseManager().deleteLoreEntry(entryUUID);
+
+        if (success) {
+            plugin.getLoreManager().removeLoreEntry(entry);
+            sender.sendMessage(ChatColor.GREEN + "✓ Lore entry '" + entryName + "' permanently deleted.");
+            logger.info("Lore entry '" + entryName + "' (" + entry.getType() + ") HARD deleted by " +
+                    sender.getName() + " [id=" + entry.getId() + "]");
+        } else {
+            sender.sendMessage(ChatColor.RED + "✖ Failed to delete lore entry. Check console for errors.");
+        }
+
+        return true;
+    }
+
+    private void showPurgePreview(CommandSender sender, LoreEntry entry) {
+        sender.sendMessage(ChatColor.GOLD + "===== Purge Lore Entry =====");
+        sender.sendMessage(ChatColor.WHITE + "Name: " + ChatColor.YELLOW + entry.getName());
+        sender.sendMessage(ChatColor.WHITE + "Type: " + ChatColor.YELLOW + entry.getType());
+        Location loc = entry.getLocation();
+        if (loc != null && loc.getWorld() != null) {
+            sender.sendMessage(ChatColor.WHITE + "Location: " + ChatColor.YELLOW +
+                    loc.getWorld().getName() + " " +
+                    String.format("%.0f, %.0f, %.0f", loc.getX(), loc.getY(), loc.getZ()));
+        }
+        sender.sendMessage(ChatColor.WHITE + "Creator: " + ChatColor.YELLOW + entry.getSubmittedBy());
+        sender.sendMessage(ChatColor.WHITE + "ID: " + ChatColor.GRAY + entry.getId());
+        sender.sendMessage("");
+        sender.sendMessage(ChatColor.RED + "⚠ This PERMANENTLY deletes this entry and cannot be undone.");
+        sender.sendMessage(ChatColor.GRAY + "   Run: /lore delete " + entry.getName() + " --purge confirm");
+    }
+
     @Override
     public String getDescription() {
-        return "Delete a lore entry permanently";
+        return "Archive a lore entry (--purge to permanently delete, admin only)";
     }
 
     @Override
     public boolean hasPermission(CommandSender sender) {
-        return sender.hasPermission("rvnklore.admin.delete") || sender.hasPermission("rvnklore.admin") || sender.isOp();
+        // Authors can delete their own unapproved entries; admins can delete anything
+        if (isAdmin(sender)) return true;
+        // Non-admins can still reach execute() where ownership is checked
+        return sender.hasPermission("rvnklore.add") || sender instanceof Player;
     }
 
     @Override
     public List<String> getTabCompletions(CommandSender sender, String[] args) {
+        List<String> argList = new ArrayList<>(Arrays.asList(args));
+        boolean hasPurge = argList.contains("--purge");
+
         if (args.length == 1) {
             return tabCompletionUtil.completeLoreEntryNames(args[0]);
         }
 
-        if (args.length == 2) {
-            String partial = args[1].toLowerCase();
+        if (!hasPurge) {
+            String partial = args[args.length - 1].toLowerCase();
+            if ("--purge".startsWith(partial) && isAdmin(sender)) {
+                return Collections.singletonList("--purge");
+            }
+        } else if (!argList.contains("confirm")) {
+            String partial = args[args.length - 1].toLowerCase();
             if ("confirm".startsWith(partial)) {
                 return Collections.singletonList("confirm");
             }

@@ -215,8 +215,23 @@ public class DatabaseManager {
             logger.warning("Database connection invalid, cannot delete lore entry");
             return false;
         }
-        // Synchronous wrapper for async operation
         return loreRepository.deleteLoreEntry(id).join();
+    }
+
+    public boolean softDeleteLoreEntry(UUID id) {
+        if (!validateConnection()) {
+            logger.warning("Database connection invalid, cannot soft-delete lore entry");
+            return false;
+        }
+        return loreRepository.softDeleteEntry(id).join();
+    }
+
+    public List<LoreEntry> getArchivedLoreEntries() {
+        if (!validateConnection()) {
+            logger.warning("Database connection invalid, cannot retrieve archived entries");
+            return new java.util.ArrayList<>();
+        }
+        return loreRepository.getAllLoreEntriesIncludingArchived().join();
     }
 
     /**
