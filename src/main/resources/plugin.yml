@@ -153,6 +153,9 @@ permissions:
   rvnklore.admin.delete:
     description: Delete lore entries (/lore delete)
     default: op
+  rvnklore.command.edit:
+    description: Edit lore entry fields in-place (/lore edit) — authors for own unapproved, admins for any
+    default: op
   rvnklore.admin.seed:
     description: Seed test lore data (/lore debug seed)
     default: op

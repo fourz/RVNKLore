@@ -218,6 +218,14 @@ public class DatabaseManager {
         return loreRepository.deleteLoreEntry(id).join();
     }
 
+    public boolean updateLoreEntryInPlace(LoreEntry entry) {
+        if (!validateConnection()) {
+            logger.warning("Database connection invalid, cannot update lore entry in-place");
+            return false;
+        }
+        return loreRepository.updateLoreEntryInPlace(entry).join();
+    }
+
     public boolean softDeleteLoreEntry(UUID id) {
         if (!validateConnection()) {
             logger.warning("Database connection invalid, cannot soft-delete lore entry");

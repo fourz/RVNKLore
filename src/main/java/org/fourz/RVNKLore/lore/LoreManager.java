@@ -289,6 +289,23 @@ public class LoreManager implements ILoreService {
         return success;
     }
 
+    public boolean updateLoreEntryInPlace(LoreEntry entry) {
+        boolean success = plugin.getDatabaseManager().updateLoreEntryInPlace(entry);
+        if (success) {
+            // Mutate the in-memory cached instance to reflect edits
+            LoreEntry cached = loreFinder.getLoreEntry(entry.getUUID());
+            if (cached != null) {
+                cached.setName(entry.getName());
+                if (entry.getDescription() != null) cached.setDescription(entry.getDescription());
+                if (entry.getVisibility() != null) cached.setVisibility(entry.getVisibility());
+            }
+            logger.debug("Lore entry updated in-place: " + entry.getId());
+        } else {
+            logger.warning("Failed to update lore entry in-place: " + entry.getId());
+        }
+        return success;
+    }
+
     public boolean rejectLoreEntrySync(UUID id) {
         LoreEntry entry = loreFinder.getLoreEntry(id);
         if (entry == null) {

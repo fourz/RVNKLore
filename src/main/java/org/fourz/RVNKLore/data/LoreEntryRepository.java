@@ -774,6 +774,78 @@ public class LoreEntryRepository implements ILoreEntryRepository {
         return entry;
     }
 
+    /**
+     * Update name, description, and/or visibility in-place on the current submission.
+     * Does NOT create a new version or alter approval status.
+     */
+    public CompletableFuture<Boolean> updateLoreEntryInPlace(LoreEntry entry) {
+        return CompletableFuture.supplyAsync(() -> {
+            try (Connection conn = dbConnection.getConnection()) {
+                conn.setAutoCommit(false);
+                try {
+                    // Update base name in lore_entry
+                    String updateName = "UPDATE " + t("lore_entry") + " SET name = ? WHERE id = ?";
+                    try (PreparedStatement stmt = conn.prepareStatement(updateName)) {
+                        stmt.setString(1, entry.getName());
+                        stmt.setString(2, entry.getId());
+                        stmt.executeUpdate();
+                    }
+
+                    // Read current content JSON, patch description, write back
+                    String readContent = "SELECT content FROM " + t("lore_submission") +
+                                         " WHERE entry_id = ? AND is_current_version = TRUE";
+                    String updatedContent = null;
+                    try (PreparedStatement stmt = conn.prepareStatement(readContent)) {
+                        stmt.setString(1, entry.getId());
+                        try (ResultSet rs = stmt.executeQuery()) {
+                            if (rs.next()) {
+                                String raw = rs.getString("content");
+                                JSONObject content;
+                                try {
+                                    content = (JSONObject) jsonParser.parse(raw != null ? raw : "{}");
+                                } catch (org.json.simple.parser.ParseException e) {
+                                    content = new JSONObject();
+                                }
+                                if (entry.getDescription() != null) {
+                                    content.put("description", entry.getDescription());
+                                }
+                                updatedContent = content.toJSONString();
+                            }
+                        }
+                    }
+
+                    if (updatedContent == null) {
+                        conn.rollback();
+                        logger.warning("updateLoreEntryInPlace: no current submission found for " + entry.getId());
+                        return false;
+                    }
+
+                    String updateSubmission = "UPDATE " + t("lore_submission") +
+                                             " SET content = ?, visibility = ?" +
+                                             " WHERE entry_id = ? AND is_current_version = TRUE";
+                    try (PreparedStatement stmt = conn.prepareStatement(updateSubmission)) {
+                        stmt.setString(1, updatedContent);
+                        stmt.setString(2, entry.getVisibility() != null ? entry.getVisibility() : "PUBLIC");
+                        stmt.setString(3, entry.getId());
+                        stmt.executeUpdate();
+                    }
+
+                    conn.commit();
+                    return true;
+                } catch (SQLException e) {
+                    conn.rollback();
+                    logger.error("Failed to update lore entry in-place: " + entry.getId(), e);
+                    return false;
+                } finally {
+                    conn.setAutoCommit(true);
+                }
+            } catch (SQLException e) {
+                logger.error("Transaction error updating lore entry in-place: " + entry.getId(), e);
+                return false;
+            }
+        });
+    }
+
     public CompletableFuture<Boolean> softDeleteEntry(UUID id) {
         return CompletableFuture.supplyAsync(() -> {
             String sql = "UPDATE " + t("lore_submission") +
