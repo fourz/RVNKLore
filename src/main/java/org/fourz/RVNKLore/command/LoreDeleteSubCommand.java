@@ -67,7 +67,7 @@ public class LoreDeleteSubCommand implements SubCommand {
             return true;
         }
 
-        boolean isAdmin = isAdmin(sender);
+        boolean isAdmin = LoreCommandUtil.isAdmin(sender);
 
         if (purge) {
             if (!isAdmin) {
@@ -82,7 +82,7 @@ public class LoreDeleteSubCommand implements SubCommand {
         }
 
         // Soft-delete path
-        if (!isAdmin && !isAuthorOfUnapproved(sender, entry)) {
+        if (!LoreCommandUtil.canManage(sender, entry)) {
             sender.sendMessage(ChatColor.RED + "✖ You can only delete your own unapproved entries.");
             return true;
         }
@@ -90,22 +90,6 @@ public class LoreDeleteSubCommand implements SubCommand {
         return executeSoftDelete(sender, entry);
     }
 
-    private boolean isAdmin(CommandSender sender) {
-        return sender.hasPermission("rvnklore.admin.delete")
-                || sender.hasPermission("rvnklore.admin")
-                || sender.isOp();
-    }
-
-    private boolean isAuthorOfUnapproved(CommandSender sender, LoreEntry entry) {
-        if (entry.isApproved()) return false;
-        if (!(sender instanceof Player)) return false;
-        String submittedBy = entry.getSubmittedBy();
-        if (submittedBy == null) return false;
-        Player player = (Player) sender;
-        // submittedBy may be UUID string or player name
-        return submittedBy.equals(player.getUniqueId().toString())
-                || submittedBy.equalsIgnoreCase(player.getName());
-    }
 
     private boolean executeSoftDelete(CommandSender sender, LoreEntry entry) {
         String entryName = entry.getName();
@@ -184,9 +168,7 @@ public class LoreDeleteSubCommand implements SubCommand {
 
     @Override
     public boolean hasPermission(CommandSender sender) {
-        // Authors can delete their own unapproved entries; admins can delete anything
-        if (isAdmin(sender)) return true;
-        // Non-admins can still reach execute() where ownership is checked
+        if (LoreCommandUtil.isAdmin(sender)) return true;
         return sender.hasPermission("rvnklore.add") || sender instanceof Player;
     }
 
@@ -201,7 +183,7 @@ public class LoreDeleteSubCommand implements SubCommand {
 
         if (!hasPurge) {
             String partial = args[args.length - 1].toLowerCase();
-            if ("--purge".startsWith(partial) && isAdmin(sender)) {
+            if ("--purge".startsWith(partial) && LoreCommandUtil.isAdmin(sender)) {
                 return Collections.singletonList("--purge");
             }
         } else if (!argList.contains("confirm")) {
