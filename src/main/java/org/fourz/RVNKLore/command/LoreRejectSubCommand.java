@@ -131,7 +131,7 @@ public class LoreRejectSubCommand implements SubCommand {
         if (args.length == 1) {
             String partial = args[0].toLowerCase();
             return plugin.getLoreManager().getAllLoreEntriesSync().stream()
-                    .filter(e -> !e.isApproved())
+                    .filter(e -> "PENDING".equalsIgnoreCase(e.getApprovalStatus()))
                     .map(LoreEntry::getName)
                     .filter(name -> name != null && name.toLowerCase().startsWith(partial))
                     .sorted(String.CASE_INSENSITIVE_ORDER)

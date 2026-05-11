@@ -21,6 +21,7 @@ public class LoreEntry {
     private Location location;
     private String submittedBy;
     private boolean approved;
+    private String approvalStatus = "PENDING";
     private Timestamp createdAt;
     private String status = "ACTIVE";
     private String visibility = "PUBLIC";
@@ -177,6 +178,15 @@ public class LoreEntry {
     
     public void setApproved(boolean approved) {
         this.approved = approved;
+    }
+
+    public String getApprovalStatus() {
+        return approvalStatus;
+    }
+
+    public void setApprovalStatus(String approvalStatus) {
+        this.approvalStatus = approvalStatus;
+        this.approved = "APPROVED".equalsIgnoreCase(approvalStatus);
     }
 
     public String getStatus() {

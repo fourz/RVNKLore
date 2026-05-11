@@ -693,7 +693,8 @@ public class LoreEntryRepository implements ILoreEntryRepository {
         String name = rs.getString("name");
         String contentJson = rs.getString("content");
         String submittedBy = rs.getString("submitter_uuid");
-        boolean approved = "APPROVED".equalsIgnoreCase(rs.getString("approval_status"));
+        String approvalStatus = rs.getString("approval_status");
+        boolean approved = "APPROVED".equalsIgnoreCase(approvalStatus);
         String status = rs.getString("status");
         String visibility = rs.getString("visibility");
         Timestamp createdAt = rs.getTimestamp("created_at");
@@ -774,6 +775,7 @@ public class LoreEntryRepository implements ILoreEntryRepository {
             }
         }
 
+        if (approvalStatus != null) entry.setApprovalStatus(approvalStatus);
         if (status != null) entry.setStatus(status);
         if (visibility != null) entry.setVisibility(visibility);
 

@@ -79,7 +79,7 @@ public class LoreListSubCommand implements SubCommand {
             // --pending: show unapproved entries (admin sees all, player sees own submissions)
             List<LoreEntry> all = new ArrayList<>(plugin.getDatabaseManager().getAllLoreEntries());
             entries = all.stream()
-                    .filter(e -> !e.isApproved())
+                    .filter(e -> "PENDING".equalsIgnoreCase(e.getApprovalStatus()))
                     .collect(Collectors.toList());
             if (!isAdmin) {
                 String senderName = sender.getName();
