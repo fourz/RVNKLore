@@ -92,6 +92,12 @@ public class LoreGetSubCommand implements SubCommand {
             return true;
         }
 
+        // Visibility gate: HIDDEN/STAFF_ONLY entries are admin-only (authors see their own)
+        if (!LoreCommandUtil.canSeeEntry(sender, entry)) {
+            sender.sendMessage(ChatColor.RED + "✖ Lore entry not found: " + input);
+            return true;
+        }
+
         // Display the lore to the player
         if (sender instanceof Player) {
             Player player = (Player) sender;

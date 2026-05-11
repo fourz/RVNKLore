@@ -44,4 +44,15 @@ public final class LoreCommandUtil {
         if (isAdmin(sender)) return true;
         return isOwner(sender, entry) && !entry.isApproved();
     }
+
+    /**
+     * Returns true if the sender can see the entry given its visibility setting.
+     * HIDDEN and STAFF_ONLY are restricted to admins; authors always see their own.
+     */
+    public static boolean canSeeEntry(CommandSender sender, LoreEntry entry) {
+        String vis = entry.getVisibility();
+        if ("PUBLIC".equalsIgnoreCase(vis)) return true;
+        if (isAdmin(sender)) return true;
+        return isOwner(sender, entry);
+    }
 }

@@ -94,8 +94,12 @@ public class LoreListSubCommand implements SubCommand {
         } else {
             entries = type != null ?
                     plugin.getLoreManager().getLoreEntriesByTypeSync(type).stream()
-                            .filter(LoreEntry::isApproved).collect(Collectors.toList()) :
-                    plugin.getLoreManager().getApprovedLoreEntriesSync();
+                            .filter(LoreEntry::isApproved)
+                            .filter(e -> LoreCommandUtil.canSeeEntry(sender, e))
+                            .collect(Collectors.toList()) :
+                    plugin.getLoreManager().getApprovedLoreEntriesSync().stream()
+                            .filter(e -> LoreCommandUtil.canSeeEntry(sender, e))
+                            .collect(Collectors.toList());
         }
 
         // Calculate pagination
