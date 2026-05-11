@@ -56,7 +56,7 @@ public class LoreCollectionAddItemSubCommand implements SubCommand {
         }
 
         String collectionId = args[0].toLowerCase();
-        String itemArg = String.join(" ", Arrays.copyOfRange(args, 1, args.length));
+        String itemArg = String.join(" ", Arrays.copyOfRange(args, 1, args.length)).replaceAll("^\"|\"$", "").trim();
 
         // Check if collection exists
         LoreCollection collection = collectionManager.getCollectionSync(collectionId);

@@ -198,7 +198,7 @@ public class LoreAddSubCommand implements SubCommand {
             parsedLocation = new Location(world, coords[0], coords[1], coords[2]);
         }
 
-        String name = String.join(" ", nameArgs);
+        String name = String.join(" ", nameArgs).replaceAll("^\"|\"$", "").trim();
         String description = descArgs.isEmpty() ? null : String.join(" ", descArgs);
         Player player = isPlayer ? (Player) sender : null;
 

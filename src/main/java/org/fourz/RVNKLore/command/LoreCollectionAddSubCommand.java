@@ -50,7 +50,7 @@ public class LoreCollectionAddSubCommand implements SubCommand {
 
         String collectionId = args[0].toLowerCase();
         String themeStr = args[1].toUpperCase();
-        String name = args[2];
+        String name = args[2].replaceAll("^\"|\"$", "").trim();
         String description = args.length > 3 ? String.join(" ", Arrays.copyOfRange(args, 3, args.length)) : "";
 
         // Validate collection ID (no spaces, alphanumeric + underscore only)
