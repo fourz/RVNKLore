@@ -596,8 +596,8 @@ public class CollectionManager implements ICollectionService {
 
         logger.debug("Player " + playerId + " completed collection: " + collection.getName());
 
-        // Emit a collection completion event for external systems (to be integrated)
-        // TODO: Fire CollectionChangeEvent with ChangeType.COMPLETED for event-driven handling
+        // Fire completion event for Discord webhook and other listeners
+        fireCollectionEvent(collection, playerId, CollectionEventType.COMPLETED, 0.99, 1.0);
 
         // Mark completion timestamp in the database
         ItemRepository repository = new ItemRepository(plugin, plugin.getDatabaseManager().getDatabaseConnection());
@@ -682,7 +682,32 @@ public class CollectionManager implements ICollectionService {
 
         logger.debug("Collection reward distribution complete for " + player.getName() + ": " + granted + " granted, " + failed + " failed");
 
-        // Fire event if rewards were granted
+        // Execute inline rewards from collection table fields (reward_entry_id, reward_achievement_id)
+        if (collection.getRewardEntryId() != null) {
+            com.google.gson.JsonObject rewardData = new com.google.gson.JsonObject();
+            rewardData.addProperty("entryId", collection.getRewardEntryId());
+            CollectionReward inlineItem = new CollectionReward(0, collection.getId(),
+                    CollectionReward.RewardType.LORE_ITEM, rewardData.toString());
+            var itemHandler = rewardHandlers.getHandler(CollectionReward.RewardType.LORE_ITEM);
+            if (itemHandler != null && itemHandler.executeReward(player, inlineItem)) {
+                granted++;
+                logger.debug("Granted inline lore item reward for collection " + collection.getId() + " to " + player.getName());
+            }
+        }
+        if (collection.getRewardAchievementId() != null) {
+            com.google.gson.JsonObject rewardData = new com.google.gson.JsonObject();
+            rewardData.addProperty("achievementId", collection.getRewardAchievementId());
+            CollectionReward inlineAchievement = new CollectionReward(0, collection.getId(),
+                    CollectionReward.RewardType.ACHIEVEMENT, rewardData.toString());
+            var achieveHandler = rewardHandlers.getHandler(CollectionReward.RewardType.ACHIEVEMENT);
+            if (achieveHandler != null) {
+                achieveHandler.executeReward(player, inlineAchievement);
+                granted++;
+                logger.debug("Processed inline achievement reward for collection " + collection.getId() + " to " + player.getName());
+            }
+        }
+
+        // Fire event if any rewards were granted
         if (granted > 0) {
             fireRewardGranted(collection, playerId);
         }

@@ -268,6 +268,8 @@ public abstract class DatabaseConnection {
         // MySQL INT(11) max is ~2.1B; System.currentTimeMillis() returns ~1.7T — must be BIGINT
         modifyColumnType(stmt, table(TABLE_COLLECTION), "created_at", "BIGINT NOT NULL");
         addColumnIfMissing(stmt, table(TABLE_LORE_SUBMISSION), "rejection_reason", "VARCHAR(500) NULL");
+        addColumnIfMissing(stmt, table(TABLE_COLLECTION), "reward_entry_id", "VARCHAR(36) NULL");
+        addColumnIfMissing(stmt, table(TABLE_COLLECTION), "reward_achievement_id", "VARCHAR(100) NULL");
     }
 
     /**
@@ -294,6 +296,8 @@ public abstract class DatabaseConnection {
             "theme_id VARCHAR(100), " +
             "is_active " + boolType + " DEFAULT 1, " +
             "created_at BIGINT NOT NULL, " +
+            "reward_entry_id VARCHAR(36) NULL, " +
+            "reward_achievement_id VARCHAR(100) NULL, " +
             "CONSTRAINT uq_" + tablePrefix + "collection_id UNIQUE (collection_id)" +
             ")", "collection");
 

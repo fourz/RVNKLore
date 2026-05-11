@@ -902,7 +902,7 @@ public class ItemRepository implements IItemRepository {
             }
 
             // Generate dialect-specific REPLACE SQL
-            String[] columns = {"collection_id", "name", "description", "theme_id", "is_active", "created_at"};
+            String[] columns = {"collection_id", "name", "description", "theme_id", "is_active", "created_at", "reward_entry_id", "reward_achievement_id"};
             String sql = dbConnection.getDialect().getReplaceSQL(t("collection"), columns);
 
             try {
@@ -913,6 +913,8 @@ public class ItemRepository implements IItemRepository {
                     stmt.setString(4, collection.getThemeId());
                     stmt.setBoolean(5, collection.isActive());
                     stmt.setLong(6, collection.getCreatedAt());
+                    stmt.setString(7, collection.getRewardEntryId());
+                    stmt.setString(8, collection.getRewardAchievementId());
                 }) > 0;
             } catch (LoreException e) {
                 logger.error("Failed to save collection: " + collection.getId(), e);
@@ -929,7 +931,7 @@ public class ItemRepository implements IItemRepository {
     @Override
     public CompletableFuture<List<LoreCollection>> loadAllCollections() {
         return CompletableFuture.supplyAsync(() -> {
-            String sql = "SELECT collection_id, name, description, theme_id, is_active, created_at FROM " + t("collection") + "";
+            String sql = "SELECT collection_id, name, description, theme_id, is_active, created_at, reward_entry_id, reward_achievement_id FROM " + t("collection");
 
             try {
                 return dbHelper.executeQuery(sql, null, rs -> {
@@ -942,6 +944,8 @@ public class ItemRepository implements IItemRepository {
                         );
                         collection.setThemeId(rs.getString("theme_id"));
                         collection.setActive(rs.getBoolean("is_active"));
+                        collection.setRewardEntryId(rs.getString("reward_entry_id"));
+                        collection.setRewardAchievementId(rs.getString("reward_achievement_id"));
                         collections.add(collection);
                     }
                     return collections;

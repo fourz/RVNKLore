@@ -16,6 +16,8 @@ public class LoreCollection {
     private String themeId;
     private boolean isActive;
     private long createdAt;
+    private String rewardEntryId;
+    private String rewardAchievementId;
 
     public LoreCollection(String id, String name, String description) {
         this.id = id;
@@ -70,6 +72,12 @@ public class LoreCollection {
     public void setActive(boolean active) { this.isActive = active; }
 
     public long getCreatedAt() { return createdAt; }
+
+    public String getRewardEntryId() { return rewardEntryId; }
+    public void setRewardEntryId(String rewardEntryId) { this.rewardEntryId = rewardEntryId; }
+
+    public String getRewardAchievementId() { return rewardAchievementId; }
+    public void setRewardAchievementId(String rewardAchievementId) { this.rewardAchievementId = rewardAchievementId; }
 
     @Override
     public String toString() {
