@@ -2,8 +2,11 @@ package org.fourz.RVNKLore.lore.item.collection;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
+import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.persistence.PersistentDataType;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.lore.item.ItemProperties;
@@ -1098,6 +1101,26 @@ public class CollectionManager implements ICollectionService {
             logger.error("Failed to add entry to collection: " + e.getMessage());
             return false;
         }
+    }
+
+    /**
+     * Scan all items in a player's inventory for the rvnklore:lore_entry_id PDC key.
+     *
+     * @param player The online player to scan
+     * @return Set of entry UUIDs found across all inventory slots
+     */
+    public Set<UUID> scanInventoryForEntryIds(Player player) {
+        Set<UUID> found = new HashSet<>();
+        NamespacedKey key = new NamespacedKey(plugin, "lore_entry_id");
+        for (ItemStack item : player.getInventory().getContents()) {
+            if (item == null || !item.hasItemMeta()) continue;
+            String raw = item.getItemMeta().getPersistentDataContainer().get(key, PersistentDataType.STRING);
+            if (raw == null) continue;
+            try {
+                found.add(UUID.fromString(raw));
+            } catch (IllegalArgumentException ignored) {}
+        }
+        return found;
     }
 
     public boolean isEntryInCollectionSync(String collectionId, UUID entryId) {

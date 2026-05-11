@@ -131,25 +131,47 @@ public class LoreCollectionSubCommand implements SubCommand {
                     sender.sendMessage(ChatColor.RED + "✖ Collection not found: " + collectionId);
                     return true;
                 }
-                int required = claimColl.getRequiredEntryCount();
-                if (required > 0) {
-                    int collected = cmgr.getCollectedEntryCountSync(claimTarget.getUniqueId(), collectionId);
-                    if (collected < required) {
-                        sender.sendMessage(ChatColor.YELLOW + "⚠ " + claimTarget.getName() + " must collect all " + required + " required entries (" + collected + "/" + required + ").");
+
+                // Double-claim guard
+                if (cmgr.getPlayerProgressSync(claimTarget.getUniqueId(), collectionId) >= 1.0) {
+                    sender.sendMessage(ChatColor.YELLOW + "⚠ " + claimTarget.getName() + " has already claimed this collection.");
+                    return true;
+                }
+
+                // PDC inventory scan for required entries
+                java.util.List<UUID> claimRequired = claimColl.getRequiredEntryIds();
+                if (!claimRequired.isEmpty()) {
+                    java.util.Set<UUID> inventoryEntries = cmgr.scanInventoryForEntryIds(claimTarget);
+                    java.util.List<UUID> missing = new ArrayList<>();
+                    for (UUID reqId : claimRequired) {
+                        if (!inventoryEntries.contains(reqId)) {
+                            missing.add(reqId);
+                        }
+                    }
+                    if (!missing.isEmpty()) {
+                        sender.sendMessage(ChatColor.YELLOW + "⚠ Missing " + missing.size() + " item(s) from your inventory:");
+                        for (UUID missingId : missing) {
+                            LoreEntry missingEntry = plugin.getLoreManager().getLoreEntrySync(missingId);
+                            String entryName = missingEntry != null ? missingEntry.getName() : missingId.toString().substring(0, 8) + "...";
+                            sender.sendMessage(ChatColor.GRAY + "  • " + ChatColor.WHITE + entryName);
+                        }
                         return true;
                     }
+                    // All items present — mark complete
+                    cmgr.updatePlayerProgressSync(claimTarget.getUniqueId(), collectionId, 1.0);
                 }
+
                 boolean rewarded = cmgr.grantCollectionRewardSync(claimTarget.getUniqueId(), collectionId);
                 if (rewarded) {
-                    sender.sendMessage(ChatColor.GREEN + "✓ Claimed rewards for collection: " + ChatColor.YELLOW + collectionId);
+                    sender.sendMessage(ChatColor.GREEN + "✓ Claimed rewards for collection: " + ChatColor.YELLOW + claimColl.getName());
                 } else {
                     // Fallback: HEAD cosmetic rewards via CosmeticsManager
                     HeadCollection headColl = cosmeticItem.getCollection(collectionId);
                     if (headColl != null && headColl.getRewards().hasRewards()) {
                         cosmeticItem.awardCollectionRewards(claimTarget, headColl, headColl.getRewards());
-                        sender.sendMessage(ChatColor.GREEN + "✓ Claimed rewards for collection: " + ChatColor.YELLOW + collectionId);
+                        sender.sendMessage(ChatColor.GREEN + "✓ Claimed rewards for collection: " + ChatColor.YELLOW + claimColl.getName());
                     } else {
-                        sender.sendMessage(ChatColor.YELLOW + "⚠ No rewards available for this collection.");
+                        sender.sendMessage(ChatColor.YELLOW + "⚠ No rewards defined for this collection.");
                     }
                 }
                 break;
