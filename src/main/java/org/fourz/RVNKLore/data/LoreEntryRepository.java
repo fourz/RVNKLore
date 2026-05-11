@@ -444,15 +444,21 @@ public class LoreEntryRepository implements ILoreEntryRepository {
      */
     @Override
     public CompletableFuture<Boolean> rejectLoreEntry(String entryId) {
+        return rejectLoreEntry(entryId, null);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> rejectLoreEntry(String entryId, String reason) {
         return CompletableFuture.supplyAsync(() -> {
             try (Connection conn = dbConnection.getConnection()) {
                 conn.setAutoCommit(false);
                 try {
                     String sql = "UPDATE " + t("lore_submission") + " " +
-                                 "SET approval_status = 'REJECTED', approved_at = CURRENT_TIMESTAMP " +
+                                 "SET approval_status = 'REJECTED', approved_at = CURRENT_TIMESTAMP, rejection_reason = ? " +
                                  "WHERE entry_id = ? AND is_current_version = TRUE";
                     try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-                        stmt.setString(1, entryId);
+                        stmt.setString(1, reason);
+                        stmt.setString(2, entryId);
                         int rowsAffected = stmt.executeUpdate();
                         if (rowsAffected == 0) {
                             throw new java.sql.SQLException("No current submission found for entry: " + entryId);

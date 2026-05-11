@@ -307,6 +307,10 @@ public class LoreManager implements ILoreService {
     }
 
     public boolean rejectLoreEntrySync(UUID id) {
+        return rejectLoreEntrySync(id, null);
+    }
+
+    public boolean rejectLoreEntrySync(UUID id, String reason) {
         LoreEntry entry = loreFinder.getLoreEntry(id);
         if (entry == null) {
             logger.warning("Attempted to reject non-existent lore entry: " + id);
@@ -316,9 +320,9 @@ public class LoreManager implements ILoreService {
             logger.warning("Attempted to reject already-approved lore entry: " + id);
             return false;
         }
-        boolean success = plugin.getDatabaseManager().rejectLoreEntry(id.toString());
+        boolean success = plugin.getDatabaseManager().rejectLoreEntry(id.toString(), reason);
         if (success) {
-            logger.debug("Lore entry rejected: " + id);
+            logger.info("Lore entry rejected: " + id + (reason != null ? " reason=" + reason : ""));
         } else {
             logger.warning("Failed to reject lore entry: " + id);
         }

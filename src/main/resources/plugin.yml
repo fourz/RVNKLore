@@ -156,6 +156,9 @@ permissions:
   rvnklore.command.edit:
     description: Edit lore entry fields in-place (/lore edit) — authors for own unapproved, admins for any
     default: op
+  rvnklore.command.reject:
+    description: Reject pending lore submissions with an optional reason (/lore reject)
+    default: op
   rvnklore.admin.seed:
     description: Seed test lore data (/lore debug seed)
     default: op

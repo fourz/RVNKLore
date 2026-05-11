@@ -259,11 +259,15 @@ public class DatabaseManager {
     }
 
     public boolean rejectLoreEntry(String entryId) {
+        return rejectLoreEntry(entryId, null);
+    }
+
+    public boolean rejectLoreEntry(String entryId, String reason) {
         if (!validateConnection()) {
             logger.warning("Database connection invalid, cannot reject lore entry");
             return false;
         }
-        return loreRepository.rejectLoreEntry(entryId).join();
+        return loreRepository.rejectLoreEntry(entryId, reason).join();
     }
 
     /**

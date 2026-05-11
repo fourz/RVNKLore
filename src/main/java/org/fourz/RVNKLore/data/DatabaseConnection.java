@@ -131,6 +131,7 @@ public abstract class DatabaseConnection {
                 "content_version INTEGER NOT NULL DEFAULT 1, " +
                 "is_current_version " + boolType + " NOT NULL DEFAULT FALSE, " +
                 "content TEXT, " +
+                "rejection_reason VARCHAR(500) NULL, " +
                 "CONSTRAINT uq_" + tablePrefix + "lore_submission_entry_version UNIQUE (entry_id, content_version), " +
                 "CONSTRAINT uq_" + tablePrefix + "lore_submission_slug UNIQUE (slug), " +
                 "CONSTRAINT ck_" + tablePrefix + "lore_submission_status CHECK (status IN ('ACTIVE', 'ARCHIVED', 'DRAFT', 'PENDING_APPROVAL')), " +
@@ -266,6 +267,7 @@ public abstract class DatabaseConnection {
         addColumnIfMissing(stmt, table(TABLE_PLAYER_COLLECTION_ITEMS), "entry_uuid", "CHAR(36) NULL");
         // MySQL INT(11) max is ~2.1B; System.currentTimeMillis() returns ~1.7T — must be BIGINT
         modifyColumnType(stmt, table(TABLE_COLLECTION), "created_at", "BIGINT NOT NULL");
+        addColumnIfMissing(stmt, table(TABLE_LORE_SUBMISSION), "rejection_reason", "VARCHAR(500) NULL");
     }
 
     /**

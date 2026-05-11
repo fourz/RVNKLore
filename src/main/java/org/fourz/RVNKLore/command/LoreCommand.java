@@ -41,6 +41,7 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
         commands.put("list", new LoreListSubCommand(plugin));
         commands.put("add", new LoreAddSubCommand(plugin));
         commands.put("approve", new LoreApproveSubCommand(plugin));
+        commands.put("reject", new LoreRejectSubCommand(plugin));
         commands.put("delete", new LoreDeleteSubCommand(plugin));
         commands.put("edit", new LoreEditSubCommand(plugin));
         commands.put("reload", new LoreReloadSubCommand(plugin));

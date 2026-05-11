@@ -104,6 +104,8 @@ public interface ILoreEntryRepository {
      */
     CompletableFuture<Boolean> rejectLoreEntry(String entryId);
 
+    CompletableFuture<Boolean> rejectLoreEntry(String entryId, String reason);
+
     /**
      * Check if the repository is operating in fallback mode.
      * Fallback mode indicates degraded operation due to database connectivity issues.
