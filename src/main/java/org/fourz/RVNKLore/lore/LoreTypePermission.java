@@ -47,7 +47,7 @@ public final class LoreTypePermission {
 
     /** Ordered list shown in tab completion for non-admin players. */
     public static final List<LoreType> PLAYER_WRITABLE_TAB = Collections.unmodifiableList(
-            Arrays.asList(LoreType.PLAYER, LoreType.ITEM, LoreType.PATH)
+            Arrays.asList(LoreType.PLAYER, LoreType.ITEM, LoreType.FACTION, LoreType.PATH)
     );
 
     private LoreTypePermission() {}

@@ -1,5 +1,6 @@
 package org.fourz.RVNKLore.command;
 
+import me.ryanhamshire.GriefPrevention.Claim;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
@@ -7,6 +8,7 @@ import org.bukkit.World;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.integration.griefprevention.GriefPreventionIntegration;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
 import org.fourz.RVNKLore.lore.LoreTypePermission;
@@ -199,6 +201,29 @@ public class LoreAddSubCommand implements SubCommand {
         String name = String.join(" ", nameArgs);
         String description = descArgs.isEmpty() ? null : String.join(" ", descArgs);
         Player player = isPlayer ? (Player) sender : null;
+
+        // FACTION: require GP claim ownership at the effective location (non-admin players only)
+        if (type == LoreType.FACTION && !sender.hasPermission("rvnklore.admin")) {
+            if (!isPlayer) {
+                sender.sendMessage(ChatColor.RED + "✖ FACTION entries require a player (GP claim check needed).");
+                return true;
+            }
+            GriefPreventionIntegration gp = plugin.getGriefPreventionIntegration();
+            if (gp == null || !gp.isEnabled()) {
+                sender.sendMessage(ChatColor.RED + "✖ FACTION entries require GriefPrevention to be installed.");
+                return true;
+            }
+            Location checkLocation = parsedLocation != null ? parsedLocation : player.getLocation();
+            java.util.Optional<Claim> claimOpt = gp.getClaimAt(checkLocation);
+            if (!claimOpt.isPresent()) {
+                sender.sendMessage(ChatColor.RED + "✖ You must be standing in your GriefPrevention claim to create a FACTION entry.");
+                return true;
+            }
+            if (!gp.ownsOrManagesClaim(player, claimOpt.get())) {
+                sender.sendMessage(ChatColor.RED + "✖ You must own or manage the GriefPrevention claim at this location to create a FACTION entry.");
+                return true;
+            }
+        }
 
         // For ITEM type, require material in hand (player-only, checked above)
         if (type == LoreType.ITEM && player != null) {
