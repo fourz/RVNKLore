@@ -957,6 +957,36 @@ public class ItemRepository implements IItemRepository {
         });
     }
 
+    /**
+     * Load all required lore entry UUIDs per collection from collection_item rows.
+     * Returns a map of collection_id (string) → list of entry UUIDs.
+     */
+    public CompletableFuture<Map<String, List<java.util.UUID>>> loadCollectionEntryIds() {
+        return CompletableFuture.supplyAsync(() -> {
+            String sql = "SELECT c.collection_id AS cid, ci.entry_id" +
+                         " FROM " + t("collection_item") + " ci" +
+                         " JOIN " + t("collection") + " c ON c.id = ci.collection_id" +
+                         " WHERE ci.entry_id IS NOT NULL";
+            try {
+                return dbHelper.executeQuery(sql, null, rs -> {
+                    Map<String, List<java.util.UUID>> result = new java.util.HashMap<>();
+                    while (rs.next()) {
+                        String cid = rs.getString("cid");
+                        String entryIdStr = rs.getString("entry_id");
+                        try {
+                            java.util.UUID uuid = java.util.UUID.fromString(entryIdStr);
+                            result.computeIfAbsent(cid, k -> new java.util.ArrayList<>()).add(uuid);
+                        } catch (IllegalArgumentException ignored) {}
+                    }
+                    return result;
+                });
+            } catch (LoreException e) {
+                logger.error("Failed to load collection entry IDs", e);
+                return new java.util.HashMap<>();
+            }
+        });
+    }
+
     // ==================== Player Progress Operations ====================
 
     /**

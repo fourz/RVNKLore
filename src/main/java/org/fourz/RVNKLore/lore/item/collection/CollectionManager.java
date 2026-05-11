@@ -363,6 +363,11 @@ public class CollectionManager implements ICollectionService {
             collections.put(collection.getId(), collection);
             logger.debug("Loaded collection from database: " + collection.getName());
         }
+        Map<String, List<UUID>> entryIds = repository.loadCollectionEntryIds().join();
+        for (Map.Entry<String, List<UUID>> e : entryIds.entrySet()) {
+            LoreCollection col = collections.get(e.getKey());
+            if (col != null) e.getValue().forEach(col::addRequiredEntry);
+        }
         logger.debug("Loaded " + loadedCollections.size() + " collections from database");
     }
 
@@ -1121,6 +1126,8 @@ public class CollectionManager implements ICollectionService {
                 stmt.executeUpdate();
             }
             logger.debug("Added entry " + entryId + " to collection " + collectionId);
+            LoreCollection cached = collections.get(collectionId);
+            if (cached != null) cached.addRequiredEntry(entryId);
             return true;
         } catch (SQLException e) {
             logger.error("Failed to add entry to collection: " + e.getMessage());
