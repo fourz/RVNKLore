@@ -79,8 +79,8 @@ public class LoreItemTagSubCommand implements SubCommand {
         loreLines.add(ChatColor.DARK_GRAY + "rvnklore: " + shortId);
         meta.setLore(loreLines);
 
-        // PDC stamp: rvnklore:entry_id = full UUID string
-        NamespacedKey entryIdKey = new NamespacedKey(plugin, "entry_id");
+        // PDC stamp: rvnklore:lore_entry_id = full UUID string (canonical key shared with books and discovery)
+        NamespacedKey entryIdKey = new NamespacedKey(plugin, "lore_entry_id");
         PersistentDataContainer pdc = meta.getPersistentDataContainer();
         pdc.set(entryIdKey, PersistentDataType.STRING, entry.getUUID().toString());
 

@@ -37,9 +37,13 @@ public class LoreExportSubCommand implements SubCommand {
     @Override
     public boolean execute(CommandSender sender, String[] args) {
         // Parse format argument
-        ExportFormat format = ExportFormat.JSON; // Default
+        ExportFormat format = ExportFormat.JSON;
         if (args.length > 0) {
             format = ExportFormat.fromString(args[0]);
+            if (format == null) {
+                sender.sendMessage(ChatColor.RED + "✖ Unknown format: " + args[0] + ". Supported: json, yaml");
+                return true;
+            }
         }
 
         // Check if type filter is specified
