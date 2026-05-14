@@ -46,6 +46,9 @@ public class LoreGetSubCommand implements SubCommand {
             input = nameBuilder.toString();
         }
 
+        // Strip literal quote characters passed by console (e.g. lore get "Name" → Name)
+        input = input.replaceAll("^\"|\"$", "").trim();
+
         // Try name lookup first (case-insensitive)
         LoreEntry entry = plugin.getLoreManager().getLoreEntryByNameSync(input);
 

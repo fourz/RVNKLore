@@ -117,15 +117,21 @@ public class LoreEditSubCommand implements SubCommand {
         return true;
     }
 
-    /** Extract the value following --flag from the arg list (removes both flag and value). */
+    /** Extract all value tokens following --flag until the next --flag (removes flag and all value tokens). */
     private String extractFlag(List<String> args, String flag) {
         int idx = args.indexOf(flag);
         if (idx < 0 || idx + 1 >= args.size()) {
             if (idx >= 0) args.remove(idx); // flag present but no value — remove it
             return null;
         }
-        args.remove(idx); // remove flag
-        return args.remove(idx); // remove and return value
+        args.remove(idx); // remove flag token
+        List<String> valueParts = new ArrayList<>();
+        while (idx < args.size() && !args.get(idx).startsWith("--")) {
+            valueParts.add(args.remove(idx));
+        }
+        if (valueParts.isEmpty()) return null;
+        String value = String.join(" ", valueParts);
+        return value.replaceAll("^\"|\"$", "").trim();
     }
 
     @Override

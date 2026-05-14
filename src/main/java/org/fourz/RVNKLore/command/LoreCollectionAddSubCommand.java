@@ -42,16 +42,17 @@ public class LoreCollectionAddSubCommand implements SubCommand {
         }
 
         if (args.length < 3) {
-            sender.sendMessage(ChatColor.RED + "â–¶ Usage: /lore collection add <id> <theme> <name> [description]");
-            sender.sendMessage(ChatColor.GRAY + "   Create a new collection with the given ID, theme, and name");
+            sender.sendMessage(ChatColor.RED + "â–¶ Usage: /lore collection add <id> <theme> <name...>");
+            sender.sendMessage(ChatColor.GRAY + "   Create a new collection with the given ID, theme, and display name");
             sender.sendMessage(ChatColor.GRAY + "   Valid themes: " + String.join(", ", getThemeNames()));
             return true;
         }
 
         String collectionId = args[0].toLowerCase();
         String themeStr = args[1].toUpperCase();
-        String name = args[2].replaceAll("^\"|\"$", "").trim();
-        String description = args.length > 3 ? String.join(" ", Arrays.copyOfRange(args, 3, args.length)) : "";
+        // Join all remaining args as the collection display name (multi-word support)
+        String name = String.join(" ", Arrays.copyOfRange(args, 2, args.length)).replaceAll("^\"|\"$", "").trim();
+        String description = "";
 
         // Validate collection ID (no spaces, alphanumeric + underscore only)
         if (!collectionId.matches("^[a-z0-9_]+$")) {

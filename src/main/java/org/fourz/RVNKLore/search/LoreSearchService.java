@@ -96,6 +96,7 @@ public class LoreSearchService {
         String entryName = entry.getName() != null ? entry.getName().toLowerCase() : "";
         String entryDesc = entry.getDescription() != null ? entry.getDescription().toLowerCase() : "";
         String entryId = entry.getId() != null ? entry.getId().toLowerCase() : "";
+        String entryType = entry.getType() != null ? entry.getType().name().toLowerCase() : "";
 
         // Exact match checks
         if (entryName.equals(lowerQuery)) {
@@ -117,6 +118,15 @@ public class LoreSearchService {
         if (entryName.contains(lowerQuery)) {
             return new SearchResult(entry, 50, SearchResult.MatchType.CONTAINS_NAME);
         }
+
+        // Type match — searching "quest" returns QUEST-type entries (score below name contains)
+        if (entryType.equals(lowerQuery)) {
+            return new SearchResult(entry, 40, SearchResult.MatchType.CONTAINS_NAME);
+        }
+        if (entryType.contains(lowerQuery)) {
+            return new SearchResult(entry, 30, SearchResult.MatchType.CONTAINS_NAME);
+        }
+
         if (entryDesc.contains(lowerQuery)) {
             return new SearchResult(entry, 25, SearchResult.MatchType.CONTAINS_DESC);
         }
