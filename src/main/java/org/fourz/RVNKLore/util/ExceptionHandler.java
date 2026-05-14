@@ -40,21 +40,26 @@ public class ExceptionHandler {
     
     /**
      * Handle a database exception
-     * 
+     *
      * @param exception The exception to handle
      * @param sender The command sender to notify
      */
     public void handleDatabaseException(Exception exception, CommandSender sender) {
         handleException(exception, sender, "accessing the database");
-        
-        // Attempt to reconnect to the database
-        boolean reconnected = plugin.getDatabaseManager().reconnect();
-        
-        if (reconnected && sender != null) {
-            sender.sendMessage(ChatColor.GREEN + "Database connection has been restored.");
-        } else if (sender != null) {
-            sender.sendMessage(ChatColor.RED + "Could not reconnect to the database. Please contact an administrator.");
-        }
+
+        // Reconnect on async thread — MySQL socket I/O must not block the main thread
+        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+            boolean reconnected = plugin.getDatabaseManager().reconnect();
+            if (sender != null) {
+                plugin.getServer().getScheduler().runTask(plugin, () -> {
+                    if (reconnected) {
+                        sender.sendMessage(ChatColor.GREEN + "Database connection has been restored.");
+                    } else {
+                        sender.sendMessage(ChatColor.RED + "Could not reconnect to the database. Please contact an administrator.");
+                    }
+                });
+            }
+        });
     }
     
     /**

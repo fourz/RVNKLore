@@ -371,6 +371,10 @@ public abstract class DatabaseConnection {
     }
 
     private void modifyColumnType(Statement stmt, String tableName, String column, String definition) {
+        // MODIFY COLUMN is MySQL-only; SQLite type affinity handles large integers natively
+        if (!"MySQL".equals(dialect.getName())) {
+            return;
+        }
         try {
             stmt.execute("ALTER TABLE " + tableName + " MODIFY COLUMN " + column + " " + definition);
             logger.debug("Migration: modified column " + column + " on " + tableName);

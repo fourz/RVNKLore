@@ -51,6 +51,7 @@ public class DiscoveryManager {
     private final Set<CompletableFuture<?>> pendingWrites = ConcurrentHashMap.newKeySet();
 
     private boolean initialized = false;
+    private DiscoveryListener discoveryListener;
 
     public DiscoveryManager(RVNKLore plugin) {
         this.plugin = plugin;
@@ -76,8 +77,8 @@ public class DiscoveryManager {
         loadFirstDiscoverers();
 
         // Register event listener
-        DiscoveryListener listener = new DiscoveryListener(plugin, this);
-        Bukkit.getPluginManager().registerEvents(listener, plugin);
+        discoveryListener = new DiscoveryListener(plugin, this);
+        Bukkit.getPluginManager().registerEvents(discoveryListener, plugin);
 
         // Register cartography table discovery listener
         CartographyDiscoveryListener cartographyListener = new CartographyDiscoveryListener(plugin, this);
@@ -339,6 +340,16 @@ public class DiscoveryManager {
      */
     public void clearCooldowns(UUID playerUuid) {
         discoveryCooldowns.remove(playerUuid);
+    }
+
+    /**
+     * Rebuild the location proximity cache in DiscoveryListener.
+     * Call after any runtime add, approve, or edit that changes location data.
+     */
+    public void refreshLocationCache() {
+        if (discoveryListener != null) {
+            discoveryListener.refreshLocationCache();
+        }
     }
 
     // Utility method to run code on main thread

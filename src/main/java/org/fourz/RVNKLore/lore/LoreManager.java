@@ -202,6 +202,11 @@ public class LoreManager implements ILoreService {
                     logger.debug("Failed to create Dynmap marker: " + e.getMessage());
                 }
             }
+
+            // Refresh proximity cache so new location entry is discoverable immediately
+            if (entry.getLocation() != null && plugin.getDiscoveryManager() != null) {
+                plugin.getDiscoveryManager().refreshLocationCache();
+            }
         } else {
             logger.warning("Failed to add lore entry to database: " + entry.getName());
         }
@@ -283,6 +288,11 @@ public class LoreManager implements ILoreService {
                     logger.debug("Failed to create Dynmap marker on approval: " + e.getMessage());
                 }
             }
+
+            // Refresh proximity cache so approved location entry is discoverable immediately
+            if (entry.getLocation() != null && plugin.getDiscoveryManager() != null) {
+                plugin.getDiscoveryManager().refreshLocationCache();
+            }
         } else {
             logger.warning("Failed to approve lore entry: " + id);
         }
@@ -300,6 +310,11 @@ public class LoreManager implements ILoreService {
                 if (entry.getVisibility() != null) cached.setVisibility(entry.getVisibility());
             }
             logger.debug("Lore entry updated in-place: " + entry.getId());
+
+            // Refresh proximity cache in case location data changed
+            if (plugin.getDiscoveryManager() != null) {
+                plugin.getDiscoveryManager().refreshLocationCache();
+            }
         } else {
             logger.warning("Failed to update lore entry in-place: " + entry.getId());
         }
