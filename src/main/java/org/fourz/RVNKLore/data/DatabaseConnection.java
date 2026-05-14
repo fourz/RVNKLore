@@ -263,13 +263,8 @@ public abstract class DatabaseConnection {
     }
 
     private void runMigrations(Statement stmt) {
-        addColumnIfMissing(stmt, table(TABLE_COLLECTION_ITEM), "entry_id", "CHAR(36) NULL");
-        addColumnIfMissing(stmt, table(TABLE_PLAYER_COLLECTION_ITEMS), "entry_uuid", "CHAR(36) NULL");
-        // MySQL INT(11) max is ~2.1B; System.currentTimeMillis() returns ~1.7T — must be BIGINT
-        modifyColumnType(stmt, table(TABLE_COLLECTION), "created_at", "BIGINT NOT NULL");
-        addColumnIfMissing(stmt, table(TABLE_LORE_SUBMISSION), "rejection_reason", "VARCHAR(500) NULL");
-        addColumnIfMissing(stmt, table(TABLE_COLLECTION), "reward_entry_id", "VARCHAR(36) NULL");
-        addColumnIfMissing(stmt, table(TABLE_COLLECTION), "reward_achievement_id", "VARCHAR(100) NULL");
+        // All columns are included in the initial schema — no migrations needed for this release.
+        // Add future addColumnIfMissing / modifyColumnType calls here when schema evolves.
     }
 
     /**
@@ -329,6 +324,7 @@ public abstract class DatabaseConnection {
             "CREATE TABLE IF NOT EXISTS " + collectionItem + " (" +
             "collection_id INTEGER NOT NULL, " +
             "item_id INTEGER NOT NULL, " +
+            "entry_id CHAR(36) NULL, " +
             "sequence_number INTEGER DEFAULT 0, " +
             "item_config TEXT, " +
             "PRIMARY KEY (collection_id, item_id), " +
@@ -342,6 +338,7 @@ public abstract class DatabaseConnection {
             "player_uuid CHAR(36) NOT NULL, " +
             "collection_id INTEGER NOT NULL, " +
             "item_id INTEGER NOT NULL, " +
+            "entry_uuid CHAR(36) NULL, " +
             "discovered_at " + timestampDefault + ", " +
             "CONSTRAINT uq_" + tablePrefix + "player_collection_item UNIQUE (player_uuid, collection_id, item_id), " +
             "FOREIGN KEY (collection_id) REFERENCES " + collection + "(id) ON DELETE CASCADE, " +
@@ -350,24 +347,6 @@ public abstract class DatabaseConnection {
 
         createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "player_collection_items_player ON " + playerCollectionItems + "(player_uuid)");
         createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "player_collection_items_collection ON " + playerCollectionItems + "(collection_id)");
-    }
-
-    /**
-     * Ensure collection tables exist. Safe to call multiple times — all statements use IF NOT EXISTS.
-     * Called from CollectionManager on startup as a safety net if createTables() had issues.
-     */
-    public void ensureCollectionTables() {
-        if (rvnkProvider == null) {
-            logger.warning("ensureCollectionTables: database not available");
-            return;
-        }
-        try (Connection conn = rvnkProvider.getConnection();
-             Statement stmt = conn.createStatement()) {
-            setupCollectionSchema(stmt);
-            logger.debug("Collection tables ensured");
-        } catch (SQLException e) {
-            logger.error("Failed to ensure collection tables", e);
-        }
     }
 
     private void modifyColumnType(Statement stmt, String tableName, String column, String definition) {
