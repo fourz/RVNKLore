@@ -1,5 +1,6 @@
 package org.fourz.RVNKLore.api.model.response;
 
+import org.bukkit.Location;
 import org.fourz.RVNKLore.data.dto.LoreEntryDTO;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
@@ -21,6 +22,21 @@ public class LoreEntryResponse {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private Map<String, String> metadata;
+    private LocationData location;
+
+    public static class LocationData {
+        public final String world;
+        public final double x;
+        public final double y;
+        public final double z;
+
+        public LocationData(String world, double x, double y, double z) {
+            this.world = world;
+            this.x = x;
+            this.y = y;
+            this.z = z;
+        }
+    }
 
     // Private constructor for builder
     private LoreEntryResponse() {}
@@ -38,6 +54,10 @@ public class LoreEntryResponse {
         response.createdAt = entry.getCreatedAt() != null ? entry.getCreatedAt().toLocalDateTime() : null;
         response.updatedAt = response.createdAt; // Use createdAt as fallback
         response.metadata = entry.getAllMetadata();
+        Location loc = entry.getLocation();
+        if (loc != null && loc.getWorld() != null) {
+            response.location = new LocationData(loc.getWorld().getName(), loc.getX(), loc.getY(), loc.getZ());
+        }
         return response;
     }
 
@@ -71,6 +91,7 @@ public class LoreEntryResponse {
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public Map<String, String> getMetadata() { return metadata; }
+    public LocationData getLocation() { return location; }
 
     /**
      * Builder for LoreEntryResponse.
@@ -87,6 +108,7 @@ public class LoreEntryResponse {
         public Builder createdAt(LocalDateTime createdAt) { response.createdAt = createdAt; return this; }
         public Builder updatedAt(LocalDateTime updatedAt) { response.updatedAt = updatedAt; return this; }
         public Builder metadata(Map<String, String> metadata) { response.metadata = metadata; return this; }
+        public Builder location(LocationData location) { response.location = location; return this; }
 
         public LoreEntryResponse build() {
             return response;
