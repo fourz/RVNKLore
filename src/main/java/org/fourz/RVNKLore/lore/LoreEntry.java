@@ -20,7 +20,6 @@ public class LoreEntry {
     private String nbtData;
     private Location location;
     private String submittedBy;
-    private boolean approved;
     private String approvalStatus = "PENDING";
     private Timestamp createdAt;
     private String status = "ACTIVE";
@@ -46,26 +45,24 @@ public class LoreEntry {
         this.description = description;
         this.nbtData = nbtData;
         this.type = type;
-        this.approved = false;
         this.createdAt = new Timestamp(System.currentTimeMillis());
-        this.submittedBy = "Server"; // Ensure submittedBy is always set
+        this.submittedBy = "Server";
     }
     /**
      * Constructor for creating a new lore entry
-     */    
+     */
 
     public LoreEntry(String name, String description, LoreType type, Player contributor) {
         this.id = UUID.randomUUID().toString();
         this.name = name;
         this.description = description;
-        this.nbtData = ""; // Initialize with empty string instead of using undefined variable
+        this.nbtData = "";
         this.submittedBy = contributor != null ? contributor.getName() : "Server";
         this.type = type;
-        this.approved = false;
         this.createdAt = new Timestamp(System.currentTimeMillis());
     }
-    
-    
+
+
     /**
      * Constructor with predefined ID
      */
@@ -74,9 +71,8 @@ public class LoreEntry {
         this.name = name;
         this.description = description;
         this.type = type;
-        this.approved = false;
         this.createdAt = new Timestamp(System.currentTimeMillis());
-        this.submittedBy = "Server"; // Ensure submittedBy is always set
+        this.submittedBy = "Server";
     }
     
     /**
@@ -91,10 +87,10 @@ public class LoreEntry {
         this.nbtData = nbtData;
         this.location = location;
         this.submittedBy = submittedBy != null ? submittedBy : "Server";
-        this.approved = approved;
+        this.approvalStatus = approved ? "APPROVED" : "PENDING";
         this.createdAt = createdAt;
     }
-    
+
     /**
      * Constructor for loading from database with string parameters
      */
@@ -107,7 +103,7 @@ public class LoreEntry {
         this.nbtData = nbtData;
         this.location = location;
         this.submittedBy = submittedBy != null ? submittedBy : "Server";
-        this.approved = approved;
+        this.approvalStatus = approved ? "APPROVED" : "PENDING";
         
         try {
             this.createdAt = Timestamp.valueOf(createdAtStr);
@@ -173,11 +169,12 @@ public class LoreEntry {
     }
     
     public boolean isApproved() {
-        return approved;
+        return "APPROVED".equalsIgnoreCase(approvalStatus);
     }
-    
+
+    /** Maps true→APPROVED, false→PENDING. Use setApprovalStatus("REJECTED") for explicit rejection. */
     public void setApproved(boolean approved) {
-        this.approved = approved;
+        this.approvalStatus = approved ? "APPROVED" : "PENDING";
     }
 
     public String getApprovalStatus() {
@@ -186,7 +183,6 @@ public class LoreEntry {
 
     public void setApprovalStatus(String approvalStatus) {
         this.approvalStatus = approvalStatus;
-        this.approved = "APPROVED".equalsIgnoreCase(approvalStatus);
     }
 
     public String getStatus() {
@@ -311,7 +307,8 @@ public class LoreEntry {
         }
         
         json.put("submittedBy", submittedBy);
-        json.put("approved", approved);
+        json.put("approved", isApproved());
+        json.put("approvalStatus", approvalStatus);
         json.put("createdAt", createdAt.toString());
         
         // Add metadata to JSON

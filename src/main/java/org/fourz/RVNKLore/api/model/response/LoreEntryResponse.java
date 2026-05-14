@@ -19,6 +19,7 @@ public class LoreEntryResponse {
     private String type;
     private String submittedBy;
     private boolean approved;
+    private String approvalStatus;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private Map<String, String> metadata;
@@ -51,6 +52,7 @@ public class LoreEntryResponse {
         response.type = entry.getType() != null ? entry.getType().name() : LoreType.GENERIC.name();
         response.submittedBy = entry.getSubmittedBy();
         response.approved = entry.isApproved();
+        response.approvalStatus = entry.getApprovalStatus();
         response.createdAt = entry.getCreatedAt() != null ? entry.getCreatedAt().toLocalDateTime() : null;
         response.updatedAt = response.createdAt; // Use createdAt as fallback
         response.metadata = entry.getAllMetadata();
@@ -88,6 +90,7 @@ public class LoreEntryResponse {
     public String getType() { return type; }
     public String getSubmittedBy() { return submittedBy; }
     public boolean isApproved() { return approved; }
+    public String getApprovalStatus() { return approvalStatus; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public Map<String, String> getMetadata() { return metadata; }
