@@ -260,6 +260,8 @@ org.fourz.RVNKLore
 **Subcommand Pattern**: LoreCommand dispatches to Lore*SubCommand implementations
 **Handler Factory**: Dynamic handler registration for lore-type-specific processing
 **Fallback Pattern**: MySQL primary with automatic SQLite fallback via FallbackTracker
+**Discovery Wiring**: `DiscoveryManager` stores a reference to `DiscoveryListener` and exposes `refreshLocationCache()`. This is called automatically from `LoreManager.addLoreEntrySync`, `approveLoreEntrySync`, and `updateLoreEntryInPlace` when the affected entry has location data. Proximity discovery updates take effect in real time without a server restart.
+**Async Reconnect**: `ExceptionHandler.handleDatabaseException()` dispatches reconnect via `runTaskAsynchronously` — MySQL socket I/O does not block the main thread.
 
 ### Service Registration (RVNKCore Integration)
 
@@ -288,6 +290,8 @@ Pool:      HikariCP connection pooling (MySQL and SQLite)
 Tracker:   FallbackTracker (from RVNKCore) monitors failure count and recovery
 Dialects:  MySQLDialect, SQLiteDialect for vendor-specific SQL generation
 ```
+
+**Migration note**: `DatabaseConnection.modifyColumnType()` is MySQL-only. It is skipped automatically on SQLite dialects — SQLite type affinity handles large integers natively and does not support `MODIFY COLUMN` syntax.
 
 **Database Tables** (defined as constants in `DatabaseConnection.java`):
 
@@ -326,6 +330,8 @@ Base path: `/api/lore/*` — registered via `IServletRegistrationService` at plu
 | GET | `/api/lore/types` | List available lore types |
 | GET | `/api/lore/stats` | Lore statistics |
 | GET | `/api/lore/health` | Health check |
+
+**Entry response fields** (`/api/lore/entries`, `/api/lore/entries/{id}`): Each entry object includes both `approved` (boolean, derived from `approvalStatus`) and `approvalStatus` (string: `PENDING` / `APPROVED` / `REJECTED`). If the entry has location data, a `location` object is included: `{ "world": "world", "x": -500.0, "y": 72.0, "z": 200.0 }`. The `location` field is omitted when no location is stored.
 
 ### Lore Types
 

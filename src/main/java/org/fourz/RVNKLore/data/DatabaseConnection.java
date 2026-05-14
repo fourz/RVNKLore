@@ -430,6 +430,85 @@ public abstract class DatabaseConnection {
     }
 
     /**
+     * DROP all lore tables (schema reset). Call before createTables() to start fresh.
+     * Disables FK checks for MySQL; SQLite FK checks are off by default.
+     */
+    public void dropAllTables() {
+        logger.warning("=== DEV: dropAllTables — dropping all lore tables ===");
+        String[] tables = {
+            // leaf → root order (FK children before parents)
+            table(TABLE_PLAYER_REWARD_CLAIM),
+            table(TABLE_PLAYER_ACHIEVEMENT),
+            table(TABLE_PLAYER_COLLECTION_ITEMS),
+            table(TABLE_PLAYER_COLLECTION_PROGRESS),
+            table(TABLE_COLLECTION_ITEM),
+            table(TABLE_COLLECTION_REWARD),
+            table(TABLE_LORE_DISCOVERY),
+            table(TABLE_LORE_LOCATION),
+            table(TABLE_LORE_METADATA),
+            table(TABLE_LORE_ITEM),
+            table(TABLE_LORE_SUBMISSION),
+            table(TABLE_COLLECTION),
+            table(TABLE_LORE_ENTRY)
+        };
+        try (Connection conn = rvnkProvider.getConnection();
+             Statement stmt = conn.createStatement()) {
+            if ("MySQL".equals(dialect.getName())) {
+                stmt.execute("SET FOREIGN_KEY_CHECKS=0");
+            }
+            for (String t : tables) {
+                stmt.execute("DROP TABLE IF EXISTS " + t);
+                logger.debug("DEV: dropped table " + t);
+            }
+            if ("MySQL".equals(dialect.getName())) {
+                stmt.execute("SET FOREIGN_KEY_CHECKS=1");
+            }
+            logger.warning("=== DEV: dropAllTables complete ===");
+        } catch (SQLException e) {
+            logger.error("DEV: dropAllTables failed", e);
+        }
+    }
+
+    /**
+     * DELETE all rows from every lore table (data wipe, schema intact).
+     * Uses FK check disable so order doesn't matter.
+     */
+    public void purgeAllData() {
+        logger.warning("=== DEV: purgeAllData — truncating all lore table rows ===");
+        String[] tables = {
+            table(TABLE_PLAYER_REWARD_CLAIM),
+            table(TABLE_PLAYER_ACHIEVEMENT),
+            table(TABLE_PLAYER_COLLECTION_ITEMS),
+            table(TABLE_PLAYER_COLLECTION_PROGRESS),
+            table(TABLE_COLLECTION_ITEM),
+            table(TABLE_COLLECTION_REWARD),
+            table(TABLE_LORE_DISCOVERY),
+            table(TABLE_LORE_LOCATION),
+            table(TABLE_LORE_METADATA),
+            table(TABLE_LORE_ITEM),
+            table(TABLE_LORE_SUBMISSION),
+            table(TABLE_COLLECTION),
+            table(TABLE_LORE_ENTRY)
+        };
+        try (Connection conn = rvnkProvider.getConnection();
+             Statement stmt = conn.createStatement()) {
+            if ("MySQL".equals(dialect.getName())) {
+                stmt.execute("SET FOREIGN_KEY_CHECKS=0");
+            }
+            for (String t : tables) {
+                stmt.execute("DELETE FROM " + t);
+                logger.debug("DEV: purged table " + t);
+            }
+            if ("MySQL".equals(dialect.getName())) {
+                stmt.execute("SET FOREIGN_KEY_CHECKS=1");
+            }
+            logger.warning("=== DEV: purgeAllData complete ===");
+        } catch (SQLException e) {
+            logger.error("DEV: purgeAllData failed", e);
+        }
+    }
+
+    /**
      * Close the database connection pool
      */
     public void close() {

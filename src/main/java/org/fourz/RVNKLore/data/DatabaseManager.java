@@ -85,6 +85,16 @@ public class DatabaseManager {
             connection.initialize();
             connection.createTables();
 
+            // Dev reset flags — both are no-ops unless explicitly enabled in config.yml
+            if (plugin.getConfigManager().isPurgeSchema()) {
+                logger.warning("=== DEV purgeSchema ENABLED — dropping and recreating all lore tables ===");
+                connection.dropAllTables();
+                connection.createTables();
+            } else if (plugin.getConfigManager().isPurgeData()) {
+                logger.warning("=== DEV purgeData ENABLED — deleting all lore table rows ===");
+                connection.purgeAllData();
+            }
+
             // Initialize repositories and services using the connection
             loreRepository = new LoreEntryRepository(plugin, connection);
             locationRepository = new LocationRepository(plugin, connection);

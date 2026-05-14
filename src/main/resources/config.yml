@@ -24,8 +24,21 @@ lore:
     HAT: DEFAULT
 
 storage:
-  test-mode: no # yes = wipe schema on start, no = keep tables on start
   type: mysql
+
+  # ── Dev-only reset flags ────────────────────────────────────────────────────
+  # WARNING: Both options destroy data. Never enable on a server with real data.
+  dev:
+    # purgeSchema: DROP all lore tables and recreate schema on server load.
+    #   Use when you need a completely fresh schema (e.g. after removing a column).
+    #   Implies purgeData. Set back to false before the next restart.
+    purgeSchema: false
+
+    # purgeData: DELETE all rows from every lore table on server load (keeps schema).
+    #   Use to wipe test data without touching the table structure.
+    #   Set back to false before the next restart.
+    purgeData: false
+  # ───────────────────────────────────────────────────────────────────────────
   mysql:
     host: 64.20.41.122
     port: 3306

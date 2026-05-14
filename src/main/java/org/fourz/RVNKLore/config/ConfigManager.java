@@ -253,11 +253,14 @@ public class ConfigManager {
         return new String[]{"DEBUG", "INFO", "WARN", "WARNING", "ERROR", "SEVERE", "OFF"};
     }
     
-    /**
-     * Get test mode setting
-     */
-    public boolean isTestMode() {
-        return "yes".equalsIgnoreCase(config.getString("storage.test-mode", "no"));
+    /** Drop and recreate all lore tables on next server load. Implies purgeData. Dev-only. */
+    public boolean isPurgeSchema() {
+        return config.getBoolean("storage.dev.purgeSchema", false);
+    }
+
+    /** Delete all rows from every lore table on next server load (keeps schema). Dev-only. */
+    public boolean isPurgeData() {
+        return config.getBoolean("storage.dev.purgeData", false);
     }
 
     // ==================== Dynmap Configuration ====================
