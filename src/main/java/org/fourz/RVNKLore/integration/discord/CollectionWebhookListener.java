@@ -3,10 +3,13 @@ package org.fourz.RVNKLore.integration.discord;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.Plugin;
+import org.fourz.RVNKLore.lore.item.collection.CollectionTheme;
 import org.fourz.RVNKLore.lore.item.collection.event.CollectionChangeEvent;
-import org.fourz.RVNKLore.lore.item.collection.event.CollectionEventType;
 import org.fourz.rvnkcore.util.log.LogManager;
 
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
@@ -14,6 +17,9 @@ import java.util.concurrent.CompletableFuture;
  * Listens to collection events and sends Discord webhooks for completions.
  */
 public class CollectionWebhookListener implements Listener {
+    private static final DateTimeFormatter COMPLETION_FMT =
+        DateTimeFormatter.ofPattern("dd MMM yyyy, HH:mm 'UTC'").withZone(ZoneId.of("UTC"));
+
     private final Plugin plugin;
     private final LogManager logger;
     private final DiscordWebhookManager webhookManager;
@@ -61,16 +67,29 @@ public class CollectionWebhookListener implements Listener {
             playerName = playerId.toString().substring(0, 8);
         }
 
+        String completionTime = COMPLETION_FMT.format(Instant.ofEpochMilli(event.getTimestamp()));
+        String theme = resolveCollectionTheme(event.getCollection().getThemeId());
+
         // Send webhook asynchronously
         webhookManager.sendCollectionCompletionWebhook(
                 playerName,
                 collectionName,
-                "Unknown", // TODO: Calculate actual completion time
-                "COMMON"   // TODO: Get rarity from collection metadata
+                completionTime,
+                theme
         ).exceptionally(ex -> {
             logger.debug("Exception sending collection completion webhook: " + ex.getMessage());
             return false;
         });
+    }
+
+    private String resolveCollectionTheme(String themeId) {
+        if (themeId == null || themeId.isEmpty()) return "Standard";
+        try {
+            return CollectionTheme.valueOf(themeId.toUpperCase()).getDisplayName();
+        } catch (IllegalArgumentException e) {
+            String name = themeId.replace('_', ' ').toLowerCase();
+            return Character.toUpperCase(name.charAt(0)) + name.substring(1);
+        }
     }
 
     /**
