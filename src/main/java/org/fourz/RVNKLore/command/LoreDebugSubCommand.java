@@ -27,9 +27,11 @@ public class LoreDebugSubCommand implements SubCommand {
     private final RVNKLore plugin;
     private final DiagnosticUtil diagnosticUtil;
     private final SeedSubCommand seedSubCommand;
+    private final LogManager logger;
 
     public LoreDebugSubCommand(RVNKLore plugin) {
         this.plugin = plugin;
+        this.logger = LogManager.getInstance(plugin, "LoreDebugSubCommand");
         this.diagnosticUtil = new DiagnosticUtil(plugin);
         this.seedSubCommand = new SeedSubCommand(plugin);
     }
@@ -349,11 +351,11 @@ public class LoreDebugSubCommand implements SubCommand {
 
             } catch (Exception e) {
                 sender.sendMessage(ChatColor.RED + "Error retrieving player diagnostics: " + e.getMessage());
-                e.printStackTrace();
+                logger.error("Error retrieving player diagnostics for async callback", e);
             }
         }).exceptionally(throwable -> {
             sender.sendMessage(ChatColor.RED + "Failed to retrieve player diagnostics: " + throwable.getMessage());
-            throwable.printStackTrace();
+            logger.error("Failed to retrieve player diagnostics", throwable);
             return null;
         });
 

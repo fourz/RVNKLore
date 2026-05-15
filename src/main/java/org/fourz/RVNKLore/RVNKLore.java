@@ -757,15 +757,14 @@ public class RVNKLore extends JavaPlugin {
     }
 
     /**
-     * Get the handler factory for this plugin
+     * Get the handler factory for this plugin.
      *
      * @return The handler factory
-     */    public HandlerFactory getHandlerFactory() {
+     * @throws IllegalStateException if the handler factory has not been initialized (reload bug)
+     */
+    public HandlerFactory getHandlerFactory() {
         if (handlerFactory == null) {
-            logger.warning("Handler factory requested but was null. Creating new instance.");
-            handlerFactory = new HandlerFactory(this);
-            // Only initialize if it's actually null - avoids repeated initialization
-            handlerFactory.initialize();
+            throw new IllegalStateException("Manager not initialized: HandlerFactory");
         }
         return handlerFactory;
     }
@@ -778,46 +777,44 @@ public class RVNKLore extends JavaPlugin {
     }
 
     /**
-     * Get the player manager for player lore operations
+     * Get the player manager for player lore operations.
      *
      * @return The player manager
+     * @throws IllegalStateException if the player manager has not been initialized (reload bug)
      */
     public PlayerManager getPlayerManager() {
         if (playerManager == null) {
-            logger.warning("Player manager requested but was null. Creating new instance.");
-            playerManager = new PlayerManager(this);
-            if (playerLookup != null) {
-                playerManager.setPlayerLookup(playerLookup);
-            }
-            playerManager.initialize();
+            throw new IllegalStateException("Manager not initialized: PlayerManager");
         }
         return playerManager;
     }
 
     /**
-     * Get the discovery manager for lore discovery events
+     * Get the discovery manager for lore discovery events.
+     * Returns {@code null} when the discovery feature is disabled in config;
+     * callers must null-check before use.
      *
-     * @return The discovery manager
+     * @return The discovery manager, or {@code null} if the feature is disabled
+     * @throws IllegalStateException if discovery is enabled but the manager was not initialized
      */
     public DiscoveryManager getDiscoveryManager() {
-        if (discoveryManager == null) {
-            logger.warning("Discovery manager requested but was null. Creating new instance.");
-            discoveryManager = new DiscoveryManager(this);
-            discoveryManager.initialize();
+        if (discoveryManager == null && configManager != null && configManager.isDiscoveryEnabled()) {
+            throw new IllegalStateException("Manager not initialized: DiscoveryManager");
         }
         return discoveryManager;
     }
 
     /**
-     * Get the achievement manager for collection achievements
+     * Get the achievement manager for collection achievements.
+     * Returns {@code null} when the achievements feature is disabled in config;
+     * callers must null-check before use.
      *
-     * @return The achievement manager
+     * @return The achievement manager, or {@code null} if the feature is disabled
+     * @throws IllegalStateException if achievements are enabled but the manager was not initialized
      */
     public AchievementManager getAchievementManager() {
-        if (achievementManager == null) {
-            logger.warning("Achievement manager requested but was null. Creating new instance.");
-            achievementManager = new AchievementManager(this);
-            achievementManager.initialize();
+        if (achievementManager == null && configManager != null && configManager.isAchievementsEnabled()) {
+            throw new IllegalStateException("Manager not initialized: AchievementManager");
         }
         return achievementManager;
     }

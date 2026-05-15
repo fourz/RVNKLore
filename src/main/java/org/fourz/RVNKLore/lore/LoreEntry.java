@@ -28,25 +28,40 @@ public class LoreEntry {
     private Map<String, String> metadata;
     
     /**
-     * Default constructor for new entries
+     * Canonical private constructor used by simple public constructors.
+     * Centralises the common field defaults so each constructor delegates here
+     * rather than duplicating initialisation.
+     *
+     * @param id          pre-generated entry ID (UUID string)
+     * @param submittedBy attribution string; use {@code "Server"} for system-generated
+     *                    entries, {@code null} only when attribution is unknown at
+     *                    construction time (field-by-field builders)
      */
-    public LoreEntry() {
-        this.id = UUID.randomUUID().toString();
+    private LoreEntry(String id, String submittedBy) {
+        this.id = id;
+        this.submittedBy = submittedBy;
         this.metadata = new HashMap<>();
         this.createdAt = new Timestamp(System.currentTimeMillis());
     }
+
+    /**
+     * Default constructor for new entries built up field-by-field.
+     * {@code submittedBy} is left {@code null}; callers must set it explicitly
+     * before persisting the entry.
+     */
+    public LoreEntry() {
+        this(UUID.randomUUID().toString(), null);
+    }
     
     /**
-     * Constructor for creating a new lore entry
+     * Constructor for creating a new server-generated lore entry with NBT data.
      */
     public LoreEntry(String name, String description, LoreType type, String nbtData) {
-        this.id = UUID.randomUUID().toString();
+        this(UUID.randomUUID().toString(), "Server");
         this.name = name;
         this.description = description;
         this.nbtData = nbtData;
         this.type = type;
-        this.createdAt = new Timestamp(System.currentTimeMillis());
-        this.submittedBy = "Server";
     }
     /**
      * Constructor for creating a new lore entry
@@ -64,15 +79,13 @@ public class LoreEntry {
 
 
     /**
-     * Constructor with predefined ID
+     * Constructor with predefined ID for server-generated entries.
      */
     public LoreEntry(String id, String name, String description, LoreType type) {
-        this.id = id;
+        this(id, "Server");
         this.name = name;
         this.description = description;
         this.type = type;
-        this.createdAt = new Timestamp(System.currentTimeMillis());
-        this.submittedBy = "Server";
     }
     
     /**

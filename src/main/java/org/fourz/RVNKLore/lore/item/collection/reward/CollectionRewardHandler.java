@@ -6,6 +6,15 @@ import org.fourz.RVNKLore.data.model.CollectionReward;
 /**
  * Interface for handling different reward types when players complete collections.
  * Implementations handle the actual reward distribution (items, permissions, commands, currency).
+ *
+ * <p>Candidate for unification with {@code achievement.reward.RewardHandler}: the two interfaces
+ * serve the same logical purpose (dispatch a reward to a player) but use incompatible dispatch
+ * mechanisms. {@code RewardHandler} routes via a boolean predicate
+ * ({@code canHandle(AchievementReward)}) and accepts an {@code AchievementReward} DTO, while this
+ * interface routes via a type-enum registry ({@code getHandledType()}) and accepts a
+ * {@code CollectionReward} DTO. A common super-interface would require either a shared reward
+ * base type or a raw/wildcard bound, both of which add complexity without eliminating duplication.
+ * Blocker: no shared reward model across the achievement and collection subsystems (#957).
  */
 public interface CollectionRewardHandler {
 

@@ -6,7 +6,6 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
 
@@ -14,20 +13,22 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Handler for path/road lore entries
+ * Handler for path/road lore entries.
+ *
+ * <p>Extends {@link AbstractLocationLoreHandler} and overrides:
+ * <ul>
+ *   <li>{@link #validateEntry} — uses simple per-field debug logging rather than the
+ *       validation-errors metadata approach used by other location types.</li>
+ *   <li>{@link #createLoreItem} / {@link #displayLore} — adds an optional
+ *       {@code destination} metadata line and uses {@code "Starting Point:"} as the
+ *       location label.</li>
+ * </ul>
  */
-public class PathLoreHandler implements LoreHandler {
-    private final RVNKLore plugin;
-    private final LogManager logger;
-    
-    public PathLoreHandler(RVNKLore plugin) {
-        this.plugin = plugin;
-        this.logger = LogManager.getInstance(plugin, "PathLoreHandler");
-    }
+public class PathLoreHandler extends AbstractLocationLoreHandler {
 
-    @Override
-    public void initialize() {
-        logger.debug("Initializing path lore handler");
+    public PathLoreHandler(RVNKLore plugin) {
+        super(plugin, Material.MAP, ChatColor.GOLD,
+                "Paved by:", "Starting Point:", "Path/Road", LoreType.PATH);
     }
 
     @Override
@@ -36,17 +37,17 @@ public class PathLoreHandler implements LoreHandler {
             logger.debug("Path lore validation failed: Name is required");
             return false;
         }
-        
+
         if (entry.getDescription() == null || entry.getDescription().isEmpty()) {
             logger.debug("Path lore validation failed: Description is required");
             return false;
         }
-        
+
         if (entry.getLocation() == null) {
             logger.debug("Path lore validation failed: Starting location is required");
             return false;
         }
-        
+
         return true;
     }
 
@@ -54,45 +55,33 @@ public class PathLoreHandler implements LoreHandler {
     public ItemStack createLoreItem(LoreEntry entry) {
         ItemStack item = new ItemStack(Material.MAP);
         ItemMeta meta = item.getItemMeta();
-        
+
         if (meta != null) {
             meta.setDisplayName(ChatColor.GOLD + entry.getName());
-            
+
             List<String> lore = new ArrayList<>();
             lore.add(ChatColor.GRAY + "Type: " + ChatColor.GOLD + "Path/Road");
-            
-            // Add creator if available
+
             if (entry.getSubmittedBy() != null) {
                 lore.add(ChatColor.GRAY + "Paved by: " + ChatColor.YELLOW + entry.getSubmittedBy());
             }
-            
-            // Get destination from metadata if available
+
             if (entry.getMetadata("destination") != null) {
                 lore.add(ChatColor.GRAY + "Destination: " + ChatColor.WHITE + entry.getMetadata("destination"));
             }
-            
+
             lore.add("");
-            
-            // Split description into lines for better readability
-            String[] descLines = entry.getDescription().split("\\n");
-            for (String line : descLines) {
-                lore.add(ChatColor.WHITE + line);
-            }
-            
-            // Add starting location
+            appendDescriptionLines(lore, entry);
+
             if (entry.getLocation() != null) {
                 lore.add("");
-                lore.add(ChatColor.GRAY + "Starting Point: " + 
-                        ChatColor.WHITE + entry.getLocation().getWorld().getName() + " at " + 
-                        (int)entry.getLocation().getX() + ", " + 
-                        (int)entry.getLocation().getY() + ", " + 
-                        (int)entry.getLocation().getZ());
+                lore.add(formatLocationLine(entry, "Starting Point:"));
             }
-            
+
             meta.setLore(lore);
             item.setItemMeta(meta);
         }
-        
+
         return item;
     }
 
@@ -100,38 +89,24 @@ public class PathLoreHandler implements LoreHandler {
     public void displayLore(LoreEntry entry, Player player) {
         player.sendMessage(ChatColor.GOLD + "==== " + entry.getName() + " ====");
         player.sendMessage(ChatColor.GRAY + "Type: " + ChatColor.GOLD + "Path/Road");
-        
-        // Add creator if available
+
         if (entry.getSubmittedBy() != null) {
             player.sendMessage(ChatColor.GRAY + "Paved by: " + ChatColor.YELLOW + entry.getSubmittedBy());
         }
-        
-        // Get destination from metadata if available
+
         if (entry.getMetadata("destination") != null) {
             player.sendMessage(ChatColor.GRAY + "Destination: " + ChatColor.WHITE + entry.getMetadata("destination"));
         }
-        
+
         player.sendMessage("");
-        
-        // Display description
-        String[] descLines = entry.getDescription().split("\\n");
-        for (String line : descLines) {
-            player.sendMessage(ChatColor.WHITE + line);
+
+        for (String descLine : getDescriptionLines(entry)) {
+            player.sendMessage(descLine);
         }
-        
-        // Add starting location
+
         if (entry.getLocation() != null) {
             player.sendMessage("");
-            player.sendMessage(ChatColor.GRAY + "Starting Point: " + 
-                    ChatColor.WHITE + entry.getLocation().getWorld().getName() + " at " + 
-                    (int)entry.getLocation().getX() + ", " + 
-                    (int)entry.getLocation().getY() + ", " + 
-                    (int)entry.getLocation().getZ());
+            player.sendMessage(formatLocationLine(entry, "Starting Point:"));
         }
-    }
-
-    @Override
-    public LoreType getHandlerType() {
-        return LoreType.PATH;
     }
 }
