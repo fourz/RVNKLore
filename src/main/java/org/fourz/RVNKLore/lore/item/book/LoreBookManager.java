@@ -436,6 +436,9 @@ public class LoreBookManager implements ILoreBookService {
         if (entry.getType() == LoreType.FACTION) {
             return buildFactionPages(entry, rarity);
         }
+        if (entry.getType() == LoreType.ITEM) {
+            return buildItemCompendiumPages(entry, rarity);
+        }
 
         List<String> pages = new ArrayList<>();
 
@@ -1074,6 +1077,103 @@ public class LoreBookManager implements ILoreBookService {
 
             pages.add(text.substring(start, end).trim());
             start = end + 1;
+        }
+
+        return pages;
+    }
+
+    /**
+     * Build pages for ITEM-type lore entries using a compendium catalogue layout.
+     *
+     * <p>Page 1 — Catalogue Entry: name, material, item type, rarity, obtainability.
+     * <p>Page 2+ — Lore: description prose with a "◆ Lore" section header.
+     * <p>Optional — Provenance: submitter, creation date, and any curator notes.
+     */
+    private List<String> buildItemCompendiumPages(LoreEntry entry, BookRarity rarity) {
+        List<String> pages = new ArrayList<>();
+        DateTimeFormatter dateFmt = DateTimeFormatter.ofPattern("MMM dd, yyyy");
+
+        // --- Page 1: Catalogue Entry ---
+        StringBuilder catalogue = new StringBuilder();
+        catalogue.append(ChatColor.DARK_GRAY).append(ChatColor.ITALIC)
+                .append("— Item Compendium —\n\n");
+        catalogue.append(rarity.getColor()).append(ChatColor.BOLD)
+                .append(entry.getName()).append(ChatColor.RESET).append("\n");
+
+        // Material line
+        String material = entry.getMetadata("material");
+        if (material != null && !material.isEmpty()) {
+            String matDisplay = material.replace("_", " ");
+            matDisplay = matDisplay.substring(0, 1).toUpperCase() + matDisplay.substring(1).toLowerCase();
+            catalogue.append(ChatColor.DARK_GRAY).append("Material: ")
+                    .append(ChatColor.GRAY).append(matDisplay).append("\n");
+        }
+
+        // Item type line
+        String itemType = entry.getMetadata("item_type");
+        if (itemType != null && !itemType.isEmpty() && !"STANDARD".equalsIgnoreCase(itemType)) {
+            catalogue.append(ChatColor.DARK_GRAY).append("Type: ")
+                    .append(ChatColor.GRAY).append(formatMetaKey(itemType.toLowerCase())).append("\n");
+        }
+
+        // Rarity line (item rarity from metadata, not book rarity)
+        String itemRarity = entry.getMetadata("rarity");
+        if (itemRarity != null && !itemRarity.isEmpty() && !"COMMON".equalsIgnoreCase(itemRarity)) {
+            catalogue.append(ChatColor.DARK_GRAY).append("Rarity: ")
+                    .append(ChatColor.GRAY).append(formatMetaKey(itemRarity.toLowerCase())).append("\n");
+        }
+
+        // Obtainability
+        String obtainable = entry.getMetadata("is_obtainable");
+        if ("false".equalsIgnoreCase(obtainable)) {
+            catalogue.append(ChatColor.RED).append(ChatColor.ITALIC).append("Not obtainable in survival\n");
+        }
+
+        catalogue.append(ChatColor.DARK_GRAY).append("\nID: ")
+                .append(ChatColor.GRAY).append(entry.getId().substring(0, 8));
+
+        pages.add(catalogue.toString());
+
+        // --- Pages 2+: Description / Lore ---
+        String description = entry.getDescription();
+        if (description != null && !description.isEmpty()) {
+            String loreHeader = ChatColor.DARK_GRAY + "" + ChatColor.ITALIC + "◆ Lore\n\n" + ChatColor.BLACK;
+            int firstPageCapacity = MAX_CHARS_PER_PAGE - loreHeader.length();
+            if (description.length() <= firstPageCapacity) {
+                pages.add(loreHeader + description);
+            } else {
+                int end = firstPageCapacity;
+                int lastSpace = description.lastIndexOf(' ', end);
+                if (lastSpace > 0) end = lastSpace;
+                pages.add(loreHeader + description.substring(0, end).trim());
+                String remaining = description.substring(end).trim();
+                if (!remaining.isEmpty()) pages.addAll(splitIntoPages(remaining));
+            }
+        }
+
+        // --- Optional: Curator Notes ---
+        String notes = entry.getMetadata("notes");
+        if (notes != null && !notes.isEmpty()) {
+            pages.add(ChatColor.DARK_GRAY + "" + ChatColor.ITALIC
+                    + "◆ Notes\n\n" + ChatColor.GRAY + notes);
+        }
+
+        // --- Optional: Provenance ---
+        boolean hasProvenance = entry.getSubmittedBy() != null || entry.getCreatedAt() != null;
+        if (hasProvenance) {
+            StringBuilder prov = new StringBuilder();
+            prov.append(ChatColor.DARK_GRAY).append(ChatColor.ITALIC)
+                    .append("◆ Provenance\n\n").append(ChatColor.RESET);
+            if (entry.getSubmittedBy() != null) {
+                prov.append(ChatColor.DARK_GRAY).append("Catalogued by: ")
+                        .append(ChatColor.GRAY).append(entry.getSubmittedBy()).append("\n");
+            }
+            if (entry.getCreatedAt() != null) {
+                prov.append(ChatColor.DARK_GRAY).append("Recorded: ")
+                        .append(ChatColor.GRAY)
+                        .append(entry.getCreatedAt().toLocalDateTime().format(dateFmt));
+            }
+            pages.add(prov.toString());
         }
 
         return pages;
