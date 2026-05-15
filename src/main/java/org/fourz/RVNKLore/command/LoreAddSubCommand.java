@@ -261,36 +261,38 @@ public class LoreAddSubCommand implements SubCommand {
             entry.setNbtData("{}");
         }
 
-        // Add the entry
-        boolean success = plugin.getLoreManager().addLoreEntrySync(entry);
-        if (success) {
-            sender.sendMessage(ChatColor.GREEN + "\u2713 Lore entry added: " + entry.getName() + " (" + entry.getType() + ")");
+        final boolean finalAutoApprove = autoApprove;
+        plugin.getLoreManager().addLoreEntry(entry).thenAccept(success ->
+            Bukkit.getScheduler().runTask(plugin,
+                () -> sendAddFeedback(sender, entry, type, name, isPlayer, finalAutoApprove, success)));
+        return true;
+    }
 
-            // Admin --approve flag: force-approve any type
+    private void sendAddFeedback(CommandSender sender, LoreEntry entry, LoreType type,
+                                 String name, boolean isPlayer, boolean autoApprove, boolean success) {
+        if (success) {
+            sender.sendMessage(ChatColor.GREEN + "✓ Lore entry added: " + entry.getName() + " (" + entry.getType() + ")");
             if (autoApprove) {
                 boolean approved = plugin.getLoreManager().approveLoreEntrySync(entry.getUUID());
                 if (approved) {
                     sender.sendMessage(ChatColor.GREEN + "   Auto-approved and published.");
                     logger.info("Lore entry '" + name + "' (" + type + ") added and auto-approved by " + sender.getName());
                 } else {
-                    sender.sendMessage(ChatColor.YELLOW + "   \u26a0 Entry added but auto-approve failed. Use /lore approve " + name);
+                    sender.sendMessage(ChatColor.YELLOW + "   ⚠ Entry added but auto-approve failed. Use /lore approve " + name);
                 }
-            // rvnklore.approve.own: implicit auto-approve for player-writable types
-            } else if (LoreTypePermission.isPlayerWritable(type)
-                    && sender.hasPermission("rvnklore.approve.own")) {
+            } else if (LoreTypePermission.isPlayerWritable(type) && sender.hasPermission("rvnklore.approve.own")) {
                 boolean approved = plugin.getLoreManager().approveLoreEntrySync(entry.getUUID());
                 if (approved) {
                     sender.sendMessage(ChatColor.GREEN + "   Published immediately.");
                     logger.info("Lore entry '" + name + "' (" + type + ") auto-approved via approve.own for " + sender.getName());
                 } else {
-                    sender.sendMessage(ChatColor.YELLOW + "   \u26a0 Entry added but auto-approve failed. Use /lore approve " + name);
+                    sender.sendMessage(ChatColor.YELLOW + "   ⚠ Entry added but auto-approve failed. Use /lore approve " + name);
                 }
             } else if (isPlayer) {
                 sender.sendMessage(ChatColor.YELLOW + "   Your submission will be reviewed by a staff member.");
             }
         } else {
-            sender.sendMessage(ChatColor.RED + "\u2716 Failed to add lore entry.");
-            // Surface validation errors to the user
+            sender.sendMessage(ChatColor.RED + "✖ Failed to add lore entry.");
             String validationErrors = entry.getMetadata("validation_errors");
             if (validationErrors != null && !validationErrors.isEmpty()) {
                 for (String error : validationErrors.split(";")) {
@@ -298,7 +300,6 @@ public class LoreAddSubCommand implements SubCommand {
                 }
             }
         }
-        return true;
     }
 
     @Override

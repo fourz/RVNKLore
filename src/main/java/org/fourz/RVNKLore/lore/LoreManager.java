@@ -119,7 +119,10 @@ public class LoreManager implements ILoreService {
     }
 
     /**
-     * Add a new lore entry (synchronous internal method).
+     * Add a new lore entry synchronously. <strong>Must not be called from the Bukkit main
+     * thread when {@code entry.getType() == LoreType.ITEM}</strong> — the ITEM post-processor
+     * blocks on {@code registerLoreItem().join()} which will freeze the server.
+     * Use {@link #addLoreEntry(LoreEntry)} for main-thread callers.
      *
      * @param entry The lore entry to add
      * @return True if successful, false otherwise
