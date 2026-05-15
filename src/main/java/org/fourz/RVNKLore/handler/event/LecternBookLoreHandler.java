@@ -18,9 +18,9 @@ import org.fourz.RVNKLore.handler.DefaultLoreHandler;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
 
-import java.text.SimpleDateFormat;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 
 /**
@@ -30,7 +30,6 @@ import java.util.List;
 public class LecternBookLoreHandler extends DefaultLoreHandler {
 
     private static final int MAX_DESCRIPTION_LENGTH = 500;
-    private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm");
 
     public LecternBookLoreHandler(RVNKLore plugin) {
         super(plugin);
@@ -96,7 +95,7 @@ public class LecternBookLoreHandler extends DefaultLoreHandler {
         if (bookAuthor != null) entry.addMetadata("book_author", bookAuthor);
         entry.addMetadata("page_count", String.valueOf(pages.size()));
         entry.addMetadata("source", "lectern");
-        entry.addMetadata("placed_at", dateFormat.format(new Date()));
+        entry.addMetadata("placed_at", DATETIME_SHORT_FMT.format(LocalDateTime.now(ZoneId.systemDefault())));
         entry.addMetadata("player_uuid", player.getUniqueId().toString());
         entry.addMetadata("player_name", player.getName());
 

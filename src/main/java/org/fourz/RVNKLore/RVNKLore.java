@@ -104,120 +104,134 @@ public class RVNKLore extends JavaPlugin {
         logger.info("Initializing RVNKLore...");
 
         try {
-            // First try to initialize the database
-            databaseManager = new DatabaseManager(this);
-
-            // Check database connection - allow fallback mode to continue
-            if (!databaseManager.isConnected()) {
-                // Check if fallback is disabled - only then is this fatal
-                if (!databaseManager.isFallbackEnabled()) {
-                    throw new Exception("Database connection failed and fallback is disabled. Plugin cannot function without storage.");
-                }
-                throw new Exception("Database connection failed and fallback also failed. Plugin cannot function without storage.");
-            }
-
-            // Log if running in fallback mode
-            if (databaseManager.isInFallbackMode()) {
-                logger.warning("=== PLUGIN RUNNING IN FALLBACK MODE ===");
-                logger.warning("MySQL unavailable - using SQLite fallback storage");
-                logger.warning("Some features may have limited functionality");
-            }
-
-            // Create handler factory but don't initialize it yet
-            handlerFactory = new HandlerFactory(this);
-
-            // Initialize utility manager for diagnostics
-            utilityManager = UtilityManager.getInstance(this);
-              // First initialize the handler factory completely before LoreManager needs it
-            handlerFactory.initialize();
-              // Now initialize LoreManager after HandlerFactory is fully initialized
-            loreManager = LoreManager.getInstance(this);
-            loreManager.initializeLore();
-
-            // Initialize LoreBookManager as plugin-level singleton
-            loreBookManager = new LoreBookManager(this);
-
-            // Initialize LoreMapManager for cross-server map storage
-            loreMapManager = new LoreMapManager(this);
-
-            // Initialize PlayerLookup for RVNKCore name resolution
-            this.playerLookup = new PlayerLookup(this);
-
-            // Initialize PlayerManager for player-related lore operations
-            this.playerManager = new PlayerManager(this);
-            this.playerManager.setPlayerLookup(playerLookup);
-            this.playerManager.initialize();
-
-            // Initialize ItemManager through LoreManager
-            this.itemManager = loreManager.getItemManager();
-
-            // Initialize SubmissionManager for lore submission workflow
-            this.submissionManager = new SubmissionManager(this);
-
-            // Initialize DiscoveryManager for lore discovery events
-            if (configManager.isDiscoveryEnabled()) {
-                this.discoveryManager = new DiscoveryManager(this);
-                this.discoveryManager.initialize();
-            } else {
-                logger.info("Feature disabled: discovery");
-            }
-
-            // Initialize AchievementManager for collection achievements
-            if (configManager.isAchievementsEnabled()) {
-                this.achievementManager = new AchievementManager(this);
-                this.achievementManager.initialize();
-            } else {
-                logger.info("Feature disabled: achievements");
-            }
-
-            // Register GUI listener for browse menus
-            getServer().getPluginManager().registerEvents(new GuiListener(), this);
-
-            // Remove direct CosmeticManager initialization (now handled by ItemManager)
-            // cosmeticManager = new CosmeticManager(this);
-            // cosmeticManager.initialize();
-
-            // Finally initialize command system
-            commandManager = new CommandManager(this);
-
-            // Register with RVNKCore ServiceRegistry if available
+            initializeCoreManagers();
             registerWithRVNKCore();
-
-            // Register notification types with PlayerPreferencesService (Phase 3)
             registerNotificationTypes();
-
-            // Initialize REST API if RVNKCore is available
             initializeRestApi();
-
-            // Register PlaceholderAPI expansion if available
-            registerPlaceholderAPI();
-
-            // Register Dynmap integration if available
-            registerDynmap();
-
-            // Register VotingPlugin integration if available
-            registerVotingPlugin();
-
-            // Register GriefPrevention integration if available
-            registerGriefPrevention();
-
-            // Register RVNKWorlds integration if available
-            registerRVNKWorlds();
-
-            // Register Discord webhook integration if configured
-            registerDiscordWebhooks();
-
-            // Register Citizens NPC integration if available
-            registerCitizens();
-
-            // Start periodic health check
-            startHealthCheck();
+            registerIntegrations();
+            startBackgroundTasks();
 
             logger.info("RVNKLore has been enabled!");
         } catch (Exception e) {
             logger.error("Failed to initialize plugin", e);
             getServer().getPluginManager().disablePlugin(this);
         }
+    }
+
+    /**
+     * Initializes database, core managers, and the command system.
+     * Called once during onEnable before RVNKCore registration.
+     */
+    private void initializeCoreManagers() throws Exception {
+        // First try to initialize the database
+        databaseManager = new DatabaseManager(this);
+
+        // Check database connection - allow fallback mode to continue
+        if (!databaseManager.isConnected()) {
+            // Check if fallback is disabled - only then is this fatal
+            if (!databaseManager.isFallbackEnabled()) {
+                throw new Exception("Database connection failed and fallback is disabled. Plugin cannot function without storage.");
+            }
+            throw new Exception("Database connection failed and fallback also failed. Plugin cannot function without storage.");
+        }
+
+        // Log if running in fallback mode
+        if (databaseManager.isInFallbackMode()) {
+            logger.warning("=== PLUGIN RUNNING IN FALLBACK MODE ===");
+            logger.warning("MySQL unavailable - using SQLite fallback storage");
+            logger.warning("Some features may have limited functionality");
+        }
+
+        // Create handler factory but don't initialize it yet
+        handlerFactory = new HandlerFactory(this);
+
+        // Initialize utility manager for diagnostics
+        utilityManager = UtilityManager.getInstance(this);
+        // First initialize the handler factory completely before LoreManager needs it
+        handlerFactory.initialize();
+        // Now initialize LoreManager after HandlerFactory is fully initialized
+        loreManager = LoreManager.getInstance(this);
+        loreManager.initializeLore();
+
+        // Initialize LoreBookManager as plugin-level singleton
+        loreBookManager = new LoreBookManager(this);
+
+        // Initialize LoreMapManager for cross-server map storage
+        loreMapManager = new LoreMapManager(this);
+
+        // Initialize PlayerLookup for RVNKCore name resolution
+        this.playerLookup = new PlayerLookup(this);
+
+        // Initialize PlayerManager for player-related lore operations
+        this.playerManager = new PlayerManager(this);
+        this.playerManager.setPlayerLookup(playerLookup);
+        this.playerManager.initialize();
+
+        // Initialize ItemManager through LoreManager
+        this.itemManager = loreManager.getItemManager();
+
+        // Initialize SubmissionManager for lore submission workflow
+        this.submissionManager = new SubmissionManager(this);
+
+        // Initialize DiscoveryManager for lore discovery events
+        if (configManager.isDiscoveryEnabled()) {
+            this.discoveryManager = new DiscoveryManager(this);
+            this.discoveryManager.initialize();
+        } else {
+            logger.info("Feature disabled: discovery");
+        }
+
+        // Initialize AchievementManager for collection achievements
+        if (configManager.isAchievementsEnabled()) {
+            this.achievementManager = new AchievementManager(this);
+            this.achievementManager.initialize();
+        } else {
+            logger.info("Feature disabled: achievements");
+        }
+
+        // Register GUI listener for browse menus
+        getServer().getPluginManager().registerEvents(new GuiListener(), this);
+
+        // Remove direct CosmeticManager initialization (now handled by ItemManager)
+        // cosmeticManager = new CosmeticManager(this);
+        // cosmeticManager.initialize();
+
+        // Finally initialize command system
+        commandManager = new CommandManager(this);
+    }
+
+    /**
+     * Registers all optional third-party integrations.
+     * Each integration is soft-optional; failures are logged but not fatal.
+     */
+    private void registerIntegrations() {
+        // Register PlaceholderAPI expansion if available
+        registerPlaceholderAPI();
+
+        // Register Dynmap integration if available
+        registerDynmap();
+
+        // Register VotingPlugin integration if available
+        registerVotingPlugin();
+
+        // Register GriefPrevention integration if available
+        registerGriefPrevention();
+
+        // Register RVNKWorlds integration if available
+        registerRVNKWorlds();
+
+        // Register Discord webhook integration if configured
+        registerDiscordWebhooks();
+
+        // Register Citizens NPC integration if available
+        registerCitizens();
+    }
+
+    /**
+     * Starts periodic background tasks (health check, reconnect watchdog).
+     */
+    private void startBackgroundTasks() {
+        startHealthCheck();
     }
 
     private void registerShutdownHook() {

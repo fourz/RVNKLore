@@ -97,14 +97,7 @@ public class DatabaseManager {
                 connection.purgeAllData();
             }
 
-            // Initialize repositories and services using the connection
-            loreRepository = new LoreEntryRepository(plugin, connection);
-            locationRepository = new LocationRepository(plugin, connection);
-            discoveryRepository = new DiscoveryRepository(plugin, connection);
-            achievementRepository = new AchievementRepository(plugin, connection);
-            collectionRewardRepository = new CollectionRewardRepository(plugin, connection);
-            mapRepository = new MapRepository(plugin, connection);
-            backupService = new DatabaseBackupService(plugin, connection);
+            wireRepositories(connection);
 
             connectionValid = true;
             inFallbackMode = false;
@@ -141,14 +134,7 @@ public class DatabaseManager {
             connection.initialize();
             connection.createTables();
 
-            // Initialize repositories with fallback connection
-            loreRepository = new LoreEntryRepository(plugin, connection);
-            locationRepository = new LocationRepository(plugin, connection);
-            discoveryRepository = new DiscoveryRepository(plugin, connection);
-            achievementRepository = new AchievementRepository(plugin, connection);
-            collectionRewardRepository = new CollectionRewardRepository(plugin, connection);
-            mapRepository = new MapRepository(plugin, connection);
-            backupService = new DatabaseBackupService(plugin, connection);
+            wireRepositories(connection);
 
             connectionValid = true;
             inFallbackMode = true;
@@ -460,13 +446,7 @@ public class DatabaseManager {
             }
 
             connection = primaryConnection;
-            loreRepository = new LoreEntryRepository(plugin, connection);
-            locationRepository = new LocationRepository(plugin, connection);
-            discoveryRepository = new DiscoveryRepository(plugin, connection);
-            achievementRepository = new AchievementRepository(plugin, connection);
-            collectionRewardRepository = new CollectionRewardRepository(plugin, connection);
-            mapRepository = new MapRepository(plugin, connection);
-            backupService = new DatabaseBackupService(plugin, connection);
+            wireRepositories(connection);
 
             connectionValid = true;
             inFallbackMode = false;
@@ -482,6 +462,22 @@ public class DatabaseManager {
             fallbackTracker.recordFailure();
             return false;
         }
+    }
+
+    /**
+     * Wire all repository fields from the given database connection.
+     * Called after every successful connection (primary, fallback, and reconnect).
+     *
+     * @param conn The active DatabaseConnection to bind repositories to
+     */
+    private void wireRepositories(DatabaseConnection conn) {
+        loreRepository = new LoreEntryRepository(plugin, conn);
+        locationRepository = new LocationRepository(plugin, conn);
+        discoveryRepository = new DiscoveryRepository(plugin, conn);
+        achievementRepository = new AchievementRepository(plugin, conn);
+        collectionRewardRepository = new CollectionRewardRepository(plugin, conn);
+        mapRepository = new MapRepository(plugin, conn);
+        backupService = new DatabaseBackupService(plugin, conn);
     }
 
     // ==================== Location Repository Facade ====================
@@ -623,7 +619,7 @@ public class DatabaseManager {
 
     /**
      * Get the database connection factory
-     * 
+     *
      * @return The DatabaseConnectionFactory instance
      */
     private boolean validateConnection() {

@@ -12,8 +12,8 @@ import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
 import org.fourz.rvnkcore.util.log.LogManager;
 
-import java.text.SimpleDateFormat;
-import java.util.Date;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 /**
  * Handler for creating taverns via sign creation.
@@ -22,7 +22,6 @@ import java.util.Date;
  */
 public class HandlerSignTavern extends DefaultLoreHandler {
     private static final String TAVERN_SIGN_HEADER = "[Tavern]";
-    private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     private final LogManager logger;
 
     public HandlerSignTavern(RVNKLore plugin) {
@@ -76,7 +75,7 @@ public class HandlerSignTavern extends DefaultLoreHandler {
     private void createTavernEntry(Player player, String name, String description, Block block) {
         LoreEntry entry = LoreEntry.createLocationLore(name, description, LoreType.TAVERN, block.getLocation(), player);
 
-        String currentTime = dateFormat.format(new Date());
+        String currentTime = DATETIME_FMT.format(LocalDateTime.now(ZoneId.systemDefault()));
         entry.addMetadata("created_at", currentTime);
         entry.addMetadata("player_uuid", player.getUniqueId().toString());
         entry.addMetadata("player_name", player.getName());

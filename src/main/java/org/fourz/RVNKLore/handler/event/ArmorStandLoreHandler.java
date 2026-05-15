@@ -17,9 +17,9 @@ import org.fourz.RVNKLore.handler.DefaultLoreHandler;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
 
-import java.text.SimpleDateFormat;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -31,7 +31,6 @@ import java.util.Set;
  */
 public class ArmorStandLoreHandler extends DefaultLoreHandler {
 
-    private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm");
     // Track armor stand UUIDs that have already been registered to avoid duplicates
     private final Set<String> registeredStatues = new HashSet<>();
 
@@ -95,7 +94,7 @@ public class ArmorStandLoreHandler extends DefaultLoreHandler {
         entry.addMetadata("sub_type", "statue");
         entry.addMetadata("armor_stand_uuid", standUuid);
         entry.addMetadata("source", "armor_stand");
-        entry.addMetadata("created_at", dateFormat.format(new Date()));
+        entry.addMetadata("created_at", DATETIME_SHORT_FMT.format(LocalDateTime.now(ZoneId.systemDefault())));
         entry.addMetadata("creator_uuid", player.getUniqueId().toString());
         entry.addMetadata("creator_name", player.getName());
 
