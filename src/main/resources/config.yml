@@ -55,20 +55,11 @@ storage:
     #   Set back to false before the next restart.
     purgeData: false
   # ───────────────────────────────────────────────────────────────────────────
+  # mysql: section is no longer used. When storage.type=mysql, RVNKLore reuses
+  # the shared ConnectionProvider from RVNKCore (no separate pool created).
+  # Connection details are configured in RVNKCore's config.yml only.
   mysql:
-    host: 64.20.41.122
-    port: 3306
-    username: fourzorg_rvnkuser
-    password: ''
-    useSSL: true
-    database: fourzorg_rvnkcore_dev
-    # Table prefix for shared database environments (e.g., 'rvnklore_')
     tablePrefix:
-    # HikariCP connection pool settings for MySQL
-    poolSize: 10
-    connectionTimeout: 30000
-    idleTimeout: 600000
-    maxLifetime: 1800000
   sqlite:
     database: data.db
     # Table prefix (optional, typically not needed for SQLite)
