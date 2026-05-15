@@ -40,6 +40,7 @@ public abstract class DatabaseConnection {
     public static final String TABLE_LORE_DISCOVERY = "lore_discovery";
     public static final String TABLE_PLAYER_ACHIEVEMENT = "player_achievement";
     public static final String TABLE_PLAYER_REWARD_CLAIM = "player_reward_claim";
+    public static final String TABLE_LORE_MAP = "lore_map";
 
     public DatabaseConnection(RVNKLore plugin, SQLDialect dialect) {
         this.plugin = plugin;
@@ -257,14 +258,55 @@ public abstract class DatabaseConnection {
             createIndexSafely(stmt, "CREATE UNIQUE INDEX idx_" + tablePrefix + "reward_claim_unique ON " + playerRewardClaim + "(reward_id, player_uuid)");
             createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "reward_claim_player ON " + playerRewardClaim + "(player_uuid)");
 
+            // --- Lore Map Table (cross-server map storage) ---
+            String loreMap = table(TABLE_LORE_MAP);
+            String createLoreMapTable = "CREATE TABLE IF NOT EXISTS " + loreMap + " (" +
+                "id " + autoIncPK + ", " +
+                "lore_entry_id CHAR(36), " +
+                "map_subtype VARCHAR(20) NOT NULL DEFAULT 'ATLAS', " +
+                "center_x INTEGER NOT NULL DEFAULT 0, " +
+                "center_z INTEGER NOT NULL DEFAULT 0, " +
+                "scale TINYINT NOT NULL DEFAULT 0, " +
+                "world_name VARCHAR(64) NOT NULL DEFAULT 'world', " +
+                "dimension VARCHAR(64) NOT NULL DEFAULT 'NORMAL', " +
+                "pixel_data MEDIUMTEXT, " +
+                "created_by VARCHAR(64), " +
+                "created_at " + timestampDefault + ", " +
+                "FOREIGN KEY (lore_entry_id) REFERENCES " + loreEntry + "(id) ON DELETE SET NULL" +
+            ")";
+            stmt.execute(createLoreMapTable);
+            createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "lore_map_entry ON " + loreMap + "(lore_entry_id)");
+            createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "lore_map_subtype ON " + loreMap + "(map_subtype)");
+
             runMigrations(stmt);
             logger.debug("Database tables created/verified");
         }
     }
 
     private void runMigrations(Statement stmt) {
-        // All columns are included in the initial schema — no migrations needed for this release.
-        // Add future addColumnIfMissing / modifyColumnType calls here when schema evolves.
+        // Ensure lore_map table exists on upgrades from pre-#910 installs.
+        // Safe no-op on fresh installs where createTables() already created it.
+        String loreEntry = table(TABLE_LORE_ENTRY);
+        String loreMap = table(TABLE_LORE_MAP);
+        String autoIncPK = dialect.getAutoIncrementPK();
+        String timestampDefault = dialect.getTimestampType(true);
+        String ensureLoreMap = "CREATE TABLE IF NOT EXISTS " + loreMap + " (" +
+            "id " + autoIncPK + ", " +
+            "lore_entry_id CHAR(36), " +
+            "map_subtype VARCHAR(20) NOT NULL DEFAULT 'ATLAS', " +
+            "center_x INTEGER NOT NULL DEFAULT 0, " +
+            "center_z INTEGER NOT NULL DEFAULT 0, " +
+            "scale TINYINT NOT NULL DEFAULT 0, " +
+            "world_name VARCHAR(64) NOT NULL DEFAULT 'world', " +
+            "dimension VARCHAR(64) NOT NULL DEFAULT 'NORMAL', " +
+            "pixel_data MEDIUMTEXT, " +
+            "created_by VARCHAR(64), " +
+            "created_at " + timestampDefault + ", " +
+            "FOREIGN KEY (lore_entry_id) REFERENCES " + loreEntry + "(id) ON DELETE SET NULL" +
+        ")";
+        createTableSafely(stmt, ensureLoreMap, TABLE_LORE_MAP);
+        createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "lore_map_entry ON " + loreMap + "(lore_entry_id)");
+        createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "lore_map_subtype ON " + loreMap + "(map_subtype)");
     }
 
     /**
@@ -424,6 +466,7 @@ public abstract class DatabaseConnection {
             table(TABLE_COLLECTION_REWARD),
             table(TABLE_LORE_DISCOVERY),
             table(TABLE_LORE_LOCATION),
+            table(TABLE_LORE_MAP),
             table(TABLE_LORE_METADATA),
             table(TABLE_LORE_ITEM),
             table(TABLE_LORE_SUBMISSION),

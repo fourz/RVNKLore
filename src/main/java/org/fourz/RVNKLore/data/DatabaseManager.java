@@ -8,6 +8,7 @@ import org.fourz.RVNKLore.data.repository.AchievementRepository;
 import org.fourz.RVNKLore.data.repository.CollectionRewardRepository;
 import org.fourz.RVNKLore.data.repository.DiscoveryRepository;
 import org.fourz.RVNKLore.data.repository.LocationRepository;
+import org.fourz.RVNKLore.data.repository.MapRepository;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
 import org.fourz.RVNKLore.lore.player.PlayerRepository;
@@ -49,6 +50,7 @@ public class DatabaseManager {
     private DiscoveryRepository discoveryRepository;
     private AchievementRepository achievementRepository;
     private CollectionRewardRepository collectionRewardRepository;
+    private MapRepository mapRepository;
     private DatabaseBackupService backupService;
     private volatile boolean connectionValid = false;
     private volatile boolean inFallbackMode = false;
@@ -101,6 +103,7 @@ public class DatabaseManager {
             discoveryRepository = new DiscoveryRepository(plugin, connection);
             achievementRepository = new AchievementRepository(plugin, connection);
             collectionRewardRepository = new CollectionRewardRepository(plugin, connection);
+            mapRepository = new MapRepository(plugin, connection);
             backupService = new DatabaseBackupService(plugin, connection);
 
             connectionValid = true;
@@ -144,6 +147,7 @@ public class DatabaseManager {
             discoveryRepository = new DiscoveryRepository(plugin, connection);
             achievementRepository = new AchievementRepository(plugin, connection);
             collectionRewardRepository = new CollectionRewardRepository(plugin, connection);
+            mapRepository = new MapRepository(plugin, connection);
             backupService = new DatabaseBackupService(plugin, connection);
 
             connectionValid = true;
@@ -461,6 +465,7 @@ public class DatabaseManager {
             discoveryRepository = new DiscoveryRepository(plugin, connection);
             achievementRepository = new AchievementRepository(plugin, connection);
             collectionRewardRepository = new CollectionRewardRepository(plugin, connection);
+            mapRepository = new MapRepository(plugin, connection);
             backupService = new DatabaseBackupService(plugin, connection);
 
             connectionValid = true;
@@ -544,6 +549,13 @@ public class DatabaseManager {
      */
     public CollectionRewardRepository getCollectionRewardRepository() {
         return collectionRewardRepository;
+    }
+
+    /**
+     * Get the MapRepository for lore_map cross-server map storage.
+     */
+    public MapRepository getMapRepository() {
+        return mapRepository;
     }
 
     /**

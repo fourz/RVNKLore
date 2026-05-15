@@ -67,6 +67,7 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
         }
 
         commands.put("book", new LoreBookSubCommand(plugin));
+        commands.put("map", new LoreMapSubCommand(plugin));
         commands.put("share", new LoreShareSubCommand(plugin));
         commands.put("prefs", new LorePrefsSubCommand(plugin));
         commands.put("dynmap", new LoreDynmapSubCommand(plugin));

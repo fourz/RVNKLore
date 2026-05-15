@@ -19,6 +19,7 @@ import org.fourz.RVNKLore.service.ISubmissionService;
 import org.fourz.RVNKLore.service.IPlayerLoreService;
 import org.fourz.RVNKLore.service.ILoreBookService;
 import org.fourz.RVNKLore.lore.item.book.LoreBookManager;
+import org.fourz.RVNKLore.lore.map.LoreMapManager;
 import org.fourz.rvnkcore.util.PlayerLookup;
 import org.fourz.RVNKLore.util.UtilityManager;
 import org.fourz.RVNKLore.lore.item.ItemManager;
@@ -54,6 +55,7 @@ public class RVNKLore extends JavaPlugin {
     private DiscoveryManager discoveryManager;
     private AchievementManager achievementManager;
     private LoreBookManager loreBookManager;
+    private LoreMapManager loreMapManager;
     private int healthCheckTaskId = -1;
     private final AtomicBoolean isReconnecting = new AtomicBoolean(false);
     private Thread shutdownHook;
@@ -134,6 +136,9 @@ public class RVNKLore extends JavaPlugin {
 
             // Initialize LoreBookManager as plugin-level singleton
             loreBookManager = new LoreBookManager(this);
+
+            // Initialize LoreMapManager for cross-server map storage
+            loreMapManager = new LoreMapManager(this);
 
             // Initialize PlayerLookup for RVNKCore name resolution
             this.playerLookup = new PlayerLookup(this);
@@ -715,6 +720,10 @@ public class RVNKLore extends JavaPlugin {
 
     public LoreBookManager getLoreBookManager() {
         return loreBookManager;
+    }
+
+    public LoreMapManager getLoreMapManager() {
+        return loreMapManager;
     }
 
     public LogManager getLogManager() {
