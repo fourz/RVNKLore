@@ -1,7 +1,6 @@
 package org.fourz.RVNKLore.data;
 
 import org.fourz.RVNKLore.RVNKLore;
-import org.fourz.rvnkcore.RVNKCore;
 import org.fourz.rvnkcore.database.connection.ConnectionProvider;
 import org.fourz.RVNKLore.data.dialect.SQLDialect;
 
@@ -10,6 +9,9 @@ import java.sql.*;
 /**
  * MySQL implementation that reuses RVNKCore's shared ConnectionProvider.
  * No separate HikariCP pool is created — lifecycle is owned by RVNKCore.
+ *
+ * Uses reflection to get RVNKCore instance to match the rest of RVNKLore's
+ * class-loader-safe access pattern (avoids direct static reference to RVNKCore).
  */
 public class MySQLConnection extends DatabaseConnection {
 
@@ -22,15 +24,43 @@ public class MySQLConnection extends DatabaseConnection {
         logger.debug("Acquiring MySQL ConnectionProvider from RVNKCore...");
         lastConnectionError = null;
 
-        RVNKCore core = RVNKCore.getInstance();
-        if (core == null || !core.isInitialized()) {
-            throw new SQLException("RVNKCore is not initialized — MySQL ConnectionProvider unavailable");
+        try {
+            // Use RVNKCore's classloader for the class lookup so the ServiceRegistry key
+            // matches exactly — avoids PlugMan/hot-reload classloader mismatch.
+            ClassLoader rvnkCoreLoader = plugin.getServer().getPluginManager()
+                .getPlugin("RVNKCore").getClass().getClassLoader();
+
+            Class<?> rvnkCoreClass = rvnkCoreLoader.loadClass("org.fourz.rvnkcore.RVNKCore");
+            Object coreInstance = rvnkCoreClass.getMethod("getInstance").invoke(null);
+            if (coreInstance == null) {
+                throw new SQLException("RVNKCore instance is null — MySQL ConnectionProvider unavailable");
+            }
+            Boolean initialized = (Boolean) rvnkCoreClass.getMethod("isInitialized").invoke(coreInstance);
+            if (!Boolean.TRUE.equals(initialized)) {
+                throw new SQLException("RVNKCore is not initialized — MySQL ConnectionProvider unavailable");
+            }
+            Object registry = rvnkCoreClass.getMethod("getServiceRegistry").invoke(coreInstance);
+            if (registry == null) {
+                throw new SQLException("RVNKCore ServiceRegistry is null");
+            }
+            Class<?> cpClass = rvnkCoreLoader.loadClass("org.fourz.rvnkcore.database.connection.ConnectionProvider");
+            Object provider = registry.getClass()
+                .getMethod("getService", Class.class)
+                .invoke(registry, cpClass);
+            if (provider == null) {
+                throw new SQLException("ConnectionProvider not registered in RVNKCore ServiceRegistry");
+            }
+            rvnkProvider = (ConnectionProvider) provider;
+            if (!rvnkProvider.isValid()) {
+                rvnkProvider = null;
+                throw new SQLException("RVNKCore ConnectionProvider is not valid");
+            }
+        } catch (SQLException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new SQLException("Failed to acquire RVNKCore ConnectionProvider: " + e.getMessage(), e);
         }
-        ConnectionProvider provider = core.getService(ConnectionProvider.class);
-        if (provider == null || !provider.isValid()) {
-            throw new SQLException("RVNKCore ConnectionProvider is null or invalid");
-        }
-        rvnkProvider = provider;
+        logger.info("MySQL: reusing RVNKCore shared pool — no new connection created (#920)");
         logger.debug("Using RVNKCore shared MySQL pool");
     }
 
