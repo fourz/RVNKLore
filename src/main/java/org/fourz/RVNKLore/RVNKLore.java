@@ -150,12 +150,20 @@ public class RVNKLore extends JavaPlugin {
             this.submissionManager = new SubmissionManager(this);
 
             // Initialize DiscoveryManager for lore discovery events
-            this.discoveryManager = new DiscoveryManager(this);
-            this.discoveryManager.initialize();
+            if (configManager.isDiscoveryEnabled()) {
+                this.discoveryManager = new DiscoveryManager(this);
+                this.discoveryManager.initialize();
+            } else {
+                logger.info("Feature disabled: discovery");
+            }
 
             // Initialize AchievementManager for collection achievements
-            this.achievementManager = new AchievementManager(this);
-            this.achievementManager.initialize();
+            if (configManager.isAchievementsEnabled()) {
+                this.achievementManager = new AchievementManager(this);
+                this.achievementManager.initialize();
+            } else {
+                logger.info("Feature disabled: achievements");
+            }
 
             // Register GUI listener for browse menus
             getServer().getPluginManager().registerEvents(new GuiListener(), this);
@@ -295,6 +303,10 @@ public class RVNKLore extends JavaPlugin {
      * The LoreController in RVNKCore routes HTTP requests to this service.
      */
     private void initializeRestApi() {
+        if (!configManager.isRestApiEnabled()) {
+            logger.info("Feature disabled: rest-api — /api/lore/* endpoints not registered");
+            return;
+        }
         if (!rvnkCoreAvailable || rvnkCoreInstance == null) {
             logger.debug("Skipping REST API initialization - RVNKCore not available");
             return;

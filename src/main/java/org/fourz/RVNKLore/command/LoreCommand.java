@@ -57,9 +57,13 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
             commands.put("achievement", new LoreAchievementSubCommand(plugin, plugin.getAchievementManager()));
         }
 
-        if (plugin.getLoreManager().getItemManager() != null && plugin.getLoreManager().getItemManager().getCosmeticItem() != null) {
+        if (plugin.getConfigManager().isCollectionsEnabled()
+                && plugin.getLoreManager().getItemManager() != null
+                && plugin.getLoreManager().getItemManager().getCosmeticItem() != null) {
             commands.put("collection", new LoreCollectionSubCommand(plugin));
             commands.put("item", new LoreItemSubCommand(plugin));
+        } else if (!plugin.getConfigManager().isCollectionsEnabled()) {
+            logger.debug("Feature disabled: collections — /lore collection and /lore item not registered");
         }
 
         commands.put("book", new LoreBookSubCommand(plugin));

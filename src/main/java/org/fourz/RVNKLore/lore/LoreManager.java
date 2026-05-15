@@ -144,6 +144,12 @@ public class LoreManager implements ILoreService {
             cachedEntries.add(entry);
             loreByType.get(entry.getType()).add(entry);
             logger.debug("Lore entry added successfully: " + entry.getId());
+
+            // Auto-approve when the approval workflow is disabled
+            if (!plugin.getConfigManager().requireApproval()) {
+                boolean approved = approveLoreEntrySync(entry.getUUID());
+                logger.debug("Auto-approved entry '" + entry.getName() + "' (workflow disabled): " + approved);
+            }
               // For ITEM type entries, register the item in the ItemManager
             if (entry.getType() == LoreType.ITEM && itemManager != null) {
                 try {
