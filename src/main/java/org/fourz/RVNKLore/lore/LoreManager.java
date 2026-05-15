@@ -5,6 +5,9 @@ import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.handler.LoreHandler;
 import org.fourz.RVNKLore.lore.item.ItemManager;
+import org.fourz.RVNKLore.lore.post.DiscoveryPostProcessor;
+import org.fourz.RVNKLore.lore.post.DynmapPostProcessor;
+import org.fourz.RVNKLore.lore.post.ItemLorePostProcessor;
 import org.fourz.RVNKLore.service.ILoreService;
 
 import java.util.*;
@@ -22,6 +25,7 @@ public class LoreManager implements ILoreService {
     private static LoreManager instance;
     private LoreFinder loreFinder;
     private ItemManager itemManager;
+    private List<LorePostProcessor> postProcessors = Collections.emptyList();
     private boolean initializing = false;
 
     public LoreManager(RVNKLore plugin) {
@@ -58,6 +62,11 @@ public class LoreManager implements ILoreService {
 
             // Initialize the unified item management system
             this.itemManager = new ItemManager(plugin);
+            this.postProcessors = Arrays.asList(
+                new ItemLorePostProcessor(plugin, itemManager),
+                new DynmapPostProcessor(plugin),
+                new DiscoveryPostProcessor(plugin)
+            );
 
             // First load entries from database (doesn't require handlers)
             loadLoreEntries();
@@ -143,76 +152,32 @@ public class LoreManager implements ILoreService {
             loreByType.get(entry.getType()).add(entry);
             logger.debug("Lore entry added successfully: " + entry.getId());
 
-            // Auto-approve when the approval workflow is disabled
             if (!plugin.getConfigManager().requireApproval()) {
                 boolean approved = approveLoreEntrySync(entry.getUUID());
                 logger.debug("Auto-approved entry '" + entry.getName() + "' (workflow disabled): " + approved);
             }
-              // For ITEM type entries, register the item in the ItemManager
-            if (entry.getType() == LoreType.ITEM && itemManager != null) {
-                try {
-                    // Resolve material from entry metadata (set by LoreAddSubCommand)
-                    org.bukkit.Material material = org.bukkit.Material.DIAMOND_SWORD;
-                    String materialName = entry.getMetadata("material");
-                    if (materialName != null) {
-                        try {
-                            material = org.bukkit.Material.valueOf(materialName);
-                        } catch (IllegalArgumentException ignored) {}
-                    }
 
-                    org.fourz.RVNKLore.lore.item.ItemProperties itemProps =
-                        new org.fourz.RVNKLore.lore.item.ItemProperties(material, entry.getName());
-
-                    itemProps.setLoreEntryId(entry.getId());
-                    if (entry.getNbtData() != null) {
-                        itemProps.setNbtData(entry.getNbtData());
-                    }
-
-                    java.util.UUID entryUUID = java.util.UUID.fromString(entry.getId());
-                    boolean itemSuccess = itemManager.registerLoreItem(entryUUID, itemProps).join();
-
-                    if (!itemSuccess) {
-                        // Rollback: remove lore_entry since item registration failed
-                        logger.warning("Item registration failed for: " + entry.getName() + " - rolling back lore entry");
-                        plugin.getDatabaseManager().deleteLoreEntry(entryUUID);
-                        loreByType.get(entry.getType()).remove(entry);
-                        entry.addMetadata("validation_errors", "Item registration failed in database");
-                        return false;
-                    }
-
-                    logger.debug("Registered item in ItemManager: " + entry.getName() + " with lore entry ID: " + entry.getId());
-                } catch (Exception e) {
-                    // Rollback: remove lore_entry since item registration failed
-                    logger.warning("Failed to register item in ItemManager: " + e.getMessage());
-                    try {
-                        java.util.UUID entryUUID = java.util.UUID.fromString(entry.getId());
-                        plugin.getDatabaseManager().deleteLoreEntry(entryUUID);
-                        loreByType.get(entry.getType()).remove(entry);
-                    } catch (Exception rollbackEx) {
-                        logger.warning("Rollback failed: " + rollbackEx.getMessage());
-                    }
-                    entry.addMetadata("validation_errors", "Item registration failed: " + e.getMessage());
+            for (LorePostProcessor processor : postProcessors) {
+                if (processor.appliesTo(entry) && !processor.process(entry)) {
+                    rollbackEntry(entry);
                     return false;
                 }
-            }
-
-            // Create Dynmap marker if integration is available
-            if (plugin.isDynmapAvailable()) {
-                try {
-                    plugin.getDynmapIntegration().getMarkerManager().createOrUpdateMarker(entry);
-                } catch (Exception e) {
-                    logger.debug("Failed to create Dynmap marker: " + e.getMessage());
-                }
-            }
-
-            // Refresh proximity cache so new location entry is discoverable immediately
-            if (entry.getLocation() != null && plugin.getDiscoveryManager() != null) {
-                plugin.getDiscoveryManager().refreshLocationCache();
             }
         } else {
             logger.warning("Failed to add lore entry to database: " + entry.getName());
         }
         return success;
+    }
+
+    private void rollbackEntry(LoreEntry entry) {
+        logger.warning("Post-processing failed for '" + entry.getName() + "' — rolling back persisted entry");
+        try {
+            UUID entryUUID = UUID.fromString(entry.getId());
+            plugin.getDatabaseManager().deleteLoreEntry(entryUUID);
+            loreByType.get(entry.getType()).remove(entry);
+        } catch (Exception e) {
+            logger.warning("Rollback failed for '" + entry.getName() + "': " + e.getMessage());
+        }
     }
 
     /**
