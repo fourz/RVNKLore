@@ -73,12 +73,6 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
         registerSubCommand("registerfaction", new LoreRegisterFactionSubCommand(plugin));
         registerSubCommand("faction", new org.fourz.RVNKLore.command.faction.LoreFactionSubCommand(plugin));
 
-        // Register the /lore npc command for Citizens collection vendors (Phase 8)
-        // TODO: Implement Citizens integration in future phase
-        // if (plugin.getCitizensIntegration() != null && plugin.getCitizensIntegration().isEnabled()) {
-        //     registerSubCommand("npc", new LoreNPCSubCommand(plugin));
-        // }
-
         logger.debug("Registered " + subCommands.size() + " subcommands successfully");
     }
 

@@ -124,6 +124,7 @@ public class AnvilArtifactLoreHandler extends DefaultLoreHandler {
         return Character.toUpperCase(name.charAt(0)) + name.substring(1);
     }
 
+    @SuppressWarnings("deprecation")
     private String formatEnchantmentName(Enchantment enchantment) {
         String key = enchantment.getKey().getKey();
         String name = key.replace('_', ' ');
