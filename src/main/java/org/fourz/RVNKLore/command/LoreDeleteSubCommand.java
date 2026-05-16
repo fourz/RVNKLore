@@ -169,7 +169,7 @@ public class LoreDeleteSubCommand implements SubCommand {
     @Override
     public boolean hasPermission(CommandSender sender) {
         if (LoreCommandUtil.isAdmin(sender)) return true;
-        return sender.hasPermission("rvnklore.add") || sender instanceof Player;
+        return sender.hasPermission("rvnklore.add") || sender.hasPermission("rvnklore.delete");
     }
 
     @Override
