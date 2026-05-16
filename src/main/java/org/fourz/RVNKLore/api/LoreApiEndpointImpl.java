@@ -92,7 +92,7 @@ public class LoreApiEndpointImpl implements ILoreApiService {
             return loreManager.getLoreEntryByName(id)
                 .<ApiResponse<?>>handle((optEntry, ex) -> {
                     if (ex != null) return ApiResponse.error("INTERNAL_ERROR",
-                        "Failed to retrieve lore entry: " + unwrapMessage(ex));
+                        "An unexpected error occurred.");
                     return optEntry
                         .map(entry -> ApiResponse.success(LoreEntryResponse.from(entry)))
                         .orElse(ApiResponse.error("NOT_FOUND", "Lore entry not found: " + id));
@@ -102,7 +102,7 @@ public class LoreApiEndpointImpl implements ILoreApiService {
         return loreManager.getLoreEntry(uuid)
             .<ApiResponse<?>>handle((optEntry, ex) -> {
                 if (ex != null) return ApiResponse.error("INTERNAL_ERROR",
-                    "Failed to retrieve lore entry: " + unwrapMessage(ex));
+                    "An unexpected error occurred.");
                 return optEntry
                     .map(entry -> ApiResponse.success(LoreEntryResponse.from(entry)))
                     .orElse(ApiResponse.error("NOT_FOUND", "Lore entry not found: " + id));
@@ -125,7 +125,7 @@ public class LoreApiEndpointImpl implements ILoreApiService {
         return loreManager.getLoreEntriesByType(type)
             .<ApiResponse<?>>handle((entries, ex) -> {
                 if (ex != null) return ApiResponse.error("INTERNAL_ERROR",
-                    "Failed to retrieve lore entries: " + unwrapMessage(ex));
+                    "An unexpected error occurred.");
                 int total = entries.size();
                 List<LoreEntryResponse> data = entries.stream()
                     .skip(offset)
@@ -173,7 +173,7 @@ public class LoreApiEndpointImpl implements ILoreApiService {
             } catch (Exception e) {
                 logger.error("Error searching lore entries", e);
                 return (ApiResponse<?>) ApiResponse.error("INTERNAL_ERROR",
-                    "Failed to search lore entries: " + e.getMessage());
+                    "An unexpected error occurred.");
             }
         });
     }
@@ -250,7 +250,7 @@ public class LoreApiEndpointImpl implements ILoreApiService {
             } catch (Exception e) {
                 logger.error("Error submitting lore entry", unwrapException(e));
                 return (ApiResponse<?>) ApiResponse.error("INTERNAL_ERROR",
-                    "Failed to submit lore entry: " + unwrapMessage(e));
+                    "An unexpected error occurred.");
             }
         });
     }
