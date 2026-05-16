@@ -337,7 +337,11 @@ public class LoreEntryRepository implements ILoreEntryRepository {
                 return entries;
             }
 
-            String searchPattern = "%" + keyword.trim() + "%";
+            String escaped = keyword.trim()
+                .replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
+            String searchPattern = "%" + escaped + "%";
 
             // FIXED bug-03: Added DISTINCT to prevent duplicate entries
             String sql = "SELECT DISTINCT e.id, e.entry_type, e.name, s.content, s.submitter_uuid, " +
@@ -345,7 +349,7 @@ public class LoreEntryRepository implements ILoreEntryRepository {
                          "FROM " + t("lore_entry") + " e " +
                          "JOIN " + t("lore_submission") + " s ON e.id = s.entry_id " +
                          "WHERE s.is_current_version = TRUE AND s.status != 'ARCHIVED' " +
-                         "AND (e.name LIKE ? OR s.content LIKE ?)";
+                         "AND (e.name LIKE ? ESCAPE '\\' OR s.content LIKE ? ESCAPE '\\')";
 
             try (Connection conn = dbConnection.getConnection();
                  PreparedStatement stmt = conn.prepareStatement(sql)) {

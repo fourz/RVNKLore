@@ -11,6 +11,7 @@ import org.fourz.RVNKLore.handler.LoreHandler;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreManager;
 import org.fourz.RVNKLore.lore.LoreType;
+import org.fourz.RVNKLore.command.LoreCommandUtil;
 
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
@@ -135,7 +136,12 @@ public class DiagnosticUtil {
                 }
             }
         } catch (Exception e) {
-            sender.sendMessage(prefix + "Database: ERROR - " + e.getMessage());
+            logger.error("Database diagnostics check failed", e);
+            if (LoreCommandUtil.isAdmin(sender)) {
+                sender.sendMessage(prefix + "Database: ERROR - " + e.getMessage());
+            } else {
+                sender.sendMessage(prefix + "Database: ERROR (check server logs)");
+            }
         }
     }
 
@@ -216,7 +222,12 @@ public class DiagnosticUtil {
                     }
                 }
             } catch (Exception e) {
-                sender.sendMessage(prefix + "  Could not verify service registration: " + e.getMessage());
+                logger.error("ServiceRegistry verification failed", e);
+                if (LoreCommandUtil.isAdmin(sender)) {
+                    sender.sendMessage(prefix + "  Could not verify service registration: " + e.getMessage());
+                } else {
+                    sender.sendMessage(prefix + "  Could not verify service registration (check server logs)");
+                }
             }
 
             sender.sendMessage(prefix + "ServiceRegistry: " + registeredServices + "/" + totalServices + " services registered");
@@ -247,8 +258,11 @@ public class DiagnosticUtil {
             }
         } catch (Exception e) {
             // LoreManager not available
-            if (verbose) {
+            logger.error("Fallback mode check failed", e);
+            if (LoreCommandUtil.isAdmin(sender) && verbose) {
                 sender.sendMessage(prefix + "Fallback Mode: Unable to determine - " + e.getMessage());
+            } else if (verbose) {
+                sender.sendMessage(prefix + "Fallback Mode: Unable to determine (check server logs)");
             }
         }
     }
@@ -273,7 +287,12 @@ public class DiagnosticUtil {
                 }
             }
         } catch (Exception e) {
-            sender.sendMessage(prefix + "Lore Stats: ERROR - " + e.getMessage());
+            logger.error("Lore stats check failed", e);
+            if (LoreCommandUtil.isAdmin(sender)) {
+                sender.sendMessage(prefix + "Lore Stats: ERROR - " + e.getMessage());
+            } else {
+                sender.sendMessage(prefix + "Lore Stats: ERROR (check server logs)");
+            }
         }
     }
 

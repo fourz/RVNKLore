@@ -204,8 +204,29 @@ public class LoreApiEndpointImpl implements ILoreApiService {
                 entry.setSubmittedBy(request.getSubmittedBy() != null ? request.getSubmittedBy() : "web");
 
                 if (request.getMetadata() != null) {
+                    if (request.getMetadata().size() > 20) {
+                        return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", "Metadata exceeds maximum of 20 keys");
+                    }
+
+                    String[] denylist = {"validation_errors", "material", "is_obtainable", "collection"};
                     for (Map.Entry<String, String> meta : request.getMetadata().entrySet()) {
-                        entry.addMetadata(meta.getKey(), meta.getValue());
+                        String key = meta.getKey();
+                        String value = meta.getValue();
+
+                        if (key == null || key.length() > 64) {
+                            return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", "Metadata key exceeds maximum length of 64 characters");
+                        }
+                        if (value == null || value.length() > 512) {
+                            return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", "Metadata value exceeds maximum length of 512 characters");
+                        }
+
+                        for (String denied : denylist) {
+                            if (key.equals(denied)) {
+                                return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", "Metadata key '" + key + "' is reserved");
+                            }
+                        }
+
+                        entry.addMetadata(key, value);
                     }
                 }
 
