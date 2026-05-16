@@ -110,11 +110,16 @@ public class PermissionRewardHandler implements RewardHandler {
 
     private boolean grantViaCommand(Player player, String permission) {
         // Fallback: use console command
-        String command = "lp user " + player.getName() + " permission set " + permission + " true";
+        String name = player.getName();
+        if (!name.matches("[a-zA-Z0-9_]{3,16}")) {
+            logger.error("Refusing permission grant: invalid IGN format: " + name);
+            return false;
+        }
+        String command = "lp user " + name + " permission set " + permission + " true";
         plugin.getServer().getScheduler().runTask(plugin, () -> {
             Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command);
         });
-        logger.debug("Granted permission via command to " + player.getName() + ": " + permission);
+        logger.debug("Granted permission via command to " + name + ": " + permission);
         return true;
     }
 
