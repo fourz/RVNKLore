@@ -11,8 +11,8 @@ import org.fourz.rvnkcore.util.log.LogManager;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.Random;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Rarity-weight RNG item roller backed by lore_item_rng_pool.
@@ -29,7 +29,6 @@ public class RngItemServiceImpl implements IRngItemService {
     private final DatabaseConnection dbConnection;
     private final DatabaseHelper dbHelper;
     private final ItemManager itemManager;
-    private final Random random = new Random();
     private boolean fallbackMode = false;
 
     public RngItemServiceImpl(RVNKLore plugin, DatabaseConnection dbConnection, ItemManager itemManager) {
@@ -48,7 +47,7 @@ public class RngItemServiceImpl implements IRngItemService {
             }
 
             int totalWeight = entries.stream().mapToInt(e -> e.weight).sum();
-            int draw = random.nextInt(totalWeight);
+            int draw = ThreadLocalRandom.current().nextInt(totalWeight);
             int cursor = 0;
             int chosenId = -1;
             for (PoolEntry e : entries) {
@@ -88,11 +87,11 @@ public class RngItemServiceImpl implements IRngItemService {
 
             if (rarityTier != null && !rarityTier.isEmpty()) {
                 sql = "SELECT lore_item_id, weight FROM " + table +
-                      " WHERE pool_id = ? AND rarity_tier = ? AND is_active = TRUE ORDER BY weight DESC";
+                      " WHERE pool_id = ? AND rarity_tier = ? AND is_active = 1 ORDER BY weight DESC";
                 params = new Object[]{poolId, rarityTier.toUpperCase()};
             } else {
                 sql = "SELECT lore_item_id, weight FROM " + table +
-                      " WHERE pool_id = ? AND is_active = TRUE ORDER BY weight DESC";
+                      " WHERE pool_id = ? AND is_active = 1 ORDER BY weight DESC";
                 params = new Object[]{poolId};
             }
 
