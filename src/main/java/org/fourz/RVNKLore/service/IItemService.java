@@ -74,6 +74,15 @@ public interface IItemService {
     CompletableFuture<Void> refreshCache();
 
     /**
+     * Get all preset items bound to a quest.
+     * Delegates to IItemRepository.getPresetsForQuest().
+     *
+     * @param questId The quest ID to look up
+     * @return Future containing ItemProperties list, empty if none or RVNKLore unavailable
+     */
+    CompletableFuture<List<ItemProperties>> getPresetsForQuest(String questId);
+
+    /**
      * Check if the service is in fallback mode due to errors.
      *
      * @return true if operating in degraded mode

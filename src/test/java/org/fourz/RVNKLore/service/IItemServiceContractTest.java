@@ -63,6 +63,11 @@ class IItemServiceContractTest {
         }
 
         @Override
+        public CompletableFuture<List<ItemProperties>> getPresetsForQuest(String questId) {
+            return CompletableFuture.completedFuture(java.util.Collections.emptyList());
+        }
+
+        @Override
         public boolean isInFallbackMode() {
             return fallbackMode;
         }

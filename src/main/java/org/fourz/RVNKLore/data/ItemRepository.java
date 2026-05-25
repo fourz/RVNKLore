@@ -291,6 +291,32 @@ public class ItemRepository implements IItemRepository {
         });
     }
 
+    @Override
+    public CompletableFuture<List<ItemProperties>> getPresetsForQuest(String questId) {
+        return CompletableFuture.supplyAsync(() -> {
+            String sql = "SELECT li.* FROM " + t("lore_item") + " li " +
+                         "JOIN " + t("quest_item_presets") + " qip ON li.id = qip.lore_item_id " +
+                         "WHERE qip.quest_id = ?";
+            try {
+                return dbHelper.executeQuery(sql,
+                    stmt -> stmt.setString(1, questId),
+                    rs -> {
+                        List<ItemProperties> items = new ArrayList<>();
+                        while (rs.next()) {
+                            ItemProperties item = resultSetToItemProperties(rs);
+                            if (item != null) {
+                                items.add(item);
+                            }
+                        }
+                        return items;
+                    });
+            } catch (LoreException e) {
+                logger.error("Failed to get preset items for quest: " + questId, e);
+                return new ArrayList<>();
+            }
+        });
+    }
+
     /**
      * Insert a new item into the database.
      * Uses dialect-aware generated key retrieval for MySQL/SQLite compatibility.

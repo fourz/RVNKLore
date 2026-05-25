@@ -115,6 +115,14 @@ public interface IItemRepository {
      */
     CompletableFuture<List<Integer>> getAllItemIdsByName(String name);
 
+    /**
+     * Get all preset items bound to a quest.
+     *
+     * @param questId The quest ID to look up
+     * @return Future containing all ItemProperties linked to this quest via quest_item_presets
+     */
+    CompletableFuture<List<ItemProperties>> getPresetsForQuest(String questId);
+
     // ==================== Collection Operations ====================
 
     /**

@@ -41,6 +41,7 @@ public abstract class DatabaseConnection {
     public static final String TABLE_PLAYER_ACHIEVEMENT = "player_achievement";
     public static final String TABLE_PLAYER_REWARD_CLAIM = "player_reward_claim";
     public static final String TABLE_LORE_MAP = "lore_map";
+    public static final String TABLE_QUEST_ITEM_PRESETS = "quest_item_presets";
 
     public DatabaseConnection(RVNKLore plugin, SQLDialect dialect) {
         this.plugin = plugin;
@@ -277,6 +278,21 @@ public abstract class DatabaseConnection {
             stmt.execute(createLoreMapTable);
             createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "lore_map_entry ON " + loreMap + "(lore_entry_id)");
             createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "lore_map_subtype ON " + loreMap + "(map_subtype)");
+
+            // --- Quest Item Presets Table (quest_id → lore_item binding for ITEM rewards) ---
+            String questItemPresets = table(TABLE_QUEST_ITEM_PRESETS);
+            String createQuestItemPresetsTable = "CREATE TABLE IF NOT EXISTS " + questItemPresets + " (" +
+                "id " + autoIncPK + ", " +
+                "quest_id VARCHAR(100) NOT NULL, " +
+                "lore_item_id INT NOT NULL, " +
+                "label VARCHAR(100), " +
+                "notes TEXT, " +
+                "created_at " + timestampDefault + ", " +
+                "CONSTRAINT uq_" + tablePrefix + "quest_item_preset UNIQUE (quest_id, lore_item_id), " +
+                "FOREIGN KEY (lore_item_id) REFERENCES " + loreItem + "(id) ON DELETE CASCADE" +
+            ")";
+            stmt.execute(createQuestItemPresetsTable);
+            createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "quest_item_presets_quest ON " + questItemPresets + "(quest_id)");
 
             runMigrations(stmt);
             logger.debug("Database tables created/verified");

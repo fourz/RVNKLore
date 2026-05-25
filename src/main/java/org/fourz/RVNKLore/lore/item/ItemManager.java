@@ -610,6 +610,18 @@ public class ItemManager implements IItemService {
 
     /**
      * {@inheritDoc}
+     * Delegates to ItemRepository.getPresetsForQuest().
+     */
+    @Override
+    public CompletableFuture<List<ItemProperties>> getPresetsForQuest(String questId) {
+        if (itemRepository == null) {
+            return CompletableFuture.completedFuture(new ArrayList<>());
+        }
+        return itemRepository.getPresetsForQuest(questId);
+    }
+
+    /**
+     * {@inheritDoc}
      */
     @Override
     public boolean isInFallbackMode() {
