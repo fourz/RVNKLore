@@ -107,6 +107,10 @@ class QuestItemPresetContractTest {
                 return CompletableFuture.completedFuture(false);
             }
             @Override
+            public CompletableFuture<java.util.Optional<org.bukkit.inventory.ItemStack>> createLoreItem(int itemId) {
+                return CompletableFuture.completedFuture(java.util.Optional.empty());
+            }
+            @Override
             public CompletableFuture<List<String>> getAllItemNames() {
                 return CompletableFuture.completedFuture(List.of());
             }

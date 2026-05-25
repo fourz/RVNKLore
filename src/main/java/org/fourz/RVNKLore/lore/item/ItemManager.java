@@ -610,6 +610,18 @@ public class ItemManager implements IItemService {
 
     /**
      * {@inheritDoc}
+     */
+    @Override
+    public CompletableFuture<Optional<org.bukkit.inventory.ItemStack>> createLoreItem(int itemId) {
+        if (itemRepository == null) {
+            return CompletableFuture.completedFuture(Optional.empty());
+        }
+        return itemRepository.getItemById(itemId).thenApply(optProps ->
+            optProps.map(props -> createLoreItemInternal(props.getItemType(), props.getDisplayName(), props)));
+    }
+
+    /**
+     * {@inheritDoc}
      * Delegates to ItemRepository.getPresetsForQuest().
      */
     @Override

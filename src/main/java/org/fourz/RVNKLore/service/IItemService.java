@@ -74,6 +74,14 @@ public interface IItemService {
     CompletableFuture<Void> refreshCache();
 
     /**
+     * Create a lore item by its database ID.
+     *
+     * @param itemId The database ID of the item to create
+     * @return Future containing the created ItemStack, or empty if not found
+     */
+    CompletableFuture<Optional<ItemStack>> createLoreItem(int itemId);
+
+    /**
      * Get all preset items bound to a quest.
      * Delegates to IItemRepository.getPresetsForQuest().
      *

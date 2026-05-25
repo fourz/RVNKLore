@@ -26,6 +26,7 @@ public class LoreItemSubCommand implements SubCommand {
         
         // Register child commands with correct constructor
         subCommands.put("give", new LoreItemGiveSubCommand(plugin, plugin.getLoreManager().getItemManager()));
+        subCommands.put("spawn", new LoreItemSpawnSubCommand(plugin, plugin.getLoreManager().getItemManager()));
         subCommands.put("info", new LoreItemInfoSubCommand(plugin, plugin.getLoreManager().getItemManager()));
         subCommands.put("list", new LoreItemListSubCommand(plugin));
         subCommands.put("tag", new LoreItemTagSubCommand(plugin));
