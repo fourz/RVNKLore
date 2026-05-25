@@ -48,6 +48,7 @@ public class RVNKLore extends JavaPlugin {
     private HandlerFactory handlerFactory;
     private UtilityManager utilityManager;
     private ItemManager itemManager;
+    private org.fourz.RVNKLore.lore.item.RngItemServiceImpl rngItemService;
     private PlayerManager playerManager;
     private PlayerLookup playerLookup;
     private SubmissionManager submissionManager;
@@ -169,6 +170,10 @@ public class RVNKLore extends JavaPlugin {
 
         // Initialize ItemManager through LoreManager
         this.itemManager = loreManager.getItemManager();
+
+        // Initialize RNG item service (requires itemManager + active DB connection)
+        this.rngItemService = new org.fourz.RVNKLore.lore.item.RngItemServiceImpl(
+            this, databaseManager.getDatabaseConnection(), itemManager);
 
         // Initialize SubmissionManager for lore submission workflow
         this.submissionManager = new SubmissionManager(this);
@@ -898,6 +903,11 @@ public class RVNKLore extends JavaPlugin {
             }
             if (loreBookManager != null) {
                 registerMethod.invoke(serviceRegistry, ILoreBookService.class, loreBookManager);
+                serviceCount++;
+            }
+            if (rngItemService != null) {
+                registerMethod.invoke(serviceRegistry,
+                    org.fourz.RVNKLore.service.IRngItemService.class, rngItemService);
                 serviceCount++;
             }
 

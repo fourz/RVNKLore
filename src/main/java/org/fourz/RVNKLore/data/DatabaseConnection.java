@@ -42,6 +42,7 @@ public abstract class DatabaseConnection {
     public static final String TABLE_PLAYER_REWARD_CLAIM = "player_reward_claim";
     public static final String TABLE_LORE_MAP = "lore_map";
     public static final String TABLE_QUEST_ITEM_PRESETS = "quest_item_presets";
+    public static final String TABLE_LORE_ITEM_RNG_POOL = "lore_item_rng_pool";
 
     public DatabaseConnection(RVNKLore plugin, SQLDialect dialect) {
         this.plugin = plugin;
@@ -293,6 +294,23 @@ public abstract class DatabaseConnection {
             ")";
             stmt.execute(createQuestItemPresetsTable);
             createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "quest_item_presets_quest ON " + questItemPresets + "(quest_id)");
+
+            // --- Lore Item RNG Pool Table (rarity-weighted item pools for RNG_ITEM rewards) ---
+            String rngPool = table(TABLE_LORE_ITEM_RNG_POOL);
+            String createRngPoolTable = "CREATE TABLE IF NOT EXISTS " + rngPool + " (" +
+                "id " + autoIncPK + ", " +
+                "pool_id VARCHAR(100) NOT NULL, " +
+                "lore_item_id INT NOT NULL, " +
+                "rarity_tier VARCHAR(20) NOT NULL DEFAULT 'COMMON', " +
+                "weight INT NOT NULL DEFAULT 100, " +
+                "is_active " + boolType + " NOT NULL DEFAULT TRUE, " +
+                "created_at " + timestampDefault + ", " +
+                "CONSTRAINT uq_" + tablePrefix + "rng_pool_item UNIQUE (pool_id, lore_item_id), " +
+                "FOREIGN KEY (lore_item_id) REFERENCES " + loreItem + "(id) ON DELETE CASCADE" +
+            ")";
+            stmt.execute(createRngPoolTable);
+            createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "rng_pool_id ON " + rngPool + "(pool_id)");
+            createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "rng_pool_tier ON " + rngPool + "(pool_id, rarity_tier)");
 
             runMigrations(stmt);
             logger.debug("Database tables created/verified");
