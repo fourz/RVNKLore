@@ -1,7 +1,5 @@
 package org.fourz.RVNKLore.integration.votingplugin;
 
-import com.bencodez.votingplugin.VotingPluginHooks;
-import com.bencodez.votingplugin.user.VotingPluginUser;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -10,18 +8,20 @@ import org.bukkit.event.server.PluginDisableEvent;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.rvnkcore.util.log.LogManager;
 
-import java.util.Optional;
+import java.lang.reflect.Method;
 import java.util.UUID;
 
 /**
  * Manages VotingPlugin API lifecycle for vote reward integration.
- * Listens for VotingPlugin enable/disable events to safely initialize/cleanup.
+ * Uses reflection to avoid a compile-time dependency on the VotingPlugin jar.
+ * VotingPlugin is a soft dependency — this integration is silently disabled if absent.
  */
 public class VotingPluginIntegration implements Listener {
 
     private final RVNKLore plugin;
     private final LogManager logger;
-    private VotingPluginHooks hooks;
+    private Object hooks;          // VotingPluginHooks instance (reflective)
+    private Object userManager;    // hooks.getUserManager() result (reflective)
     private boolean enabled = false;
 
     public VotingPluginIntegration(RVNKLore plugin) {
@@ -30,8 +30,7 @@ public class VotingPluginIntegration implements Listener {
     }
 
     /**
-     * Attempt to activate VotingPlugin integration.
-     * Called during plugin enable or when VotingPlugin is detected.
+     * Attempt to activate VotingPlugin integration via reflection.
      *
      * @return true if integration was activated successfully
      */
@@ -42,15 +41,23 @@ public class VotingPluginIntegration implements Listener {
         }
 
         try {
-            hooks = VotingPluginHooks.getInstance();
+            Class<?> hooksClass = Class.forName("com.bencodez.votingplugin.VotingPluginHooks");
+            Method getInstance = hooksClass.getMethod("getInstance");
+            hooks = getInstance.invoke(null);
             if (hooks == null) {
                 logger.warning("VotingPluginHooks instance is null");
                 return false;
             }
 
+            Method getUserManagerMethod = hooksClass.getMethod("getUserManager");
+            userManager = getUserManagerMethod.invoke(hooks);
+
             enabled = true;
             logger.debug("VotingPlugin integration activated");
             return true;
+        } catch (ClassNotFoundException e) {
+            logger.debug("VotingPlugin classes not on classpath — integration disabled");
+            return false;
         } catch (Exception e) {
             logger.warning("Failed to initialize VotingPlugin integration: " + e.getMessage());
             cleanup();
@@ -74,52 +81,80 @@ public class VotingPluginIntegration implements Listener {
         }
     }
 
-    /**
-     * Get a VotingPluginUser wrapper for the given player.
-     *
-     * @param player The player to look up
-     * @return Optional containing the VotingPluginUser, or empty if unavailable
-     */
-    public Optional<VotingPluginUser> getUser(Player player) {
-        if (!enabled || hooks == null) {
-            return Optional.empty();
-        }
+    private Object getUser(Player player) {
+        if (!enabled || userManager == null) return null;
         try {
-            return Optional.ofNullable(hooks.getUserManager().getVotingPluginUser(player));
+            Method getUser = userManager.getClass().getMethod("getVotingPluginUser", Player.class);
+            return getUser.invoke(userManager, player);
         } catch (Exception e) {
             logger.debug("Failed to get VotingPluginUser for " + player.getName() + ": " + e.getMessage());
-            return Optional.empty();
+            return null;
+        }
+    }
+
+    private Object getUser(UUID uuid) {
+        if (!enabled || userManager == null) return null;
+        try {
+            Method getUser = userManager.getClass().getMethod("getVotingPluginUser", UUID.class);
+            return getUser.invoke(userManager, uuid);
+        } catch (Exception e) {
+            logger.debug("Failed to get VotingPluginUser for " + uuid + ": " + e.getMessage());
+            return null;
         }
     }
 
     /**
-     * Get a VotingPluginUser wrapper for the given UUID.
+     * Get the vote points for a player.
      *
-     * @param uuid The player UUID to look up
-     * @return Optional containing the VotingPluginUser, or empty if unavailable
+     * @return The player's vote points, or 0 if unavailable
      */
-    public Optional<VotingPluginUser> getUser(UUID uuid) {
-        if (!enabled || hooks == null) {
-            return Optional.empty();
-        }
+    public int getVotePoints(Player player) {
+        Object user = getUser(player);
+        if (user == null) return 0;
         try {
-            return Optional.ofNullable(hooks.getUserManager().getVotingPluginUser(uuid));
+            Method getPoints = user.getClass().getMethod("getPoints");
+            Object result = getPoints.invoke(user);
+            return result instanceof Number ? ((Number) result).intValue() : 0;
         } catch (Exception e) {
-            logger.debug("Failed to get VotingPluginUser for " + uuid + ": " + e.getMessage());
-            return Optional.empty();
+            return 0;
+        }
+    }
+
+    /**
+     * Add vote points to a player.
+     */
+    public void addVotePoints(Player player, int points) {
+        Object user = getUser(player);
+        if (user == null) return;
+        try {
+            Method addPoints = user.getClass().getMethod("addPoints", int.class);
+            addPoints.invoke(user, points);
+        } catch (Exception e) {
+            logger.debug("Failed to add vote points for " + player.getName() + ": " + e.getMessage());
+        }
+    }
+
+    /**
+     * Remove vote points from a player.
+     */
+    public void removeVotePoints(Player player, int points) {
+        Object user = getUser(player);
+        if (user == null) return;
+        try {
+            Method removePoints = user.getClass().getMethod("removePoints", int.class);
+            removePoints.invoke(user, points);
+        } catch (Exception e) {
+            logger.debug("Failed to remove vote points for " + player.getName() + ": " + e.getMessage());
         }
     }
 
     public void cleanup() {
         hooks = null;
+        userManager = null;
         enabled = false;
     }
 
     public boolean isEnabled() {
         return enabled;
-    }
-
-    public VotingPluginHooks getHooks() {
-        return hooks;
     }
 }
