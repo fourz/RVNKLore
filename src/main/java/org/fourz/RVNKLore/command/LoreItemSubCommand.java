@@ -154,6 +154,6 @@ public class LoreItemSubCommand implements SubCommand {
 
     @Override
     public String getDescription() {
-        return "Manage lore items (give, info)";
+        return "Manage lore items (give, spawn, info, list, tag)";
     }
 }

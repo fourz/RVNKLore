@@ -567,21 +567,51 @@ public class LoreEntryRepository implements ILoreEntryRepository {
      * @throws SQLException If a database error occurs
      */
     private boolean insertLoreItem(String entryId, LoreEntry entry, Connection conn) throws SQLException {
-        // Require material metadata for lore items
         String material = entry.getMetadata("material");
         if (material == null || material.trim().isEmpty()) {
             logger.warning("Material is required for lore item entry: " + entry.getName());
             throw new SQLException("Material is required for lore item entry");
         }
-        String sql = "INSERT INTO " + t("lore_item") + " (lore_entry_id, name, material, item_type, rarity, is_obtainable, nbt_data) VALUES (?, ?, ?, ?, ?, ?, ?)";
+        String itemType = entry.getMetadata("item_type") != null ? entry.getMetadata("item_type") : "STANDARD";
+        String rarity = entry.getMetadata("rarity") != null ? entry.getMetadata("rarity") : "COMMON";
+        boolean obtainable = entry.getMetadata("is_obtainable") == null || Boolean.parseBoolean(entry.getMetadata("is_obtainable"));
+        String nbtData = entry.getNbtData();
+
+        // Upsert: update if a row already exists for this lore_entry_id (handles orphaned rows
+        // from prior incomplete transactions), otherwise insert fresh.
+        String checkSql = "SELECT COUNT(*) FROM " + t("lore_item") + " WHERE lore_entry_id = ?";
+        try (PreparedStatement check = conn.prepareStatement(checkSql)) {
+            check.setString(1, entryId);
+            try (ResultSet rs = check.executeQuery()) {
+                if (rs.next() && rs.getInt(1) > 0) {
+                    logger.debug("lore_item row exists for entry " + entryId + " — updating instead of inserting");
+                    String updateSql = "UPDATE " + t("lore_item") +
+                        " SET name = ?, material = ?, item_type = ?, rarity = ?, is_obtainable = ?, nbt_data = ?" +
+                        " WHERE lore_entry_id = ?";
+                    try (PreparedStatement stmt = conn.prepareStatement(updateSql)) {
+                        stmt.setString(1, entry.getName());
+                        stmt.setString(2, material);
+                        stmt.setString(3, itemType);
+                        stmt.setString(4, rarity);
+                        stmt.setBoolean(5, obtainable);
+                        stmt.setString(6, nbtData);
+                        stmt.setString(7, entryId);
+                        return stmt.executeUpdate() > 0;
+                    }
+                }
+            }
+        }
+
+        String sql = "INSERT INTO " + t("lore_item") +
+            " (lore_entry_id, name, material, item_type, rarity, is_obtainable, nbt_data) VALUES (?, ?, ?, ?, ?, ?, ?)";
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, entryId);
             stmt.setString(2, entry.getName());
             stmt.setString(3, material);
-            stmt.setString(4, entry.getMetadata("item_type") != null ? entry.getMetadata("item_type") : "STANDARD");
-            stmt.setString(5, entry.getMetadata("rarity") != null ? entry.getMetadata("rarity") : "COMMON");
-            stmt.setBoolean(6, entry.getMetadata("is_obtainable") != null ? Boolean.parseBoolean(entry.getMetadata("is_obtainable")) : true);
-            stmt.setString(7, entry.getNbtData());
+            stmt.setString(4, itemType);
+            stmt.setString(5, rarity);
+            stmt.setBoolean(6, obtainable);
+            stmt.setString(7, nbtData);
             return stmt.executeUpdate() > 0;
         }
     }
