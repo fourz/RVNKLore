@@ -1294,6 +1294,16 @@ public class ItemRepository implements IItemRepository {
                 // Column might not exist in older schema, ignore
             }
 
+            // Set creation timestamp if present
+            try {
+                java.sql.Timestamp createdAt = rs.getTimestamp("created_at");
+                if (createdAt != null) {
+                    props.setCreatedAt(createdAt.getTime());
+                }
+            } catch (SQLException e) {
+                // Column might not exist in older schema, ignore
+            }
+
             // Process JSON properties
             String jsonData = rs.getString("item_properties");
             if (jsonData != null && !jsonData.isEmpty()) {

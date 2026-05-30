@@ -51,7 +51,7 @@ public class LoreItemPresetsSubCommand implements SubCommand {
                 for (ItemProperties props : presets) {
                     String rarity = props.getRarity() != null ? props.getRarity() : "?";
                     String material = props.getMaterial() != null ? props.getMaterial().name() : "?";
-                    sender.sendMessage(ChatColor.YELLOW + "• " + ChatColor.WHITE + props.getDisplayName()
+                    sender.sendMessage(ChatColor.YELLOW + "- " + ChatColor.WHITE + props.getDisplayName()
                             + ChatColor.GRAY + " [" + material + "] "
                             + ChatColor.AQUA + rarity
                             + ChatColor.DARK_GRAY + " (id=" + props.getDatabaseId() + ")");
