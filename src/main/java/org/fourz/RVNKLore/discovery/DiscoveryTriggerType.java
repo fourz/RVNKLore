@@ -68,5 +68,10 @@ public enum DiscoveryTriggerType {
      * Player creates or clones a map at a cartography table
      * covering a region with lore locations.
      */
-    CARTOGRAPHY
+    CARTOGRAPHY,
+
+    /**
+     * Player enters a GriefPrevention claim with associated lore.
+     */
+    CLAIM_ENTER
 }

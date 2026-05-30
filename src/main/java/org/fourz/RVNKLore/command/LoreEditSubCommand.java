@@ -4,9 +4,12 @@ import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.integration.griefprevention.GriefPreventionIntegration;
 import org.fourz.RVNKLore.lore.LoreEntry;
+import org.fourz.RVNKLore.lore.LoreType;
 import org.fourz.RVNKLore.search.LoreSearchService;
 import org.fourz.rvnkcore.util.log.LogManager;
+import me.ryanhamshire.GriefPrevention.Claim;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -90,6 +93,29 @@ public class LoreEditSubCommand implements SubCommand {
             return true;
         }
 
+        // Claim-based edit protection: if entry has claim_id and is a location type,
+        // verify player owns/manages the claim (skip for admins and console)
+        if (!LoreCommandUtil.isAdmin(sender) && sender instanceof Player) {
+            Player player = (Player) sender;
+            if (isLocationCapableType(entry.getType()) && entry.hasMetadata("claim_id")) {
+                GriefPreventionIntegration gp = plugin.getGriefPreventionIntegration();
+                if (gp != null && gp.isEnabled()) {
+                    try {
+                        long claimId = Long.parseLong(entry.getMetadata("claim_id"));
+                        java.util.Optional<Claim> claimOpt = gp.getClaimById(claimId);
+                        if (claimOpt.isPresent()) {
+                            if (!gp.ownsOrManagesClaim(player, claimOpt.get())) {
+                                player.sendMessage(ChatColor.RED + "✖ You don't have permission to edit this lore entry — you must own the associated GP claim.");
+                                return true;
+                            }
+                        }
+                    } catch (NumberFormatException e) {
+                        logger.debug("Invalid claim_id metadata for entry " + entry.getId() + ": " + entry.getMetadata("claim_id"));
+                    }
+                }
+            }
+        }
+
         // Apply edits to entry
         String oldName = entry.getName();
         if (newName != null) entry.setName(newName);
@@ -115,6 +141,17 @@ public class LoreEditSubCommand implements SubCommand {
         }
 
         return true;
+    }
+
+    /**
+     * Check if a lore type is location-capable (has GP claim association).
+     * Matches the types in the spec: CITY, LANDMARK, MONUMENT, FACTION, TAVERN, GUILD, SHRINE
+     */
+    private boolean isLocationCapableType(LoreType type) {
+        if (type == null) return false;
+        return type == LoreType.CITY || type == LoreType.LANDMARK || type == LoreType.MONUMENT ||
+               type == LoreType.FACTION || type == LoreType.TAVERN || type == LoreType.GUILD ||
+               type == LoreType.SHRINE;
     }
 
     /** Extract all value tokens following --flag until the next --flag (removes flag and all value tokens). */

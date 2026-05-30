@@ -23,6 +23,13 @@ import java.util.concurrent.CompletableFuture;
  * using the lore_entry, lore_submission, and specialized tables (e.g., lore_item).
  *
  * All methods return CompletableFuture<T> for async operations per RVNKCore standard.
+ *
+ * FIXED issue-899: UUID-based authorship
+ * The submitter_uuid column now stores UUID strings (e.g., "550e8400-e29b-41d4-a716-446655440000")
+ * instead of player names. This prevents lore attribution corruption when players rename.
+ * Legacy entries with player name strings in submitter_uuid will still load, but should not
+ * be created by new code. The submittedBy field in LoreEntry represents UUID strings, with
+ * "Server" reserved for system-generated entries.
  */
 public class LoreEntryRepository implements ILoreEntryRepository {
     @SuppressWarnings("unused")
@@ -641,6 +648,7 @@ public class LoreEntryRepository implements ILoreEntryRepository {
      * Insert the initial submission record for a lore entry
      *
      * FIXED bug-01: Added version parameter to create versioned slugs to avoid UNIQUE constraint violations
+     * FIXED issue-899: submitter_uuid now stores UUID strings, not player names
      *
      * @param entryId The parent lore entry ID
      * @param entry The lore entry
@@ -655,6 +663,7 @@ public class LoreEntryRepository implements ILoreEntryRepository {
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, entryId);
             // Defensive: use "Server" if submittedBy is null or empty
+            // submittedBy should be either a UUID string or "Server"
             String submitter = entry.getSubmittedBy();
             if (submitter == null || submitter.trim().isEmpty()) {
                 submitter = "Server";
@@ -715,6 +724,10 @@ public class LoreEntryRepository implements ILoreEntryRepository {
 
     /**
      * Convert a database result set to a LoreEntry object
+     *
+     * FIXED issue-899: submitter_uuid column now expected to contain UUID strings.
+     * Legacy entries may contain player names; these are preserved in the LoreEntry.submittedBy field
+     * but should not occur in new data.
      *
      * @param rs The result set containing lore entry data
      * @param conn The database connection
