@@ -44,7 +44,7 @@ public class LoreItemSpawnSubCommand implements SubCommand {
         }
 
         String playerName = args[args.length - 1];
-        String nameOrId = String.join(" ", java.util.Arrays.copyOfRange(args, 0, args.length - 1));
+        String nameOrId = stripQuotes(String.join(" ", java.util.Arrays.copyOfRange(args, 0, args.length - 1)));
 
         Player target = Bukkit.getPlayerExact(playerName);
         if (target == null) {
@@ -89,6 +89,13 @@ public class LoreItemSpawnSubCommand implements SubCommand {
         } catch (NumberFormatException e) {
             return false;
         }
+    }
+
+    private String stripQuotes(String value) {
+        if (value != null && value.length() > 2 && value.startsWith("\"") && value.endsWith("\"")) {
+            return value.substring(1, value.length() - 1);
+        }
+        return value;
     }
 
     @Override
