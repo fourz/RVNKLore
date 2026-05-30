@@ -620,6 +620,17 @@ public class ItemManager implements IItemService {
             optProps.map(props -> createLoreItemInternal(props.getItemType(), props.getDisplayName(), props)));
     }
 
+    public CompletableFuture<Optional<ItemProperties>> getItemPropertiesById(int itemId) {
+        if (itemRepository == null) {
+            logger.warning("getItemPropertiesById(" + itemId + "): itemRepository is null");
+            return CompletableFuture.completedFuture(Optional.empty());
+        }
+        return itemRepository.getItemById(itemId).thenApply(opt -> {
+            logger.debug("getItemPropertiesById(" + itemId + "): " + (opt.isPresent() ? opt.get().getDisplayName() : "empty"));
+            return opt;
+        });
+    }
+
     /**
      * {@inheritDoc}
      * Delegates to ItemRepository.getPresetsForQuest().

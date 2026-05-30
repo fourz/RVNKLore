@@ -61,8 +61,10 @@ public class LoreItemSpawnSubCommand implements SubCommand {
         // Detect numeric ID vs name
         if (isNumericId(nameOrId)) {
             int itemId = Integer.parseInt(nameOrId.trim());
-            itemManager.createLoreItem(itemId).thenAccept(opt -> {
-                Bukkit.getScheduler().runTask(plugin, () -> deliverResult(sender, opt, nameOrId, target));
+            itemManager.getItemPropertiesById(itemId).thenAccept(optProps -> {
+                String resolvedName = optProps.map(p -> p.getDisplayName()).orElse(nameOrId);
+                itemManager.createLoreItem(itemId).thenAccept(opt ->
+                    Bukkit.getScheduler().runTask(plugin, () -> deliverResult(sender, opt, resolvedName, target)));
             });
         } else {
             itemManager.createLoreItem(nameOrId).thenAccept(opt -> {
@@ -73,13 +75,13 @@ public class LoreItemSpawnSubCommand implements SubCommand {
         return true;
     }
 
-    private void deliverResult(CommandSender sender, Optional<ItemStack> opt, String key, Player target) {
+    private void deliverResult(CommandSender sender, Optional<ItemStack> opt, String resolvedName, Player target) {
         if (opt.isEmpty()) {
-            sender.sendMessage(ChatColor.RED + "✖ Item not found: " + key);
+            sender.sendMessage(ChatColor.RED + "✖ Item not found: " + resolvedName);
             return;
         }
         target.getInventory().addItem(opt.get());
-        sender.sendMessage(ChatColor.GREEN + "✓ Spawned '" + key + "' for " + target.getName());
+        sender.sendMessage(ChatColor.GREEN + "✓ Spawned '" + resolvedName + "' for " + target.getName());
     }
 
     private boolean isNumericId(String value) {
