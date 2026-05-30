@@ -1,3 +1,5 @@
+> **HISTORICAL DOCUMENT** — Planning artifact or implementation summary. Not maintained. May not reflect current code.
+
 # RVNKLore Refactor Guide: Unified `/lore give` Command
 
 This guide provides a step-by-step approach to refactoring the RVNKLore plugin to support a unified `/lore give` command for all item types—including cosmetics and collection items—without requiring additional cosmetic-specific data. Cosmetic and collection-specific management will be moved to dedicated commands (e.g., `/lore collection`).

@@ -1,3 +1,5 @@
+> **HISTORICAL DOCUMENT** — Planning artifact or implementation summary. Not maintained. May not reflect current code.
+
 # RVNKLore Database Architecture Refactor - Step-by-Step Plan
 
 > **Canonical Location**: This document has been moved to the central documentation hub.

@@ -352,8 +352,11 @@ components:
         - PATH
         - QUEST
         - ENCHANTMENT
-        - SPECIAL_ENTITY
         - GENERIC
+        - MONUMENT
+        - TAVERN
+        - GUILD
+        - SHRINE
       example: LANDMARK
 
     # ─── Entry Schemas ──────────────────────────────────────────────────────────
@@ -376,11 +379,47 @@ components:
           $ref: '#/components/schemas/LoreType'
         submittedBy:
           type: string
-          description: Player name or "web" for API submissions
+          description: Raw value stored at submission time — UUID string for in-game submissions, "web" for API submissions. Use submitterName for display.
+          example: "069a79f4-44e9-4726-a5be-fca90e38aaf5"
+        submitterUuid:
+          type: string
+          format: uuid
+          nullable: true
+          description: Resolved UUID of the submitter (null if not a valid UUID, e.g. "web")
+          example: "069a79f4-44e9-4726-a5be-fca90e38aaf5"
+        submitterName:
+          type: string
+          description: Resolved display name of the submitter (from Bukkit OfflinePlayer lookup, or raw submittedBy if not a UUID)
           example: "Notch"
+        approvalStatus:
+          type: string
+          description: Approval workflow state
+          enum: [PENDING, APPROVED, REJECTED]
+          example: APPROVED
         approved:
           type: boolean
+          description: Convenience flag — true when approvalStatus is APPROVED
           example: true
+        location:
+          type: object
+          nullable: true
+          description: Primary spatial location for this entry (null if not location-capable type)
+          properties:
+            world:
+              type: string
+              example: "world"
+            x:
+              type: number
+              format: double
+              example: 1024.0
+            y:
+              type: number
+              format: double
+              example: 64.0
+            z:
+              type: number
+              format: double
+              example: -512.0
         createdAt:
           type: string
           format: date-time
@@ -396,7 +435,6 @@ components:
             type: string
           description: Arbitrary key-value metadata
           example:
-            location: "1024, 64, -512"
             region: "Northern Wastes"
 
     PagedLoreResponse:
@@ -436,8 +474,8 @@ components:
           $ref: '#/components/schemas/LoreType'
         submittedBy:
           type: string
-          description: Player name or identifier (defaults to "web" if omitted)
-          example: "PlayerName"
+          description: Player UUID string or "web" for API submissions. Stored as-is; resolved to a display name in responses via submitterName.
+          example: "069a79f4-44e9-4726-a5be-fca90e38aaf5"
         metadata:
           type: object
           additionalProperties:

@@ -1,3 +1,5 @@
+> **HISTORICAL DOCUMENT** — Planning artifact or implementation summary. Not maintained. May not reflect current code.
+
 ---
 title: RVNKLore Phase 8 Deployment & Integration Test Report
 date: 2026-02-14

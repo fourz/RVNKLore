@@ -1,3 +1,5 @@
+> **HISTORICAL DOCUMENT** — Planning artifact or implementation summary. Not maintained. May not reflect current code.
+
 # Implementation Summary: impl-07 - Service Interface Expansion (IPlayerService)
 
 **Task ID:** impl-07

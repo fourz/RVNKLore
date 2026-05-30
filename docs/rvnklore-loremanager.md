@@ -12,8 +12,8 @@ The `LoreManager` is the central registry and orchestrator for all lore content 
 ## Key Methods
 - `initializeLore()`: Initialize all lore systems
 - `getItemManager()`: Access the item manager
-- `getLoreEntryByName(String)`, `getLoreEntry(int)`: Lookup lore entries
-- `addLoreEntry(LoreEntry)`, `approveLoreEntry(int)`: Manage entries
+- `getLoreEntryByName(String)`, `getLoreEntry(UUID)`: Lookup lore entries
+- `addLoreEntry(LoreEntry)`, `approveLoreEntry(UUID)`: Manage entries
 - `cleanup()`: Resource management
 
 ## Recent Edits

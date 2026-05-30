@@ -1,3 +1,5 @@
+> **HISTORICAL DOCUMENT** — Planning artifact or implementation summary. Not maintained. May not reflect current code.
+
 # impl-12: Enhanced Debug Diagnostics Implementation Summary
 
 **Status**: ✅ Complete

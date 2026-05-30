@@ -80,17 +80,28 @@ storage:
 |------------|-------------|---------|
 | `rvnklore.use` | Basic lore viewing commands | true |
 | `rvnklore.browse` | Access to `/lore browse` GUI | true |
-| `rvnklore.command.add` | Add new lore entries | false |
-| `rvnklore.command.get` | View lore entries | true |
-| `rvnklore.command.list` | List lore entries | true |
-| `rvnklore.command.getitem` | Get lore items | op |
-| `rvnklore.command.collection` | View and claim collection progress | true |
+| `rvnklore.add` | Add new lore entries | false |
+| `rvnklore.get` | View lore entries | true |
+| `rvnklore.list` | List lore entries | true |
+| `rvnklore.search` | Search lore entries | true |
+| `rvnklore.discover` | Trigger lore discoveries | true |
+| `rvnklore.share` | Share lore entries with other players | true |
+| `rvnklore.prefs` | Manage personal lore preferences | true |
+| `rvnklore.getitem` | Get lore items | op |
+| `rvnklore.collection` | View and claim collection progress | true |
+| `rvnklore.book` | Access lore book commands | true |
+| `rvnklore.book.list` | List available lore books | true |
+| `rvnklore.book.give` | Give lore books to players | op |
+| `rvnklore.item.tag` | Tag lore items | op |
+| `rvnklore.discover.grant` | Grant discoveries to players | op |
 
 ### Approval System
 
 | Permission | Description | Default |
 |------------|-------------|---------|
-| `rvnklore.command.approve` | Approve pending lore entries | op |
+| `rvnklore.admin` | Full admin access (approve, reject, delete, seed, etc.) | op |
+| `rvnklore.command.edit` | Edit existing lore entries | op |
+| `rvnklore.command.reject` | Reject pending lore submissions | op |
 | `rvnklore.approve.own` | Auto-approve own submissions | op |
 
 ### Advanced Permissions
@@ -251,25 +262,31 @@ Achievements track player engagement with lore content.
 
 RVNKLore uses a comprehensive relational database with the following core tables:
 
-**Core Entities:**
-- `lore_entries` - Main lore entry storage
-- `lore_items` - Custom items with properties and enchantments
-- `lore_locations` - Significant places with coordinates
-- `lore_characters` - NPCs, historical figures, player characters
-- `lore_quests` - Quest definitions and progression
-- `lore_events` - Historical events
-- `special_entities` - Named mobs and creatures
-- `server_happenings` - Server events and roleplay activities
+**Core Lore:**
+- `lore_entry` — Root entity; one row per piece of lore, typed by `entry_type`
+- `lore_submission` — Versioned content with approval workflow; one-to-many per entry
+- `lore_metadata` — Key-value pairs per entry (flexible attributes)
+- `lore_location` — Spatial coordinates (world, x, y, z); entries can have multiple locations
+- `lore_discovery` — Per-player discovery event log
+
+**Item System:**
+- `lore_item` — Custom Minecraft item definitions (one-to-one with `lore_entry`)
+- `lore_item_rng_pool` — Weighted RNG drop pools for item rewards
+- `quest_item_presets` — Quest-specific item preset associations (RVNKQuests integration)
 
 **Collection System:**
-- `collections` - Collection definitions
-- `seasonal_items` - Time-limited item availability
-- `item_values` - Economic tracking
+- `collection` — Collection definitions
+- `player_collection_progress` — Per-player completion tracking
+- `collection_reward` — Rewards attached to collections
+- `collection_item` — Junction table linking items to collections
+- `player_collection_items` — Per-player item discovery tracking within collections
 
-**Engagement:**
-- `player_achievements` - Player achievement records
-- `community_voting` - Player feedback on lore
-- `trading_records` - Item trading history
+**Player Tracking:**
+- `player_achievement` — Achievement progress and completion state per player
+- `player_reward_claim` — Per-player collection reward claim tracking
+
+> Full column definitions: see [database-schema.md](../database-schema.md).
+> All table names are prefixed at runtime via `storage.<type>.tablePrefix` in config.yml.
 
 ## Troubleshooting
 
@@ -370,24 +387,33 @@ See [README.md](../../README.md) for complete API examples.
 | Command | Permission | Description |
 |---------|------------|-------------|
 | `/lore` | `rvnklore.use` | Show available commands |
-| `/lore list [type]` | `rvnklore.command.list` | List lore entries |
-| `/lore get <name>` | `rvnklore.command.get` | View specific entry |
-| `/lore add <type> <name> <desc>` | `rvnklore.command.add` | Add new lore entry |
-| `/lore search <keyword>` | `rvnklore.command.list` | Search for lore |
-| `/lore approve <id>` | `rvnklore.command.approve` | Approve pending entry |
+| `/lore list [type]` | `rvnklore.list` | List lore entries |
+| `/lore get <name>` | `rvnklore.get` | View specific entry |
+| `/lore add <type> <name> <desc>` | `rvnklore.add` | Add new lore entry |
+| `/lore edit <id> <field> <value>` | `rvnklore.command.edit` | Edit lore entry field |
+| `/lore search <keyword>` | `rvnklore.search` | Search for lore |
+| `/lore approve <id>` | `rvnklore.admin` | Approve pending entry |
+| `/lore reject <id> [reason]` | `rvnklore.command.reject` | Reject pending submission |
+| `/lore delete <id>` | `rvnklore.admin.delete` | Delete a lore entry |
+| `/lore discover <player> <id>` | `rvnklore.discover.grant` | Grant discovery to player |
+| `/lore share <id> <player>` | `rvnklore.share` | Share an entry with a player |
 | `/lore export [type]` | `rvnklore.admin` | Export lore to JSON |
 | `/lore reload` | `rvnklore.admin` | Reload configuration |
 | `/lore debug` | `rvnklore.admin` | Access debug tools |
+| `/lore seed` | `rvnklore.admin.seed` | Seed/reset data |
 | `/lore browse [type]` | `rvnklore.browse` | Open GUI browser |
-| `/lore collection list` | `rvnklore.command.collection` | List collections |
-| `/lore collection view <id>` | `rvnklore.command.collection` | View collection details |
-| `/lore collection claim <id>` | `rvnklore.command.collection` | Claim rewards |
-| `/lore collection add <id> <name> <desc>` | `rvnklore.admin` | Create collection |
+| `/lore prefs` | `rvnklore.prefs` | Manage preferences |
+| `/lore collection list` | `rvnklore.collection` | List collections |
+| `/lore collection view <id>` | `rvnklore.collection` | View collection details |
+| `/lore collection claim <id>` | `rvnklore.collection` | Claim rewards |
+| `/lore collection add <id> <name> <desc>` | `rvnklore.admin.collection.add` | Create collection |
 | `/lore item give <player> <item>` | `rvnklore.admin.item.give` | Give item to player |
+| `/lore item spawn <item>` | `rvnklore.admin.item.give` | Spawn item at your location |
 | `/lore item info <uuid>` | `rvnklore.admin` | View item details |
 | `/lore item list [page]` | `rvnklore.admin` | List all items |
-| `/lore book give <player> <entry_id> [rarity]` | `rvnklore.admin` | Give lore book |
-| `/lore book list [page] [type]` | `rvnklore.use` | List available books |
+| `/lore item tag <uuid> <tag>` | `rvnklore.item.tag` | Tag a lore item |
+| `/lore book give <player> <entry_id> [rarity]` | `rvnklore.book.give` | Give lore book |
+| `/lore book list [page] [type]` | `rvnklore.book.list` | List available books |
 | `/lore achievement list [page]` | `rvnklore.achievement` | List achievements |
 | `/lore achievement progress [player]` | `rvnklore.achievement` | View progress |
 | `/lore achievement grant <player> <id>` | `rvnklore.achievement.grant` | Grant achievement |
@@ -441,6 +467,6 @@ See [README.md](../../README.md) for complete API examples.
 
 ---
 
-**Version**: RVNKLore 1.0.0
-**Dependencies**: RVNKCore 1.3.0-alpha, Java 21+
-**Compatibility**: Minecraft 1.17+, Paper/Spigot
+**Version**: RVNKLore 1.0.40+
+**Dependencies**: RVNKCore 1.4.4-alpha, Java 21+
+**Compatibility**: Minecraft 1.21+, Paper/Spigot

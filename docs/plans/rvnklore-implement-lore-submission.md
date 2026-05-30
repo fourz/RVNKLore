@@ -1,3 +1,5 @@
+> **HISTORICAL DOCUMENT** — Planning artifact or implementation summary. Not maintained. May not reflect current code.
+
 # Plan: Implement `lore_submission` Table Integration in LoreManager
 
 ## Overview

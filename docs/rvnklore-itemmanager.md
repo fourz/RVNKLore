@@ -33,7 +33,7 @@ The `ItemManager` is the central orchestrator for all item-related functionality
 
 ## Example Usage
 ```java
-ItemManager itemManager = plugin.getItemManager();
+ItemManager itemManager = plugin.getLoreManager().getItemManager();
 ItemStack enchantedSword = itemManager.createLoreItem(ItemType.ENCHANTED, "Frost Edge", properties);
 List<String> allItems = itemManager.getAllItemNames();
 ```
