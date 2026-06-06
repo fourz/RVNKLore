@@ -197,6 +197,10 @@ public class RVNKLore extends JavaPlugin {
         // Register GUI listener for browse menus
         getServer().getPluginManager().registerEvents(new GuiListener(), this);
 
+        // Collection completion in-game notification (preference-gated via collection_completion type)
+        getServer().getPluginManager().registerEvents(
+                new org.fourz.RVNKLore.lore.item.collection.CollectionNotificationListener(this), this);
+
         // Remove direct CosmeticManager initialization (now handled by ItemManager)
         // cosmeticManager = new CosmeticManager(this);
         // cosmeticManager.initialize();
