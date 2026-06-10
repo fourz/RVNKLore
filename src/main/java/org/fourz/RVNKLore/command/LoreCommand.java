@@ -9,7 +9,7 @@ import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.rvnkcore.util.log.LogManager;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -20,7 +20,7 @@ import java.util.Map;
 public class LoreCommand implements CommandExecutor, TabCompleter {
     private final RVNKLore plugin;
     private final LogManager logger;
-    private final Map<String, SubCommand> subCommands = new HashMap<>();
+    private final Map<String, SubCommand> subCommands = new LinkedHashMap<>();
 
     public LoreCommand(RVNKLore plugin) {
         this.plugin = plugin;
@@ -33,64 +33,47 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
      */
     private void registerSubCommands() {
         logger.debug("Registering subcommands...");
-          // Register all subcommands at once to reduce debug log spam
-        Map<String, SubCommand> commands = new HashMap<>();
-        commands.put("add", new LoreAddSubCommand(plugin));
-        commands.put("get", new LoreGetSubCommand(plugin));
-        commands.put("list", new LoreListSubCommand(plugin));
-        commands.put("search", new LoreSearchSubCommand(plugin));
-        commands.put("approve", new LoreApproveSubCommand(plugin));
-        commands.put("delete", new LoreDeleteSubCommand(plugin));
-        commands.put("reload", new LoreReloadSubCommand(plugin));
-        commands.put("export", new LoreExportSubCommand(plugin));
-        commands.put("import", new LoreImportSubCommand(plugin));
-        commands.put("debug", new LoreDebugSubCommand(plugin));
+        // Ordered insertion: player-facing first, admin last
+        registerSubCommand("browse", new LoreBrowseSubCommand(plugin));
+        registerSubCommand("get", new LoreGetSubCommand(plugin));
+        registerSubCommand("search", new LoreSearchSubCommand(plugin));
+        registerSubCommand("list", new LoreListSubCommand(plugin));
+        registerSubCommand("add", new LoreAddSubCommand(plugin));
+        registerSubCommand("approve", new LoreApproveSubCommand(plugin));
+        registerSubCommand("reject", new LoreRejectSubCommand(plugin));
+        registerSubCommand("delete", new LoreDeleteSubCommand(plugin));
+        registerSubCommand("edit", new LoreEditSubCommand(plugin));
+        registerSubCommand("reload", new LoreReloadSubCommand(plugin));
+        registerSubCommand("export", new LoreExportSubCommand(plugin));
+        registerSubCommand("import", new LoreImportSubCommand(plugin));
+        registerSubCommand("debug", new LoreDebugSubCommand(plugin));
 
-        // Add cosmetic management commands using the new ItemManager-based API
-        //if (plugin.getItemManager() != null && plugin.getItemManager().getCosmeticManager() != null) {
-        if (plugin.getLoreManager().getItemManager() != null && plugin.getLoreManager().getItemManager().getCosmeticItem() != null) {
-            commands.put("collection", new LoreCollectionSubCommand(plugin));
-            // Register the /lore item parent subcommand and its children
-            commands.put("item", new LoreItemSubCommand(plugin));
-            // Remove /lore itemgive registration
-        }
-
-        // Register the /lore book command for lore book management
-        commands.put("book", new LoreBookSubCommand(plugin));
-
-        // Register the /lore achievement command for achievement management
-        if (plugin.getAchievementManager() != null) {
-            commands.put("achievement", new LoreAchievementSubCommand(plugin, plugin.getAchievementManager()));
-        }
-
-        // Register the /lore browse command for GUI browser
-        commands.put("browse", new LoreBrowseSubCommand(plugin));
-
-        // Register the /lore dynmap command for dynmap integration
-        // Always register — availability checked at execution time since Dynmap enables after RVNKLore
-        commands.put("dynmap", new LoreDynmapSubCommand(plugin));
-
-        // Register faction commands (GP territory integration)
-        commands.put("registerfaction", new LoreRegisterFactionSubCommand(plugin));
-        commands.put("faction", new org.fourz.RVNKLore.command.faction.LoreFactionSubCommand(plugin));
-
-        // Register the /lore discover command for manual discovery granting
         if (plugin.getDiscoveryManager() != null) {
-            commands.put("discover", new LoreDiscoverSubCommand(plugin));
+            registerSubCommand("discover", new LoreDiscoverSubCommand(plugin));
         }
 
-        // Register the /lore prefs command for player notification preferences (Phase 3)
-        commands.put("prefs", new LorePrefsSubCommand(plugin));
+        if (plugin.getAchievementManager() != null) {
+            registerSubCommand("achievement", new LoreAchievementSubCommand(plugin, plugin.getAchievementManager()));
+        }
 
-        // Register the /lore npc command for Citizens collection vendors (Phase 8)
-        // TODO: Implement Citizens integration in future phase
-        // if (plugin.getCitizensIntegration() != null && plugin.getCitizensIntegration().isEnabled()) {
-        //     commands.put("npc", new LoreNPCSubCommand(plugin));
-        // }
+        if (plugin.getConfigManager().isCollectionsEnabled()
+                && plugin.getLoreManager().getItemManager() != null
+                && plugin.getLoreManager().getItemManager().getCosmeticItem() != null) {
+            registerSubCommand("collection", new LoreCollectionSubCommand(plugin));
+            registerSubCommand("item", new LoreItemSubCommand(plugin));
+        } else if (!plugin.getConfigManager().isCollectionsEnabled()) {
+            logger.debug("Feature disabled: collections — /lore collection and /lore item not registered");
+        }
 
-        // Add all commands to the subCommands map
-        commands.forEach(this::registerSubCommand);
-        logger.debug("Registered " + commands.size() + " subcommands successfully");
+        registerSubCommand("book", new LoreBookSubCommand(plugin));
+        registerSubCommand("map", new LoreMapSubCommand(plugin));
+        registerSubCommand("share", new LoreShareSubCommand(plugin));
+        registerSubCommand("prefs", new LorePrefsSubCommand(plugin));
+        registerSubCommand("dynmap", new LoreDynmapSubCommand(plugin));
+        registerSubCommand("registerfaction", new LoreRegisterFactionSubCommand(plugin));
+        registerSubCommand("faction", new org.fourz.RVNKLore.command.faction.LoreFactionSubCommand(plugin));
+
+        logger.debug("Registered " + subCommands.size() + " subcommands successfully");
     }
 
     /**
@@ -133,7 +116,8 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
     }
 
     /**
-     * Shows help information to the sender
+     * Shows help information to the sender.
+     * Descriptions are sourced uniformly from each subcommand's {@link SubCommand#getDescription()}.
      *
      * @param sender Command sender to show help to
      */
@@ -141,37 +125,11 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage(ChatColor.GOLD + "===== RVNKLore Commands =====");
         for (Map.Entry<String, SubCommand> entry : subCommands.entrySet()) {
             if (entry.getValue().hasPermission(sender)) {
-                if ("collection".equals(entry.getKey())) {
-                    sender.sendMessage(ChatColor.YELLOW + "/lore collection <view|claim> <collection_id>" +
-                        ChatColor.WHITE + " - View or claim collection progress/rewards");
-                } else if ("book".equals(entry.getKey())) {
-                    sender.sendMessage(ChatColor.YELLOW + "/lore book <give|list> ..." +
-                        ChatColor.WHITE + " - Create and manage lore books");
-                } else if ("export".equals(entry.getKey())) {
-                    sender.sendMessage(ChatColor.YELLOW + "/lore export [json|yaml] [type]" +
-                        ChatColor.WHITE + " - Export lore entries to file");
-                } else if ("import".equals(entry.getKey())) {
-                    sender.sendMessage(ChatColor.YELLOW + "/lore import <file> [--preview]" +
-                        ChatColor.WHITE + " - Import lore entries from file");
-                } else if ("delete".equals(entry.getKey())) {
-                    sender.sendMessage(ChatColor.YELLOW + "/lore delete <name> [confirm]" +
-                        ChatColor.WHITE + " - Permanently delete a lore entry");
-                } else if ("dynmap".equals(entry.getKey())) {
-                    sender.sendMessage(ChatColor.YELLOW + "/lore dynmap <diff|import> [set]" +
-                        ChatColor.WHITE + " - Dynmap marker integration");
-                } else if ("registerfaction".equals(entry.getKey())) {
-                    sender.sendMessage(ChatColor.YELLOW + "/lore registerfaction <name> <member1> [member2...]" +
-                        ChatColor.WHITE + " - Register a faction at your claim");
-                } else if ("faction".equals(entry.getKey())) {
-                    sender.sendMessage(ChatColor.YELLOW + "/lore faction <addterritory|refresh> <name>" +
-                        ChatColor.WHITE + " - Manage faction territories");
-                } else {
-                    sender.sendMessage(ChatColor.YELLOW + "/lore " + entry.getKey() +
-                        ChatColor.WHITE + " - " + entry.getValue().getDescription());
-                }
+                sender.sendMessage(ChatColor.YELLOW + "/lore " + entry.getKey()
+                        + ChatColor.WHITE + " - " + entry.getValue().getDescription());
             }
         }
-        sender.sendMessage(ChatColor.GRAY + "\nSee /lore item give and /lore collection for item and collection management.");
+        sender.sendMessage(ChatColor.GRAY + "See /lore item and /lore collection for item and collection management.");
     }
 
     @Override

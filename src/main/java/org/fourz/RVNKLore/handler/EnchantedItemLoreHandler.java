@@ -72,7 +72,8 @@ public class EnchantedItemLoreHandler extends DefaultLoreHandler {
         // Auto-approve since it's system-generated
         entry.setApproved(true);
         
-        getPlugin().getLoreManager().addLoreEntrySync(entry);
+        getPlugin().getLoreManager().addLoreEntry(entry)
+            .thenAccept(success -> logger.debug("Enchanted item lore entry " + (success ? "saved" : "not saved") + ": " + entry.getName()));
     }
 
     @Override

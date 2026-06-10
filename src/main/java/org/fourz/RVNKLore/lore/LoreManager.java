@@ -5,6 +5,9 @@ import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.handler.LoreHandler;
 import org.fourz.RVNKLore.lore.item.ItemManager;
+import org.fourz.RVNKLore.lore.post.DiscoveryPostProcessor;
+import org.fourz.RVNKLore.lore.post.DynmapPostProcessor;
+import org.fourz.RVNKLore.lore.post.ItemLorePostProcessor;
 import org.fourz.RVNKLore.service.ILoreService;
 
 import java.util.*;
@@ -18,11 +21,11 @@ import java.util.stream.Collectors;
 public class LoreManager implements ILoreService {
     private final RVNKLore plugin;
     private final LogManager logger;
-    private final Set<LoreEntry> cachedEntries = new HashSet<>();
     private final Map<LoreType, List<LoreEntry>> loreByType = new HashMap<>();
     private static LoreManager instance;
     private LoreFinder loreFinder;
     private ItemManager itemManager;
+    private List<LorePostProcessor> postProcessors = Collections.emptyList();
     private boolean initializing = false;
 
     public LoreManager(RVNKLore plugin) {
@@ -59,6 +62,11 @@ public class LoreManager implements ILoreService {
 
             // Initialize the unified item management system
             this.itemManager = new ItemManager(plugin);
+            this.postProcessors = Arrays.asList(
+                new ItemLorePostProcessor(plugin, itemManager),
+                new DynmapPostProcessor(plugin),
+                new DiscoveryPostProcessor(plugin)
+            );
 
             // First load entries from database (doesn't require handlers)
             loadLoreEntries();
@@ -77,14 +85,14 @@ public class LoreManager implements ILoreService {
      */
     private void loadLoreEntries() {
         logger.debug("Loading lore entries from database...");
-        cachedEntries.clear();
+        for (List<LoreEntry> list : loreByType.values()) {
+            list.clear();
+        }
         List<LoreEntry> entries = plugin.getDatabaseManager().getAllLoreEntries();
-        cachedEntries.addAll(entries);
-        // Populate loreByType map
         for (LoreEntry entry : entries) {
             loreByType.get(entry.getType()).add(entry);
         }
-        logger.debug("Loaded " + cachedEntries.size() + " lore entries");
+        logger.debug("Loaded " + entries.size() + " lore entries");
     }
 
     /**
@@ -111,7 +119,10 @@ public class LoreManager implements ILoreService {
     }
 
     /**
-     * Add a new lore entry (synchronous internal method).
+     * Add a new lore entry synchronously. <strong>Must not be called from the Bukkit main
+     * thread when {@code entry.getType() == LoreType.ITEM}</strong> — the ITEM post-processor
+     * blocks on {@code registerLoreItem().join()} which will freeze the server.
+     * Use {@link #addLoreEntry(LoreEntry)} for main-thread callers.
      *
      * @param entry The lore entry to add
      * @return True if successful, false otherwise
@@ -141,71 +152,35 @@ public class LoreManager implements ILoreService {
         boolean success = plugin.getDatabaseManager().addLoreEntry(entry);
 
         if (success) {
-            cachedEntries.add(entry);
             loreByType.get(entry.getType()).add(entry);
             logger.debug("Lore entry added successfully: " + entry.getId());
-              // For ITEM type entries, register the item in the ItemManager
-            if (entry.getType() == LoreType.ITEM && itemManager != null) {
-                try {
-                    // Resolve material from entry metadata (set by LoreAddSubCommand)
-                    org.bukkit.Material material = org.bukkit.Material.DIAMOND_SWORD;
-                    String materialName = entry.getMetadata("material");
-                    if (materialName != null) {
-                        try {
-                            material = org.bukkit.Material.valueOf(materialName);
-                        } catch (IllegalArgumentException ignored) {}
-                    }
 
-                    org.fourz.RVNKLore.lore.item.ItemProperties itemProps =
-                        new org.fourz.RVNKLore.lore.item.ItemProperties(material, entry.getName());
-
-                    itemProps.setLoreEntryId(entry.getId());
-                    if (entry.getNbtData() != null) {
-                        itemProps.setNbtData(entry.getNbtData());
-                    }
-
-                    java.util.UUID entryUUID = java.util.UUID.fromString(entry.getId());
-                    boolean itemSuccess = itemManager.registerLoreItem(entryUUID, itemProps).join();
-
-                    if (!itemSuccess) {
-                        // Rollback: remove lore_entry since item registration failed
-                        logger.warning("Item registration failed for: " + entry.getName() + " - rolling back lore entry");
-                        plugin.getDatabaseManager().deleteLoreEntry(entryUUID);
-                        cachedEntries.remove(entry);
-                        loreByType.get(entry.getType()).remove(entry);
-                        entry.addMetadata("validation_errors", "Item registration failed in database");
-                        return false;
-                    }
-
-                    logger.debug("Registered item in ItemManager: " + entry.getName() + " with lore entry ID: " + entry.getId());
-                } catch (Exception e) {
-                    // Rollback: remove lore_entry since item registration failed
-                    logger.warning("Failed to register item in ItemManager: " + e.getMessage());
-                    try {
-                        java.util.UUID entryUUID = java.util.UUID.fromString(entry.getId());
-                        plugin.getDatabaseManager().deleteLoreEntry(entryUUID);
-                        cachedEntries.remove(entry);
-                        loreByType.get(entry.getType()).remove(entry);
-                    } catch (Exception rollbackEx) {
-                        logger.warning("Rollback failed: " + rollbackEx.getMessage());
-                    }
-                    entry.addMetadata("validation_errors", "Item registration failed: " + e.getMessage());
-                    return false;
-                }
+            if (!plugin.getConfigManager().requireApproval()) {
+                boolean approved = approveLoreEntrySync(entry.getUUID());
+                logger.debug("Auto-approved entry '" + entry.getName() + "' (workflow disabled): " + approved);
             }
 
-            // Create Dynmap marker if integration is available
-            if (plugin.isDynmapAvailable()) {
-                try {
-                    plugin.getDynmapIntegration().getMarkerManager().createOrUpdateMarker(entry);
-                } catch (Exception e) {
-                    logger.debug("Failed to create Dynmap marker: " + e.getMessage());
+            for (LorePostProcessor processor : postProcessors) {
+                if (processor.appliesTo(entry) && !processor.process(entry)) {
+                    rollbackEntry(entry);
+                    return false;
                 }
             }
         } else {
             logger.warning("Failed to add lore entry to database: " + entry.getName());
         }
         return success;
+    }
+
+    private void rollbackEntry(LoreEntry entry) {
+        logger.warning("Post-processing failed for '" + entry.getName() + "' — rolling back persisted entry");
+        try {
+            UUID entryUUID = UUID.fromString(entry.getId());
+            plugin.getDatabaseManager().deleteLoreEntry(entryUUID);
+            loreByType.get(entry.getType()).remove(entry);
+        } catch (Exception e) {
+            logger.warning("Rollback failed for '" + entry.getName() + "': " + e.getMessage());
+        }
     }
 
     /**
@@ -215,7 +190,7 @@ public class LoreManager implements ILoreService {
      * @return The lore entry, or null if not found
      */
     public LoreEntry getLoreEntrySync(UUID id) {
-        return cachedEntries.stream()
+        return getCachedEntries().stream()
                 .filter(entry -> entry.getUUID().equals(id))
                 .findFirst()
                 .orElse(null);
@@ -228,7 +203,7 @@ public class LoreManager implements ILoreService {
      * @return Optional containing the lore entry, or empty if not found
      */
     public Optional<LoreEntry> getLoreEntryByIdSync(String id) {
-        return cachedEntries.stream()
+        return getCachedEntries().stream()
                 .filter(entry -> entry.getId().equals(id))
                 .findFirst();
     }
@@ -249,7 +224,7 @@ public class LoreManager implements ILoreService {
      * @return A list of approved lore entries
      */
     public List<LoreEntry> getApprovedLoreEntriesSync() {
-        return cachedEntries.stream()
+        return getCachedEntries().stream()
             .filter(LoreEntry::isApproved)
             .collect(Collectors.toList());
     }
@@ -283,8 +258,58 @@ public class LoreManager implements ILoreService {
                     logger.debug("Failed to create Dynmap marker on approval: " + e.getMessage());
                 }
             }
+
+            // Refresh proximity cache so approved location entry is discoverable immediately
+            if (entry.getLocation() != null && plugin.getDiscoveryManager() != null) {
+                plugin.getDiscoveryManager().refreshLocationCache();
+            }
         } else {
             logger.warning("Failed to approve lore entry: " + id);
+        }
+        return success;
+    }
+
+    public boolean updateLoreEntryInPlace(LoreEntry entry) {
+        boolean success = plugin.getDatabaseManager().updateLoreEntryInPlace(entry);
+        if (success) {
+            // Mutate the in-memory cached instance to reflect edits
+            LoreEntry cached = loreFinder.getLoreEntry(entry.getUUID());
+            if (cached != null) {
+                cached.setName(entry.getName());
+                if (entry.getDescription() != null) cached.setDescription(entry.getDescription());
+                if (entry.getVisibility() != null) cached.setVisibility(entry.getVisibility());
+            }
+            logger.debug("Lore entry updated in-place: " + entry.getId());
+
+            // Refresh proximity cache in case location data changed
+            if (plugin.getDiscoveryManager() != null) {
+                plugin.getDiscoveryManager().refreshLocationCache();
+            }
+        } else {
+            logger.warning("Failed to update lore entry in-place: " + entry.getId());
+        }
+        return success;
+    }
+
+    public boolean rejectLoreEntrySync(UUID id) {
+        return rejectLoreEntrySync(id, null);
+    }
+
+    public boolean rejectLoreEntrySync(UUID id, String reason) {
+        LoreEntry entry = loreFinder.getLoreEntry(id);
+        if (entry == null) {
+            logger.warning("Attempted to reject non-existent lore entry: " + id);
+            return false;
+        }
+        if (entry.isApproved()) {
+            logger.warning("Attempted to reject already-approved lore entry: " + id);
+            return false;
+        }
+        boolean success = plugin.getDatabaseManager().rejectLoreEntry(id.toString(), reason);
+        if (success) {
+            logger.info("Lore entry rejected: " + id + (reason != null ? " reason=" + reason : ""));
+        } else {
+            logger.warning("Failed to reject lore entry: " + id);
         }
         return success;
     }
@@ -310,7 +335,7 @@ public class LoreManager implements ILoreService {
             return new ArrayList<>();
         }
 
-        return cachedEntries.stream()
+        return getCachedEntries().stream()
                 .filter(LoreEntry::isApproved)
                 .filter(entry -> {
                     if (entry.getLocation() == null) return false;
@@ -340,7 +365,6 @@ public class LoreManager implements ILoreService {
      * @param entry The lore entry to remove
      */
     public void removeLoreEntry(LoreEntry entry) {
-        cachedEntries.remove(entry);
         List<LoreEntry> typeList = loreByType.get(entry.getType());
         if (typeList != null) {
             typeList.remove(entry);
@@ -359,7 +383,6 @@ public class LoreManager implements ILoreService {
             itemManager = null;
         }
 
-        cachedEntries.clear();
         loreByType.clear();
         instance = null;
     }
@@ -390,7 +413,7 @@ public class LoreManager implements ILoreService {
      * Get a lore entry by ID string
      */
     public Optional<LoreEntry> getLoreById(String id) {
-        return cachedEntries.stream()
+        return getCachedEntries().stream()
                 .filter(entry -> entry.getId().equals(id))
                 .findFirst();
     }
@@ -399,7 +422,7 @@ public class LoreManager implements ILoreService {
      * Get lore entries by name (partial match)
      */
     public List<LoreEntry> getLoreByName(String nameFragment) {
-        return cachedEntries.stream()
+        return getCachedEntries().stream()
                 .filter(entry -> entry.getName().toLowerCase().contains(nameFragment.toLowerCase()))
                 .collect(Collectors.toList());
     }
@@ -466,7 +489,6 @@ public class LoreManager implements ILoreService {
      * Clear all lore entries
      */
     public void clearAllLore() {
-        cachedEntries.clear();
         for (List<LoreEntry> entries : loreByType.values()) {
             entries.clear();
         }
@@ -480,10 +502,13 @@ public class LoreManager implements ILoreService {
     }
 
     /**
-     * Package-private method to get cached entries for the LoreFinder
+     * Returns a derived set of all cached entries from the loreByType map.
+     * This is the single authoritative source of all in-memory lore entries.
      */
     Set<LoreEntry> getCachedEntries() {
-        return cachedEntries;
+        return loreByType.values().stream()
+                .flatMap(List::stream)
+                .collect(Collectors.toSet());
     }
 
     /**
@@ -495,7 +520,7 @@ public class LoreManager implements ILoreService {
     public LoreEntry getLoreEntryByNameSync(String name) {
         logger.debug("Looking up lore entry by name: " + name);
 
-        return cachedEntries.stream()
+        return getCachedEntries().stream()
             .filter(entry -> entry.getName().equalsIgnoreCase(name))
             .findFirst()
             .orElse(null);
@@ -507,21 +532,21 @@ public class LoreManager implements ILoreService {
      * @return A list of all lore entries
      */
     public List<LoreEntry> getAllLoreEntriesSync() {
-        return new ArrayList<>(cachedEntries);
+        return new ArrayList<>(getCachedEntries());
     }
 
     /**
      * Get total count of cached lore entries without copying the list.
      */
     public int getLoreEntryCount() {
-        return cachedEntries.size();
+        return loreByType.values().stream().mapToInt(List::size).sum();
     }
 
     /**
      * Get a paginated subset of cached lore entries.
      */
     public List<LoreEntry> getLoreEntriesPaginated(int offset, int limit) {
-        return cachedEntries.stream()
+        return getCachedEntries().stream()
             .skip(offset)
             .limit(limit)
             .collect(Collectors.toList());
@@ -536,7 +561,7 @@ public class LoreManager implements ILoreService {
     public List<LoreEntry> findLoreEntriesSync(String startsWith) {
         String fragment = startsWith.toLowerCase();
         List<LoreEntry> result = new ArrayList<>();
-        for (LoreEntry entry : cachedEntries) {
+        for (LoreEntry entry : getCachedEntries()) {
             if (entry.getId().toLowerCase().startsWith(fragment) ||
                 entry.getName().toLowerCase().startsWith(fragment)) {
                 result.add(entry);

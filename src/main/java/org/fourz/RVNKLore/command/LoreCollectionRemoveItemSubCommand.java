@@ -9,7 +9,7 @@ import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.data.ItemRepository;
 import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
-import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
+import org.fourz.RVNKLore.lore.item.collection.LoreCollection;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -37,7 +37,7 @@ public class LoreCollectionRemoveItemSubCommand implements SubCommand {
 
     @Override
     public boolean hasPermission(CommandSender sender) {
-        return sender.hasPermission("rvnklore.admin.collection.removeitem");
+        return sender.hasPermission("rvnklore.admin.collection.removeitem") || sender.hasPermission("rvnklore.admin");
     }
 
     @Override
@@ -77,7 +77,7 @@ public class LoreCollectionRemoveItemSubCommand implements SubCommand {
         }
 
         // Check if collection exists
-        ItemCollection collection = collectionManager.getCollectionSync(collectionId);
+        LoreCollection collection = collectionManager.getCollectionSync(collectionId);
         if (collection == null) {
             sender.sendMessage(ChatColor.RED + "✖ Collection not found: " + collectionId);
             return true;
@@ -199,7 +199,7 @@ public class LoreCollectionRemoveItemSubCommand implements SubCommand {
         } else if (args.length == 2) {
             // Get items in selected collection and suggest materials
             if (args.length > 0) {
-                ItemCollection collection = collectionManager.getCollectionSync(args[0].toLowerCase());
+                LoreCollection collection = collectionManager.getCollectionSync(args[0].toLowerCase());
                 if (collection != null) {
                     for (ItemStack item : collection.getItems()) {
                         String materialName = item.getType().name();

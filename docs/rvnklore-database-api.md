@@ -1,4 +1,8 @@
-# RVNKLore Database Integration API Reference
+> **HISTORICAL DOCUMENT — Do not use as an implementation reference.**
+> This document was written as an aspirational design artifact and was never updated to match the actual implementation. Key divergences: it documents a `ConnectionManager` class, `DatabaseType.POSTGRESQL` support, and config keys (`database.type`, `database.sqlite.file`) that do not exist in the codebase. The actual implementation uses `DatabaseConnection.java` with `MySQLDialect`/`SQLiteDialect`, HikariCP, and `storage.*` config keys.
+> For the current schema: see [database-schema.md](database-schema.md). For database patterns: see [../../docs/standard/database-patterns.md](../../docs/standard/database-patterns.md).
+
+# RVNKLore Database Integration API Reference (Historical)
 
 **Authoritative Location**: `docs/standard/rvnklore-database-api.md`
 **Last Updated**: January 30, 2026

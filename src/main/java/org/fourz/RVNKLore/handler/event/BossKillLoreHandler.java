@@ -16,9 +16,9 @@ import org.fourz.RVNKLore.handler.DefaultLoreHandler;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
 
-import java.text.SimpleDateFormat;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
@@ -70,11 +70,9 @@ public class BossKillLoreHandler extends DefaultLoreHandler {
             .filter(p -> p.getLocation().distanceSquared(location) <= PARTICIPANT_RADIUS * PARTICIPANT_RADIUS)
             .collect(Collectors.toList());
 
-        SimpleDateFormat nameFormatter = new SimpleDateFormat("yyyy-MM-dd");
-        SimpleDateFormat descFormatter = new SimpleDateFormat("yyyy-MM-dd HH:mm");
-        Date now = new Date();
-        String nameDate = nameFormatter.format(now);
-        String descDate = descFormatter.format(now);
+        LocalDateTime now = LocalDateTime.now(ZoneId.systemDefault());
+        String nameDate = DATE_FMT.format(now.toLocalDate());
+        String descDate = DATETIME_SHORT_FMT.format(now);
 
         StringBuilder description = new StringBuilder();
         description.append("On ").append(descDate).append(", the ").append(bossName)

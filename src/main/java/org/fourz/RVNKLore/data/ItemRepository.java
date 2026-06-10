@@ -7,7 +7,7 @@ import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.exception.LoreException;
 import org.fourz.RVNKLore.lore.item.ItemProperties;
 import org.fourz.RVNKLore.lore.item.ItemType;
-import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
+import org.fourz.RVNKLore.lore.item.collection.LoreCollection;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
@@ -286,6 +286,32 @@ public class ItemRepository implements IItemRepository {
                     });
             } catch (LoreException e) {
                 logger.error("Failed to get all items", e);
+                return new ArrayList<>();
+            }
+        });
+    }
+
+    @Override
+    public CompletableFuture<List<ItemProperties>> getPresetsForQuest(String questId) {
+        return CompletableFuture.supplyAsync(() -> {
+            String sql = "SELECT li.* FROM " + t("lore_item") + " li " +
+                         "JOIN " + t("quest_item_presets") + " qip ON li.id = qip.lore_item_id " +
+                         "WHERE qip.quest_id = ?";
+            try {
+                return dbHelper.executeQuery(sql,
+                    stmt -> stmt.setString(1, questId),
+                    rs -> {
+                        List<ItemProperties> items = new ArrayList<>();
+                        while (rs.next()) {
+                            ItemProperties item = resultSetToItemProperties(rs);
+                            if (item != null) {
+                                items.add(item);
+                            }
+                        }
+                        return items;
+                    });
+            } catch (LoreException e) {
+                logger.error("Failed to get preset items for quest: " + questId, e);
                 return new ArrayList<>();
             }
         });
@@ -638,7 +664,7 @@ public class ItemRepository implements IItemRepository {
     @Override
     public CompletableFuture<Map<String, String>> getCollectionDetails(int collectionId) {
         return CompletableFuture.supplyAsync(() -> {
-            String sql = "SELECT name, description, theme FROM " + t("collection") + " WHERE id = ?";
+            String sql = "SELECT name, description, theme_id FROM " + t("collection") + " WHERE id = ?";
 
             try {
                 return dbHelper.executeQuery(sql,
@@ -648,7 +674,7 @@ public class ItemRepository implements IItemRepository {
                         if (rs.next()) {
                             details.put("name", rs.getString("name"));
                             details.put("description", rs.getString("description"));
-                            details.put("theme", rs.getString("theme"));
+                            details.put("theme", rs.getString("theme_id"));
                         }
                         return details;
                     });
@@ -672,7 +698,7 @@ public class ItemRepository implements IItemRepository {
     public CompletableFuture<Integer> createCollection(String name, String description, String theme) {
         return CompletableFuture.supplyAsync(() -> {
             // Base INSERT without RETURNING clause - dialect handles key retrieval
-            String sql = "INSERT INTO " + t("collection") + " (name, description, theme) VALUES (?, ?, ?)";
+            String sql = "INSERT INTO " + t("collection") + " (name, description, theme_id, created_at) VALUES (?, ?, ?, ?)";
 
             try {
                 return dbHelper.executeInsertWithGeneratedKey(sql, "id",
@@ -680,6 +706,7 @@ public class ItemRepository implements IItemRepository {
                         stmt.setString(1, name);
                         stmt.setString(2, description);
                         stmt.setString(3, theme);
+                        stmt.setLong(4, System.currentTimeMillis());
                     });
             } catch (LoreException e) {
                 logger.error("Failed to create collection: " + name, e);
@@ -700,7 +727,7 @@ public class ItemRepository implements IItemRepository {
     @Override
     public CompletableFuture<Boolean> updateCollection(int collectionId, String name, String description, String theme) {
         return CompletableFuture.supplyAsync(() -> {
-            StringBuilder sql = new StringBuilder("UPDATE " + t("collection") + " SET updated_at = CURRENT_TIMESTAMP");
+            StringBuilder sql = new StringBuilder("UPDATE " + t("collection") + " SET name = name");
             List<String> params = new ArrayList<>();
 
             if (name != null) {
@@ -712,7 +739,7 @@ public class ItemRepository implements IItemRepository {
                 params.add(description);
             }
             if (theme != null) {
-                sql.append(", theme = ?");
+                sql.append(", theme_id = ?");
                 params.add(theme);
             }
 
@@ -894,15 +921,15 @@ public class ItemRepository implements IItemRepository {
      * @return CompletableFuture that completes with true if successfully saved
      */
     @Override
-    public CompletableFuture<Boolean> saveCollection(ItemCollection collection) {
+    public CompletableFuture<Boolean> saveCollection(LoreCollection collection) {
         return CompletableFuture.supplyAsync(() -> {
             if (collection == null) {
                 return false;
             }
 
             // Generate dialect-specific REPLACE SQL
-            String[] columns = {"collection_id", "name", "description", "theme_id", "is_active", "created_at"};
-            String sql = dbConnection.getDialect().getReplaceSQL("collection", columns);
+            String[] columns = {"collection_id", "name", "description", "theme_id", "is_active", "created_at", "reward_entry_id", "reward_achievement_id"};
+            String sql = dbConnection.getDialect().getReplaceSQL(t("collection"), columns);
 
             try {
                 return dbHelper.executeUpdate(sql, stmt -> {
@@ -912,6 +939,8 @@ public class ItemRepository implements IItemRepository {
                     stmt.setString(4, collection.getThemeId());
                     stmt.setBoolean(5, collection.isActive());
                     stmt.setLong(6, collection.getCreatedAt());
+                    stmt.setString(7, collection.getRewardEntryId());
+                    stmt.setString(8, collection.getRewardAchievementId());
                 }) > 0;
             } catch (LoreException e) {
                 logger.error("Failed to save collection: " + collection.getId(), e);
@@ -926,21 +955,23 @@ public class ItemRepository implements IItemRepository {
      * @return CompletableFuture that completes with a list of all collections
      */
     @Override
-    public CompletableFuture<List<ItemCollection>> loadAllCollections() {
+    public CompletableFuture<List<LoreCollection>> loadAllCollections() {
         return CompletableFuture.supplyAsync(() -> {
-            String sql = "SELECT collection_id, name, description, theme_id, is_active, created_at FROM " + t("collection") + "";
+            String sql = "SELECT collection_id, name, description, theme_id, is_active, created_at, reward_entry_id, reward_achievement_id FROM " + t("collection");
 
             try {
                 return dbHelper.executeQuery(sql, null, rs -> {
-                    List<ItemCollection> collections = new ArrayList<>();
+                    List<LoreCollection> collections = new ArrayList<>();
                     while (rs.next()) {
-                        ItemCollection collection = new ItemCollection(
+                        LoreCollection collection = new LoreCollection(
                                 rs.getString("collection_id"),
                                 rs.getString("name"),
                                 rs.getString("description")
                         );
                         collection.setThemeId(rs.getString("theme_id"));
                         collection.setActive(rs.getBoolean("is_active"));
+                        collection.setRewardEntryId(rs.getString("reward_entry_id"));
+                        collection.setRewardAchievementId(rs.getString("reward_achievement_id"));
                         collections.add(collection);
                     }
                     return collections;
@@ -948,6 +979,36 @@ public class ItemRepository implements IItemRepository {
             } catch (LoreException e) {
                 logger.error("Failed to load collections", e);
                 return new ArrayList<>();
+            }
+        });
+    }
+
+    /**
+     * Load all required lore entry UUIDs per collection from collection_item rows.
+     * Returns a map of collection_id (string) → list of entry UUIDs.
+     */
+    public CompletableFuture<Map<String, List<java.util.UUID>>> loadCollectionEntryIds() {
+        return CompletableFuture.supplyAsync(() -> {
+            String sql = "SELECT c.collection_id AS cid, ci.entry_id" +
+                         " FROM " + t("collection_item") + " ci" +
+                         " JOIN " + t("collection") + " c ON c.id = ci.collection_id" +
+                         " WHERE ci.entry_id IS NOT NULL";
+            try {
+                return dbHelper.executeQuery(sql, null, rs -> {
+                    Map<String, List<java.util.UUID>> result = new java.util.HashMap<>();
+                    while (rs.next()) {
+                        String cid = rs.getString("cid");
+                        String entryIdStr = rs.getString("entry_id");
+                        try {
+                            java.util.UUID uuid = java.util.UUID.fromString(entryIdStr);
+                            result.computeIfAbsent(cid, k -> new java.util.ArrayList<>()).add(uuid);
+                        } catch (IllegalArgumentException ignored) {}
+                    }
+                    return result;
+                });
+            } catch (LoreException e) {
+                logger.error("Failed to load collection entry IDs", e);
+                return new java.util.HashMap<>();
             }
         });
     }
@@ -1228,6 +1289,16 @@ public class ItemRepository implements IItemRepository {
                 String loreEntryId = rs.getString("lore_entry_id");
                 if (loreEntryId != null) {
                     props.setLoreEntryId(loreEntryId);
+                }
+            } catch (SQLException e) {
+                // Column might not exist in older schema, ignore
+            }
+
+            // Set creation timestamp if present
+            try {
+                java.sql.Timestamp createdAt = rs.getTimestamp("created_at");
+                if (createdAt != null) {
+                    props.setCreatedAt(createdAt.getTime());
                 }
             } catch (SQLException e) {
                 // Column might not exist in older schema, ignore

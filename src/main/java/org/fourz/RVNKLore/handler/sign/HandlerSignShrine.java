@@ -12,8 +12,8 @@ import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
 import org.fourz.rvnkcore.util.log.LogManager;
 
-import java.text.SimpleDateFormat;
-import java.util.Date;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 /**
  * Handler for creating shrines via sign creation.
@@ -22,7 +22,6 @@ import java.util.Date;
  */
 public class HandlerSignShrine extends DefaultLoreHandler {
     private static final String SHRINE_SIGN_HEADER = "[Shrine]";
-    private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     private final LogManager logger;
 
     public HandlerSignShrine(RVNKLore plugin) {
@@ -76,7 +75,7 @@ public class HandlerSignShrine extends DefaultLoreHandler {
     private void createShrineEntry(Player player, String name, String description, Block block) {
         LoreEntry entry = LoreEntry.createLocationLore(name, description, LoreType.SHRINE, block.getLocation(), player);
 
-        String currentTime = dateFormat.format(new Date());
+        String currentTime = DATETIME_FMT.format(LocalDateTime.now(ZoneId.systemDefault()));
         entry.addMetadata("created_at", currentTime);
         entry.addMetadata("player_uuid", player.getUniqueId().toString());
         entry.addMetadata("player_name", player.getName());

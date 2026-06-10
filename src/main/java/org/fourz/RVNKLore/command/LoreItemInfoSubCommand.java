@@ -34,7 +34,7 @@ public class LoreItemInfoSubCommand implements SubCommand {
 
     @Override
     public boolean hasPermission(CommandSender sender) {
-        return sender.hasPermission("rvnklore.admin.item.give") || sender.hasPermission("rvnklore.command.collection");
+        return sender.hasPermission("rvnklore.admin.item.give") || sender.hasPermission("rvnklore.collection");
     }
 
     @Override
@@ -49,7 +49,7 @@ public class LoreItemInfoSubCommand implements SubCommand {
             DisplayFactory.displayPaginatedList(sender, "Available Items", allItems, 1, 50, s -> org.bukkit.ChatColor.YELLOW + " - " + s);
             return true;
         }
-        String itemNameOrId = String.join(" ", args);
+        String itemNameOrId = stripQuotes(String.join(" ", args));
         if (itemManager == null) {
             sender.sendMessage(org.bukkit.ChatColor.RED + "âœ– Item system is not available. Please try again later.");
             logger.error("ItemManager is null when trying to get item info: " + itemNameOrId, null);
@@ -77,6 +77,13 @@ public class LoreItemInfoSubCommand implements SubCommand {
     @Override
     public String getDescription() {
         return "Get information about a lore item by name.";
+    }
+
+    private String stripQuotes(String value) {
+        if (value != null && value.length() > 2 && value.startsWith("\"") && value.endsWith("\"")) {
+            return value.substring(1, value.length() - 1);
+        }
+        return value;
     }
 
     @Override

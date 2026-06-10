@@ -2,6 +2,7 @@ package org.fourz.RVNKLore;
 
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.fourz.RVNKLore.handler.HandlerFactory;
 import org.fourz.rvnkcore.RVNKCore;
 import org.fourz.rvnkcore.api.model.NotificationTypeDefinition;
@@ -18,6 +19,7 @@ import org.fourz.RVNKLore.service.ISubmissionService;
 import org.fourz.RVNKLore.service.IPlayerLoreService;
 import org.fourz.RVNKLore.service.ILoreBookService;
 import org.fourz.RVNKLore.lore.item.book.LoreBookManager;
+import org.fourz.RVNKLore.lore.map.LoreMapManager;
 import org.fourz.rvnkcore.util.PlayerLookup;
 import org.fourz.RVNKLore.util.UtilityManager;
 import org.fourz.RVNKLore.lore.item.ItemManager;
@@ -46,6 +48,7 @@ public class RVNKLore extends JavaPlugin {
     private HandlerFactory handlerFactory;
     private UtilityManager utilityManager;
     private ItemManager itemManager;
+    private org.fourz.RVNKLore.lore.item.RngItemServiceImpl rngItemService;
     private PlayerManager playerManager;
     private PlayerLookup playerLookup;
     private SubmissionManager submissionManager;
@@ -53,7 +56,9 @@ public class RVNKLore extends JavaPlugin {
     private DiscoveryManager discoveryManager;
     private AchievementManager achievementManager;
     private LoreBookManager loreBookManager;
+    private LoreMapManager loreMapManager;
     private int healthCheckTaskId = -1;
+    private final AtomicBoolean isReconnecting = new AtomicBoolean(false);
     private Thread shutdownHook;
     private boolean shuttingDown = false;
     private final Object shutdownLock = new Object();
@@ -100,109 +105,142 @@ public class RVNKLore extends JavaPlugin {
         logger.info("Initializing RVNKLore...");
 
         try {
-            // First try to initialize the database
-            databaseManager = new DatabaseManager(this);
-
-            // Check database connection - allow fallback mode to continue
-            if (!databaseManager.isConnected()) {
-                // Check if fallback is disabled - only then is this fatal
-                if (!databaseManager.isFallbackEnabled()) {
-                    throw new Exception("Database connection failed and fallback is disabled. Plugin cannot function without storage.");
-                }
-                throw new Exception("Database connection failed and fallback also failed. Plugin cannot function without storage.");
-            }
-
-            // Log if running in fallback mode
-            if (databaseManager.isInFallbackMode()) {
-                logger.warning("=== PLUGIN RUNNING IN FALLBACK MODE ===");
-                logger.warning("MySQL unavailable - using SQLite fallback storage");
-                logger.warning("Some features may have limited functionality");
-            }
-
-            // Create handler factory but don't initialize it yet
-            handlerFactory = new HandlerFactory(this);
-
-            // Initialize utility manager for diagnostics
-            utilityManager = UtilityManager.getInstance(this);
-              // First initialize the handler factory completely before LoreManager needs it
-            handlerFactory.initialize();
-              // Now initialize LoreManager after HandlerFactory is fully initialized
-            loreManager = LoreManager.getInstance(this);
-            loreManager.initializeLore();
-
-            // Initialize LoreBookManager as plugin-level singleton
-            loreBookManager = new LoreBookManager(this);
-
-            // Initialize PlayerLookup for RVNKCore name resolution
-            this.playerLookup = new PlayerLookup(this);
-
-            // Initialize PlayerManager for player-related lore operations
-            this.playerManager = new PlayerManager(this);
-            this.playerManager.setPlayerLookup(playerLookup);
-            this.playerManager.initialize();
-
-            // Initialize ItemManager through LoreManager
-            this.itemManager = loreManager.getItemManager();
-
-            // Initialize SubmissionManager for lore submission workflow
-            this.submissionManager = new SubmissionManager(this);
-
-            // Initialize DiscoveryManager for lore discovery events
-            this.discoveryManager = new DiscoveryManager(this);
-            this.discoveryManager.initialize();
-
-            // Initialize AchievementManager for collection achievements
-            this.achievementManager = new AchievementManager(this);
-            this.achievementManager.initialize();
-
-            // Register GUI listener for browse menus
-            getServer().getPluginManager().registerEvents(new GuiListener(), this);
-
-            // Remove direct CosmeticManager initialization (now handled by ItemManager)
-            // cosmeticManager = new CosmeticManager(this);
-            // cosmeticManager.initialize();
-
-            // Finally initialize command system
-            commandManager = new CommandManager(this);
-
-            // Register with RVNKCore ServiceRegistry if available
+            initializeCoreManagers();
             registerWithRVNKCore();
-
-            // Register notification types with PlayerPreferencesService (Phase 3)
             registerNotificationTypes();
-
-            // Initialize REST API if RVNKCore is available
             initializeRestApi();
-
-            // Register PlaceholderAPI expansion if available
-            registerPlaceholderAPI();
-
-            // Register Dynmap integration if available
-            registerDynmap();
-
-            // Register VotingPlugin integration if available
-            registerVotingPlugin();
-
-            // Register GriefPrevention integration if available
-            registerGriefPrevention();
-
-            // Register RVNKWorlds integration if available
-            registerRVNKWorlds();
-
-            // Register Discord webhook integration if configured
-            registerDiscordWebhooks();
-
-            // Register Citizens NPC integration if available
-            registerCitizens();
-
-            // Start periodic health check
-            startHealthCheck();
+            registerIntegrations();
+            startBackgroundTasks();
 
             logger.info("RVNKLore has been enabled!");
         } catch (Exception e) {
             logger.error("Failed to initialize plugin", e);
             getServer().getPluginManager().disablePlugin(this);
         }
+    }
+
+    /**
+     * Initializes database, core managers, and the command system.
+     * Called once during onEnable before RVNKCore registration.
+     */
+    private void initializeCoreManagers() throws Exception {
+        // First try to initialize the database
+        databaseManager = new DatabaseManager(this);
+
+        // Check database connection - allow fallback mode to continue
+        if (!databaseManager.isConnected()) {
+            // Check if fallback is disabled - only then is this fatal
+            if (!databaseManager.isFallbackEnabled()) {
+                throw new Exception("Database connection failed and fallback is disabled. Plugin cannot function without storage.");
+            }
+            throw new Exception("Database connection failed and fallback also failed. Plugin cannot function without storage.");
+        }
+
+        // Log if running in fallback mode
+        if (databaseManager.isInFallbackMode()) {
+            logger.warning("=== PLUGIN RUNNING IN FALLBACK MODE ===");
+            logger.warning("MySQL unavailable - using SQLite fallback storage");
+            logger.warning("Some features may have limited functionality");
+        }
+
+        // Create handler factory but don't initialize it yet
+        handlerFactory = new HandlerFactory(this);
+
+        // Initialize utility manager for diagnostics
+        utilityManager = UtilityManager.getInstance(this);
+        // First initialize the handler factory completely before LoreManager needs it
+        handlerFactory.initialize();
+        // Now initialize LoreManager after HandlerFactory is fully initialized
+        loreManager = LoreManager.getInstance(this);
+        loreManager.initializeLore();
+
+        // Initialize LoreBookManager as plugin-level singleton
+        loreBookManager = new LoreBookManager(this);
+
+        // Initialize LoreMapManager for cross-server map storage
+        loreMapManager = new LoreMapManager(this);
+
+        // Initialize PlayerLookup for RVNKCore name resolution
+        this.playerLookup = new PlayerLookup(this);
+
+        // Initialize PlayerManager for player-related lore operations
+        this.playerManager = new PlayerManager(this);
+        this.playerManager.setPlayerLookup(playerLookup);
+        this.playerManager.initialize();
+
+        // Initialize ItemManager through LoreManager
+        this.itemManager = loreManager.getItemManager();
+
+        // Initialize RNG item service (requires itemManager + active DB connection)
+        this.rngItemService = new org.fourz.RVNKLore.lore.item.RngItemServiceImpl(
+            this, databaseManager.getDatabaseConnection(), itemManager);
+
+        // Initialize SubmissionManager for lore submission workflow
+        this.submissionManager = new SubmissionManager(this);
+
+        // Initialize DiscoveryManager for lore discovery events
+        if (configManager.isDiscoveryEnabled()) {
+            this.discoveryManager = new DiscoveryManager(this);
+            this.discoveryManager.initialize();
+        } else {
+            logger.info("Feature disabled: discovery");
+        }
+
+        // Initialize AchievementManager for collection achievements
+        if (configManager.isAchievementsEnabled()) {
+            this.achievementManager = new AchievementManager(this);
+            this.achievementManager.initialize();
+        } else {
+            logger.info("Feature disabled: achievements");
+        }
+
+        // Register GUI listener for browse menus
+        getServer().getPluginManager().registerEvents(new GuiListener(), this);
+
+        // Collection completion in-game notification (preference-gated via collection_completion type)
+        getServer().getPluginManager().registerEvents(
+                new org.fourz.RVNKLore.lore.item.collection.CollectionNotificationListener(this), this);
+
+        // Remove direct CosmeticManager initialization (now handled by ItemManager)
+        // cosmeticManager = new CosmeticManager(this);
+        // cosmeticManager.initialize();
+
+        // Finally initialize command system
+        commandManager = new CommandManager(this);
+    }
+
+    /**
+     * Registers all optional third-party integrations.
+     * Each integration is soft-optional; failures are logged but not fatal.
+     */
+    private void registerIntegrations() {
+        // Register PlaceholderAPI expansion if available
+        registerPlaceholderAPI();
+
+        // Register Dynmap integration if available
+        registerDynmap();
+
+        // Register VotingPlugin integration if available
+        registerVotingPlugin();
+
+        // Register GriefPrevention integration if available
+        registerGriefPrevention();
+
+        // Register RVNKWorlds integration if available
+        registerRVNKWorlds();
+
+        // Register Discord webhook integration if configured
+        registerDiscordWebhooks();
+
+        // Register Citizens NPC integration if available
+        registerCitizens();
+    }
+
+    /**
+     * Starts periodic background tasks (health check, reconnect watchdog).
+     */
+    private void startBackgroundTasks() {
+        startHealthCheck();
     }
 
     private void registerShutdownHook() {
@@ -223,18 +261,28 @@ public class RVNKLore extends JavaPlugin {
                 return;
             }
 
-            // Check database connection
-            if (!databaseManager.isConnected()) {
-                logger.warning("Database connection lost, attempting reconnect");
-                databaseManager.reconnect();
-            }
+            boolean needsReconnect = !databaseManager.isConnected();
+            boolean needsPrimaryRecovery = !needsReconnect
+                    && databaseManager.isInFallbackMode()
+                    && databaseManager.getFallbackTracker() != null
+                    && !databaseManager.getFallbackTracker().isInFallbackMode();
 
-            // If in fallback mode, periodically attempt primary reconnection
-            if (databaseManager.isInFallbackMode()) {
-                var tracker = databaseManager.getFallbackTracker();
-                if (tracker != null && !tracker.isInFallbackMode()) {
+            if (needsReconnect || needsPrimaryRecovery) {
+                if (needsReconnect) {
+                    logger.warning("Database connection lost, attempting reconnect");
+                } else {
                     logger.info("Recovery period elapsed, attempting primary database reconnection");
-                    databaseManager.reconnect();
+                }
+                if (isReconnecting.compareAndSet(false, true)) {
+                    getServer().getScheduler().runTaskAsynchronously(this, () -> {
+                        try {
+                            databaseManager.reconnect();
+                        } finally {
+                            isReconnecting.set(false);
+                        }
+                    });
+                } else {
+                    logger.warning("Reconnect already in progress, skipping");
                 }
             }
         }, 1200L, 1200L); // Check every minute (20 ticks/sec * 60 sec)
@@ -283,6 +331,10 @@ public class RVNKLore extends JavaPlugin {
      * The LoreController in RVNKCore routes HTTP requests to this service.
      */
     private void initializeRestApi() {
+        if (!configManager.isRestApiEnabled()) {
+            logger.info("Feature disabled: rest-api — /api/lore/* endpoints not registered");
+            return;
+        }
         if (!rvnkCoreAvailable || rvnkCoreInstance == null) {
             logger.debug("Skipping REST API initialization - RVNKCore not available");
             return;
@@ -693,6 +745,10 @@ public class RVNKLore extends JavaPlugin {
         return loreBookManager;
     }
 
+    public LoreMapManager getLoreMapManager() {
+        return loreMapManager;
+    }
+
     public LogManager getLogManager() {
         return logger;
     }
@@ -710,15 +766,14 @@ public class RVNKLore extends JavaPlugin {
     }
 
     /**
-     * Get the handler factory for this plugin
+     * Get the handler factory for this plugin.
      *
      * @return The handler factory
-     */    public HandlerFactory getHandlerFactory() {
+     * @throws IllegalStateException if the handler factory has not been initialized (reload bug)
+     */
+    public HandlerFactory getHandlerFactory() {
         if (handlerFactory == null) {
-            logger.warning("Handler factory requested but was null. Creating new instance.");
-            handlerFactory = new HandlerFactory(this);
-            // Only initialize if it's actually null - avoids repeated initialization
-            handlerFactory.initialize();
+            throw new IllegalStateException("Manager not initialized: HandlerFactory");
         }
         return handlerFactory;
     }
@@ -731,46 +786,44 @@ public class RVNKLore extends JavaPlugin {
     }
 
     /**
-     * Get the player manager for player lore operations
+     * Get the player manager for player lore operations.
      *
      * @return The player manager
+     * @throws IllegalStateException if the player manager has not been initialized (reload bug)
      */
     public PlayerManager getPlayerManager() {
         if (playerManager == null) {
-            logger.warning("Player manager requested but was null. Creating new instance.");
-            playerManager = new PlayerManager(this);
-            if (playerLookup != null) {
-                playerManager.setPlayerLookup(playerLookup);
-            }
-            playerManager.initialize();
+            throw new IllegalStateException("Manager not initialized: PlayerManager");
         }
         return playerManager;
     }
 
     /**
-     * Get the discovery manager for lore discovery events
+     * Get the discovery manager for lore discovery events.
+     * Returns {@code null} when the discovery feature is disabled in config;
+     * callers must null-check before use.
      *
-     * @return The discovery manager
+     * @return The discovery manager, or {@code null} if the feature is disabled
+     * @throws IllegalStateException if discovery is enabled but the manager was not initialized
      */
     public DiscoveryManager getDiscoveryManager() {
-        if (discoveryManager == null) {
-            logger.warning("Discovery manager requested but was null. Creating new instance.");
-            discoveryManager = new DiscoveryManager(this);
-            discoveryManager.initialize();
+        if (discoveryManager == null && configManager != null && configManager.isDiscoveryEnabled()) {
+            throw new IllegalStateException("Manager not initialized: DiscoveryManager");
         }
         return discoveryManager;
     }
 
     /**
-     * Get the achievement manager for collection achievements
+     * Get the achievement manager for collection achievements.
+     * Returns {@code null} when the achievements feature is disabled in config;
+     * callers must null-check before use.
      *
-     * @return The achievement manager
+     * @return The achievement manager, or {@code null} if the feature is disabled
+     * @throws IllegalStateException if achievements are enabled but the manager was not initialized
      */
     public AchievementManager getAchievementManager() {
-        if (achievementManager == null) {
-            logger.warning("Achievement manager requested but was null. Creating new instance.");
-            achievementManager = new AchievementManager(this);
-            achievementManager.initialize();
+        if (achievementManager == null && configManager != null && configManager.isAchievementsEnabled()) {
+            throw new IllegalStateException("Manager not initialized: AchievementManager");
         }
         return achievementManager;
     }
@@ -854,6 +907,11 @@ public class RVNKLore extends JavaPlugin {
             }
             if (loreBookManager != null) {
                 registerMethod.invoke(serviceRegistry, ILoreBookService.class, loreBookManager);
+                serviceCount++;
+            }
+            if (rngItemService != null) {
+                registerMethod.invoke(serviceRegistry,
+                    org.fourz.RVNKLore.service.IRngItemService.class, rngItemService);
                 serviceCount++;
             }
 

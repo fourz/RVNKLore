@@ -74,6 +74,23 @@ public interface IItemService {
     CompletableFuture<Void> refreshCache();
 
     /**
+     * Create a lore item by its database ID.
+     *
+     * @param itemId The database ID of the item to create
+     * @return Future containing the created ItemStack, or empty if not found
+     */
+    CompletableFuture<Optional<ItemStack>> createLoreItem(int itemId);
+
+    /**
+     * Get all preset items bound to a quest.
+     * Delegates to IItemRepository.getPresetsForQuest().
+     *
+     * @param questId The quest ID to look up
+     * @return Future containing ItemProperties list, empty if none or RVNKLore unavailable
+     */
+    CompletableFuture<List<ItemProperties>> getPresetsForQuest(String questId);
+
+    /**
      * Check if the service is in fallback mode due to errors.
      *
      * @return true if operating in degraded mode

@@ -7,7 +7,7 @@ import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
 import org.fourz.RVNKLore.lore.item.collection.CollectionTheme;
-import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
+import org.fourz.RVNKLore.lore.item.collection.LoreCollection;
 import org.fourz.RVNKLore.command.output.DisplayFactory;
 
 import java.util.ArrayList;
@@ -32,7 +32,7 @@ public class LoreCollectionListSubCommand implements SubCommand {
 
     @Override
     public boolean hasPermission(CommandSender sender) {
-        return sender.hasPermission("rvnklore.command.collection") || sender.hasPermission("rvnklore.admin");
+        return sender.hasPermission("rvnklore.collection") || sender.hasPermission("rvnklore.admin");
     }
 
     @Override
@@ -42,7 +42,7 @@ public class LoreCollectionListSubCommand implements SubCommand {
             themeFilter = args[0];
         }
 
-        List<ItemCollection> collectionsToShow = new ArrayList<>();
+        List<LoreCollection> collectionsToShow = new ArrayList<>();
         if (themeFilter != null) {
             CollectionTheme theme = CollectionTheme.fromDisplayName(themeFilter);
             if (theme == null || theme == CollectionTheme.CUSTOM) {
@@ -52,7 +52,7 @@ public class LoreCollectionListSubCommand implements SubCommand {
                 }
                 return true;
             }
-            for (ItemCollection collection : collectionManager.getAllCollectionsSync().values()) {
+            for (LoreCollection collection : collectionManager.getAllCollectionsSync().values()) {
                 if (theme.name().equalsIgnoreCase(collection.getThemeId())) {
                     collectionsToShow.add(collection);
                 }
@@ -62,7 +62,7 @@ public class LoreCollectionListSubCommand implements SubCommand {
         }
 
         // Sort newest to oldest
-        collectionsToShow.sort(Comparator.comparingLong(ItemCollection::getCreatedAt).reversed());
+        collectionsToShow.sort(Comparator.comparingLong(LoreCollection::getCreatedAt).reversed());
 
         // Output via DisplayFactory (player only) or console output
         if (sender instanceof Player) {
@@ -70,7 +70,7 @@ public class LoreCollectionListSubCommand implements SubCommand {
         } else {
             // Console output: simple list format
             sender.sendMessage(ChatColor.YELLOW + "Collections (" + collectionsToShow.size() + " total):");
-            for (ItemCollection collection : collectionsToShow) {
+            for (LoreCollection collection : collectionsToShow) {
                 sender.sendMessage("  - [" + collection.getId() + "] " + collection.getName() + " (" + collection.getItemCount() + " items)");
             }
         }

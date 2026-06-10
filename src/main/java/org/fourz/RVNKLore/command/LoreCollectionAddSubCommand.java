@@ -7,7 +7,7 @@ import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
 import org.fourz.RVNKLore.lore.item.collection.CollectionTheme;
-import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
+import org.fourz.RVNKLore.lore.item.collection.LoreCollection;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -31,7 +31,7 @@ public class LoreCollectionAddSubCommand implements SubCommand {
 
     @Override
     public boolean hasPermission(CommandSender sender) {
-        return sender.hasPermission("rvnklore.admin.collection.add");
+        return sender.hasPermission("rvnklore.admin.collection.add") || sender.hasPermission("rvnklore.admin");
     }
 
     @Override
@@ -42,16 +42,17 @@ public class LoreCollectionAddSubCommand implements SubCommand {
         }
 
         if (args.length < 3) {
-            sender.sendMessage(ChatColor.RED + "â–¶ Usage: /lore collection add <id> <theme> <name> [description]");
-            sender.sendMessage(ChatColor.GRAY + "   Create a new collection with the given ID, theme, and name");
+            sender.sendMessage(ChatColor.RED + "â–¶ Usage: /lore collection add <id> <theme> <name...>");
+            sender.sendMessage(ChatColor.GRAY + "   Create a new collection with the given ID, theme, and display name");
             sender.sendMessage(ChatColor.GRAY + "   Valid themes: " + String.join(", ", getThemeNames()));
             return true;
         }
 
         String collectionId = args[0].toLowerCase();
         String themeStr = args[1].toUpperCase();
-        String name = args[2];
-        String description = args.length > 3 ? String.join(" ", Arrays.copyOfRange(args, 3, args.length)) : "";
+        // Join all remaining args as the collection display name (multi-word support)
+        String name = String.join(" ", Arrays.copyOfRange(args, 2, args.length)).replaceAll("^\"|\"$", "").trim();
+        String description = "";
 
         // Validate collection ID (no spaces, alphanumeric + underscore only)
         if (!collectionId.matches("^[a-z0-9_]+$")) {
@@ -60,7 +61,7 @@ public class LoreCollectionAddSubCommand implements SubCommand {
         }
 
         // Check if collection already exists
-        if (collectionManager.getCollection(collectionId) != null) {
+        if (collectionManager.getCollectionSync(collectionId) != null) {
             sender.sendMessage(ChatColor.RED + "âœ– A collection with ID '" + collectionId + "' already exists.");
             return true;
         }
@@ -77,7 +78,7 @@ public class LoreCollectionAddSubCommand implements SubCommand {
 
         try {
             // Create and validate the collection
-            ItemCollection collection = collectionManager.createCollectionSync(collectionId, name, description);
+            LoreCollection collection = collectionManager.createCollectionSync(collectionId, name, description);
             if (collection == null) {
                 sender.sendMessage(ChatColor.RED + "âœ– Failed to create collection: validation error");
                 return true;

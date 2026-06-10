@@ -1,3 +1,5 @@
+> **HISTORICAL DOCUMENT** — Planning artifact or implementation summary. Not maintained. May not reflect current code.
+
 # CollectionManager Implementation Plan
 
 **Status**: Draft  

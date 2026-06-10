@@ -5,7 +5,7 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.fourz.RVNKLore.lore.LoreEntry;
-import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
+import org.fourz.RVNKLore.lore.item.collection.LoreCollection;
 import org.fourz.RVNKLore.lore.item.ItemManager;
 import org.fourz.RVNKLore.lore.item.ItemProperties;
 
@@ -167,13 +167,13 @@ public class DisplayFactory {
      * @param collections The list of collections to display
      * @return true if the display was successful
      */
-    public static boolean displayCollectionList(CommandSender sender, List<ItemCollection> collections) {
+    public static boolean displayCollectionList(CommandSender sender, List<LoreCollection> collections) {
         sender.sendMessage(ChatColor.GOLD + "===== Collections (Newest First) =====");
         if (collections.isEmpty()) {
             sender.sendMessage(ChatColor.YELLOW + "⚠ No collections found");
             return true;
         }
-        for (ItemCollection collection : collections) {
+        for (LoreCollection collection : collections) {
             String dateStr = DATE_FORMAT.format(new Date(collection.getCreatedAt()));
             sender.sendMessage(ChatColor.WHITE + collection.getName() + ChatColor.GRAY + " (" + collection.getId() + ")"
                     + ChatColor.YELLOW + " - " + dateStr);

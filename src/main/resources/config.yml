@@ -4,6 +4,22 @@ general:
   # Default: WARNING (quiet mode - set INFO for verbose operational logs)
   logLevel: WARNING
 
+features:
+  # Set any subsystem to false to disable it at startup.
+  # Discovery, achievements, and collections share the player progression loop.
+  collections:
+    enabled: true
+  discovery:
+    enabled: true
+  achievements:
+    enabled: true
+  # When false: all submitted lore entries are auto-approved (no pending state)
+  approval-workflow:
+    enabled: true
+  # When false: /api/lore/* endpoints are not registered with RVNKCore
+  rest-api:
+    enabled: true
+
 lore:
   nearbyRadius: 50.0
   requireApproval: true
@@ -24,22 +40,26 @@ lore:
     HAT: DEFAULT
 
 storage:
-  test-mode: no # yes = wipe schema on start, no = keep tables on start
   type: mysql
+
+  # ── Dev-only reset flags ────────────────────────────────────────────────────
+  # WARNING: Both options destroy data. Never enable on a server with real data.
+  dev:
+    # purgeSchema: DROP all lore tables and recreate schema on server load.
+    #   Use when you need a completely fresh schema (e.g. after removing a column).
+    #   Implies purgeData. Set back to false before the next restart.
+    purgeSchema: false
+
+    # purgeData: DELETE all rows from every lore table on server load (keeps schema).
+    #   Use to wipe test data without touching the table structure.
+    #   Set back to false before the next restart.
+    purgeData: false
+  # ───────────────────────────────────────────────────────────────────────────
+  # mysql: section is no longer used. When storage.type=mysql, RVNKLore reuses
+  # the shared ConnectionProvider from RVNKCore (no separate pool created).
+  # Connection details are configured in RVNKCore's config.yml only.
   mysql:
-    host: 64.20.41.122
-    port: 3306
-    username: fourzorg_rvnkuser
-    password: ''
-    useSSL: true
-    database: fourzorg_rvnkcore_dev
-    # Table prefix for shared database environments (e.g., 'rvnklore_')
     tablePrefix:
-    # HikariCP connection pool settings for MySQL
-    poolSize: 10
-    connectionTimeout: 30000
-    idleTimeout: 600000
-    maxLifetime: 1800000
   sqlite:
     database: data.db
     # Table prefix (optional, typically not needed for SQLite)
@@ -166,6 +186,10 @@ citizens:
     track-purchases: true
     # Default stackable setting for new vendors
     default-stackable: true
+
+voting:
+  # Award a random approved HEAD lore entry to players when they vote
+  headsEnabled: true
 
 landmarks:
   signs:

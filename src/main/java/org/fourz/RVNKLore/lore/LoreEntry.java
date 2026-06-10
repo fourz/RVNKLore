@@ -20,62 +20,78 @@ public class LoreEntry {
     private String nbtData;
     private Location location;
     private String submittedBy;
-    private boolean approved;
+    private String approvalStatus = "PENDING";
     private Timestamp createdAt;
+    private String status = "ACTIVE";
+    private String visibility = "PUBLIC";
     // Missing metadata field
     private Map<String, String> metadata;
-    
+
     /**
-     * Default constructor for new entries
+     * Canonical private constructor used by simple public constructors.
+     * Centralises the common field defaults so each constructor delegates here
+     * rather than duplicating initialisation.
+     *
+     * @param id          pre-generated entry ID (UUID string)
+     * @param submittedBy attribution string; use {@code "Server"} for system-generated
+     *                    entries, {@code null} only when attribution is unknown at
+     *                    construction time (field-by-field builders)
      */
-    public LoreEntry() {
-        this.id = UUID.randomUUID().toString();
+    private LoreEntry(String id, String submittedBy) {
+        this.id = id;
+        this.submittedBy = submittedBy;
         this.metadata = new HashMap<>();
         this.createdAt = new Timestamp(System.currentTimeMillis());
     }
-    
+
     /**
-     * Constructor for creating a new lore entry
+     * Default constructor for new entries built up field-by-field.
+     * {@code submittedBy} is left {@code null}; callers must set it explicitly
+     * before persisting the entry.
+     */
+    public LoreEntry() {
+        this(UUID.randomUUID().toString(), null);
+    }
+
+    /**
+     * Constructor for creating a new server-generated lore entry with NBT data.
      */
     public LoreEntry(String name, String description, LoreType type, String nbtData) {
-        this.id = UUID.randomUUID().toString();
+        this(UUID.randomUUID().toString(), "Server");
         this.name = name;
         this.description = description;
         this.nbtData = nbtData;
         this.type = type;
-        this.approved = false;
-        this.createdAt = new Timestamp(System.currentTimeMillis());
-        this.submittedBy = "Server"; // Ensure submittedBy is always set
     }
     /**
-     * Constructor for creating a new lore entry
-     */    
+     * Constructor for creating a new lore entry from a Player (stores UUID, not name)
+     *
+     * FIXED issue-899: Now stores player UUID string instead of player name.
+     * Player renames no longer corrupt lore attribution.
+     */
 
     public LoreEntry(String name, String description, LoreType type, Player contributor) {
         this.id = UUID.randomUUID().toString();
         this.name = name;
         this.description = description;
-        this.nbtData = ""; // Initialize with empty string instead of using undefined variable
-        this.submittedBy = contributor != null ? contributor.getName() : "Server";
+        this.nbtData = "";
+        // FIXED issue-899: Store UUID string instead of player name to prevent corruption on renames
+        this.submittedBy = contributor != null ? contributor.getUniqueId().toString() : "Server";
         this.type = type;
-        this.approved = false;
         this.createdAt = new Timestamp(System.currentTimeMillis());
     }
-    
-    
+
+
     /**
-     * Constructor with predefined ID
+     * Constructor with predefined ID for server-generated entries.
      */
     public LoreEntry(String id, String name, String description, LoreType type) {
-        this.id = id;
+        this(id, "Server");
         this.name = name;
         this.description = description;
         this.type = type;
-        this.approved = false;
-        this.createdAt = new Timestamp(System.currentTimeMillis());
-        this.submittedBy = "Server"; // Ensure submittedBy is always set
     }
-    
+
     /**
      * Full constructor
      */
@@ -88,10 +104,10 @@ public class LoreEntry {
         this.nbtData = nbtData;
         this.location = location;
         this.submittedBy = submittedBy != null ? submittedBy : "Server";
-        this.approved = approved;
+        this.approvalStatus = approved ? "APPROVED" : "PENDING";
         this.createdAt = createdAt;
     }
-    
+
     /**
      * Constructor for loading from database with string parameters
      */
@@ -104,87 +120,131 @@ public class LoreEntry {
         this.nbtData = nbtData;
         this.location = location;
         this.submittedBy = submittedBy != null ? submittedBy : "Server";
-        this.approved = approved;
-        
+        this.approvalStatus = approved ? "APPROVED" : "PENDING";
+
         try {
             this.createdAt = Timestamp.valueOf(createdAtStr);
         } catch (IllegalArgumentException e) {
             this.createdAt = new Timestamp(System.currentTimeMillis());
         }
     }
-    
+
     public String getId() {
         return id;
     }
-    
+
     public UUID getUUID() {
         return UUID.fromString(id);
     }
-    
+
     public String getName() {
         return name;
     }
-    
+
     public void setName(String name) {
         this.name = name;
     }
-    
+
     public String getDescription() {
         return description;
     }
-    
+
     public void setDescription(String description) {
         this.description = description;
     }
-    
+
     public LoreType getType() {
         return type;
     }
-    
+
     public void setType(LoreType type) {
         this.type = type;
     }
-    
+
     public String getNbtData() {
         return nbtData;
     }
-    
+
     public void setNbtData(String nbtData) {
         this.nbtData = nbtData;
     }
-    
+
     public Location getLocation() {
         return location;
     }
-    
+
     public void setLocation(Location location) {
         this.location = location;
     }
-    
+
+    /**
+     * Get the submitter UUID string.
+     * Returns the UUID of the player who submitted this lore entry,
+     * or "Server" for system-generated entries.
+     *
+     * FIXED issue-899: Now returns UUID string instead of player name.
+     *
+     * @return UUID string of submitter, or "Server"
+     */
     public String getSubmittedBy() {
         return submittedBy;
     }
-    
+
+    /**
+     * Set the submitter UUID string.
+     * Typically set to player.getUniqueId().toString() or "Server".
+     *
+     * @param submittedBy UUID string or "Server"
+     */
     public void setSubmittedBy(String submittedBy) {
         this.submittedBy = submittedBy;
     }
-    
+
     public boolean isApproved() {
-        return approved;
+        return "APPROVED".equalsIgnoreCase(approvalStatus);
     }
-    
+
+    /** Maps true→APPROVED, false→PENDING. Use setApprovalStatus("REJECTED") for explicit rejection. */
     public void setApproved(boolean approved) {
-        this.approved = approved;
+        this.approvalStatus = approved ? "APPROVED" : "PENDING";
     }
-    
+
+    public String getApprovalStatus() {
+        return approvalStatus;
+    }
+
+    public void setApprovalStatus(String approvalStatus) {
+        this.approvalStatus = approvalStatus;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
+    public String getVisibility() {
+        return visibility;
+    }
+
+    public void setVisibility(String visibility) {
+        this.visibility = visibility;
+    }
+
+    public boolean isArchived() {
+        return "ARCHIVED".equals(status);
+    }
+
     public Timestamp getCreatedAt() {
         return createdAt;
     }
-    
+
     public void setCreatedAt(Timestamp createdAt) {
         this.createdAt = createdAt;
     }
-    
+
     /**
      * Get a human-readable display name for this entry.
      * For PLAYER-type entries, returns the player_name metadata instead of the
@@ -201,7 +261,7 @@ public class LoreEntry {
 
     /**
      * Add metadata to this lore entry
-     * 
+     *
      * @param key The metadata key
      * @param value The metadata value
      */
@@ -211,10 +271,10 @@ public class LoreEntry {
         }
         metadata.put(key, value);
     }
-    
+
     /**
      * Get metadata from this lore entry
-     * 
+     *
      * @param key The metadata key
      * @return The metadata value, or null if not found
      */
@@ -224,10 +284,10 @@ public class LoreEntry {
         }
         return metadata.get(key);
     }
-    
+
     /**
      * Check if this entry has metadata with the given key
-     * 
+     *
      * @param key The metadata key
      * @return True if metadata exists, false otherwise
      */
@@ -237,23 +297,23 @@ public class LoreEntry {
 
         /**
      * Check if this entry has metadata with the given key
-     * 
+     *
      * @param key The metadata key
      * @return True if metadata exists, false otherwise
      */
     public boolean hasMetadata() {
         return metadata != null;
     }
-    
+
     /**
      * Get all metadata for this entry
-     * 
+     *
      * @return A map of all metadata
      */
     public Map<String, String> getAllMetadata() {
         return metadata != null ? new HashMap<>(metadata) : new HashMap<>();
     }
-    
+
     /**
      * Convert the lore entry to a JSON object
      */
@@ -264,11 +324,11 @@ public class LoreEntry {
         json.put("type", type.name());
         json.put("name", name);
         json.put("description", description);
-        
+
         if (nbtData != null) {
             json.put("nbtData", nbtData);
         }
-        
+
         if (location != null) {
             JSONObject locationJson = new JSONObject();
             locationJson.put("world", location.getWorld().getName());
@@ -277,21 +337,22 @@ public class LoreEntry {
             locationJson.put("z", location.getZ());
             json.put("location", locationJson);
         }
-        
+
         json.put("submittedBy", submittedBy);
-        json.put("approved", approved);
+        json.put("approved", isApproved());
+        json.put("approvalStatus", approvalStatus);
         json.put("createdAt", createdAt.toString());
-        
+
         // Add metadata to JSON
         if (metadata != null && !metadata.isEmpty()) {
             JSONObject metadataJson = new JSONObject();
             metadataJson.putAll(metadata);
             json.put("metadata", metadataJson);
         }
-        
+
         return json;
     }
-    
+
     @Override
     public String toString() {
         return "LoreEntry{" +
@@ -300,10 +361,10 @@ public class LoreEntry {
                 ", type=" + type +
                 '}';
     }
-    
+
     /**
      * Creates a location-based lore entry (LANDMARK, CITY, PATH)
-     * 
+     *
      * @param name The name of the lore entry
      * @param description The description of the lore entry
      * @param type The type of lore (should be LANDMARK, CITY, or PATH)
@@ -316,10 +377,10 @@ public class LoreEntry {
         entry.setLocation(location);
         return entry;
     }
-    
+
     /**
      * Creates a head/hat based lore entry (PLAYER_HEAD, MOB_HEAD, HEAD, HAT)
-     * 
+     *
      * @param name The name of the lore entry
      * @param description The description of the lore entry
      * @param type The type of lore (should be a head/hat type)
@@ -332,10 +393,10 @@ public class LoreEntry {
         entry.setNbtData(nbtData);
         return entry;
     }
-    
+
     /**
      * Creates a character-related lore entry (PLAYER, FACTION)
-     * 
+     *
      * @param name The name of the lore entry
      * @param description The description of the lore entry
      * @param type The type of lore (should be PLAYER or FACTION)
@@ -345,10 +406,10 @@ public class LoreEntry {
     public static LoreEntry createCharacterLore(String name, String description, LoreType type, Player player) {
         return new LoreEntry(name, description, type, player);
     }
-    
+
     /**
      * Creates a gameplay-related lore entry (ENCHANTMENT, ITEM, QUEST)
-     * 
+     *
      * @param name The name of the lore entry
      * @param description The description of the lore entry
      * @param type The type of lore (should be ENCHANTMENT, ITEM, or QUEST)
@@ -358,27 +419,27 @@ public class LoreEntry {
     public static LoreEntry createGameplayLore(String name, String description, LoreType type, Player player) {
         return new LoreEntry(name, description, type, player);
     }
-    
+
     /**
      * Validates if this lore entry has all required fields based on its type
-     * 
+     *
      * @return true if the entry is valid, false otherwise
      */
     public boolean isValid() {
         if (name == null || description == null || type == null) {
             return false;
         }
-        
+
         // Location-based lore requires a location
         if (type != null && type.isLocationCapable() && location == null) {
             return false;
         }
-        
+
         // Head/hat lore typically requires NBT data
         if ((type == LoreType.HEAD ) && (nbtData == null || nbtData.isEmpty())) {
             return false;
         }
-        
+
         return true;
     }
 }

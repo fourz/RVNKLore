@@ -75,6 +75,11 @@ public class ConfigManager {
         config.addDefault("storage.mysql.password", "");
         config.addDefault("lore.nearbyRadius", 50.0);
         config.addDefault("lore.requireApproval", true);
+        config.addDefault("features.collections.enabled", true);
+        config.addDefault("features.discovery.enabled", true);
+        config.addDefault("features.achievements.enabled", true);
+        config.addDefault("features.approval-workflow.enabled", true);
+        config.addDefault("features.rest-api.enabled", true);
         
         // Add handler configuration defaults
         for (LoreType type : LoreType.values()) {
@@ -210,8 +215,26 @@ public class ConfigManager {
     }
     
     public boolean requireApproval() {
+        // When approval workflow is disabled, treat as no approval required
+        if (!isFeatureEnabled("approval-workflow")) return false;
         return config.getBoolean("lore.requireApproval", true);
     }
+
+    // ==================== Feature Toggles ====================
+
+    /**
+     * Check if a named feature subsystem is enabled.
+     * All features default to true when the key is absent.
+     */
+    public boolean isFeatureEnabled(String feature) {
+        return config.getBoolean("features." + feature + ".enabled", true);
+    }
+
+    public boolean isCollectionsEnabled() { return isFeatureEnabled("collections"); }
+    public boolean isDiscoveryEnabled()   { return isFeatureEnabled("discovery"); }
+    public boolean isAchievementsEnabled(){ return isFeatureEnabled("achievements"); }
+    public boolean isApprovalWorkflowEnabled() { return isFeatureEnabled("approval-workflow"); }
+    public boolean isRestApiEnabled()     { return isFeatureEnabled("rest-api"); }
 
     public FileConfiguration getConfig() {
         return config;
@@ -253,11 +276,14 @@ public class ConfigManager {
         return new String[]{"DEBUG", "INFO", "WARN", "WARNING", "ERROR", "SEVERE", "OFF"};
     }
     
-    /**
-     * Get test mode setting
-     */
-    public boolean isTestMode() {
-        return "yes".equalsIgnoreCase(config.getString("storage.test-mode", "no"));
+    /** Drop and recreate all lore tables on next server load. Implies purgeData. Dev-only. */
+    public boolean isPurgeSchema() {
+        return config.getBoolean("storage.dev.purgeSchema", false);
+    }
+
+    /** Delete all rows from every lore table on next server load (keeps schema). Dev-only. */
+    public boolean isPurgeData() {
+        return config.getBoolean("storage.dev.purgeData", false);
     }
 
     // ==================== Dynmap Configuration ====================

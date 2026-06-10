@@ -46,6 +46,9 @@ public class LoreGetSubCommand implements SubCommand {
             input = nameBuilder.toString();
         }
 
+        // Strip literal quote characters passed by console (e.g. lore get "Name" → Name)
+        input = input.replaceAll("^\"|\"$", "").trim();
+
         // Try name lookup first (case-insensitive)
         LoreEntry entry = plugin.getLoreManager().getLoreEntryByNameSync(input);
 
@@ -92,6 +95,12 @@ public class LoreGetSubCommand implements SubCommand {
             return true;
         }
 
+        // Visibility gate: HIDDEN/STAFF_ONLY entries are admin-only (authors see their own)
+        if (!LoreCommandUtil.canSeeEntry(sender, entry)) {
+            sender.sendMessage(ChatColor.RED + "✖ Lore entry not found: " + input);
+            return true;
+        }
+
         // Display the lore to the player
         if (sender instanceof Player) {
             Player player = (Player) sender;
@@ -114,7 +123,7 @@ public class LoreGetSubCommand implements SubCommand {
                     break;
                 }
             }
-            if (hasItemArg && player.hasPermission("rvnklore.command.getitem")) {
+            if (hasItemArg && player.hasPermission("rvnklore.getitem")) {
                 if (handler != null) {
                     player.getInventory().addItem(handler.createLoreItem(entry));
                     player.sendMessage(ChatColor.GREEN + "✓ Added lore item to your inventory.");
@@ -141,7 +150,7 @@ public class LoreGetSubCommand implements SubCommand {
 
     @Override
     public boolean hasPermission(CommandSender sender) {
-        return sender.hasPermission("rvnklore.command.get") || sender.isOp();
+        return sender.hasPermission("rvnklore.get") || sender.hasPermission("rvnklore.admin");
     }
 
     @Override

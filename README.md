@@ -302,7 +302,7 @@ entry.setName("Battle of the North");
 entry.setDescription("A legendary battle that took place between rival factions.");
 entry.setLocation(location);
 entry.setSubmittedBy("PluginName");
-entry.setApproved(true);
+entry.setApprovalStatus("APPROVED");
 
 // Add the entry
 rvnkLore.getLoreManager().addLoreEntry(entry);

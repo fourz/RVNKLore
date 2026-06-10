@@ -1,5 +1,6 @@
 package org.fourz.RVNKLore.command;
 
+import me.ryanhamshire.GriefPrevention.Claim;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
@@ -7,8 +8,10 @@ import org.bukkit.World;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.integration.griefprevention.GriefPreventionIntegration;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
+import org.fourz.RVNKLore.lore.LoreTypePermission;
 import org.fourz.RVNKLore.search.LoreSearchService;
 import org.fourz.rvnkcore.util.log.LogManager;
 
@@ -58,6 +61,12 @@ public class LoreAddSubCommand implements SubCommand {
             sender.sendMessage(ChatColor.RED + "\u2716 Invalid lore type: " + typeStr);
             sender.sendMessage(ChatColor.RED + "\u25b6 Valid types: " +
                     Arrays.stream(LoreType.values()).map(LoreType::name).collect(Collectors.joining(", ")));
+            return true;
+        }
+
+        // Type-permission matrix gate (spec \u00a71)
+        if (LoreTypePermission.isAdminOnly(type) && !sender.hasPermission("rvnklore.admin")) {
+            sender.sendMessage(ChatColor.RED + "\u2716 " + type.name() + " entries require admin permission.");
             return true;
         }
 
@@ -159,9 +168,9 @@ public class LoreAddSubCommand implements SubCommand {
             return true;
         }
 
-        // Check --approve permission
-        if (autoApprove && !sender.hasPermission("rvnklore.admin") && !sender.isOp()) {
-            sender.sendMessage(ChatColor.RED + "\u2716 --approve requires admin permission.");
+        // Check --approve permission (admin-only flag)
+        if (autoApprove && !sender.hasPermission("rvnklore.admin")) {
+            sender.sendMessage(ChatColor.RED + "\u2716 --approve requires rvnklore.admin.");
             autoApprove = false;
         }
 
@@ -189,9 +198,32 @@ public class LoreAddSubCommand implements SubCommand {
             parsedLocation = new Location(world, coords[0], coords[1], coords[2]);
         }
 
-        String name = String.join(" ", nameArgs);
+        String name = String.join(" ", nameArgs).replaceAll("^\"|\"$", "").trim();
         String description = descArgs.isEmpty() ? null : String.join(" ", descArgs);
         Player player = isPlayer ? (Player) sender : null;
+
+        // FACTION: require GP claim ownership at the effective location (non-admin players only)
+        if (type == LoreType.FACTION && !sender.hasPermission("rvnklore.admin")) {
+            if (!isPlayer) {
+                sender.sendMessage(ChatColor.RED + "✖ FACTION entries require a player (GP claim check needed).");
+                return true;
+            }
+            GriefPreventionIntegration gp = plugin.getGriefPreventionIntegration();
+            if (gp == null || !gp.isEnabled()) {
+                sender.sendMessage(ChatColor.RED + "✖ FACTION entries require GriefPrevention to be installed.");
+                return true;
+            }
+            Location checkLocation = parsedLocation != null ? parsedLocation : player.getLocation();
+            java.util.Optional<Claim> claimOpt = gp.getClaimAt(checkLocation);
+            if (!claimOpt.isPresent()) {
+                sender.sendMessage(ChatColor.RED + "✖ You must be standing in your GriefPrevention claim to create a FACTION entry.");
+                return true;
+            }
+            if (!gp.ownsOrManagesClaim(player, claimOpt.get())) {
+                sender.sendMessage(ChatColor.RED + "✖ You must own or manage the GriefPrevention claim at this location to create a FACTION entry.");
+                return true;
+            }
+        }
 
         // For ITEM type, require material in hand (player-only, checked above)
         if (type == LoreType.ITEM && player != null) {
@@ -229,26 +261,38 @@ public class LoreAddSubCommand implements SubCommand {
             entry.setNbtData("{}");
         }
 
-        // Add the entry
-        boolean success = plugin.getLoreManager().addLoreEntrySync(entry);
-        if (success) {
-            sender.sendMessage(ChatColor.GREEN + "\u2713 Lore entry added: " + entry.getName() + " (" + entry.getType() + ")");
+        final boolean finalAutoApprove = autoApprove;
+        plugin.getLoreManager().addLoreEntry(entry).thenAccept(success ->
+            Bukkit.getScheduler().runTask(plugin,
+                () -> sendAddFeedback(sender, entry, type, name, isPlayer, finalAutoApprove, success)));
+        return true;
+    }
 
-            // Auto-approve via DB after successful add
+    private void sendAddFeedback(CommandSender sender, LoreEntry entry, LoreType type,
+                                 String name, boolean isPlayer, boolean autoApprove, boolean success) {
+        if (success) {
+            sender.sendMessage(ChatColor.GREEN + "✓ Lore entry added: " + entry.getName() + " (" + entry.getType() + ")");
             if (autoApprove) {
                 boolean approved = plugin.getLoreManager().approveLoreEntrySync(entry.getUUID());
                 if (approved) {
                     sender.sendMessage(ChatColor.GREEN + "   Auto-approved and published.");
                     logger.info("Lore entry '" + name + "' (" + type + ") added and auto-approved by " + sender.getName());
                 } else {
-                    sender.sendMessage(ChatColor.YELLOW + "   \u26a0 Entry added but auto-approve failed. Use /lore approve " + name);
+                    sender.sendMessage(ChatColor.YELLOW + "   ⚠ Entry added but auto-approve failed. Use /lore approve " + name);
+                }
+            } else if (LoreTypePermission.isPlayerWritable(type) && sender.hasPermission("rvnklore.approve.own")) {
+                boolean approved = plugin.getLoreManager().approveLoreEntrySync(entry.getUUID());
+                if (approved) {
+                    sender.sendMessage(ChatColor.GREEN + "   Published immediately.");
+                    logger.info("Lore entry '" + name + "' (" + type + ") auto-approved via approve.own for " + sender.getName());
+                } else {
+                    sender.sendMessage(ChatColor.YELLOW + "   ⚠ Entry added but auto-approve failed. Use /lore approve " + name);
                 }
             } else if (isPlayer) {
                 sender.sendMessage(ChatColor.YELLOW + "   Your submission will be reviewed by a staff member.");
             }
         } else {
-            sender.sendMessage(ChatColor.RED + "\u2716 Failed to add lore entry.");
-            // Surface validation errors to the user
+            sender.sendMessage(ChatColor.RED + "✖ Failed to add lore entry.");
             String validationErrors = entry.getMetadata("validation_errors");
             if (validationErrors != null && !validationErrors.isEmpty()) {
                 for (String error : validationErrors.split(";")) {
@@ -256,7 +300,6 @@ public class LoreAddSubCommand implements SubCommand {
                 }
             }
         }
-        return true;
     }
 
     @Override
@@ -266,14 +309,21 @@ public class LoreAddSubCommand implements SubCommand {
 
     @Override
     public boolean hasPermission(CommandSender sender) {
-        return sender.hasPermission("rvnklore.command.add") || sender.isOp();
+        return sender.hasPermission("rvnklore.add") || sender.hasPermission("rvnklore.admin");
     }
 
     @Override
     public List<String> getTabCompletions(CommandSender sender, String[] args) {
         if (args.length == 1) {
-            // First arg: lore type
-            return tabCompletionUtil.completeEnum(LoreType.class, args[0]);
+            // Admins see all types; players see only types they can create
+            if (sender.hasPermission("rvnklore.admin")) {
+                return tabCompletionUtil.completeEnum(LoreType.class, args[0]);
+            }
+            String prefix = args[0].toLowerCase();
+            return LoreTypePermission.PLAYER_WRITABLE_TAB.stream()
+                    .map(LoreType::name)
+                    .filter(n -> n.toLowerCase().startsWith(prefix))
+                    .collect(Collectors.toList());
         }
         if (args.length >= 3) {
             String lastArg = args[args.length - 1].toLowerCase();

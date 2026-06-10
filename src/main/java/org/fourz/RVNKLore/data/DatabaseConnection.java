@@ -40,6 +40,9 @@ public abstract class DatabaseConnection {
     public static final String TABLE_LORE_DISCOVERY = "lore_discovery";
     public static final String TABLE_PLAYER_ACHIEVEMENT = "player_achievement";
     public static final String TABLE_PLAYER_REWARD_CLAIM = "player_reward_claim";
+    public static final String TABLE_LORE_MAP = "lore_map";
+    public static final String TABLE_QUEST_ITEM_PRESETS = "quest_item_presets";
+    public static final String TABLE_LORE_ITEM_RNG_POOL = "lore_item_rng_pool";
 
     public DatabaseConnection(RVNKLore plugin, SQLDialect dialect) {
         this.plugin = plugin;
@@ -105,10 +108,6 @@ public abstract class DatabaseConnection {
         String loreSubmission = table(TABLE_LORE_SUBMISSION);
         String loreItem = table(TABLE_LORE_ITEM);
         String loreMetadata = table(TABLE_LORE_METADATA);
-        String collection = table(TABLE_COLLECTION);
-        String playerProgress = table(TABLE_PLAYER_COLLECTION_PROGRESS);
-        String collectionReward = table(TABLE_COLLECTION_REWARD);
-        String collectionItem = table(TABLE_COLLECTION_ITEM);
 
         String createLoreEntryTable = "CREATE TABLE IF NOT EXISTS " + loreEntry + " (" +
                 "id CHAR(36) PRIMARY KEY, " +
@@ -135,6 +134,7 @@ public abstract class DatabaseConnection {
                 "content_version INTEGER NOT NULL DEFAULT 1, " +
                 "is_current_version " + boolType + " NOT NULL DEFAULT FALSE, " +
                 "content TEXT, " +
+                "rejection_reason VARCHAR(500) NULL, " +
                 "CONSTRAINT uq_" + tablePrefix + "lore_submission_entry_version UNIQUE (entry_id, content_version), " +
                 "CONSTRAINT uq_" + tablePrefix + "lore_submission_slug UNIQUE (slug), " +
                 "CONSTRAINT ck_" + tablePrefix + "lore_submission_status CHECK (status IN ('ACTIVE', 'ARCHIVED', 'DRAFT', 'PENDING_APPROVAL')), " +
@@ -184,81 +184,12 @@ public abstract class DatabaseConnection {
             stmt.execute(createLoreEntryTable);
             stmt.execute(createLoreSubmissionTable);
             stmt.execute(createLoreItemTable);
-            stmt.execute(createLoreSubmissionEntryIndex);
-            stmt.execute(createLoreItemEntryIndex);
+            createIndexSafely(stmt, createLoreSubmissionEntryIndex);
+            createIndexSafely(stmt, createLoreItemEntryIndex);
 
             stmt.execute(createMetadataTable);
 
-            // --- Collection System Tables ---
-            // Use dialect-aware constraint syntax (MySQL uses length specifiers, SQLite doesn't)
-            boolean isMySQL = "MySQL".equals(dialect.getName());
-            String collectionIdConstraint = isMySQL
-                ? "CONSTRAINT uq_" + tablePrefix + "collection_id UNIQUE (collection_id(255))"
-                : "CONSTRAINT uq_" + tablePrefix + "collection_id UNIQUE (collection_id)";
-            String playerCollectionConstraint = isMySQL
-                ? "CONSTRAINT uq_" + tablePrefix + "player_collection UNIQUE (player_id(36), collection_id(255))"
-                : "CONSTRAINT uq_" + tablePrefix + "player_collection UNIQUE (player_id, collection_id)";
-
-            String createCollectionTable = "CREATE TABLE IF NOT EXISTS " + collection + " (" +
-                "id " + autoIncPK + ", " +
-                "collection_id TEXT NOT NULL, " +
-                "name TEXT NOT NULL, " +
-                "description TEXT, " +
-                "theme_id TEXT, " +
-                "is_active " + boolType + " DEFAULT 1, " +
-                "created_at INTEGER NOT NULL, " +
-                collectionIdConstraint +
-            ")";
-            String createPlayerCollectionProgressTable = "CREATE TABLE IF NOT EXISTS " + playerProgress + " (" +
-                "id " + autoIncPK + ", " +
-                "player_id TEXT NOT NULL, " +
-                "collection_id TEXT NOT NULL, " +
-                "progress REAL DEFAULT 0.0, " +
-                "completed_at INTEGER, " +
-                "last_updated INTEGER NOT NULL, " +
-                playerCollectionConstraint +
-            ")";
-            String createCollectionRewardTable = "CREATE TABLE IF NOT EXISTS " + collectionReward + " (" +
-                "id " + autoIncPK + ", " +
-                "collection_id TEXT NOT NULL, " +
-                "reward_type TEXT NOT NULL, " +
-                "reward_data TEXT, " +
-                "is_claimed " + boolType + " DEFAULT 0" +
-            ")";
-
-            // Collection-item relationship table for managing item sequences in collections
-            String createCollectionItemTable = "CREATE TABLE IF NOT EXISTS " + collectionItem + " (" +
-                "collection_id INTEGER NOT NULL, " +
-                "item_id INTEGER NOT NULL, " +
-                "sequence_number INTEGER DEFAULT 0, " +
-                "item_config TEXT, " +
-                "PRIMARY KEY (collection_id, item_id), " +
-                "FOREIGN KEY (collection_id) REFERENCES " + collection + "(id) ON DELETE CASCADE, " +
-                "FOREIGN KEY (item_id) REFERENCES " + loreItem + "(id) ON DELETE CASCADE" +
-            ")";
-
-            // Player collection items table for tracking individual item discoveries per player
-            String playerCollectionItems = table(TABLE_PLAYER_COLLECTION_ITEMS);
-            String createPlayerCollectionItemsTable = "CREATE TABLE IF NOT EXISTS " + playerCollectionItems + " (" +
-                "id " + autoIncPK + ", " +
-                "player_uuid CHAR(36) NOT NULL, " +
-                "collection_id INTEGER NOT NULL, " +
-                "item_id INTEGER NOT NULL, " +
-                "discovered_at " + timestampDefault + ", " +
-                "CONSTRAINT uq_" + tablePrefix + "player_collection_item UNIQUE (player_uuid, collection_id, item_id), " +
-                "FOREIGN KEY (collection_id) REFERENCES " + collection + "(id) ON DELETE CASCADE, " +
-                "FOREIGN KEY (item_id) REFERENCES " + loreItem + "(id) ON DELETE CASCADE" +
-            ")";
-
-            stmt.execute(createCollectionTable);
-            stmt.execute(createPlayerCollectionProgressTable);
-            stmt.execute("CREATE INDEX IF NOT EXISTS idx_" + tablePrefix + "player_collection_progress_player ON " + playerProgress + "(player_id)");
-            stmt.execute(createCollectionRewardTable);
-            stmt.execute("CREATE INDEX IF NOT EXISTS idx_" + tablePrefix + "collection_reward_collection ON " + collectionReward + "(collection_id)");
-            stmt.execute(createCollectionItemTable);
-            stmt.execute(createPlayerCollectionItemsTable);
-            stmt.execute("CREATE INDEX IF NOT EXISTS idx_" + tablePrefix + "player_collection_items_player ON " + playerCollectionItems + "(player_uuid)");
-            stmt.execute("CREATE INDEX IF NOT EXISTS idx_" + tablePrefix + "player_collection_items_collection ON " + playerCollectionItems + "(collection_id)");
+            setupCollectionSchema(stmt);
 
             // --- Lore Location Table (spatial data for lore entries) ---
             String loreLocation = table(TABLE_LORE_LOCATION);
@@ -275,8 +206,8 @@ public abstract class DatabaseConnection {
                 "FOREIGN KEY (entry_id) REFERENCES " + loreEntry + "(id) ON DELETE CASCADE" +
             ")";
             stmt.execute(createLoreLocationTable);
-            stmt.execute("CREATE INDEX IF NOT EXISTS idx_" + tablePrefix + "lore_location_entry ON " + loreLocation + "(entry_id)");
-            stmt.execute("CREATE INDEX IF NOT EXISTS idx_" + tablePrefix + "lore_location_world ON " + loreLocation + "(world, x, z)");
+            createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "lore_location_entry ON " + loreLocation + "(entry_id)");
+            createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "lore_location_world ON " + loreLocation + "(world, x, z)");
 
             // --- Lore Discovery Table (enriched discovery tracking) ---
             String loreDiscovery = table(TABLE_LORE_DISCOVERY);
@@ -295,9 +226,9 @@ public abstract class DatabaseConnection {
                 "FOREIGN KEY (entry_id) REFERENCES " + loreEntry + "(id) ON DELETE CASCADE" +
             ")";
             stmt.execute(createLoreDiscoveryTable);
-            stmt.execute("CREATE INDEX IF NOT EXISTS idx_" + tablePrefix + "lore_discovery_player ON " + loreDiscovery + "(player_uuid)");
-            stmt.execute("CREATE INDEX IF NOT EXISTS idx_" + tablePrefix + "lore_discovery_entry ON " + loreDiscovery + "(entry_id)");
-            stmt.execute("CREATE INDEX IF NOT EXISTS idx_" + tablePrefix + "lore_discovery_first ON " + loreDiscovery + "(is_first_discovery)");
+            createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "lore_discovery_player ON " + loreDiscovery + "(player_uuid)");
+            createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "lore_discovery_entry ON " + loreDiscovery + "(entry_id)");
+            createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "lore_discovery_first ON " + loreDiscovery + "(is_first_discovery)");
 
             // --- Player Achievement Table (achievement progress persistence) ---
             String playerAchievement = table(TABLE_PLAYER_ACHIEVEMENT);
@@ -313,8 +244,8 @@ public abstract class DatabaseConnection {
                 "PRIMARY KEY (player_uuid, achievement_id)" +
             ")";
             stmt.execute(createPlayerAchievementTable);
-            stmt.execute("CREATE INDEX IF NOT EXISTS idx_" + tablePrefix + "player_achievement_player ON " + playerAchievement + "(player_uuid)");
-            stmt.execute("CREATE INDEX IF NOT EXISTS idx_" + tablePrefix + "player_achievement_completed ON " + playerAchievement + "(completed)");
+            createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "player_achievement_player ON " + playerAchievement + "(player_uuid)");
+            createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "player_achievement_completed ON " + playerAchievement + "(completed)");
 
             // --- Player Reward Claim Table (per-player reward claim tracking) ---
             String playerRewardClaim = table(TABLE_PLAYER_REWARD_CLAIM);
@@ -323,13 +254,313 @@ public abstract class DatabaseConnection {
                 "reward_id INTEGER NOT NULL, " +
                 "player_uuid CHAR(36) NOT NULL, " +
                 "claimed_at BIGINT NOT NULL, " +
-                "FOREIGN KEY (reward_id) REFERENCES " + collectionReward + "(id) ON DELETE CASCADE" +
+                "FOREIGN KEY (reward_id) REFERENCES " + table(TABLE_COLLECTION_REWARD) + "(id) ON DELETE CASCADE" +
             ")";
             stmt.execute(createPlayerRewardClaimTable);
-            stmt.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_" + tablePrefix + "reward_claim_unique ON " + playerRewardClaim + "(reward_id, player_uuid)");
-            stmt.execute("CREATE INDEX IF NOT EXISTS idx_" + tablePrefix + "reward_claim_player ON " + playerRewardClaim + "(player_uuid)");
+            createIndexSafely(stmt, "CREATE UNIQUE INDEX idx_" + tablePrefix + "reward_claim_unique ON " + playerRewardClaim + "(reward_id, player_uuid)");
+            createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "reward_claim_player ON " + playerRewardClaim + "(player_uuid)");
 
+            // --- Lore Map Table (cross-server map storage) ---
+            String loreMap = table(TABLE_LORE_MAP);
+            String createLoreMapTable = "CREATE TABLE IF NOT EXISTS " + loreMap + " (" +
+                "id " + autoIncPK + ", " +
+                "lore_entry_id CHAR(36), " +
+                "map_subtype VARCHAR(20) NOT NULL DEFAULT 'ATLAS', " +
+                "center_x INTEGER NOT NULL DEFAULT 0, " +
+                "center_z INTEGER NOT NULL DEFAULT 0, " +
+                "scale TINYINT NOT NULL DEFAULT 0, " +
+                "world_name VARCHAR(64) NOT NULL DEFAULT 'world', " +
+                "dimension VARCHAR(64) NOT NULL DEFAULT 'NORMAL', " +
+                "pixel_data MEDIUMTEXT, " +
+                "created_by VARCHAR(64), " +
+                "created_at " + timestampDefault + ", " +
+                "FOREIGN KEY (lore_entry_id) REFERENCES " + loreEntry + "(id) ON DELETE SET NULL" +
+            ")";
+            stmt.execute(createLoreMapTable);
+            createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "lore_map_entry ON " + loreMap + "(lore_entry_id)");
+            createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "lore_map_subtype ON " + loreMap + "(map_subtype)");
+
+            // --- Quest Item Presets Table (quest_id → lore_item binding for ITEM rewards) ---
+            String questItemPresets = table(TABLE_QUEST_ITEM_PRESETS);
+            String createQuestItemPresetsTable = "CREATE TABLE IF NOT EXISTS " + questItemPresets + " (" +
+                "id " + autoIncPK + ", " +
+                "quest_id VARCHAR(100) NOT NULL, " +
+                "lore_item_id INT NOT NULL, " +
+                "label VARCHAR(100), " +
+                "notes TEXT, " +
+                "created_at " + timestampDefault + ", " +
+                "CONSTRAINT uq_" + tablePrefix + "quest_item_preset UNIQUE (quest_id, lore_item_id), " +
+                "FOREIGN KEY (lore_item_id) REFERENCES " + loreItem + "(id) ON DELETE CASCADE" +
+            ")";
+            stmt.execute(createQuestItemPresetsTable);
+            createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "quest_item_presets_quest ON " + questItemPresets + "(quest_id)");
+
+            // --- Lore Item RNG Pool Table (rarity-weighted item pools for RNG_ITEM rewards) ---
+            String rngPool = table(TABLE_LORE_ITEM_RNG_POOL);
+            String createRngPoolTable = "CREATE TABLE IF NOT EXISTS " + rngPool + " (" +
+                "id " + autoIncPK + ", " +
+                "pool_id VARCHAR(100) NOT NULL, " +
+                "lore_item_id INT NOT NULL, " +
+                "rarity_tier VARCHAR(20) NOT NULL DEFAULT 'COMMON', " +
+                "weight INT NOT NULL DEFAULT 100, " +
+                "is_active " + boolType + " NOT NULL DEFAULT TRUE, " +
+                "created_at " + timestampDefault + ", " +
+                "CONSTRAINT uq_" + tablePrefix + "rng_pool_item UNIQUE (pool_id, lore_item_id), " +
+                "FOREIGN KEY (lore_item_id) REFERENCES " + loreItem + "(id) ON DELETE CASCADE" +
+            ")";
+            stmt.execute(createRngPoolTable);
+            createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "rng_pool_id ON " + rngPool + "(pool_id)");
+            createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "rng_pool_tier ON " + rngPool + "(pool_id, rarity_tier)");
+
+            runMigrations(stmt);
             logger.debug("Database tables created/verified");
+        }
+    }
+
+    private void runMigrations(Statement stmt) {
+        // Ensure lore_map table exists on upgrades from pre-#910 installs.
+        // Safe no-op on fresh installs where createTables() already created it.
+        String loreEntry = table(TABLE_LORE_ENTRY);
+        String loreMap = table(TABLE_LORE_MAP);
+        String autoIncPK = dialect.getAutoIncrementPK();
+        String timestampDefault = dialect.getTimestampType(true);
+        String ensureLoreMap = "CREATE TABLE IF NOT EXISTS " + loreMap + " (" +
+            "id " + autoIncPK + ", " +
+            "lore_entry_id CHAR(36), " +
+            "map_subtype VARCHAR(20) NOT NULL DEFAULT 'ATLAS', " +
+            "center_x INTEGER NOT NULL DEFAULT 0, " +
+            "center_z INTEGER NOT NULL DEFAULT 0, " +
+            "scale TINYINT NOT NULL DEFAULT 0, " +
+            "world_name VARCHAR(64) NOT NULL DEFAULT 'world', " +
+            "dimension VARCHAR(64) NOT NULL DEFAULT 'NORMAL', " +
+            "pixel_data MEDIUMTEXT, " +
+            "created_by VARCHAR(64), " +
+            "created_at " + timestampDefault + ", " +
+            "FOREIGN KEY (lore_entry_id) REFERENCES " + loreEntry + "(id) ON DELETE SET NULL" +
+        ")";
+        createTableSafely(stmt, ensureLoreMap, TABLE_LORE_MAP);
+        createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "lore_map_entry ON " + loreMap + "(lore_entry_id)");
+        createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "lore_map_subtype ON " + loreMap + "(map_subtype)");
+    }
+
+    /**
+     * Create all collection-related tables in the given statement context.
+     * Extracted so both createTables() and ensureCollectionTables() share one DDL source.
+     */
+    private void setupCollectionSchema(Statement stmt) {
+        String autoIncPK = dialect.getAutoIncrementPK();
+        String boolType = dialect.getBooleanType();
+        String timestampDefault = dialect.getTimestampType(true);
+        String collection = table(TABLE_COLLECTION);
+        String playerProgress = table(TABLE_PLAYER_COLLECTION_PROGRESS);
+        String collectionReward = table(TABLE_COLLECTION_REWARD);
+        String collectionItem = table(TABLE_COLLECTION_ITEM);
+        String playerCollectionItems = table(TABLE_PLAYER_COLLECTION_ITEMS);
+        String loreItem = table(TABLE_LORE_ITEM);
+
+        createTableSafely(stmt,
+            "CREATE TABLE IF NOT EXISTS " + collection + " (" +
+            "id " + autoIncPK + ", " +
+            "collection_id VARCHAR(255) NOT NULL, " +
+            "name VARCHAR(255) NOT NULL, " +
+            "description TEXT, " +
+            "theme_id VARCHAR(100), " +
+            "is_active " + boolType + " DEFAULT 1, " +
+            "created_at BIGINT NOT NULL, " +
+            "reward_entry_id VARCHAR(36) NULL, " +
+            "reward_achievement_id VARCHAR(100) NULL, " +
+            "CONSTRAINT uq_" + tablePrefix + "collection_id UNIQUE (collection_id)" +
+            ")", "collection");
+
+        createTableSafely(stmt,
+            "CREATE TABLE IF NOT EXISTS " + playerProgress + " (" +
+            "id " + autoIncPK + ", " +
+            "player_id VARCHAR(36) NOT NULL, " +
+            "collection_id VARCHAR(255) NOT NULL, " +
+            "progress REAL DEFAULT 0.0, " +
+            "completed_at INTEGER, " +
+            "last_updated INTEGER NOT NULL, " +
+            "CONSTRAINT uq_" + tablePrefix + "player_collection UNIQUE (player_id, collection_id)" +
+            ")", "player_collection_progress");
+
+        createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "player_collection_progress_player ON " + playerProgress + "(player_id)");
+
+        createTableSafely(stmt,
+            "CREATE TABLE IF NOT EXISTS " + collectionReward + " (" +
+            "id " + autoIncPK + ", " +
+            "collection_id VARCHAR(255) NOT NULL, " +
+            "reward_type VARCHAR(50) NOT NULL, " +
+            "reward_data TEXT, " +
+            "is_claimed " + boolType + " DEFAULT 0" +
+            ")", "collection_reward");
+
+        createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "collection_reward_collection ON " + collectionReward + "(collection_id)");
+
+        createTableSafely(stmt,
+            "CREATE TABLE IF NOT EXISTS " + collectionItem + " (" +
+            "collection_id INTEGER NOT NULL, " +
+            "item_id INTEGER NOT NULL, " +
+            "entry_id CHAR(36) NULL, " +
+            "sequence_number INTEGER DEFAULT 0, " +
+            "item_config TEXT, " +
+            "PRIMARY KEY (collection_id, item_id), " +
+            "FOREIGN KEY (collection_id) REFERENCES " + collection + "(id) ON DELETE CASCADE, " +
+            "FOREIGN KEY (item_id) REFERENCES " + loreItem + "(id) ON DELETE CASCADE" +
+            ")", "collection_item");
+
+        createTableSafely(stmt,
+            "CREATE TABLE IF NOT EXISTS " + playerCollectionItems + " (" +
+            "id " + autoIncPK + ", " +
+            "player_uuid CHAR(36) NOT NULL, " +
+            "collection_id INTEGER NOT NULL, " +
+            "item_id INTEGER NOT NULL, " +
+            "entry_uuid CHAR(36) NULL, " +
+            "discovered_at " + timestampDefault + ", " +
+            "CONSTRAINT uq_" + tablePrefix + "player_collection_item UNIQUE (player_uuid, collection_id, item_id), " +
+            "FOREIGN KEY (collection_id) REFERENCES " + collection + "(id) ON DELETE CASCADE, " +
+            "FOREIGN KEY (item_id) REFERENCES " + loreItem + "(id) ON DELETE CASCADE" +
+            ")", "player_collection_items");
+
+        createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "player_collection_items_player ON " + playerCollectionItems + "(player_uuid)");
+        createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "player_collection_items_collection ON " + playerCollectionItems + "(collection_id)");
+    }
+
+    private void modifyColumnType(Statement stmt, String tableName, String column, String definition) {
+        // MODIFY COLUMN is MySQL-only; SQLite type affinity handles large integers natively
+        if (!"MySQL".equals(dialect.getName())) {
+            return;
+        }
+        try {
+            stmt.execute("ALTER TABLE " + tableName + " MODIFY COLUMN " + column + " " + definition);
+            logger.debug("Migration: modified column " + column + " on " + tableName);
+        } catch (SQLException e) {
+            String msg = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
+            if (!msg.contains("doesn't exist") && !msg.contains("unknown column")) {
+                logger.debug("Migration: column type already correct for " + column + " on " + tableName);
+            }
+        }
+    }
+
+    private void addColumnIfMissing(Statement stmt, String tableName, String column, String definition) {
+        try {
+            stmt.execute("ALTER TABLE " + tableName + " ADD COLUMN " + column + " " + definition);
+            logger.debug("Migration: added column " + column + " to " + tableName);
+        } catch (SQLException e) {
+            String msg = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
+            if (!msg.contains("duplicate column") && !msg.contains("already exists")) {
+                logger.warning("Migration warning [" + column + " on " + tableName + "]: " + e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Execute a CREATE INDEX statement, silently ignoring "already exists" errors.
+     * MySQL 5.7 does not support CREATE INDEX IF NOT EXISTS — this method provides
+     * equivalent behavior across MySQL 5.7+, MySQL 8.0+, and SQLite.
+     */
+    private void createIndexSafely(Statement stmt, String sql) {
+        try {
+            stmt.execute(sql);
+        } catch (SQLException e) {
+            String msg = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
+            if (!msg.contains("duplicate key name") && !msg.contains("already exists")) {
+                logger.warning("Index creation warning: " + e.getMessage() + " | SQL: " + sql);
+            }
+        }
+    }
+
+    /**
+     * Execute a CREATE TABLE statement with explicit error logging.
+     * Unlike stmt.execute(), failures here are logged at WARNING level so they
+     * are visible in production logs without requiring debug mode.
+     */
+    private void createTableSafely(Statement stmt, String sql, String tableName) {
+        try {
+            stmt.execute(sql);
+            logger.info("Schema: table ready — " + tableName);
+        } catch (SQLException e) {
+            logger.warning("Schema: failed to create table '" + tableName + "': " + e.getMessage());
+            logger.warning("Schema SQL: " + sql.substring(0, Math.min(300, sql.length())));
+        }
+    }
+
+    /**
+     * DROP all lore tables (schema reset). Call before createTables() to start fresh.
+     * Disables FK checks for MySQL; SQLite FK checks are off by default.
+     */
+    public void dropAllTables() {
+        logger.warning("=== DEV: dropAllTables — dropping all lore tables ===");
+        String[] tables = {
+            // leaf → root order (FK children before parents)
+            table(TABLE_PLAYER_REWARD_CLAIM),
+            table(TABLE_PLAYER_ACHIEVEMENT),
+            table(TABLE_PLAYER_COLLECTION_ITEMS),
+            table(TABLE_PLAYER_COLLECTION_PROGRESS),
+            table(TABLE_COLLECTION_ITEM),
+            table(TABLE_COLLECTION_REWARD),
+            table(TABLE_LORE_DISCOVERY),
+            table(TABLE_LORE_LOCATION),
+            table(TABLE_LORE_MAP),
+            table(TABLE_LORE_METADATA),
+            table(TABLE_LORE_ITEM),
+            table(TABLE_LORE_SUBMISSION),
+            table(TABLE_COLLECTION),
+            table(TABLE_LORE_ENTRY)
+        };
+        try (Connection conn = rvnkProvider.getConnection();
+             Statement stmt = conn.createStatement()) {
+            if ("MySQL".equals(dialect.getName())) {
+                stmt.execute("SET FOREIGN_KEY_CHECKS=0");
+            }
+            for (String t : tables) {
+                stmt.execute("DROP TABLE IF EXISTS " + t);
+                logger.debug("DEV: dropped table " + t);
+            }
+            if ("MySQL".equals(dialect.getName())) {
+                stmt.execute("SET FOREIGN_KEY_CHECKS=1");
+            }
+            logger.warning("=== DEV: dropAllTables complete ===");
+        } catch (SQLException e) {
+            logger.error("DEV: dropAllTables failed", e);
+        }
+    }
+
+    /**
+     * DELETE all rows from every lore table (data wipe, schema intact).
+     * Uses FK check disable so order doesn't matter.
+     */
+    public void purgeAllData() {
+        logger.warning("=== DEV: purgeAllData — truncating all lore table rows ===");
+        String[] tables = {
+            table(TABLE_PLAYER_REWARD_CLAIM),
+            table(TABLE_PLAYER_ACHIEVEMENT),
+            table(TABLE_PLAYER_COLLECTION_ITEMS),
+            table(TABLE_PLAYER_COLLECTION_PROGRESS),
+            table(TABLE_COLLECTION_ITEM),
+            table(TABLE_COLLECTION_REWARD),
+            table(TABLE_LORE_DISCOVERY),
+            table(TABLE_LORE_LOCATION),
+            table(TABLE_LORE_METADATA),
+            table(TABLE_LORE_ITEM),
+            table(TABLE_LORE_SUBMISSION),
+            table(TABLE_COLLECTION),
+            table(TABLE_LORE_ENTRY)
+        };
+        try (Connection conn = rvnkProvider.getConnection();
+             Statement stmt = conn.createStatement()) {
+            if ("MySQL".equals(dialect.getName())) {
+                stmt.execute("SET FOREIGN_KEY_CHECKS=0");
+            }
+            for (String t : tables) {
+                stmt.execute("DELETE FROM " + t);
+                logger.debug("DEV: purged table " + t);
+            }
+            if ("MySQL".equals(dialect.getName())) {
+                stmt.execute("SET FOREIGN_KEY_CHECKS=1");
+            }
+            logger.warning("=== DEV: purgeAllData complete ===");
+        } catch (SQLException e) {
+            logger.error("DEV: purgeAllData failed", e);
         }
     }
 

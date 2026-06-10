@@ -126,8 +126,10 @@ public class LoreSearchSubCommand implements SubCommand {
         SearchCriteria criteria = criteriaBuilder.build();
         logger.debug("Executing search with criteria: " + criteria);
 
-        List<SearchResult> results = searchService.search(criteria);
-        int totalMatches = searchService.countMatches(criteria);
+        List<SearchResult> results = searchService.search(criteria).stream()
+                .filter(r -> LoreCommandUtil.canSeeEntry(sender, r.getEntry()))
+                .collect(Collectors.toList());
+        int totalMatches = results.size();
 
         if (results.isEmpty()) {
             sendMessage(sender, ChatColor.YELLOW + "No results found" +
@@ -349,7 +351,7 @@ public class LoreSearchSubCommand implements SubCommand {
 
     @Override
     public boolean hasPermission(CommandSender sender) {
-        return sender.hasPermission("rvnklore.search") || sender.hasPermission("rvnklore.user");
+        return sender.hasPermission("rvnklore.search") || sender.hasPermission("rvnklore.use");
     }
 
     @Override

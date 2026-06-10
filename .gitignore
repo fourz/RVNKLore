@@ -4,3 +4,5 @@ target/
 BuildTools/
 .github/logs/
 logs/
+dependency-reduced-pom.xml
+/org/

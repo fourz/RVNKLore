@@ -50,7 +50,7 @@ public class LoreExporter {
                     return f;
                 }
             }
-            return JSON; // Default to JSON
+            return null;
         }
     }
 

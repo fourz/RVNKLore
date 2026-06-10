@@ -8,6 +8,7 @@ import org.fourz.RVNKLore.data.repository.AchievementRepository;
 import org.fourz.RVNKLore.data.repository.CollectionRewardRepository;
 import org.fourz.RVNKLore.data.repository.DiscoveryRepository;
 import org.fourz.RVNKLore.data.repository.LocationRepository;
+import org.fourz.RVNKLore.data.repository.MapRepository;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
 import org.fourz.RVNKLore.lore.player.PlayerRepository;
@@ -22,7 +23,6 @@ import java.sql.Connection;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -50,6 +50,7 @@ public class DatabaseManager {
     private DiscoveryRepository discoveryRepository;
     private AchievementRepository achievementRepository;
     private CollectionRewardRepository collectionRewardRepository;
+    private MapRepository mapRepository;
     private DatabaseBackupService backupService;
     private volatile boolean connectionValid = false;
     private volatile boolean inFallbackMode = false;
@@ -86,13 +87,17 @@ public class DatabaseManager {
             connection.initialize();
             connection.createTables();
 
-            // Initialize repositories and services using the connection
-            loreRepository = new LoreEntryRepository(plugin, connection);
-            locationRepository = new LocationRepository(plugin, connection);
-            discoveryRepository = new DiscoveryRepository(plugin, connection);
-            achievementRepository = new AchievementRepository(plugin, connection);
-            collectionRewardRepository = new CollectionRewardRepository(plugin, connection);
-            backupService = new DatabaseBackupService(plugin, connection);
+            // Dev reset flags — both are no-ops unless explicitly enabled in config.yml
+            if (plugin.getConfigManager().isPurgeSchema()) {
+                logger.warning("=== DEV purgeSchema ENABLED — dropping and recreating all lore tables ===");
+                connection.dropAllTables();
+                connection.createTables();
+            } else if (plugin.getConfigManager().isPurgeData()) {
+                logger.warning("=== DEV purgeData ENABLED — deleting all lore table rows ===");
+                connection.purgeAllData();
+            }
+
+            wireRepositories(connection);
 
             connectionValid = true;
             inFallbackMode = false;
@@ -129,13 +134,7 @@ public class DatabaseManager {
             connection.initialize();
             connection.createTables();
 
-            // Initialize repositories with fallback connection
-            loreRepository = new LoreEntryRepository(plugin, connection);
-            locationRepository = new LocationRepository(plugin, connection);
-            discoveryRepository = new DiscoveryRepository(plugin, connection);
-            achievementRepository = new AchievementRepository(plugin, connection);
-            collectionRewardRepository = new CollectionRewardRepository(plugin, connection);
-            backupService = new DatabaseBackupService(plugin, connection);
+            wireRepositories(connection);
 
             connectionValid = true;
             inFallbackMode = true;
@@ -216,8 +215,31 @@ public class DatabaseManager {
             logger.warning("Database connection invalid, cannot delete lore entry");
             return false;
         }
-        // Synchronous wrapper for async operation
         return loreRepository.deleteLoreEntry(id).join();
+    }
+
+    public boolean updateLoreEntryInPlace(LoreEntry entry) {
+        if (!validateConnection()) {
+            logger.warning("Database connection invalid, cannot update lore entry in-place");
+            return false;
+        }
+        return loreRepository.updateLoreEntryInPlace(entry).join();
+    }
+
+    public boolean softDeleteLoreEntry(UUID id) {
+        if (!validateConnection()) {
+            logger.warning("Database connection invalid, cannot soft-delete lore entry");
+            return false;
+        }
+        return loreRepository.softDeleteEntry(id).join();
+    }
+
+    public List<LoreEntry> getArchivedLoreEntries() {
+        if (!validateConnection()) {
+            logger.warning("Database connection invalid, cannot retrieve archived entries");
+            return new java.util.ArrayList<>();
+        }
+        return loreRepository.getAllLoreEntriesIncludingArchived().join();
     }
 
     /**
@@ -234,6 +256,18 @@ public class DatabaseManager {
             return false;
         }
         return loreRepository.approveLoreEntry(entryId, approvedBy).join();
+    }
+
+    public boolean rejectLoreEntry(String entryId) {
+        return rejectLoreEntry(entryId, null);
+    }
+
+    public boolean rejectLoreEntry(String entryId, String reason) {
+        if (!validateConnection()) {
+            logger.warning("Database connection invalid, cannot reject lore entry");
+            return false;
+        }
+        return loreRepository.rejectLoreEntry(entryId, reason).join();
     }
 
     /**
@@ -412,12 +446,7 @@ public class DatabaseManager {
             }
 
             connection = primaryConnection;
-            loreRepository = new LoreEntryRepository(plugin, connection);
-            locationRepository = new LocationRepository(plugin, connection);
-            discoveryRepository = new DiscoveryRepository(plugin, connection);
-            achievementRepository = new AchievementRepository(plugin, connection);
-            collectionRewardRepository = new CollectionRewardRepository(plugin, connection);
-            backupService = new DatabaseBackupService(plugin, connection);
+            wireRepositories(connection);
 
             connectionValid = true;
             inFallbackMode = false;
@@ -433,6 +462,22 @@ public class DatabaseManager {
             fallbackTracker.recordFailure();
             return false;
         }
+    }
+
+    /**
+     * Wire all repository fields from the given database connection.
+     * Called after every successful connection (primary, fallback, and reconnect).
+     *
+     * @param conn The active DatabaseConnection to bind repositories to
+     */
+    private void wireRepositories(DatabaseConnection conn) {
+        loreRepository = new LoreEntryRepository(plugin, conn);
+        locationRepository = new LocationRepository(plugin, conn);
+        discoveryRepository = new DiscoveryRepository(plugin, conn);
+        achievementRepository = new AchievementRepository(plugin, conn);
+        collectionRewardRepository = new CollectionRewardRepository(plugin, conn);
+        mapRepository = new MapRepository(plugin, conn);
+        backupService = new DatabaseBackupService(plugin, conn);
     }
 
     // ==================== Location Repository Facade ====================
@@ -503,6 +548,13 @@ public class DatabaseManager {
     }
 
     /**
+     * Get the MapRepository for lore_map cross-server map storage.
+     */
+    public MapRepository getMapRepository() {
+        return mapRepository;
+    }
+
+    /**
      * Close the database connection
      */
     public void close() {
@@ -567,7 +619,7 @@ public class DatabaseManager {
 
     /**
      * Get the database connection factory
-     * 
+     *
      * @return The DatabaseConnectionFactory instance
      */
     private boolean validateConnection() {

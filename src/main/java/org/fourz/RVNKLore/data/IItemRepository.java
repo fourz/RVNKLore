@@ -1,7 +1,7 @@
 package org.fourz.RVNKLore.data;
 
 import org.fourz.RVNKLore.lore.item.ItemProperties;
-import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
+import org.fourz.RVNKLore.lore.item.collection.LoreCollection;
 import org.json.simple.JSONObject;
 
 import java.util.List;
@@ -115,6 +115,14 @@ public interface IItemRepository {
      */
     CompletableFuture<List<Integer>> getAllItemIdsByName(String name);
 
+    /**
+     * Get all preset items bound to a quest.
+     *
+     * @param questId The quest ID to look up
+     * @return Future containing all ItemProperties linked to this quest via quest_item_presets
+     */
+    CompletableFuture<List<ItemProperties>> getPresetsForQuest(String questId);
+
     // ==================== Collection Operations ====================
 
     /**
@@ -214,14 +222,14 @@ public interface IItemRepository {
      * @param collection The collection to save
      * @return CompletableFuture that completes with true if successfully saved
      */
-    CompletableFuture<Boolean> saveCollection(ItemCollection collection);
+    CompletableFuture<Boolean> saveCollection(LoreCollection collection);
 
     /**
      * Load all collections from the database.
      *
      * @return CompletableFuture that completes with a list of all collections
      */
-    CompletableFuture<List<ItemCollection>> loadAllCollections();
+    CompletableFuture<List<LoreCollection>> loadAllCollections();
 
     // ==================== Player Progress Operations ====================
 

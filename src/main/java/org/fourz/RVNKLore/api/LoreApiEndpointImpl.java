@@ -10,7 +10,7 @@ import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreManager;
 import org.fourz.RVNKLore.lore.LoreType;
 import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
-import org.fourz.RVNKLore.lore.item.collection.ItemCollection;
+import org.fourz.RVNKLore.lore.item.collection.LoreCollection;
 import org.fourz.RVNKLore.lore.player.PlayerManager;
 import org.fourz.RVNKLore.search.LoreSearchService;
 import org.fourz.RVNKLore.search.SearchCriteria;
@@ -92,7 +92,7 @@ public class LoreApiEndpointImpl implements ILoreApiService {
             return loreManager.getLoreEntryByName(id)
                 .<ApiResponse<?>>handle((optEntry, ex) -> {
                     if (ex != null) return ApiResponse.error("INTERNAL_ERROR",
-                        "Failed to retrieve lore entry: " + unwrapMessage(ex));
+                        "An unexpected error occurred.");
                     return optEntry
                         .map(entry -> ApiResponse.success(LoreEntryResponse.from(entry)))
                         .orElse(ApiResponse.error("NOT_FOUND", "Lore entry not found: " + id));
@@ -102,7 +102,7 @@ public class LoreApiEndpointImpl implements ILoreApiService {
         return loreManager.getLoreEntry(uuid)
             .<ApiResponse<?>>handle((optEntry, ex) -> {
                 if (ex != null) return ApiResponse.error("INTERNAL_ERROR",
-                    "Failed to retrieve lore entry: " + unwrapMessage(ex));
+                    "An unexpected error occurred.");
                 return optEntry
                     .map(entry -> ApiResponse.success(LoreEntryResponse.from(entry)))
                     .orElse(ApiResponse.error("NOT_FOUND", "Lore entry not found: " + id));
@@ -125,7 +125,7 @@ public class LoreApiEndpointImpl implements ILoreApiService {
         return loreManager.getLoreEntriesByType(type)
             .<ApiResponse<?>>handle((entries, ex) -> {
                 if (ex != null) return ApiResponse.error("INTERNAL_ERROR",
-                    "Failed to retrieve lore entries: " + unwrapMessage(ex));
+                    "An unexpected error occurred.");
                 int total = entries.size();
                 List<LoreEntryResponse> data = entries.stream()
                     .skip(offset)
@@ -173,7 +173,7 @@ public class LoreApiEndpointImpl implements ILoreApiService {
             } catch (Exception e) {
                 logger.error("Error searching lore entries", e);
                 return (ApiResponse<?>) ApiResponse.error("INTERNAL_ERROR",
-                    "Failed to search lore entries: " + e.getMessage());
+                    "An unexpected error occurred.");
             }
         });
     }
@@ -204,8 +204,29 @@ public class LoreApiEndpointImpl implements ILoreApiService {
                 entry.setSubmittedBy(request.getSubmittedBy() != null ? request.getSubmittedBy() : "web");
 
                 if (request.getMetadata() != null) {
+                    if (request.getMetadata().size() > 20) {
+                        return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", "Metadata exceeds maximum of 20 keys");
+                    }
+
+                    String[] denylist = {"validation_errors", "material", "is_obtainable", "collection"};
                     for (Map.Entry<String, String> meta : request.getMetadata().entrySet()) {
-                        entry.addMetadata(meta.getKey(), meta.getValue());
+                        String key = meta.getKey();
+                        String value = meta.getValue();
+
+                        if (key == null || key.length() > 64) {
+                            return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", "Metadata key exceeds maximum length of 64 characters");
+                        }
+                        if (value == null || value.length() > 512) {
+                            return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", "Metadata value exceeds maximum length of 512 characters");
+                        }
+
+                        for (String denied : denylist) {
+                            if (key.equals(denied)) {
+                                return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", "Metadata key '" + key + "' is reserved");
+                            }
+                        }
+
+                        entry.addMetadata(key, value);
                     }
                 }
 
@@ -229,7 +250,7 @@ public class LoreApiEndpointImpl implements ILoreApiService {
             } catch (Exception e) {
                 logger.error("Error submitting lore entry", unwrapException(e));
                 return (ApiResponse<?>) ApiResponse.error("INTERNAL_ERROR",
-                    "Failed to submit lore entry: " + unwrapMessage(e));
+                    "An unexpected error occurred.");
             }
         });
     }
@@ -285,8 +306,8 @@ public class LoreApiEndpointImpl implements ILoreApiService {
         return CompletableFuture.supplyAsync(() -> {
             try {
                 List<CollectionResponse> collections = new ArrayList<>();
-                Map<String, ItemCollection> all = collectionManager.getAllCollectionsSync();
-                for (ItemCollection col : all.values()) {
+                Map<String, LoreCollection> all = collectionManager.getAllCollectionsSync();
+                for (LoreCollection col : all.values()) {
                     collections.add(CollectionResponse.builder()
                         .id(col.getId())
                         .name(col.getName())

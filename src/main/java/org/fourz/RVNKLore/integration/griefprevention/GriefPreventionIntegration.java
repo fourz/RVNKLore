@@ -7,18 +7,27 @@ import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.server.PluginEnableEvent;
 import org.bukkit.event.server.PluginDisableEvent;
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.discovery.DiscoveryManager;
+import org.fourz.RVNKLore.discovery.DiscoveryTriggerType;
+import org.fourz.RVNKLore.lore.LoreEntry;
+import org.fourz.RVNKLore.lore.LoreManager;
+import org.fourz.RVNKLore.lore.LoreType;
 import org.fourz.rvnkcore.util.log.LogManager;
 
 import java.util.ArrayList;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.Map;
 
 /**
  * Manages GriefPrevention API lifecycle for claim integration.
  * Listens for GriefPrevention enable/disable events to safely initialize/cleanup.
+ * Also implements claim-enter discovery via PlayerMoveEvent boundary detection.
  */
 public class GriefPreventionIntegration implements Listener {
 
@@ -27,6 +36,9 @@ public class GriefPreventionIntegration implements Listener {
     private GriefPrevention gpInstance;
     private DataStore dataStore;
     private boolean enabled = false;
+
+    // Track previous claim for each player to detect claim transitions
+    private final Map<UUID, Long> playerPreviousClaimIds = new ConcurrentHashMap<>();
 
     public GriefPreventionIntegration(RVNKLore plugin) {
         this.plugin = plugin;
@@ -82,6 +94,94 @@ public class GriefPreventionIntegration implements Listener {
         if ("GriefPrevention".equalsIgnoreCase(event.getPlugin().getName()) && enabled) {
             logger.info("GriefPrevention unloaded - cleaning up integration");
             cleanup();
+        }
+    }
+
+    /**
+     * Listen for player movement to detect claim entries and trigger CLAIM_ENTER discovery.
+     * Compares the claim at the new location with the claim at the previous location.
+     */
+    @EventHandler
+    public void onPlayerMove(PlayerMoveEvent event) {
+        if (!enabled || dataStore == null) {
+            return;
+        }
+
+        Player player = event.getPlayer();
+        UUID playerUuid = player.getUniqueId();
+
+        try {
+            Location to = event.getTo();
+            Location from = event.getFrom();
+
+            // Only check on block changes, not sub-block movement
+            if (to == null || (to.getBlockX() == from.getBlockX() &&
+                               to.getBlockY() == from.getBlockY() &&
+                               to.getBlockZ() == from.getBlockZ())) {
+                return;
+            }
+
+            Claim previousClaim = getClaimAt(from).orElse(null);
+            Claim currentClaim = getClaimAt(to).orElse(null);
+
+            Long previousClaimId = previousClaim != null ? previousClaim.getID() : null;
+            Long currentClaimId = currentClaim != null ? currentClaim.getID() : null;
+
+            // If claim changed, check for discovery
+            if ((previousClaimId == null && currentClaimId != null) ||
+                (previousClaimId != null && !previousClaimId.equals(currentClaimId))) {
+                // Player entered a new claim (or left a claim)
+                if (currentClaimId != null) {
+                    triggerClaimEnterDiscovery(player, currentClaim);
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("Error checking claim entry for " + player.getName() + ": " + e.getMessage());
+        }
+    }
+
+    /**
+     * Trigger discovery for a player entering a claim that has associated FACTION lore.
+     */
+    private void triggerClaimEnterDiscovery(Player player, Claim claim) {
+        LoreManager loreManager = plugin.getLoreManager();
+        DiscoveryManager discoveryManager = plugin.getDiscoveryManager();
+
+        if (loreManager == null || discoveryManager == null) {
+            return;
+        }
+
+        try {
+            // Get all FACTION lore entries and check which one matches this claim
+            java.util.List<LoreEntry> allEntries = loreManager.getAllLoreEntriesSync();
+
+            for (LoreEntry entry : allEntries) {
+                // Only match FACTION types (only faction entries can have claim_id)
+                if (entry.getType() != LoreType.FACTION) {
+                    continue;
+                }
+
+                // Check if entry has claim_id metadata matching current claim
+                if (entry.hasMetadata("claim_id")) {
+                    try {
+                        long entryClaimId = Long.parseLong(entry.getMetadata("claim_id"));
+                        if (entryClaimId == claim.getID()) {
+                            // Match found — trigger discovery
+                            discoveryManager.triggerDiscovery(
+                                player,
+                                entry,
+                                DiscoveryTriggerType.CLAIM_ENTER,
+                                player.getLocation()
+                            );
+                            return; // Only trigger once per claim
+                        }
+                    } catch (NumberFormatException e) {
+                        logger.debug("Invalid claim_id for entry " + entry.getId() + ": " + entry.getMetadata("claim_id"));
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("Error triggering claim enter discovery: " + e.getMessage());
         }
     }
 
@@ -188,6 +288,7 @@ public class GriefPreventionIntegration implements Listener {
     public void cleanup() {
         gpInstance = null;
         dataStore = null;
+        playerPreviousClaimIds.clear();
         enabled = false;
     }
 

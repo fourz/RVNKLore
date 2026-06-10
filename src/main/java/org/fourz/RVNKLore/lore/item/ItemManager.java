@@ -1,7 +1,10 @@
 package org.fourz.RVNKLore.lore.item;
 
+import org.bukkit.ChatColor;
+import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.persistence.PersistentDataType;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.data.DatabaseConnection;
 import org.fourz.RVNKLore.data.ItemRepository;
@@ -248,7 +251,6 @@ public class ItemManager implements IItemService {
                 }
                 return fallback;
             default:
-                // For standard items, create a basic item with the properties
                 ItemStack item = new ItemStack(properties.getMaterial());
                 org.bukkit.inventory.meta.ItemMeta meta = item.getItemMeta();
                 if (meta != null) {
@@ -257,8 +259,26 @@ public class ItemManager implements IItemService {
                     }
                     if (properties.getLore() != null && !properties.getLore().isEmpty()) {
                         meta.setLore(properties.getLore());
+                    } else if (properties.getRarity() != null && !properties.getRarity().isEmpty()) {
+                        meta.setLore(java.util.Arrays.asList(
+                            org.bukkit.ChatColor.GRAY + "" + org.bukkit.ChatColor.ITALIC + properties.getRarity()
+                        ));
                     }
-                    meta.setCustomModelData(properties.getCustomModelData());
+                    if (properties.getCustomModelData() > 0) {
+                        meta.setCustomModelData(properties.getCustomModelData());
+                    }
+                    if (properties.getDatabaseId() > 0) {
+                        org.bukkit.NamespacedKey itemIdKey = new org.bukkit.NamespacedKey(plugin, "lore_item_id");
+                        meta.getPersistentDataContainer().set(itemIdKey,
+                            org.bukkit.persistence.PersistentDataType.INTEGER,
+                            properties.getDatabaseId());
+                    }
+                    if (properties.getLoreEntryId() != null && !properties.getLoreEntryId().isEmpty()) {
+                        org.bukkit.NamespacedKey entryKey = new org.bukkit.NamespacedKey(plugin, "lore_entry_id");
+                        meta.getPersistentDataContainer().set(entryKey,
+                            org.bukkit.persistence.PersistentDataType.STRING,
+                            properties.getLoreEntryId());
+                    }
                     item.setItemMeta(meta);
                 }
                 return item;
@@ -606,6 +626,41 @@ public class ItemManager implements IItemService {
     @Override
     public CompletableFuture<Void> refreshCache() {
         return CompletableFuture.runAsync(this::initializeCache);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public CompletableFuture<Optional<org.bukkit.inventory.ItemStack>> createLoreItem(int itemId) {
+        if (itemRepository == null) {
+            return CompletableFuture.completedFuture(Optional.empty());
+        }
+        return itemRepository.getItemById(itemId).thenApply(optProps ->
+            optProps.map(props -> createLoreItemInternal(props.getItemType(), props.getDisplayName(), props)));
+    }
+
+    public CompletableFuture<Optional<ItemProperties>> getItemPropertiesById(int itemId) {
+        if (itemRepository == null) {
+            logger.warning("getItemPropertiesById(" + itemId + "): itemRepository is null");
+            return CompletableFuture.completedFuture(Optional.empty());
+        }
+        return itemRepository.getItemById(itemId).thenApply(opt -> {
+            logger.debug("getItemPropertiesById(" + itemId + "): " + (opt.isPresent() ? opt.get().getDisplayName() : "empty"));
+            return opt;
+        });
+    }
+
+    /**
+     * {@inheritDoc}
+     * Delegates to ItemRepository.getPresetsForQuest().
+     */
+    @Override
+    public CompletableFuture<List<ItemProperties>> getPresetsForQuest(String questId) {
+        if (itemRepository == null) {
+            return CompletableFuture.completedFuture(new ArrayList<>());
+        }
+        return itemRepository.getPresetsForQuest(questId);
     }
 
     /**

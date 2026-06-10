@@ -23,6 +23,13 @@ import java.util.concurrent.CompletableFuture;
  * using the lore_entry, lore_submission, and specialized tables (e.g., lore_item).
  *
  * All methods return CompletableFuture<T> for async operations per RVNKCore standard.
+ *
+ * FIXED issue-899: UUID-based authorship
+ * The submitter_uuid column now stores UUID strings (e.g., "550e8400-e29b-41d4-a716-446655440000")
+ * instead of player names. This prevents lore attribution corruption when players rename.
+ * Legacy entries with player name strings in submitter_uuid will still load, but should not
+ * be created by new code. The submittedBy field in LoreEntry represents UUID strings, with
+ * "Server" reserved for system-generated entries.
  */
 public class LoreEntryRepository implements ILoreEntryRepository {
     @SuppressWarnings("unused")
@@ -231,7 +238,7 @@ public class LoreEntryRepository implements ILoreEntryRepository {
     public CompletableFuture<Optional<LoreEntry>> getLoreEntryById(String id) {
         return CompletableFuture.supplyAsync(() -> {
             String sql = "SELECT e.id, e.entry_type, e.name, s.content, s.submitter_uuid, " +
-                         "s.approval_status, s.created_at " +
+                         "s.approval_status, s.status, s.visibility, s.created_at " +
                          "FROM " + t("lore_entry") + " e " +
                          "JOIN " + t("lore_submission") + " s ON e.id = s.entry_id " +
                          "WHERE e.id = ? AND s.is_current_version = TRUE";
@@ -266,10 +273,10 @@ public class LoreEntryRepository implements ILoreEntryRepository {
 
             // FIXED bug-03: Added DISTINCT to prevent duplicate entries
             String sql = "SELECT DISTINCT e.id, e.entry_type, e.name, s.content, s.submitter_uuid, " +
-                         "s.approval_status, s.created_at " +
+                         "s.approval_status, s.status, s.visibility, s.created_at " +
                          "FROM " + t("lore_entry") + " e " +
                          "JOIN " + t("lore_submission") + " s ON e.id = s.entry_id " +
-                         "WHERE s.is_current_version = TRUE";
+                         "WHERE s.is_current_version = TRUE AND s.status != 'ARCHIVED'";
 
             try (Connection conn = dbConnection.getConnection();
                  PreparedStatement stmt = conn.prepareStatement(sql);
@@ -299,10 +306,10 @@ public class LoreEntryRepository implements ILoreEntryRepository {
 
             // FIXED bug-03: Added DISTINCT to prevent duplicate entries
             String sql = "SELECT DISTINCT e.id, e.entry_type, e.name, s.content, s.submitter_uuid, " +
-                         "s.approval_status, s.created_at " +
+                         "s.approval_status, s.status, s.visibility, s.created_at " +
                          "FROM " + t("lore_entry") + " e " +
                          "JOIN " + t("lore_submission") + " s ON e.id = s.entry_id " +
-                         "WHERE e.entry_type = ? AND s.is_current_version = TRUE";
+                         "WHERE e.entry_type = ? AND s.is_current_version = TRUE AND s.status != 'ARCHIVED'";
 
             try (Connection conn = dbConnection.getConnection();
                  PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -337,15 +344,19 @@ public class LoreEntryRepository implements ILoreEntryRepository {
                 return entries;
             }
 
-            String searchPattern = "%" + keyword.trim() + "%";
+            String escaped = keyword.trim()
+                .replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
+            String searchPattern = "%" + escaped + "%";
 
             // FIXED bug-03: Added DISTINCT to prevent duplicate entries
             String sql = "SELECT DISTINCT e.id, e.entry_type, e.name, s.content, s.submitter_uuid, " +
-                         "s.approval_status, s.created_at " +
+                         "s.approval_status, s.status, s.visibility, s.created_at " +
                          "FROM " + t("lore_entry") + " e " +
                          "JOIN " + t("lore_submission") + " s ON e.id = s.entry_id " +
-                         "WHERE s.is_current_version = TRUE " +
-                         "AND (e.name LIKE ? OR s.content LIKE ?)";
+                         "WHERE s.is_current_version = TRUE AND s.status != 'ARCHIVED' " +
+                         "AND (e.name LIKE ? ESCAPE '\\' OR s.content LIKE ? ESCAPE '\\')";
 
             try (Connection conn = dbConnection.getConnection();
                  PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -443,6 +454,43 @@ public class LoreEntryRepository implements ILoreEntryRepository {
      * @return CompletableFuture that completes with true if successful, false otherwise
      */
     @Override
+    public CompletableFuture<Boolean> rejectLoreEntry(String entryId) {
+        return rejectLoreEntry(entryId, null);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> rejectLoreEntry(String entryId, String reason) {
+        return CompletableFuture.supplyAsync(() -> {
+            try (Connection conn = dbConnection.getConnection()) {
+                conn.setAutoCommit(false);
+                try {
+                    String sql = "UPDATE " + t("lore_submission") + " " +
+                                 "SET approval_status = 'REJECTED', approved_at = CURRENT_TIMESTAMP, rejection_reason = ? " +
+                                 "WHERE entry_id = ? AND is_current_version = TRUE";
+                    try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                        stmt.setString(1, reason);
+                        stmt.setString(2, entryId);
+                        int rowsAffected = stmt.executeUpdate();
+                        if (rowsAffected == 0) {
+                            throw new java.sql.SQLException("No current submission found for entry: " + entryId);
+                        }
+                        conn.commit();
+                        return true;
+                    }
+                } catch (java.sql.SQLException e) {
+                    conn.rollback();
+                    logger.error("Failed to reject lore entry: " + entryId, e);
+                    return false;
+                } finally {
+                    conn.setAutoCommit(true);
+                }
+            } catch (java.sql.SQLException e) {
+                logger.error("Database connection error rejecting lore entry: " + entryId, e);
+                return false;
+            }
+        });
+    }
+
     public CompletableFuture<Boolean> approveLoreEntry(String entryId, String approvedBy) {
         return CompletableFuture.supplyAsync(() -> {
             try (Connection conn = dbConnection.getConnection()) {
@@ -526,21 +574,51 @@ public class LoreEntryRepository implements ILoreEntryRepository {
      * @throws SQLException If a database error occurs
      */
     private boolean insertLoreItem(String entryId, LoreEntry entry, Connection conn) throws SQLException {
-        // Require material metadata for lore items
         String material = entry.getMetadata("material");
         if (material == null || material.trim().isEmpty()) {
             logger.warning("Material is required for lore item entry: " + entry.getName());
             throw new SQLException("Material is required for lore item entry");
         }
-        String sql = "INSERT INTO " + t("lore_item") + " (lore_entry_id, name, material, item_type, rarity, is_obtainable, nbt_data) VALUES (?, ?, ?, ?, ?, ?, ?)";
+        String itemType = entry.getMetadata("item_type") != null ? entry.getMetadata("item_type") : "STANDARD";
+        String rarity = entry.getMetadata("rarity") != null ? entry.getMetadata("rarity") : "COMMON";
+        boolean obtainable = entry.getMetadata("is_obtainable") == null || Boolean.parseBoolean(entry.getMetadata("is_obtainable"));
+        String nbtData = entry.getNbtData();
+
+        // Upsert: update if a row already exists for this lore_entry_id (handles orphaned rows
+        // from prior incomplete transactions), otherwise insert fresh.
+        String checkSql = "SELECT COUNT(*) FROM " + t("lore_item") + " WHERE lore_entry_id = ?";
+        try (PreparedStatement check = conn.prepareStatement(checkSql)) {
+            check.setString(1, entryId);
+            try (ResultSet rs = check.executeQuery()) {
+                if (rs.next() && rs.getInt(1) > 0) {
+                    logger.debug("lore_item row exists for entry " + entryId + " — updating instead of inserting");
+                    String updateSql = "UPDATE " + t("lore_item") +
+                        " SET name = ?, material = ?, item_type = ?, rarity = ?, is_obtainable = ?, nbt_data = ?" +
+                        " WHERE lore_entry_id = ?";
+                    try (PreparedStatement stmt = conn.prepareStatement(updateSql)) {
+                        stmt.setString(1, entry.getName());
+                        stmt.setString(2, material);
+                        stmt.setString(3, itemType);
+                        stmt.setString(4, rarity);
+                        stmt.setBoolean(5, obtainable);
+                        stmt.setString(6, nbtData);
+                        stmt.setString(7, entryId);
+                        return stmt.executeUpdate() > 0;
+                    }
+                }
+            }
+        }
+
+        String sql = "INSERT INTO " + t("lore_item") +
+            " (lore_entry_id, name, material, item_type, rarity, is_obtainable, nbt_data) VALUES (?, ?, ?, ?, ?, ?, ?)";
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, entryId);
             stmt.setString(2, entry.getName());
             stmt.setString(3, material);
-            stmt.setString(4, entry.getMetadata("item_type") != null ? entry.getMetadata("item_type") : "STANDARD");
-            stmt.setString(5, entry.getMetadata("rarity") != null ? entry.getMetadata("rarity") : "COMMON");
-            stmt.setBoolean(6, entry.getMetadata("is_obtainable") != null ? Boolean.parseBoolean(entry.getMetadata("is_obtainable")) : true);
-            stmt.setString(7, entry.getNbtData());
+            stmt.setString(4, itemType);
+            stmt.setString(5, rarity);
+            stmt.setBoolean(6, obtainable);
+            stmt.setString(7, nbtData);
             return stmt.executeUpdate() > 0;
         }
     }
@@ -570,6 +648,7 @@ public class LoreEntryRepository implements ILoreEntryRepository {
      * Insert the initial submission record for a lore entry
      *
      * FIXED bug-01: Added version parameter to create versioned slugs to avoid UNIQUE constraint violations
+     * FIXED issue-899: submitter_uuid now stores UUID strings, not player names
      *
      * @param entryId The parent lore entry ID
      * @param entry The lore entry
@@ -584,6 +663,7 @@ public class LoreEntryRepository implements ILoreEntryRepository {
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, entryId);
             // Defensive: use "Server" if submittedBy is null or empty
+            // submittedBy should be either a UUID string or "Server"
             String submitter = entry.getSubmittedBy();
             if (submitter == null || submitter.trim().isEmpty()) {
                 submitter = "Server";
@@ -645,6 +725,10 @@ public class LoreEntryRepository implements ILoreEntryRepository {
     /**
      * Convert a database result set to a LoreEntry object
      *
+     * FIXED issue-899: submitter_uuid column now expected to contain UUID strings.
+     * Legacy entries may contain player names; these are preserved in the LoreEntry.submittedBy field
+     * but should not occur in new data.
+     *
      * @param rs The result set containing lore entry data
      * @param conn The database connection
      * @return The populated LoreEntry object
@@ -656,7 +740,10 @@ public class LoreEntryRepository implements ILoreEntryRepository {
         String name = rs.getString("name");
         String contentJson = rs.getString("content");
         String submittedBy = rs.getString("submitter_uuid");
-        boolean approved = "APPROVED".equalsIgnoreCase(rs.getString("approval_status"));
+        String approvalStatus = rs.getString("approval_status");
+        boolean approved = "APPROVED".equalsIgnoreCase(approvalStatus);
+        String status = rs.getString("status");
+        String visibility = rs.getString("visibility");
         Timestamp createdAt = rs.getTimestamp("created_at");
 
         LoreType type;
@@ -735,6 +822,124 @@ public class LoreEntryRepository implements ILoreEntryRepository {
             }
         }
 
+        if (approvalStatus != null) entry.setApprovalStatus(approvalStatus);
+        if (status != null) entry.setStatus(status);
+        if (visibility != null) entry.setVisibility(visibility);
+
         return entry;
+    }
+
+    /**
+     * Update name, description, and/or visibility in-place on the current submission.
+     * Does NOT create a new version or alter approval status.
+     */
+    public CompletableFuture<Boolean> updateLoreEntryInPlace(LoreEntry entry) {
+        return CompletableFuture.supplyAsync(() -> {
+            try (Connection conn = dbConnection.getConnection()) {
+                conn.setAutoCommit(false);
+                try {
+                    // Update base name in lore_entry
+                    String updateName = "UPDATE " + t("lore_entry") + " SET name = ? WHERE id = ?";
+                    try (PreparedStatement stmt = conn.prepareStatement(updateName)) {
+                        stmt.setString(1, entry.getName());
+                        stmt.setString(2, entry.getId());
+                        stmt.executeUpdate();
+                    }
+
+                    // Read current content JSON, patch description, write back
+                    String readContent = "SELECT content FROM " + t("lore_submission") +
+                                         " WHERE entry_id = ? AND is_current_version = TRUE";
+                    String updatedContent = null;
+                    try (PreparedStatement stmt = conn.prepareStatement(readContent)) {
+                        stmt.setString(1, entry.getId());
+                        try (ResultSet rs = stmt.executeQuery()) {
+                            if (rs.next()) {
+                                String raw = rs.getString("content");
+                                JSONObject content;
+                                try {
+                                    content = (JSONObject) jsonParser.parse(raw != null ? raw : "{}");
+                                } catch (org.json.simple.parser.ParseException e) {
+                                    content = new JSONObject();
+                                }
+                                if (entry.getDescription() != null) {
+                                    content.put("description", entry.getDescription());
+                                }
+                                updatedContent = content.toJSONString();
+                            }
+                        }
+                    }
+
+                    if (updatedContent == null) {
+                        conn.rollback();
+                        logger.warning("updateLoreEntryInPlace: no current submission found for " + entry.getId());
+                        return false;
+                    }
+
+                    String updateSubmission = "UPDATE " + t("lore_submission") +
+                                             " SET content = ?, visibility = ?" +
+                                             " WHERE entry_id = ? AND is_current_version = TRUE";
+                    try (PreparedStatement stmt = conn.prepareStatement(updateSubmission)) {
+                        stmt.setString(1, updatedContent);
+                        stmt.setString(2, entry.getVisibility() != null ? entry.getVisibility() : "PUBLIC");
+                        stmt.setString(3, entry.getId());
+                        stmt.executeUpdate();
+                    }
+
+                    conn.commit();
+                    return true;
+                } catch (SQLException e) {
+                    conn.rollback();
+                    logger.error("Failed to update lore entry in-place: " + entry.getId(), e);
+                    return false;
+                } finally {
+                    conn.setAutoCommit(true);
+                }
+            } catch (SQLException e) {
+                logger.error("Transaction error updating lore entry in-place: " + entry.getId(), e);
+                return false;
+            }
+        });
+    }
+
+    public CompletableFuture<Boolean> softDeleteEntry(UUID id) {
+        return CompletableFuture.supplyAsync(() -> {
+            String sql = "UPDATE " + t("lore_submission") +
+                         " SET status = 'ARCHIVED', visibility = 'HIDDEN'" +
+                         " WHERE entry_id = ? AND is_current_version = TRUE";
+            try (Connection conn = dbConnection.getConnection();
+                 PreparedStatement stmt = conn.prepareStatement(sql)) {
+                stmt.setString(1, id.toString());
+                int rows = stmt.executeUpdate();
+                if (rows == 0) {
+                    logger.warning("softDeleteEntry: no current submission for " + id);
+                    return false;
+                }
+                return true;
+            } catch (SQLException e) {
+                logger.error("Failed to soft-delete lore entry: " + id, e);
+                return false;
+            }
+        });
+    }
+
+    public CompletableFuture<List<LoreEntry>> getAllLoreEntriesIncludingArchived() {
+        return CompletableFuture.supplyAsync(() -> {
+            List<LoreEntry> entries = new ArrayList<>();
+            String sql = "SELECT DISTINCT e.id, e.entry_type, e.name, s.content, s.submitter_uuid, " +
+                         "s.approval_status, s.status, s.visibility, s.created_at " +
+                         "FROM " + t("lore_entry") + " e " +
+                         "JOIN " + t("lore_submission") + " s ON e.id = s.entry_id " +
+                         "WHERE s.is_current_version = TRUE AND s.status = 'ARCHIVED'";
+            try (Connection conn = dbConnection.getConnection();
+                 PreparedStatement stmt = conn.prepareStatement(sql);
+                 ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    entries.add(resultSetToLoreEntry(rs, conn));
+                }
+            } catch (SQLException e) {
+                logger.error("Error retrieving archived lore entries", e);
+            }
+            return entries;
+        });
     }
 }

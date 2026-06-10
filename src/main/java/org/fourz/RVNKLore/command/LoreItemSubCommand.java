@@ -24,10 +24,12 @@ public class LoreItemSubCommand implements SubCommand {
         this.logger = LogManager.getInstance(plugin, "LoreItemSubCommand");
         this.subCommands = new HashMap<>();
         
-        // Register child commands with correct constructor
         subCommands.put("give", new LoreItemGiveSubCommand(plugin, plugin.getLoreManager().getItemManager()));
+        subCommands.put("spawn", new LoreItemSpawnSubCommand(plugin, plugin.getLoreManager().getItemManager()));
         subCommands.put("info", new LoreItemInfoSubCommand(plugin, plugin.getLoreManager().getItemManager()));
         subCommands.put("list", new LoreItemListSubCommand(plugin));
+        subCommands.put("tag", new LoreItemTagSubCommand(plugin));
+        subCommands.put("presets", new LoreItemPresetsSubCommand(plugin, plugin.getLoreManager().getItemManager()));
     }
 
     @Override
@@ -153,6 +155,6 @@ public class LoreItemSubCommand implements SubCommand {
 
     @Override
     public String getDescription() {
-        return "Manage lore items (give, info)";
+        return "Manage lore items (give, spawn, info, list, tag)";
     }
 }

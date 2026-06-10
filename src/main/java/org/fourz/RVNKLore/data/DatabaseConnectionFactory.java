@@ -7,7 +7,6 @@ import org.fourz.RVNKLore.data.dialect.MySQLDialect;
 import org.fourz.RVNKLore.data.dialect.SQLDialect;
 import org.fourz.RVNKLore.data.dialect.SQLiteDialect;
 import org.fourz.rvnkcore.util.log.LogManager;
-
 import java.io.File;
 
 /**
@@ -44,9 +43,9 @@ public class DatabaseConnectionFactory {
 
         if (settings.getType() == DatabaseSettingsDTO.DatabaseType.MYSQL) {
             this.dialect = new MySQLDialect();
-            logger.debug("Using MySQL dialect");
+            logger.debug("Using MySQL dialect — will reuse RVNKCore shared pool");
             this.usingFallback = false;
-            return new MySQLConnection(plugin, dialect, settings.getMysqlSettings());
+            return new MySQLConnection(plugin, dialect);
         } else {
             this.dialect = new SQLiteDialect();
             logger.debug("Using SQLite dialect");

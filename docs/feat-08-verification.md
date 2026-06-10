@@ -1,3 +1,5 @@
+> **HISTORICAL DOCUMENT** — Feature implementation summary. Not maintained. May not reflect current code.
+
 # feat-08 Implementation Verification
 
 ## Build Status

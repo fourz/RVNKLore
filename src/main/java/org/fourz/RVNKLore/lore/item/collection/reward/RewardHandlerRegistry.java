@@ -44,6 +44,14 @@ public class RewardHandlerRegistry {
         handlers.put(CollectionReward.RewardType.CURRENCY, new CurrencyHandler(logger, pluginManager));
         logger.debug("Registered CurrencyHandler");
 
+        // Register lore item handler
+        handlers.put(CollectionReward.RewardType.LORE_ITEM, new LoreItemRewardHandler(plugin, logger));
+        logger.debug("Registered LoreItemRewardHandler");
+
+        // Register achievement handler
+        handlers.put(CollectionReward.RewardType.ACHIEVEMENT, new AchievementRewardHandler(plugin, logger));
+        logger.debug("Registered AchievementRewardHandler");
+
         logger.debug("Reward handler registry initialized with " + handlers.size() + " handlers");
     }
 
