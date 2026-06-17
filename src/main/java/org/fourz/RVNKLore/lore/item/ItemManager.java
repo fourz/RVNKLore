@@ -252,6 +252,24 @@ public class ItemManager implements IItemService {
                 return fallback;
             default:
                 ItemStack item = new ItemStack(properties.getMaterial());
+                // Handle written books with pages
+                if (properties.getMaterial() == org.bukkit.Material.WRITTEN_BOOK && 
+                    properties.getPages() != null && !properties.getPages().isEmpty()) {
+                    org.bukkit.inventory.meta.BookMeta bookMeta = (org.bukkit.inventory.meta.BookMeta) item.getItemMeta();
+                    if (bookMeta != null) {
+                        if (properties.getDisplayName() != null) {
+                            bookMeta.setDisplayName(properties.getDisplayName());
+                        }
+                        // Add all pages to the book
+                        for (String page : properties.getPages()) {
+                            bookMeta.addPage(page);
+                        }
+                        // Add generation flag for written book
+                        bookMeta.setGeneration(org.bukkit.inventory.meta.BookMeta.Generation.ORIGINAL);
+                        item.setItemMeta(bookMeta);
+                    }
+                    return item;
+                }
                 org.bukkit.inventory.meta.ItemMeta meta = item.getItemMeta();
                 if (meta != null) {
                     if (properties.getDisplayName() != null) {

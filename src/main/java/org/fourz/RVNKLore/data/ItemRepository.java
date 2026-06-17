@@ -359,6 +359,9 @@ public class ItemRepository implements IItemRepository {
                         if (properties.getSkullTexture() != null) {
                             jsonProps.put("skull_texture", properties.getSkullTexture());
                         }
+                        if (properties.getPages() != null && !properties.getPages().isEmpty()) {
+                            jsonProps.put("pages", properties.getPages());
+                        }
                         stmt.setString(7, jsonProps.toJSONString());
                         stmt.setString(8, properties.getCreatedBy());
                         stmt.setString(9, properties.getNbtData());
@@ -419,6 +422,9 @@ public class ItemRepository implements IItemRepository {
                         }
                         if (properties.getSkullTexture() != null) {
                             jsonProps.put("skull_texture", properties.getSkullTexture());
+                        }
+                        if (properties.getPages() != null && !properties.getPages().isEmpty()) {
+                            jsonProps.put("pages", properties.getPages());
                         }
                         stmt.setString(7, jsonProps.toJSONString());
                         // Set NBT data
@@ -1326,6 +1332,15 @@ public class ItemRepository implements IItemRepository {
                             @SuppressWarnings("unchecked")
                             List<String> loreList = (List<String>) loreObj;
                             props.setLore(loreList);
+                        }
+                    }
+
+                    if (jsonProps.containsKey("pages")) {
+                        Object pagesObj = jsonProps.get("pages");
+                        if (pagesObj instanceof List) {
+                            @SuppressWarnings("unchecked")
+                            List<String> pagesList = (List<String>) pagesObj;
+                            props.setPages(pagesList);
                         }
                     }
 
