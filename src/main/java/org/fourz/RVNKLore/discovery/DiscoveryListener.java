@@ -60,8 +60,10 @@ public class DiscoveryListener implements Listener {
     // Location-based discovery tracking (to prevent spam)
     private final Map<UUID, Set<String>> recentLocationDiscoveries = new ConcurrentHashMap<>();
 
-    // Cache of locations with lore entries
-    private final Map<String, LoreEntry> locationLoreCache = new ConcurrentHashMap<>();
+    // Location entries bucketed by world name — used for proximity scan in onPlayerMove
+    private final Map<String, List<LoreEntry>> locationLoreCache = new ConcurrentHashMap<>();
+    // Exact-coord index ("world:x:y:z") — used for O(1) block-break lookup
+    private final Map<String, LoreEntry> locationExactIndex = new ConcurrentHashMap<>();
 
     public DiscoveryListener(RVNKLore plugin, DiscoveryManager discoveryManager) {
         this.plugin = plugin;
@@ -75,20 +77,25 @@ public class DiscoveryListener implements Listener {
     }
 
     /**
-     * Builds a cache of lore entries with location data.
+     * Builds the location caches:
+     * - locationLoreCache: entries bucketed by world name (proximity scan)
+     * - locationExactIndex: entries by exact coords (block-break O(1) lookup)
      */
     private void buildLocationCache() {
         locationLoreCache.clear();
+        locationExactIndex.clear();
 
+        int count = 0;
         List<LoreEntry> entries = loreManager.getAllLoreEntriesSync();
         for (LoreEntry entry : entries) {
-            if (entry.getLocation() != null) {
-                String locationKey = getLocationKey(entry.getLocation());
-                locationLoreCache.put(locationKey, entry);
-            }
+            if (entry.getLocation() == null || entry.getLocation().getWorld() == null) continue;
+            String world = entry.getLocation().getWorld().getName();
+            locationLoreCache.computeIfAbsent(world, k -> new ArrayList<>()).add(entry);
+            locationExactIndex.put(getLocationKey(entry.getLocation()), entry);
+            count++;
         }
 
-        logger.debug("Built location cache with " + locationLoreCache.size() + " entries");
+        logger.debug("Built location cache: " + count + " entries across " + locationLoreCache.size() + " worlds");
     }
 
     /**
@@ -144,7 +151,7 @@ public class DiscoveryListener implements Listener {
 
         // Check if there's a lore entry at this location
         String locationKey = getLocationKey(location);
-        LoreEntry entry = locationLoreCache.get(locationKey);
+        LoreEntry entry = locationExactIndex.get(locationKey);
 
         if (entry != null && entry.getType() == LoreType.ITEM) {
             discoveryManager.triggerDiscovery(
@@ -237,34 +244,39 @@ public class DiscoveryListener implements Listener {
 
     /**
      * Handles player movement for location-based discovery.
-     * Uses chunking to reduce performance impact.
+     * Only scans on chunk-boundary crossings; uses world-partitioned cache and
+     * distanceSquared to minimize per-event cost.
      */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onPlayerMove(PlayerMoveEvent event) {
-        // Only check on block change
         Location from = event.getFrom();
         Location to = event.getTo();
         if (to == null) return;
 
-        if (from.getBlockX() == to.getBlockX() &&
-            from.getBlockY() == to.getBlockY() &&
-            from.getBlockZ() == to.getBlockZ()) {
+        // Only scan when the player crosses a chunk boundary (~64× less frequent than per-block)
+        if (from.getChunk().getX() == to.getChunk().getX() &&
+            from.getChunk().getZ() == to.getChunk().getZ()) {
             return;
         }
 
         Player player = event.getPlayer();
         UUID playerUuid = player.getUniqueId();
 
-        // Check for nearby lore entries
-        for (Map.Entry<String, LoreEntry> mapEntry : locationLoreCache.entrySet()) {
-            LoreEntry entry = mapEntry.getValue();
+        // F: skip worlds with no location entries entirely
+        List<LoreEntry> worldEntries = locationLoreCache.get(to.getWorld().getName());
+        if (worldEntries == null || worldEntries.isEmpty()) return;
+
+        double radiusSq = plugin.getConfigManager().getNearbyRadius();
+        radiusSq *= radiusSq;
+
+        // Check for nearby lore entries in this world only
+        for (LoreEntry entry : worldEntries) {
             Location entryLoc = entry.getLocation();
 
             if (entryLoc == null) continue;
-            if (!entryLoc.getWorld().equals(to.getWorld())) continue;
 
-            double distance = to.distance(entryLoc);
-            if (distance > plugin.getConfigManager().getNearbyRadius()) continue;
+            // E: distanceSquared avoids sqrt per entry
+            if (to.distanceSquared(entryLoc) > radiusSq) continue;
 
             // Check if recently discovered at this location
             Set<String> recentLocations = recentLocationDiscoveries.computeIfAbsent(
