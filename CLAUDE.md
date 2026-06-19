@@ -262,6 +262,7 @@ org.fourz.RVNKLore
 **Fallback Pattern**: MySQL primary with automatic SQLite fallback via FallbackTracker
 **Discovery Wiring**: `DiscoveryManager` stores a reference to `DiscoveryListener` and exposes `refreshLocationCache()`. This is called automatically from `LoreManager.addLoreEntrySync`, `approveLoreEntrySync`, and `updateLoreEntryInPlace` when the affected entry has location data. Proximity discovery updates take effect in real time without a server restart.
 **Async Reconnect**: `ExceptionHandler.handleDatabaseException()` dispatches reconnect via `runTaskAsynchronously` — MySQL socket I/O does not block the main thread.
+**WRITTEN_BOOK pages**: `ItemProperties` carries a `List<String> pages` field. `ItemRepository` serializes/deserializes it as `{"pages":["page1","page2",...]}` within the `item_properties` JSON column on `lore_item`. `ItemManager.createLoreItemInternal()` applies the page list to `BookMeta` with generation `ORIGINAL` when `material == WRITTEN_BOOK`. Page content supports `§` color codes and `\n` newlines (#1177).
 
 ### Service Registration (RVNKCore Integration)
 
