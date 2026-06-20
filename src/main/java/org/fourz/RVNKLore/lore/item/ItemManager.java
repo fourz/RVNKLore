@@ -14,6 +14,7 @@ import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
 import org.fourz.RVNKLore.lore.item.cosmetic.CosmeticsManager;
 import org.fourz.RVNKLore.lore.item.custommodeldata.CustomModelDataManager;
 import org.fourz.RVNKLore.service.IItemService;
+import org.fourz.RVNKLore.service.ILoreItemResolver;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -29,7 +30,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * Acts as a central orchestrator for enchantments, cosmetics, collections, and model data.
  * Implements IItemService for RVNKCore ServiceRegistry integration.
  */
-public class ItemManager implements IItemService {
+public class ItemManager implements IItemService, ILoreItemResolver {
 
     // Fallback mode flag for IItemService contract
     private boolean fallbackMode = false;
@@ -174,6 +175,20 @@ public class ItemManager implements IItemService {
         return true;
     }
 
+    // ── ILoreItemResolver ────────────────────────────────────────────────────────
+
+    @Override
+    public String getBookId(ItemStack item) {
+        if (item == null) return null;
+        org.bukkit.inventory.meta.ItemMeta meta = item.getItemMeta();
+        if (meta == null) return null;
+        return meta.getPersistentDataContainer().get(
+            new NamespacedKey(plugin, "lore_item_name"),
+            org.bukkit.persistence.PersistentDataType.STRING);
+    }
+
+    // ── Item display helpers ─────────────────────────────────────────────────────
+
     /**
      * Display a list of all available items to a CommandSender.
      *
@@ -266,6 +281,25 @@ public class ItemManager implements IItemService {
                         }
                         // Add generation flag for written book
                         bookMeta.setGeneration(org.bukkit.inventory.meta.BookMeta.Generation.ORIGINAL);
+                        // PDC tags for cross-plugin resolution
+                        if (properties.getDatabaseId() > 0) {
+                            bookMeta.getPersistentDataContainer().set(
+                                new org.bukkit.NamespacedKey(plugin, "lore_item_id"),
+                                org.bukkit.persistence.PersistentDataType.INTEGER,
+                                properties.getDatabaseId());
+                        }
+                        if (properties.getLoreEntryId() != null && !properties.getLoreEntryId().isEmpty()) {
+                            bookMeta.getPersistentDataContainer().set(
+                                new org.bukkit.NamespacedKey(plugin, "lore_entry_id"),
+                                org.bukkit.persistence.PersistentDataType.STRING,
+                                properties.getLoreEntryId());
+                        }
+                        if (name != null && !name.isEmpty()) {
+                            bookMeta.getPersistentDataContainer().set(
+                                new org.bukkit.NamespacedKey(plugin, "lore_item_name"),
+                                org.bukkit.persistence.PersistentDataType.STRING,
+                                name);
+                        }
                         item.setItemMeta(bookMeta);
                     }
                     return item;
@@ -296,6 +330,12 @@ public class ItemManager implements IItemService {
                         meta.getPersistentDataContainer().set(entryKey,
                             org.bukkit.persistence.PersistentDataType.STRING,
                             properties.getLoreEntryId());
+                    }
+                    if (name != null && !name.isEmpty()) {
+                        meta.getPersistentDataContainer().set(
+                            new org.bukkit.NamespacedKey(plugin, "lore_item_name"),
+                            org.bukkit.persistence.PersistentDataType.STRING,
+                            name);
                     }
                     item.setItemMeta(meta);
                 }
