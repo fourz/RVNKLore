@@ -192,10 +192,11 @@ public class PlayerDeathLoreHandler extends DefaultLoreHandler {
      * Async location-juxtaposition criterion: a death within nearbyRadius of an
      * existing lore location ties into established lore.
      *
-     * Queries the lore_location table (not the in-memory entry cache — entries
-     * loaded from DB carry their coordinates there, not in content JSON). Only
-     * approved, non-death entries count, so death sites don't chain-spawn more
-     * death entries.
+     * Lore locations live in two stores depending on entry age and creation
+     * path: legacy entries carry coordinates in their content JSON (hydrated
+     * into LoreEntry.getLocation() at load), newer entries have lore_location
+     * rows. Both are checked. Only approved, non-death entries count, so death
+     * sites don't chain-spawn more death entries.
      */
     private void checkLoreSiteProximity(Player player, String deathMessage) {
         Location deathLocation = player.getLocation().clone();
@@ -203,6 +204,16 @@ public class PlayerDeathLoreHandler extends DefaultLoreHandler {
             return;
         }
         double radius = plugin.getConfigManager().getNearbyRadius();
+
+        // Source 1: in-memory entry cache (content-JSON locations), no DB hit
+        for (LoreEntry site : plugin.getLoreManager().findNearbyLoreEntriesSync(deathLocation, radius)) {
+            if (isLoreSite(site)) {
+                createDeathLoreEntry(player, deathMessage, "near_lore_site:" + site.getName());
+                return;
+            }
+        }
+
+        // Source 2: lore_location table
         String world = deathLocation.getWorld().getName();
         double x = deathLocation.getX();
         double z = deathLocation.getZ();
@@ -222,17 +233,18 @@ public class PlayerDeathLoreHandler extends DefaultLoreHandler {
                         } catch (IllegalArgumentException e) {
                             continue;
                         }
-                        if (site == null || !site.isApproved()) {
-                            continue;
+                        if (isLoreSite(site)) {
+                            createDeathLoreEntry(player, deathMessage, "near_lore_site:" + site.getName());
+                            return;
                         }
-                        if (site.getName().startsWith("Death of ")) {
-                            continue;
-                        }
-                        createDeathLoreEntry(player, deathMessage, "near_lore_site:" + site.getName());
-                        return;
                     }
                 });
             });
+    }
+
+    /** A lore site worth juxtaposing a death against: approved, and not itself a death entry. */
+    private boolean isLoreSite(LoreEntry site) {
+        return site != null && site.isApproved() && !site.getName().startsWith("Death of ");
     }
 
     /**
