@@ -23,6 +23,16 @@ features:
 lore:
   nearbyRadius: 50.0
   requireApproval: true
+  # Player-death lore creation:
+  #   none        - no lore entries from player deaths (default)
+  #   significant - only deaths flagged by the significance evaluator
+  #                 (funny/ironic causes, rare damage causes, deaths near
+  #                 existing lore locations, or rvnklore.notable permission)
+  #   all         - every player death creates a pending entry
+  # Entries always enter the approval queue; nothing is auto-approved.
+  # Changing mode from 'none' requires a server restart (listener registration).
+  playerDeath:
+    mode: none
   handlers:
     GENERIC: DEFAULT
     PLAYER: DEFAULT

@@ -187,6 +187,12 @@ public class HandlerFactory {
         };
         for (String key : eventHandlerKeys) {
             try {
+                // Death lore is opt-in: skip listener registration entirely when mode is "none"
+                if ("PLAYER_DEATH".equals(key)
+                        && "none".equals(plugin.getConfigManager().getPlayerDeathLoreMode())) {
+                    logger.debug("Player death lore disabled (lore.playerDeath.mode: none) - handler not registered");
+                    continue;
+                }
                 Class<? extends LoreHandler> handlerClass = handlerClasses.get(key);
                 if (handlerClass != null) {
                     LoreHandler handler = handlerClass.getConstructor(RVNKLore.class).newInstance(plugin);
