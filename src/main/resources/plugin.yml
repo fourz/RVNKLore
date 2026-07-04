@@ -125,7 +125,8 @@ permissions:
     default: op
   rvnklore.notable:
     description: Deaths by this player are recorded as lore entries
-    default: op
+    # Explicit grant only — ops should not implicitly flag every death as notable
+    default: false
 
   # ── Achievement actions ───────────────────────────────────────────────────
   rvnklore.achievement.seehidden:
