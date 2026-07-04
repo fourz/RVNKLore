@@ -19,17 +19,20 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.projectiles.ProjectileSource;
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.data.model.LoreLocation;
 import org.fourz.RVNKLore.handler.DefaultLoreHandler;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
 
 import java.time.Instant;
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Handler for creating lore entries when players die.
@@ -188,19 +191,48 @@ public class PlayerDeathLoreHandler extends DefaultLoreHandler {
     /**
      * Async location-juxtaposition criterion: a death within nearbyRadius of an
      * existing lore location ties into established lore.
+     *
+     * Queries the lore_location table (not the in-memory entry cache — entries
+     * loaded from DB carry their coordinates there, not in content JSON). Only
+     * approved, non-death entries count, so death sites don't chain-spawn more
+     * death entries.
      */
     private void checkLoreSiteProximity(Player player, String deathMessage) {
         Location deathLocation = player.getLocation().clone();
+        if (deathLocation.getWorld() == null) {
+            return;
+        }
         double radius = plugin.getConfigManager().getNearbyRadius();
+        String world = deathLocation.getWorld().getName();
+        double x = deathLocation.getX();
+        double z = deathLocation.getZ();
 
-        plugin.getLoreManager().findNearbyLoreEntries(deathLocation, radius).thenAccept(entries -> {
-            if (entries == null || entries.isEmpty()) {
-                return;
-            }
-            String siteName = entries.get(0).getName();
-            Bukkit.getScheduler().runTask(plugin, () ->
-                createDeathLoreEntry(player, deathMessage, "near_lore_site:" + siteName));
-        });
+        CompletableFuture
+            .supplyAsync(() -> plugin.getDatabaseManager().findNearbyLore(world, x, z, radius))
+            .thenAccept(locations -> {
+                if (locations == null || locations.isEmpty()) {
+                    return;
+                }
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    for (LoreLocation siteLocation : locations) {
+                        LoreEntry site;
+                        try {
+                            site = plugin.getLoreManager().getLoreEntrySync(
+                                UUID.fromString(siteLocation.getEntryId()));
+                        } catch (IllegalArgumentException e) {
+                            continue;
+                        }
+                        if (site == null || !site.isApproved()) {
+                            continue;
+                        }
+                        if (site.getName().startsWith("Death of ")) {
+                            continue;
+                        }
+                        createDeathLoreEntry(player, deathMessage, "near_lore_site:" + site.getName());
+                        return;
+                    }
+                });
+            });
     }
 
     /**
@@ -210,11 +242,14 @@ public class PlayerDeathLoreHandler extends DefaultLoreHandler {
         logger.debug("Creating death lore entry for: " + player.getName()
             + " (significance: " + significance + ")");
 
-        String dateString = DATE_FMT.format(LocalDate.now(ZoneId.systemDefault()));
+        LocalDateTime now = LocalDateTime.now(ZoneId.systemDefault());
+        String dateString = DATE_FMT.format(now.toLocalDate());
 
         LoreEntry entry = new LoreEntry();
         entry.setType(LoreType.EVENT);
-        entry.setName("Death of " + player.getName());
+        // Timestamp in the name: repository rejects duplicate (name, type) pairs,
+        // and a player dies more than once
+        entry.setName("Death of " + player.getName() + " (" + DATETIME_FMT.format(now) + ")");
 
         // Create a descriptive death entry
         String description = "On " + dateString + ", " + player.getName() + " met their demise.";
