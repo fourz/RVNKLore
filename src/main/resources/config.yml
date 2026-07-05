@@ -213,6 +213,12 @@ taverns:
   signs:
     auto_approve: false
 
+library:
+  signs:
+    # When true, books placed on a [Library]-designated lectern are auto-approved;
+    # otherwise they register as PENDING for later approval.
+    auto_approve: false
+
 messages:
   generic:
     error:

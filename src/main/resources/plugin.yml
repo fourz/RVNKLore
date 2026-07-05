@@ -107,6 +107,9 @@ permissions:
   rvnklore.sign.shrine:
     description: Create shrine signs ([shrine] sign tag)
     default: op
+  rvnklore.sign.library:
+    description: Designate a lectern as a lore library ([library] sign tag)
+    default: op
 
   # ── Approval ──────────────────────────────────────────────────────────────
   rvnklore.approve.own:
