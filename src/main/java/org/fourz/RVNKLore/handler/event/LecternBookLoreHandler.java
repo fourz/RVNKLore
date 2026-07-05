@@ -90,6 +90,10 @@ public class LecternBookLoreHandler extends DefaultLoreHandler {
             lecternBlock.getLocation(), player
         );
 
+        // Library entries are ITEM-type lore; the lore_item insert requires a material.
+        // Written books placed on a lectern are always WRITTEN_BOOK — set it so the ITEM
+        // insert is valid instead of throwing 'Material is required' on every placement (#1417).
+        entry.addMetadata("material", "WRITTEN_BOOK");
         entry.addMetadata("sub_type", "library_book");
         entry.addMetadata("book_title", bookTitle);
         if (bookAuthor != null) entry.addMetadata("book_author", bookAuthor);
