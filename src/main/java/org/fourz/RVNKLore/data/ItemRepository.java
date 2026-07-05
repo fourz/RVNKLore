@@ -372,6 +372,13 @@ public class ItemRepository implements IItemRepository {
                         }
                     });
             } catch (LoreException e) {
+                // Duplicate lore_item for an existing lore_entry_id (e.g. a book re-placed on a
+                // lectern) is an expected, benign outcome — the item already exists. Log one DEBUG
+                // line instead of a full ERROR stack trace (#1427).
+                if (e.getCause() instanceof java.sql.SQLIntegrityConstraintViolationException) {
+                    logger.debug("Lore item already exists (duplicate key), skipping insert: " + properties.getDisplayName());
+                    return -1;
+                }
                 logger.error("Failed to insert item: " + properties.getDisplayName(), e);
                 return -1;
             }

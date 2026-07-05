@@ -60,6 +60,11 @@ public class DatabaseHelper {
                 // Execute the operation
                 return operation.execute();
 
+            } catch (java.sql.SQLIntegrityConstraintViolationException e) {
+                // A constraint violation (e.g. duplicate key) will never succeed on retry.
+                // Fail fast instead of emitting maxRetries identical WARN lines with a delay
+                // between each — the caller decides whether a duplicate is expected (#1427).
+                throw new LoreException("Database constraint violation", e, LoreExceptionType.DATABASE_ERROR);
             } catch (SQLException e) {
                 retryCount++;
                 logger.warning("Database operation failed (attempt " + retryCount + "/" + maxRetries + "): " + e.getMessage());

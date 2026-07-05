@@ -548,6 +548,17 @@ public class ItemManager implements IItemService, ILoreItemResolver {
         // Store in database
         if (itemRepository != null) {
             try {
+                // A lore item already registered for this entry (e.g. a book re-placed on a
+                // lectern) is not an error — short-circuit to success instead of attempting a
+                // duplicate insert that would hit the UNIQUE constraint and spam the log (#1427).
+                if (itemRepository.getItemByLoreEntryId(loreEntryId.toString()).join().isPresent()) {
+                    String key = properties.getDisplayName().toLowerCase();
+                    itemNameCache.computeIfAbsent(key, k -> new ArrayList<>()).add(properties);
+                    loreEntryIdCache.put(loreEntryId.toString(), properties);
+                    logger.debug("Lore item already registered for entry " + loreEntryId +
+                        ", skipping duplicate insert: " + properties.getDisplayName());
+                    return true;
+                }
                 int itemId = itemRepository.insertItem(properties).join();
                 if (itemId > 0) {
                     // Add to name cache
