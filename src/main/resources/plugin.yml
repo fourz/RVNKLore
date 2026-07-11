@@ -4,7 +4,7 @@ version: '${project.version}'
 description: A lore data system for Minecraft
 authors: [Derek, Fourz]
 main: org.fourz.RVNKLore.RVNKLore
-api-version: 1.17
+api-version: '26.1'
 depend:
   - RVNKCore
 softdepend:
