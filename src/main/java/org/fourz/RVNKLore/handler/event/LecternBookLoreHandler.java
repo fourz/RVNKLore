@@ -17,6 +17,7 @@ import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.handler.DefaultLoreHandler;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
+import org.fourz.RVNKLore.util.LecternSignUtil;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -59,6 +60,11 @@ public class LecternBookLoreHandler extends DefaultLoreHandler {
 
         if (!player.hasPermission("rvnklore.library.submit")) return;
 
+        // Only catalog books on lecterns explicitly designated with a [Library] sign
+        // (see HandlerSignLibrary). Plain lecterns do nothing — this prevents every
+        // written book placement from creating a lore entry.
+        if (!LecternSignUtil.isLibraryLectern(block)) return;
+
         BookMeta bookMeta = (BookMeta) itemInHand.getItemMeta();
         if (bookMeta == null || bookMeta.getTitle() == null) return;
 
@@ -90,6 +96,10 @@ public class LecternBookLoreHandler extends DefaultLoreHandler {
             lecternBlock.getLocation(), player
         );
 
+        // Library entries are ITEM-type lore; the lore_item insert requires a material.
+        // Written books placed on a lectern are always WRITTEN_BOOK — set it so the ITEM
+        // insert is valid instead of throwing 'Material is required' on every placement (#1417).
+        entry.addMetadata("material", "WRITTEN_BOOK");
         entry.addMetadata("sub_type", "library_book");
         entry.addMetadata("book_title", bookTitle);
         if (bookAuthor != null) entry.addMetadata("book_author", bookAuthor);
@@ -100,7 +110,7 @@ public class LecternBookLoreHandler extends DefaultLoreHandler {
         entry.addMetadata("player_name", player.getName());
 
         boolean autoApprove = plugin.getConfigManager().getConfig()
-            .getBoolean("library.auto_approve", false);
+            .getBoolean("library.signs.auto_approve", false);
         entry.setApproved(autoApprove || player.hasPermission("rvnklore.approve.own"));
 
         plugin.getLoreManager().addLoreEntry(entry).thenAccept(success -> {

@@ -1,28 +1,75 @@
 package org.fourz.RVNKLore.handler.event;
 
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.Projectile;
+import org.bukkit.entity.TNTPrimed;
+import org.bukkit.entity.Tameable;
 import org.bukkit.event.EventHandler;
-import org.bukkit.event.Listener;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityDamageEvent.DamageCause;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.projectiles.ProjectileSource;
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.data.model.LoreLocation;
 import org.fourz.RVNKLore.handler.DefaultLoreHandler;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
 
 import java.time.Instant;
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 /**
- * Handler for creating lore entries when players die
+ * Handler for creating lore entries when players die.
+ *
+ * Behavior is controlled by lore.playerDeath.mode:
+ *   none        - handler is never registered (see HandlerFactory)
+ *   significant - only deaths flagged by the significance evaluator
+ *   all         - every death creates an entry
+ *
+ * Entries are always created unapproved and enter the approval queue.
  */
 public class PlayerDeathLoreHandler extends DefaultLoreHandler {
+
+    /** Kill credits that are embarrassing rather than dangerous. */
+    private static final Set<EntityType> HARMLESS_KILLERS = EnumSet.of(
+        EntityType.BEE,
+        EntityType.GOAT,
+        EntityType.LLAMA,
+        EntityType.TRADER_LLAMA,
+        EntityType.PUFFERFISH,
+        EntityType.CHICKEN,
+        EntityType.RABBIT,
+        EntityType.SNOW_GOLEM
+    );
+
+    /** Mundane hazards claiming a player reads as ironic. */
+    private static final Set<DamageCause> IRONIC_CAUSES = EnumSet.of(
+        DamageCause.CONTACT,        // cactus, berry bush, stalagmite
+        DamageCause.FALLING_BLOCK,  // anvil, falling stalactite
+        DamageCause.LIGHTNING
+    );
+
+    /** Causes implying a rare or epic encounter. */
+    private static final Set<DamageCause> RARE_CAUSES = EnumSet.of(
+        DamageCause.SONIC_BOOM,     // warden
+        DamageCause.DRAGON_BREATH
+    );
 
     public PlayerDeathLoreHandler(RVNKLore plugin) {
         super(plugin);
@@ -31,65 +78,190 @@ public class PlayerDeathLoreHandler extends DefaultLoreHandler {
 
     @Override
     public void initialize() {
-        logger.debug("Initializing player death lore handler");
+        logger.debug("Initializing player death lore handler (mode: "
+            + plugin.getConfigManager().getPlayerDeathLoreMode() + ")");
     }
 
     /**
-     * Listen for player death events and create lore entries
+     * Listen for player death events and create lore entries per configured mode
      */
     @EventHandler
     public void onPlayerDeath(PlayerDeathEvent event) {
         try {
-            Player player = event.getEntity();
-
-            if (shouldCreateDeathLoreEntry(player)) {
-                createDeathLoreEntry(player, event.getDeathMessage());
+            String mode = plugin.getConfigManager().getPlayerDeathLoreMode();
+            if ("none".equals(mode)) {
+                return;
             }
+
+            Player player = event.getEntity();
+            String deathMessage = event.getDeathMessage();
+
+            if ("all".equals(mode)) {
+                createDeathLoreEntry(player, deathMessage, "all_deaths_mode");
+                return;
+            }
+
+            // significant mode: any single criterion flags the death
+            String reason = evaluateSignificance(player);
+            if (reason != null) {
+                createDeathLoreEntry(player, deathMessage, reason);
+                return;
+            }
+
+            checkLoreSiteProximity(player, deathMessage);
         } catch (Exception e) {
             logger.error("Error processing player death event", e);
         }
     }
 
     /**
-     * Determine if this death should be recorded as lore
+     * Synchronous significance criteria. Returns a reason tag when the death
+     * is significant, or null when nothing matched.
      */
-    private boolean shouldCreateDeathLoreEntry(Player player) {
-        try {
-            if (player.hasPermission("rvnklore.notable")) {
-                return true;
-            }
-
-            // Check for death by another player
-            if (player.getKiller() != null) {
-                return true;
-            }
-
-            // Check for death in special locations
-            if (player.getLocation().getY() < 0 || player.getLocation().getY() > 200) {
-                return true;
-            }
-
-            // Check for death with valuable items
-            return player.getInventory().all(Material.DIAMOND).size() > 0 ||
-                   player.getInventory().all(Material.NETHERITE_INGOT).size() > 0;
-
-        } catch (Exception e) {
-            logger.error("Error checking death significance", e);
-            return false;
+    private String evaluateSignificance(Player player) {
+        // Curated path: staff-designated notable players
+        if (player.hasPermission("rvnklore.notable")) {
+            return "notable_player";
         }
+
+        EntityDamageEvent lastDamage = player.getLastDamageCause();
+        if (lastDamage == null) {
+            return null;
+        }
+
+        DamageCause cause = lastDamage.getCause();
+        if (IRONIC_CAUSES.contains(cause)) {
+            return "ironic_cause:" + cause.name();
+        }
+        if (RARE_CAUSES.contains(cause)) {
+            return "rare_cause:" + cause.name();
+        }
+        if (cause == DamageCause.FLY_INTO_WALL) {
+            return "self_inflicted:FLY_INTO_WALL";
+        }
+
+        if (lastDamage instanceof EntityDamageByEntityEvent) {
+            Entity damager = resolveDamager(((EntityDamageByEntityEvent) lastDamage).getDamager());
+
+            if (damager != null) {
+                if (damager.equals(player)) {
+                    return "self_inflicted:" + cause.name();
+                }
+                if (HARMLESS_KILLERS.contains(damager.getType())) {
+                    return "harmless_mob:" + damager.getType().name();
+                }
+                // Betrayed by their own tamed animal (wolf teleport into a fight, etc.)
+                if (damager instanceof Tameable) {
+                    Tameable pet = (Tameable) damager;
+                    if (pet.isTamed() && player.equals(pet.getOwner())) {
+                        return "own_pet:" + damager.getType().name();
+                    }
+                }
+                if (damager.getType() == EntityType.END_CRYSTAL
+                        || damager.getType() == EntityType.WARDEN) {
+                    return "rare_cause:" + damager.getType().name();
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Resolve a damager to the entity that gets narrative credit:
+     * projectiles and primed TNT are traced back to their source.
+     */
+    private Entity resolveDamager(Entity damager) {
+        if (damager instanceof Projectile) {
+            ProjectileSource shooter = ((Projectile) damager).getShooter();
+            if (shooter instanceof Entity) {
+                return (Entity) shooter;
+            }
+            return damager;
+        }
+        if (damager instanceof TNTPrimed) {
+            Entity source = ((TNTPrimed) damager).getSource();
+            if (source != null) {
+                return source;
+            }
+        }
+        return damager;
+    }
+
+    /**
+     * Async location-juxtaposition criterion: a death within nearbyRadius of an
+     * existing lore location ties into established lore.
+     *
+     * Lore locations live in two stores depending on entry age and creation
+     * path: legacy entries carry coordinates in their content JSON (hydrated
+     * into LoreEntry.getLocation() at load), newer entries have lore_location
+     * rows. Both are checked. Only approved, non-death entries count, so death
+     * sites don't chain-spawn more death entries.
+     */
+    private void checkLoreSiteProximity(Player player, String deathMessage) {
+        Location deathLocation = player.getLocation().clone();
+        if (deathLocation.getWorld() == null) {
+            return;
+        }
+        double radius = plugin.getConfigManager().getNearbyRadius();
+
+        // Source 1: in-memory entry cache (content-JSON locations), no DB hit
+        for (LoreEntry site : plugin.getLoreManager().findNearbyLoreEntriesSync(deathLocation, radius)) {
+            if (isLoreSite(site)) {
+                createDeathLoreEntry(player, deathMessage, "near_lore_site:" + site.getName());
+                return;
+            }
+        }
+
+        // Source 2: lore_location table
+        String world = deathLocation.getWorld().getName();
+        double x = deathLocation.getX();
+        double z = deathLocation.getZ();
+
+        CompletableFuture
+            .supplyAsync(() -> plugin.getDatabaseManager().findNearbyLore(world, x, z, radius))
+            .thenAccept(locations -> {
+                if (locations == null || locations.isEmpty()) {
+                    return;
+                }
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    for (LoreLocation siteLocation : locations) {
+                        LoreEntry site;
+                        try {
+                            site = plugin.getLoreManager().getLoreEntrySync(
+                                UUID.fromString(siteLocation.getEntryId()));
+                        } catch (IllegalArgumentException e) {
+                            continue;
+                        }
+                        if (isLoreSite(site)) {
+                            createDeathLoreEntry(player, deathMessage, "near_lore_site:" + site.getName());
+                            return;
+                        }
+                    }
+                });
+            });
+    }
+
+    /** A lore site worth juxtaposing a death against: approved, and not itself a death entry. */
+    private boolean isLoreSite(LoreEntry site) {
+        return site != null && site.isApproved() && !site.getName().startsWith("Death of ");
     }
 
     /**
      * Create a lore entry for a player death
      */
-    private void createDeathLoreEntry(Player player, String deathMessage) {
-        logger.debug("Creating death lore entry for: " + player.getName());
+    private void createDeathLoreEntry(Player player, String deathMessage, String significance) {
+        logger.debug("Creating death lore entry for: " + player.getName()
+            + " (significance: " + significance + ")");
 
-        String dateString = DATE_FMT.format(LocalDate.now(ZoneId.systemDefault()));
+        LocalDateTime now = LocalDateTime.now(ZoneId.systemDefault());
+        String dateString = DATE_FMT.format(now.toLocalDate());
 
         LoreEntry entry = new LoreEntry();
         entry.setType(LoreType.EVENT);
-        entry.setName("Death of " + player.getName());
+        // Timestamp in the name: repository rejects duplicate (name, type) pairs,
+        // and a player dies more than once
+        entry.setName("Death of " + player.getName() + " (" + DATETIME_FMT.format(now) + ")");
 
         // Create a descriptive death entry
         String description = "On " + dateString + ", " + player.getName() + " met their demise.";
@@ -105,12 +277,17 @@ public class PlayerDeathLoreHandler extends DefaultLoreHandler {
         entry.addMetadata("player_uuid", player.getUniqueId().toString());
         entry.addMetadata("death_date", System.currentTimeMillis() + "");
         entry.addMetadata("death_message", deathMessage);
+        entry.addMetadata("death_significance", significance);
 
-        // Save to database - might need admin approval
+        // Always pending: the approval queue decides what becomes real lore
         entry.setApproved(false);
-        plugin.getLoreManager().addLoreEntrySync(entry);
-
-        logger.debug("Death lore entry created for: " + player.getName());
+        plugin.getLoreManager().addLoreEntry(entry).thenAccept(success -> {
+            if (success) {
+                logger.debug("Death lore entry created for: " + player.getName());
+            } else {
+                logger.warning("Failed to save death lore entry for: " + player.getName());
+            }
+        });
     }
 
     @Override

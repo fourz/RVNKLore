@@ -18,6 +18,7 @@ import org.fourz.RVNKLore.service.ICollectionService;
 import org.fourz.RVNKLore.service.ISubmissionService;
 import org.fourz.RVNKLore.service.IPlayerLoreService;
 import org.fourz.RVNKLore.service.ILoreBookService;
+import org.fourz.RVNKLore.service.ILoreItemResolver;
 import org.fourz.RVNKLore.lore.item.book.LoreBookManager;
 import org.fourz.RVNKLore.lore.map.LoreMapManager;
 import org.fourz.rvnkcore.util.PlayerLookup;
@@ -486,14 +487,34 @@ public class RVNKLore extends JavaPlugin {
     /**
      * Registers GriefPrevention integration if GriefPrevention is available.
      * Also registers as event listener for late GriefPrevention loading.
+     *
+     * <p>{@link GriefPreventionIntegration} directly references GriefPrevention
+     * types ({@code Claim}, {@code DataStore}, {@code GriefPrevention}) in its
+     * field/method signatures. Bukkit's {@code registerEvents} reflectively
+     * scans the listener class, which requires the JVM to load and verify it —
+     * on servers without GriefPrevention installed, those types don't exist on
+     * any classpath, so verification throws {@link NoClassDefFoundError}
+     * (a hard {@link Error}, not caught by the {@code activate()} method's own
+     * defensive checks, since those never get a chance to run). Skip
+     * construction and registration entirely when the plugin isn't present, so
+     * the class is never referenced and never needs to be loaded (#1444).</p>
      */
     private void registerGriefPrevention() {
-        gpIntegration = new GriefPreventionIntegration(this);
-        getServer().getPluginManager().registerEvents(gpIntegration, this);
-        if (gpIntegration.activate()) {
-            logger.info("GriefPrevention integration enabled - claim API active");
-        } else {
-            logger.debug("GriefPrevention not available - claim support disabled");
+        if (getServer().getPluginManager().getPlugin("GriefPrevention") == null) {
+            logger.debug("GriefPrevention not installed - claim support disabled");
+            return;
+        }
+        try {
+            gpIntegration = new GriefPreventionIntegration(this);
+            getServer().getPluginManager().registerEvents(gpIntegration, this);
+            if (gpIntegration.activate()) {
+                logger.info("GriefPrevention integration enabled - claim API active");
+            } else {
+                logger.debug("GriefPrevention not available - claim support disabled");
+            }
+        } catch (Throwable t) {
+            logger.warning("GriefPrevention integration failed to load: " + t.getMessage());
+            gpIntegration = null;
         }
     }
 
@@ -914,6 +935,8 @@ public class RVNKLore extends JavaPlugin {
                     org.fourz.RVNKLore.service.IRngItemService.class, rngItemService);
                 serviceCount++;
             }
+            registerMethod.invoke(serviceRegistry, ILoreItemResolver.class, itemManager);
+            serviceCount++;
 
             rvnkCoreAvailable = true;
             rvnkCoreInstance = coreInstance;
@@ -985,6 +1008,7 @@ public class RVNKLore extends JavaPlugin {
                 Class<?> loreApiServiceClass = Class.forName("org.fourz.rvnkcore.api.service.ILoreApiService");
                 unregisterMethod.invoke(serviceRegistry, loreApiServiceClass);
             } catch (ClassNotFoundException ignored) {}
+            unregisterMethod.invoke(serviceRegistry, ILoreItemResolver.class);
             unregisterMethod.invoke(serviceRegistry, ILoreBookService.class);
             unregisterMethod.invoke(serviceRegistry, IPlayerLoreService.class);
             unregisterMethod.invoke(serviceRegistry, ISubmissionService.class);

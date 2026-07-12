@@ -4,7 +4,7 @@ version: '${project.version}'
 description: A lore data system for Minecraft
 authors: [Derek, Fourz]
 main: org.fourz.RVNKLore.RVNKLore
-api-version: 1.17
+api-version: '26.1'
 depend:
   - RVNKCore
 softdepend:
@@ -107,6 +107,9 @@ permissions:
   rvnklore.sign.shrine:
     description: Create shrine signs ([shrine] sign tag)
     default: op
+  rvnklore.sign.library:
+    description: Designate a lectern as a lore library ([library] sign tag)
+    default: op
 
   # ── Approval ──────────────────────────────────────────────────────────────
   rvnklore.approve.own:
@@ -125,7 +128,8 @@ permissions:
     default: op
   rvnklore.notable:
     description: Deaths by this player are recorded as lore entries
-    default: op
+    # Explicit grant only — ops should not implicitly flag every death as notable
+    default: false
 
   # ── Achievement actions ───────────────────────────────────────────────────
   rvnklore.achievement.seehidden:

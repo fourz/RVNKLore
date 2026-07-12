@@ -75,6 +75,7 @@ public class ConfigManager {
         config.addDefault("storage.mysql.password", "");
         config.addDefault("lore.nearbyRadius", 50.0);
         config.addDefault("lore.requireApproval", true);
+        config.addDefault("lore.playerDeath.mode", "none");
         config.addDefault("features.collections.enabled", true);
         config.addDefault("features.discovery.enabled", true);
         config.addDefault("features.achievements.enabled", true);
@@ -212,6 +213,22 @@ public class ConfigManager {
     
     public double getNearbyRadius() {
         return config.getDouble("lore.nearbyRadius", 50.0);
+    }
+
+    /**
+     * Player-death lore creation mode: "none" (no death lore), "significant"
+     * (only deaths flagged by the significance evaluator), or "all".
+     * Unrecognized values are treated as "none".
+     */
+    public String getPlayerDeathLoreMode() {
+        String mode = config.getString("lore.playerDeath.mode", "none").trim().toLowerCase();
+        switch (mode) {
+            case "significant":
+            case "all":
+                return mode;
+            default:
+                return "none";
+        }
     }
     
     public boolean requireApproval() {

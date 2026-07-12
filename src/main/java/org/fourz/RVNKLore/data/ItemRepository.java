@@ -359,6 +359,9 @@ public class ItemRepository implements IItemRepository {
                         if (properties.getSkullTexture() != null) {
                             jsonProps.put("skull_texture", properties.getSkullTexture());
                         }
+                        if (properties.getPages() != null && !properties.getPages().isEmpty()) {
+                            jsonProps.put("pages", properties.getPages());
+                        }
                         stmt.setString(7, jsonProps.toJSONString());
                         stmt.setString(8, properties.getCreatedBy());
                         stmt.setString(9, properties.getNbtData());
@@ -369,6 +372,13 @@ public class ItemRepository implements IItemRepository {
                         }
                     });
             } catch (LoreException e) {
+                // Duplicate lore_item for an existing lore_entry_id (e.g. a book re-placed on a
+                // lectern) is an expected, benign outcome — the item already exists. Log one DEBUG
+                // line instead of a full ERROR stack trace (#1427).
+                if (e.getCause() instanceof java.sql.SQLIntegrityConstraintViolationException) {
+                    logger.debug("Lore item already exists (duplicate key), skipping insert: " + properties.getDisplayName());
+                    return -1;
+                }
                 logger.error("Failed to insert item: " + properties.getDisplayName(), e);
                 return -1;
             }
@@ -419,6 +429,9 @@ public class ItemRepository implements IItemRepository {
                         }
                         if (properties.getSkullTexture() != null) {
                             jsonProps.put("skull_texture", properties.getSkullTexture());
+                        }
+                        if (properties.getPages() != null && !properties.getPages().isEmpty()) {
+                            jsonProps.put("pages", properties.getPages());
                         }
                         stmt.setString(7, jsonProps.toJSONString());
                         // Set NBT data
@@ -1326,6 +1339,15 @@ public class ItemRepository implements IItemRepository {
                             @SuppressWarnings("unchecked")
                             List<String> loreList = (List<String>) loreObj;
                             props.setLore(loreList);
+                        }
+                    }
+
+                    if (jsonProps.containsKey("pages")) {
+                        Object pagesObj = jsonProps.get("pages");
+                        if (pagesObj instanceof List) {
+                            @SuppressWarnings("unchecked")
+                            List<String> pagesList = (List<String>) pagesObj;
+                            props.setPages(pagesList);
                         }
                     }
 

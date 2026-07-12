@@ -189,7 +189,7 @@ CREATE TABLE IF NOT EXISTS lore_entry (
 | `custom_model_data` | INTEGER | YES | NULL | Resource pack CustomModelData value |
 | `season_id` | INTEGER | YES | NULL | Seasonal association (if any) |
 | `is_vote_reward` | BOOLEAN/TINYINT(1) | NO | `FALSE` | VotingPlugin reward item flag |
-| `item_properties` | TEXT | YES | NULL | JSON: `ItemPropertiesDTO` |
+| `item_properties` | TEXT | YES | NULL | JSON: `ItemPropertiesDTO`. For `WRITTEN_BOOK` items, includes `{"pages":["page1","page2",...]}` — page content supports `§` color codes and `\n` newlines. |
 | `drop_settings` | TEXT | YES | NULL | JSON: drop configuration |
 | `created_by` | VARCHAR(64) | YES | NULL | Creator identifier |
 | `nbt_data` | TEXT | YES | NULL | Serialized NBT data |

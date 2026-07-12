@@ -69,6 +69,16 @@ public class LoreEntryRepository implements ILoreEntryRepository {
     @Override
     public CompletableFuture<Boolean> addLoreEntry(LoreEntry entry) {
         return CompletableFuture.supplyAsync(() -> {
+            // A missing material on an ITEM entry is a validation problem, not a DB failure.
+            // Reject it up front with a single WARN so it doesn't reach insertLoreItem, throw,
+            // and get logged as a full ERROR stack trace on every occurrence (#1417).
+            if (entry.getType() == LoreType.ITEM) {
+                String material = entry.getMetadata("material");
+                if (material == null || material.trim().isEmpty()) {
+                    logger.warning("Skipping ITEM lore entry without a material: " + entry.getName());
+                    return false;
+                }
+            }
             try (Connection conn = dbConnection.getConnection()) {
                 conn.setAutoCommit(false);
 
