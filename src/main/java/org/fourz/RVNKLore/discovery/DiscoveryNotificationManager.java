@@ -70,6 +70,15 @@ public class DiscoveryNotificationManager {
         Player player = event.getPlayer();
         LoreEntry entry = event.getLoreEntry();
 
+        // Per-type hard gate (#1475): some lore types are recorded silently (no discovery blast).
+        // The discovery has already been recorded upstream in DiscoveryManager; this only suppresses
+        // the player notification, and overrides per-player prefs and custom messages for that type.
+        if (entry != null && entry.getType() != null
+                && !plugin.getConfigManager().isDiscoveryNotificationEnabled(entry.getType())) {
+            logger.debug("Discovery notification suppressed by per-type policy: " + entry.getType());
+            return;
+        }
+
         // Custom message takes priority
         if (event.getCustomMessage() != null) {
             player.sendMessage(event.getCustomMessage());

@@ -49,6 +49,33 @@ lore:
     MOB_HEAD: DEFAULT
     HAT: DEFAULT
 
+# Discovery notifications shown to a player when they discover a lore entry.
+notifications:
+  # Global channel toggles (title / action bar / chat / sound + first-discovery bonus).
+  titles: { enabled: true }
+  actionbar: { enabled: true }
+  chat: { enabled: true }
+  sounds: { enabled: true }
+  first_discovery_bonus: true
+  # Per-type hard gate. false = discovery is still recorded, but no popup is shown for that type.
+  # Record-keeping types default off so new-player/death/etc. lore doesn't blast on proximity.
+  perType:
+    PLAYER:      { enabled: false }   # new-player arrivals stack at spawn — silent by default
+    EVENT:       { enabled: false }   # deaths / events — record-keeping, not announced
+    GENERIC:     { enabled: false }
+    HEAD:        { enabled: false }   # cosmetic heads
+    CITY:        { enabled: true }
+    LANDMARK:    { enabled: true }
+    FACTION:     { enabled: true }
+    PATH:        { enabled: true }
+    ITEM:        { enabled: true }
+    QUEST:       { enabled: true }
+    ENCHANTMENT: { enabled: true }
+    MONUMENT:    { enabled: true }
+    TAVERN:      { enabled: true }
+    GUILD:       { enabled: true }
+    SHRINE:      { enabled: true }
+
 storage:
   type: mysql
 
