@@ -233,10 +233,41 @@ public class ItemManager implements IItemService, ILoreItemResolver {
     /**
      * Create a generic lore item with basic properties (synchronous internal method).
      */
+    /**
+     * Stamp the cross-plugin id PDC keys (lore_item_id / lore_entry_id / lore_item_name)
+     * onto an item. Shared so non-STANDARD factory paths (e.g. ENCHANTED) resolve too (#1506).
+     */
+    private void applyIdPdc(ItemStack item, ItemProperties properties, String name) {
+        if (item == null) return;
+        org.bukkit.inventory.meta.ItemMeta meta = item.getItemMeta();
+        if (meta == null) return;
+        if (properties.getDatabaseId() > 0) {
+            meta.getPersistentDataContainer().set(
+                new org.bukkit.NamespacedKey(plugin, "lore_item_id"),
+                org.bukkit.persistence.PersistentDataType.INTEGER, properties.getDatabaseId());
+        }
+        if (properties.getLoreEntryId() != null && !properties.getLoreEntryId().isEmpty()) {
+            meta.getPersistentDataContainer().set(
+                new org.bukkit.NamespacedKey(plugin, "lore_entry_id"),
+                org.bukkit.persistence.PersistentDataType.STRING, properties.getLoreEntryId());
+        }
+        if (name != null && !name.isEmpty()) {
+            meta.getPersistentDataContainer().set(
+                new org.bukkit.NamespacedKey(plugin, "lore_item_name"),
+                org.bukkit.persistence.PersistentDataType.STRING, name);
+        }
+        item.setItemMeta(meta);
+    }
+
     private ItemStack createLoreItemInternal(ItemType type, String name, ItemProperties properties) {
         switch (type) {
-            case ENCHANTED:
-                return enchantManager.createEnchantedItem(properties);
+            case ENCHANTED: {
+                // #1506: stamp the id PDC keys the STANDARD path applies but ENCHANTED skipped,
+                // so enchanted lore items are resolvable via resolveItemId.
+                ItemStack enchanted = enchantManager.createEnchantedItem(properties);
+                applyIdPdc(enchanted, properties, name);
+                return enchanted;
+            }
             case COSMETIC:
                 return cosmeticItem.createCosmeticItem(properties);
             case COLLECTION:
