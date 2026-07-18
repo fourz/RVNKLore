@@ -568,10 +568,10 @@ public class ItemManager implements IItemService, ILoreItemResolver {
      * @param properties The properties of the item to register
      * @return true if the item was registered successfully, false otherwise
      */
-    private boolean registerLoreItemSync(java.util.UUID loreEntryId, ItemProperties properties) {
+    private int registerLoreItemSync(java.util.UUID loreEntryId, ItemProperties properties) {
         if (loreEntryId == null || properties == null) {
             logger.warning("Cannot register lore item with null ID or properties");
-            return false;
+            return -1;
         }
         logger.debug("Registering lore item: " + properties.getDisplayName() + " with lore entry ID: " + loreEntryId);
         // Add lore entry ID reference to item properties
@@ -580,15 +580,16 @@ public class ItemManager implements IItemService, ILoreItemResolver {
         if (itemRepository != null) {
             try {
                 // A lore item already registered for this entry (e.g. a book re-placed on a
-                // lectern) is not an error — short-circuit to success instead of attempting a
-                // duplicate insert that would hit the UNIQUE constraint and spam the log (#1427).
-                if (itemRepository.getItemByLoreEntryId(loreEntryId.toString()).join().isPresent()) {
+                // lectern) is not an error — short-circuit to the existing id instead of attempting
+                // a duplicate insert that would hit the UNIQUE constraint and spam the log (#1427).
+                Optional<ItemProperties> existing = itemRepository.getItemByLoreEntryId(loreEntryId.toString()).join();
+                if (existing.isPresent()) {
                     String key = properties.getDisplayName().toLowerCase();
                     itemNameCache.computeIfAbsent(key, k -> new ArrayList<>()).add(properties);
                     loreEntryIdCache.put(loreEntryId.toString(), properties);
                     logger.debug("Lore item already registered for entry " + loreEntryId +
                         ", skipping duplicate insert: " + properties.getDisplayName());
-                    return true;
+                    return existing.get().getDatabaseId();
                 }
                 int itemId = itemRepository.insertItem(properties).join();
                 if (itemId > 0) {
@@ -598,7 +599,7 @@ public class ItemManager implements IItemService, ILoreItemResolver {
                     // Add to loreEntryId cache
                     loreEntryIdCache.put(loreEntryId.toString(), properties);
                     logger.debug("Registered item in database with ID: " + itemId);
-                    return true;
+                    return itemId;
                 } else {
                     logger.warning("Failed to insert item into database");
                 }
@@ -607,13 +608,13 @@ public class ItemManager implements IItemService, ILoreItemResolver {
             }
         } else {
             logger.warning("ItemRepository is not available, item will not be persisted");
-            // Add to cache anyway
+            // Add to cache anyway (id unknown without a repository)
             String key = properties.getDisplayName().toLowerCase();
             itemNameCache.computeIfAbsent(key, k -> new ArrayList<>()).add(properties);
             loreEntryIdCache.put(loreEntryId.toString(), properties);
-            return true;
+            return 0;
         }
-        return false;
+        return -1;
     }
 
     // ============================================================
@@ -716,7 +717,59 @@ public class ItemManager implements IItemService, ILoreItemResolver {
      */
     @Override
     public CompletableFuture<Boolean> registerLoreItem(UUID loreEntryId, ItemProperties properties) {
-        return CompletableFuture.supplyAsync(() -> registerLoreItemSync(loreEntryId, properties));
+        return CompletableFuture.supplyAsync(() -> registerLoreItemSync(loreEntryId, properties) > 0);
+    }
+
+    /**
+     * Upsert the full {@link ItemProperties} (incl. enchantments/lore/pages) onto the lore_item
+     * row for {@code loreEntryId}, returning its id. Used by the REST mint endpoint (#1517).
+     *
+     * <p>Creating an ITEM lore_entry already inserts a bare lore_item row (name/material/type,
+     * but no {@code item_properties}); this method fills that row in via
+     * {@link ItemRepository#updateItem} (which serializes enchantments per #1503), or inserts a
+     * fresh row if none exists. Returns the item id, or a value {@code <= 0} on failure.</p>
+     */
+    public CompletableFuture<Integer> registerLoreItemForId(UUID loreEntryId, ItemProperties properties) {
+        return CompletableFuture.supplyAsync(() -> upsertItemPropertiesSync(loreEntryId, properties));
+    }
+
+    private int upsertItemPropertiesSync(UUID loreEntryId, ItemProperties properties) {
+        if (loreEntryId == null || properties == null) {
+            logger.warning("Cannot upsert lore item with null ID or properties");
+            return -1;
+        }
+        if (itemRepository == null) {
+            logger.warning("ItemRepository is not available, item properties will not be persisted");
+            return -1;
+        }
+        properties.setLoreEntryId(loreEntryId.toString());
+        try {
+            Optional<ItemProperties> existing = itemRepository.getItemByLoreEntryId(loreEntryId.toString()).join();
+            int itemId;
+            if (existing.isPresent()) {
+                itemId = existing.get().getDatabaseId();
+                if (!itemRepository.updateItem(itemId, properties).join()) {
+                    logger.warning("Failed to update item_properties for item id " + itemId);
+                    return -1;
+                }
+                logger.debug("Updated item_properties for existing lore_item id " + itemId
+                    + ": " + properties.getDisplayName());
+            } else {
+                itemId = itemRepository.insertItem(properties).join();
+                if (itemId <= 0) {
+                    logger.warning("Failed to insert lore item: " + properties.getDisplayName());
+                    return -1;
+                }
+                logger.debug("Inserted lore_item id " + itemId + ": " + properties.getDisplayName());
+            }
+            String key = properties.getDisplayName().toLowerCase();
+            itemNameCache.computeIfAbsent(key, k -> new ArrayList<>()).add(properties);
+            loreEntryIdCache.put(loreEntryId.toString(), properties);
+            return itemId;
+        } catch (Exception e) {
+            logger.error("Error upserting lore item properties", e);
+            return -1;
+        }
     }
 
     /**
