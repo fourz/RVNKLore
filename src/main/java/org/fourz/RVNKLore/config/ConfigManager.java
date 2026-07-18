@@ -86,7 +86,14 @@ public class ConfigManager {
         for (LoreType type : LoreType.values()) {
             config.addDefault("lore.handlers." + type.name(), "DEFAULT");
         }
-        
+
+        // Per-type discovery notification defaults (hard gate, #1475). Record-keeping types
+        // (PLAYER/EVENT/GENERIC/HEAD) default off so they record silently instead of blasting.
+        for (LoreType type : LoreType.values()) {
+            config.addDefault("notifications.perType." + type.name() + ".enabled",
+                              !DEFAULT_NOTIFY_DISABLED.contains(type));
+        }
+
         config.options().copyDefaults(true);
         plugin.saveConfig();
     }
@@ -345,6 +352,15 @@ public class ConfigManager {
         DEFAULT_LAYER_LABELS = java.util.Collections.unmodifiableMap(m);
     }
 
+    /**
+     * LoreTypes whose discovery notifications are OFF by default (#1475).
+     * Record-keeping types that would otherwise blast on proximity discovery:
+     * new-player arrivals (PLAYER), deaths/events (EVENT), catch-all (GENERIC),
+     * and cosmetic heads (HEAD). All other types notify by default.
+     */
+    private static final java.util.EnumSet<LoreType> DEFAULT_NOTIFY_DISABLED =
+        java.util.EnumSet.of(LoreType.PLAYER, LoreType.EVENT, LoreType.GENERIC, LoreType.HEAD);
+
     public String getDynmapLayerLabel(LoreType type) {
         String defaultLabel = DEFAULT_LAYER_LABELS.getOrDefault(type, type.name());
         return config.getString("dynmap.layers." + type.name() + ".label", defaultLabel);
@@ -365,6 +381,17 @@ public class ConfigManager {
 
     public boolean isDynmapOnlyApproved() {
         return config.getBoolean("dynmap.only-approved", true);
+    }
+
+    /**
+     * Whether discovery notifications (title/actionbar/chat/sound) fire for a given lore type (#1475).
+     * Hard server-side gate: when false, no player is notified for that type, but the discovery is
+     * still recorded. Read live from config so /lore reload takes effect without a restart.
+     */
+    public boolean isDiscoveryNotificationEnabled(LoreType type) {
+        if (type == null) return true;
+        return config.getBoolean("notifications.perType." + type.name() + ".enabled",
+                                 !DEFAULT_NOTIFY_DISABLED.contains(type));
     }
 
     public boolean isDynmapPopupEnabled() {

@@ -1,10 +1,12 @@
 package org.fourz.RVNKLore.data.dto;
 
 import org.bukkit.Material;
+import org.bukkit.enchantments.Enchantment;
 import org.fourz.RVNKLore.lore.item.ItemProperties;
 import org.fourz.RVNKLore.lore.item.ItemType;
 import org.fourz.RVNKLore.lore.item.cosmetic.HeadRarity;
 import org.fourz.RVNKLore.lore.item.cosmetic.HeadVariant;
+import org.fourz.RVNKLore.lore.item.enchant.EnchantmentTier;
 
 import java.util.List;
 import java.util.Map;
@@ -45,7 +47,13 @@ public record ItemPropertiesDTO(
     String createdBy,
     Long createdAt,
     Map<String, Object> customProperties,
-    Map<String, String> metadata
+    Map<String, String> metadata,
+
+    // Enchantment & book properties (#1497 — carried faithfully so a
+    // from()->toEntity() round-trip no longer silently drops them)
+    List<String> pages,
+    Map<Enchantment, Integer> enchantments,
+    EnchantmentTier enchantmentTier
 ) {
     /**
      * Compact constructor with validation and defensive copies.
@@ -58,6 +66,9 @@ public record ItemPropertiesDTO(
         lore = lore == null ? List.of() : List.copyOf(lore);
         customProperties = customProperties == null ? Map.of() : Map.copyOf(customProperties);
         metadata = metadata == null ? Map.of() : Map.copyOf(metadata);
+        pages = pages == null ? List.of() : List.copyOf(pages);
+        enchantments = enchantments == null ? Map.of() : Map.copyOf(enchantments);
+        // enchantmentTier is an immutable value object — no defensive copy needed
     }
 
     /**
@@ -93,7 +104,10 @@ public record ItemPropertiesDTO(
             properties.getCreatedBy(),
             properties.getCreatedAt(),
             properties.hasCustomProperties() ? properties.getAllCustomProperties() : null,
-            properties.getAllMetadata()
+            properties.getAllMetadata(),
+            properties.getPages(),
+            properties.getEnchantments(),
+            properties.getEnchantmentTier()
         );
     }
 
@@ -140,6 +154,11 @@ public record ItemPropertiesDTO(
                 properties.setMetadata(entry.getKey(), entry.getValue());
             }
         }
+
+        // Set enchantment & book properties (#1497 — faithful round-trip)
+        if (!pages.isEmpty()) properties.setPages(new java.util.ArrayList<>(pages));
+        if (!enchantments.isEmpty()) properties.setEnchantments(new java.util.HashMap<>(enchantments));
+        if (enchantmentTier != null) properties.setEnchantmentTier(enchantmentTier);
 
         // Set head variant properties if exists
         if (textureData != null || ownerName != null) {
@@ -192,6 +211,9 @@ public record ItemPropertiesDTO(
         private Long createdAt;
         private Map<String, Object> customProperties;
         private Map<String, String> metadata;
+        private List<String> pages;
+        private Map<Enchantment, Integer> enchantments;
+        private EnchantmentTier enchantmentTier;
 
         public Builder id(int id) {
             this.id = id;
@@ -303,12 +325,28 @@ public record ItemPropertiesDTO(
             return this;
         }
 
+        public Builder pages(List<String> pages) {
+            this.pages = pages;
+            return this;
+        }
+
+        public Builder enchantments(Map<Enchantment, Integer> enchantments) {
+            this.enchantments = enchantments;
+            return this;
+        }
+
+        public Builder enchantmentTier(EnchantmentTier enchantmentTier) {
+            this.enchantmentTier = enchantmentTier;
+            return this;
+        }
+
         public ItemPropertiesDTO build() {
             return new ItemPropertiesDTO(
                 id, itemType, material, displayName, lore, customModelData, rarity, obtainable,
                 loreEntryId, nbtData, glow, skullTexture, textureData, ownerName,
                 collectionId, themeId, rarityLevel, collectionSequence,
-                createdBy, createdAt, customProperties, metadata
+                createdBy, createdAt, customProperties, metadata,
+                pages, enchantments, enchantmentTier
             );
         }
     }

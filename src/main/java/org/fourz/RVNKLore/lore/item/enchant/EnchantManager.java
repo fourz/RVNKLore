@@ -48,28 +48,59 @@ public class EnchantManager {
         
         String displayName = properties.getDisplayName();
         Map<Enchantment, Integer> enchantments = properties.getEnchantments();
-        
-        ItemStack item = generator.createEnchantedItem(material, enchantments, displayName);
-        
-        // Apply additional properties
-        if (properties.getLore() != null) {
-            ItemMeta meta = item.getItemMeta();
-            if (meta != null) {
-                meta.setLore(properties.getLore());
-                item.setItemMeta(meta);
-            }
+
+        // #1504: when no explicit enchants but a tier is set, auto-select a curated,
+        // material-aware set (ports gear.item.py GEAR_SETS/TIERS).
+        if ((enchantments == null || enchantments.isEmpty()) && properties.getEnchantmentTier() != null) {
+            enchantments = EnchantmentTemplate.selectEnchants(material, properties.getEnchantmentTier());
         }
-        
-        
+
+        ItemStack item = generator.createEnchantedItem(material, enchantments, displayName);
+
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
-            meta.setCustomModelData(properties.getCustomModelData());
+            // #1505: expanded lore — explicit lore wins, else auto-generate a rarity header.
+            java.util.List<String> lore = properties.getLore();
+            if (lore == null || lore.isEmpty()) {
+                lore = buildAutoLore(properties);
+            }
+            if (lore != null && !lore.isEmpty()) {
+                meta.setLore(lore);
+            }
+            if (properties.getCustomModelData() > 0) {
+                meta.setCustomModelData(properties.getCustomModelData());
+            }
             item.setItemMeta(meta);
         }
-        
-        
+
         logger.debug("Created enchanted item through EnchantManager: " + displayName);
         return item;
+    }
+
+    /**
+     * Auto-generate "expanded lore" (tooltip) for an enchanted item when the caller
+     * supplied none — a colored, bold rarity header (#1505). ASCII by construction.
+     */
+    private java.util.List<String> buildAutoLore(ItemProperties properties) {
+        java.util.List<String> lore = new java.util.ArrayList<>();
+        String rarity = properties.getRarity();
+        if (rarity != null && !rarity.isEmpty()) {
+            String label = rarity.substring(0, 1).toUpperCase() + rarity.substring(1).toLowerCase();
+            lore.add(rarityColor(rarity) + "§l" + label);
+        }
+        return lore;
+    }
+
+    /** Map a rarity string to its § color code. */
+    private String rarityColor(String rarity) {
+        switch (rarity == null ? "" : rarity.toUpperCase()) {
+            case "UNCOMMON": return "§a"; // green
+            case "RARE":     return "§b"; // aqua
+            case "EPIC":     return "§d"; // light purple
+            case "LEGENDARY":return "§6"; // gold
+            case "UNIQUE":   return "§5"; // dark purple
+            default:          return "§f"; // white (COMMON)
+        }
     }
     
     /**
@@ -138,7 +169,7 @@ public class EnchantManager {
         String currentName = meta.getDisplayName();
         if (currentName != null && !currentName.isEmpty()) {
             String tierColor = getTierColor(tier);
-            if (!currentName.startsWith("Â§")) {
+            if (!currentName.startsWith("§")) {
                 meta.setDisplayName(tierColor + currentName);
             }
         }
@@ -155,17 +186,17 @@ public class EnchantManager {
     private String getTierColor(EnchantmentTier tier) {
         switch (tier) {
             case COMMON:
-                return "Â§f"; // White
+                return "§f"; // White
             case UNCOMMON:
-                return "Â§a"; // Green
+                return "§a"; // Green
             case RARE:
-                return "Â§9"; // Blue
+                return "§9"; // Blue
             case EPIC:
-                return "Â§5"; // Purple
+                return "§5"; // Purple
             case LEGENDARY:
-                return "Â§6"; // Gold
+                return "§6"; // Gold
             default:
-                return "Â§7"; // Gray
+                return "§7"; // Gray
         }
     }
     

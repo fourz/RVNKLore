@@ -1,6 +1,9 @@
 package org.fourz.RVNKLore.data;
 
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
+import org.bukkit.enchantments.Enchantment;
+import org.fourz.RVNKLore.lore.item.enchant.EnchantmentTier;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.rvnkcore.data.FallbackTracker;
 import org.fourz.rvnkcore.util.log.LogManager;
@@ -362,6 +365,7 @@ public class ItemRepository implements IItemRepository {
                         if (properties.getPages() != null && !properties.getPages().isEmpty()) {
                             jsonProps.put("pages", properties.getPages());
                         }
+                        appendEnchantJson(jsonProps, properties);
                         stmt.setString(7, jsonProps.toJSONString());
                         stmt.setString(8, properties.getCreatedBy());
                         stmt.setString(9, properties.getNbtData());
@@ -433,6 +437,7 @@ public class ItemRepository implements IItemRepository {
                         if (properties.getPages() != null && !properties.getPages().isEmpty()) {
                             jsonProps.put("pages", properties.getPages());
                         }
+                        appendEnchantJson(jsonProps, properties);
                         stmt.setString(7, jsonProps.toJSONString());
                         // Set NBT data
                         stmt.setString(8, properties.getNbtData());
@@ -1244,6 +1249,57 @@ public class ItemRepository implements IItemRepository {
      * @param rs The result set to convert
      * @return The item properties, or null if conversion failed
      */
+    /**
+     * Serialize the enchantments map (namespaced-key -> level) and enchantment tier
+     * into the item_properties JSON so ENCHANTED items round-trip through the DB (#1503).
+     */
+    @SuppressWarnings("unchecked")
+    private void appendEnchantJson(JSONObject jsonProps, ItemProperties properties) {
+        Map<Enchantment, Integer> enchants = properties.getEnchantments();
+        if (enchants != null && !enchants.isEmpty()) {
+            JSONObject ench = new JSONObject();
+            for (Map.Entry<Enchantment, Integer> e : enchants.entrySet()) {
+                ench.put(e.getKey().getKey().toString(), e.getValue());
+            }
+            jsonProps.put("enchantments", ench);
+        }
+        if (properties.getEnchantmentTier() != null) {
+            jsonProps.put("enchantment_tier", properties.getEnchantmentTier().name());
+        }
+    }
+
+    /**
+     * Parse the enchantments map + tier back out of the item_properties JSON (#1503).
+     */
+    private void parseEnchantJson(JSONObject jsonProps, ItemProperties props) {
+        Object enchObj = jsonProps.get("enchantments");
+        if (enchObj instanceof JSONObject) {
+            Map<Enchantment, Integer> enchMap = new HashMap<>();
+            JSONObject ench = (JSONObject) enchObj;
+            for (Object key : ench.keySet()) {
+                NamespacedKey nk = NamespacedKey.fromString((String) key);
+                Enchantment enchant = (nk != null) ? Enchantment.getByKey(nk) : null;
+                Object lvl = ench.get(key);
+                if (enchant != null && lvl instanceof Number) {
+                    enchMap.put(enchant, ((Number) lvl).intValue());
+                } else if (enchant == null) {
+                    logger.warning("Unknown enchantment in item_properties: " + key);
+                }
+            }
+            if (!enchMap.isEmpty()) {
+                props.setEnchantments(enchMap);
+            }
+        }
+        Object tierObj = jsonProps.get("enchantment_tier");
+        if (tierObj instanceof String) {
+            try {
+                props.setEnchantmentTier(EnchantmentTier.valueOf((String) tierObj));
+            } catch (IllegalArgumentException ignore) {
+                // unknown tier name — leave unset
+            }
+        }
+    }
+
     @SuppressWarnings("unchecked")
     private ItemProperties resultSetToItemProperties(ResultSet rs) {
         try {
@@ -1350,6 +1406,7 @@ public class ItemRepository implements IItemRepository {
                             props.setPages(pagesList);
                         }
                     }
+                    parseEnchantJson(jsonProps, props);
 
                     // Add all properties as custom properties
                     for (Object key : jsonProps.keySet()) {

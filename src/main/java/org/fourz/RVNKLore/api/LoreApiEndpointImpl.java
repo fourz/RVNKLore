@@ -9,9 +9,13 @@ import org.fourz.RVNKLore.lore.LoreCategory;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreManager;
 import org.fourz.RVNKLore.lore.LoreType;
+import org.fourz.RVNKLore.data.dto.ItemPropertiesDTO;
+import org.fourz.RVNKLore.lore.item.ItemProperties;
 import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
 import org.fourz.RVNKLore.lore.item.collection.LoreCollection;
 import org.fourz.RVNKLore.lore.player.PlayerManager;
+import org.fourz.RVNKLore.service.IRngItemService;
+import org.bukkit.inventory.ItemStack;
 import org.fourz.RVNKLore.search.LoreSearchService;
 import org.fourz.RVNKLore.search.SearchCriteria;
 import org.fourz.RVNKLore.search.SearchResult;
@@ -409,6 +413,134 @@ public class LoreApiEndpointImpl implements ILoreApiService {
             }
             return (ApiResponse<?>) ApiResponse.success(categories);
         });
+    }
+
+    // ========================================================
+    // Item surface (#1495) — read + roll, no mint/persist over HTTP
+    // ========================================================
+
+    @Override
+    public CompletableFuture<ApiResponse<?>> getItemById(String idStr) {
+        int id;
+        try {
+            id = Integer.parseInt(idStr);
+        } catch (NumberFormatException e) {
+            return CompletableFuture.completedFuture(
+                ApiResponse.error("INVALID_REQUEST", "Item id must be numeric: " + idStr));
+        }
+        return loreManager.getItemManager().getItemPropertiesById(id)
+            .<ApiResponse<?>>handle((opt, ex) -> {
+                if (ex != null) {
+                    logger.error("Error retrieving item " + id, unwrapException(ex));
+                    return ApiResponse.error("INTERNAL_ERROR", "An unexpected error occurred.");
+                }
+                return opt
+                    .map(props -> ApiResponse.success(itemToMap(props)))
+                    .orElse(ApiResponse.error("NOT_FOUND", "Item not found: " + id));
+            });
+    }
+
+    @Override
+    public CompletableFuture<ApiResponse<?>> getItemByName(String name) {
+        return loreManager.getItemManager().getAllItemsWithProperties()
+            .<ApiResponse<?>>handle((list, ex) -> {
+                if (ex != null) {
+                    logger.error("Error retrieving item by name '" + name + "'", unwrapException(ex));
+                    return ApiResponse.error("INTERNAL_ERROR", "An unexpected error occurred.");
+                }
+                return list.stream()
+                    .filter(p -> name.equalsIgnoreCase(p.getDisplayName()))
+                    .findFirst()
+                    .map(props -> ApiResponse.success(itemToMap(props)))
+                    .orElse(ApiResponse.error("NOT_FOUND", "Item not found: " + name));
+            });
+    }
+
+    @Override
+    public CompletableFuture<ApiResponse<?>> getPresetsForQuest(String questId) {
+        return loreManager.getItemManager().getPresetsForQuest(questId)
+            .<ApiResponse<?>>handle((list, ex) -> {
+                if (ex != null) {
+                    logger.error("Error retrieving presets for quest '" + questId + "'", unwrapException(ex));
+                    return ApiResponse.error("INTERNAL_ERROR", "An unexpected error occurred.");
+                }
+                List<Map<String, Object>> data = list.stream()
+                    .map(this::itemToMap)
+                    .collect(Collectors.toList());
+                return ApiResponse.success(data);
+            });
+    }
+
+    @Override
+    public CompletableFuture<ApiResponse<?>> rollPool(String poolId, String requestBody) {
+        IRngItemService rng = plugin.getRngItemService();
+        if (rng == null) {
+            return CompletableFuture.completedFuture(
+                ApiResponse.error("SERVICE_UNAVAILABLE", "RNG item service not available"));
+        }
+
+        String rarityTier = null;
+        if (requestBody != null && !requestBody.isBlank()) {
+            try {
+                Map<?, ?> body = gson.fromJson(requestBody, Map.class);
+                if (body != null && body.get("rarityTier") != null) {
+                    rarityTier = String.valueOf(body.get("rarityTier"));
+                }
+            } catch (Exception ignored) {
+                // optional body — ignore malformed JSON, roll without a tier filter
+            }
+        }
+        final String tier = rarityTier;
+
+        return rng.roll(poolId, tier)
+            .<ApiResponse<?>>handle((opt, ex) -> {
+                if (ex != null) {
+                    logger.error("Error rolling RNG pool '" + poolId + "'", unwrapException(ex));
+                    return ApiResponse.error("INTERNAL_ERROR", "An unexpected error occurred.");
+                }
+                if (opt.isEmpty()) {
+                    return ApiResponse.error("NOT_FOUND", "Pool empty or unknown: " + poolId);
+                }
+                ItemStack rolled = opt.get();
+                Map<String, Object> item = new LinkedHashMap<>();
+                item.put("itemName", loreManager.getItemManager().resolveItemId(rolled));
+                item.put("material", rolled.getType().name());
+                if (rolled.hasItemMeta() && rolled.getItemMeta().hasDisplayName()) {
+                    item.put("displayName", rolled.getItemMeta().getDisplayName());
+                }
+                Map<String, Object> result = new LinkedHashMap<>();
+                result.put("poolId", poolId);
+                result.put("rarityTier", tier);
+                result.put("rolled", item);
+                return ApiResponse.success(result);
+            });
+    }
+
+    /**
+     * Build a JSON-safe map from ItemProperties via {@link ItemPropertiesDTO#from} — Gson 2.8.9
+     * cannot serialize the record directly, so we project its fields into a Map. Routing item
+     * responses through the DTO exercises the faithful round-trip (incl. book {@code pages}, #1497).
+     */
+    private Map<String, Object> itemToMap(ItemProperties props) {
+        ItemPropertiesDTO dto = ItemPropertiesDTO.from(props);
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", dto.id());
+        m.put("name", dto.displayName());
+        m.put("material", dto.material());
+        m.put("itemType", dto.itemType() != null ? dto.itemType().name() : null);
+        m.put("rarity", dto.rarity());
+        m.put("obtainable", dto.obtainable());
+        m.put("customModelData", dto.customModelData());
+        m.put("loreEntryId", dto.loreEntryId());
+        m.put("lore", dto.lore());
+        m.put("pages", dto.pages());
+        m.put("glow", dto.glow());
+        if (dto.enchantments() != null && !dto.enchantments().isEmpty()) {
+            Map<String, Object> ench = new LinkedHashMap<>();
+            dto.enchantments().forEach((e, lvl) -> ench.put(e.getKey().toString(), lvl));
+            m.put("enchantments", ench);
+        }
+        return m;
     }
 
     // ========================================================
