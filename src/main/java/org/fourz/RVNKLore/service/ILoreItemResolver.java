@@ -11,14 +11,27 @@ import org.bukkit.inventory.ItemStack;
 public interface ILoreItemResolver {
 
     /**
-     * Returns the lore item name stored in this item's PDC, or null if absent or not a lore item.
+     * Returns the lore item identifier stored in this item's PDC, or null if absent
+     * or not a lore item.
      *
      * <p>Reads the {@code lore_item_name} persistent data container tag set by RVNKLore
      * when creating lore items. Tag is present on items created via {@link
-     * org.fourz.RVNKLore.lore.item.ItemManager}.</p>
+     * org.fourz.RVNKLore.lore.item.ItemManager} — this covers <b>all</b> lore items,
+     * not just books.</p>
      *
      * @param item The item to inspect; may be null
      * @return The item identifier (e.g. {@code "heralds_mandate"}), or null
      */
-    String getBookId(ItemStack item);
+    String resolveItemId(ItemStack item);
+
+    /**
+     * @deprecated Misnomer — this never resolved book identity specifically; it returns
+     *             any lore item's id. Use {@link #resolveItemId(ItemStack)}. Retained as a
+     *             delegating alias for soft-dep reflection consumers that look up
+     *             {@code getBookId} by name (#1498).
+     */
+    @Deprecated
+    default String getBookId(ItemStack item) {
+        return resolveItemId(item);
+    }
 }

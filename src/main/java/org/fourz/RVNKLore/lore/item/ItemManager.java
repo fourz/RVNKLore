@@ -178,7 +178,7 @@ public class ItemManager implements IItemService, ILoreItemResolver {
     // ── ILoreItemResolver ────────────────────────────────────────────────────────
 
     @Override
-    public String getBookId(ItemStack item) {
+    public String resolveItemId(ItemStack item) {
         if (item == null) return null;
         org.bukkit.inventory.meta.ItemMeta meta = item.getItemMeta();
         if (meta == null) return null;
