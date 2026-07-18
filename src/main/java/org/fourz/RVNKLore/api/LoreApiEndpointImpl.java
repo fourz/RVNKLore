@@ -595,6 +595,14 @@ public class LoreApiEndpointImpl implements ILoreApiService {
             List<String> pages = asStringList(body.get("pages"));
 
             try {
+                // Duplicate (name, ITEM) → 409 CONFLICT (unique lore_entry(name, entry_type)).
+                java.util.List<ItemProperties> existingItems = loreManager.getItemManager()
+                    .getAllItemsWithProperties().get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                if (existingItems.stream().anyMatch(p -> name.equalsIgnoreCase(p.getDisplayName()))) {
+                    return (ApiResponse<?>) ApiResponse.error("CONFLICT",
+                        "An item named '" + name + "' already exists — use PUT /lore/items/{id} to update it.");
+                }
+
                 // 1) lore_entry (type ITEM) — an authed mint is trusted, so approve immediately.
                 // ITEM entries require material/type/rarity metadata: addLoreEntry uses it to
                 // insert the base lore_item row (item_properties filled in at step 2).
@@ -634,6 +642,11 @@ public class LoreApiEndpointImpl implements ILoreApiService {
                 if (itemId <= 0) {
                     return (ApiResponse<?>) ApiResponse.error("INTERNAL_ERROR", "Failed to persist lore item");
                 }
+
+                // Snapshot the created properties into the v1 submission so version history is
+                // consistent from creation (#1528).
+                loreManager.getItemManager().snapshotItemVersion(itemId)
+                    .get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
 
                 logger.info("Lore item minted via API: " + name + " (id " + itemId + ", " + itemType
                     + ") by " + (createdBy != null ? createdBy : "rest-mint"));
@@ -695,6 +708,180 @@ public class LoreApiEndpointImpl implements ILoreApiService {
         List<String> out = new ArrayList<>();
         for (Object item : (List<?>) o) out.add(String.valueOf(item));
         return out;
+    }
+
+    // ── Versioned item write surface (#1528) ─────────────────────────────────────
+
+    @Override
+    public CompletableFuture<ApiResponse<?>> updateItem(String idStr, String requestBody) {
+        return CompletableFuture.supplyAsync(() -> {
+            int id;
+            try { id = Integer.parseInt(idStr); }
+            catch (NumberFormatException e) {
+                return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", "Item id must be numeric: " + idStr);
+            }
+            try {
+                Optional<ItemProperties> opt = loreManager.getItemManager().getItemPropertiesById(id)
+                    .get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                if (opt.isEmpty()) {
+                    return (ApiResponse<?>) ApiResponse.error("NOT_FOUND", "Item not found: " + id);
+                }
+                Map<String, Object> body = gson.fromJson(requestBody, Map.class);
+                if (body == null) {
+                    return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", "Empty request body");
+                }
+                ItemProperties props = opt.get();
+                List<String> warnings = new ArrayList<>();
+                applyBodyToProps(props, body, warnings);
+
+                int ver = loreManager.getItemManager().updateItemVersioned(id, props)
+                    .get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                if (ver <= 0) {
+                    return (ApiResponse<?>) ApiResponse.error("INTERNAL_ERROR", "Failed to update item " + id);
+                }
+                logger.info("Lore item updated via API: id " + id + " -> version " + ver);
+                Optional<ItemProperties> after = loreManager.getItemManager().getItemPropertiesById(id)
+                    .get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                Map<String, Object> data = after.map(this::itemToMap).orElseGet(LinkedHashMap::new);
+                data.put("version", ver);
+                if (!warnings.isEmpty()) data.put("warnings", warnings);
+                return (ApiResponse<?>) ApiResponse.success(data);
+            } catch (Exception e) {
+                logger.error("Error updating item " + id, unwrapException(e));
+                return (ApiResponse<?>) ApiResponse.error("INTERNAL_ERROR", "An unexpected error occurred.");
+            }
+        });
+    }
+
+    @Override
+    public CompletableFuture<ApiResponse<?>> deleteItem(String idStr, boolean hard) {
+        return CompletableFuture.supplyAsync(() -> {
+            int id;
+            try { id = Integer.parseInt(idStr); }
+            catch (NumberFormatException e) {
+                return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", "Item id must be numeric: " + idStr);
+            }
+            try {
+                Optional<ItemProperties> opt = loreManager.getItemManager().getItemPropertiesById(id)
+                    .get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                if (opt.isEmpty()) {
+                    return (ApiResponse<?>) ApiResponse.error("NOT_FOUND", "Item not found: " + id);
+                }
+                boolean ok = hard
+                    ? loreManager.getItemManager().hardDeleteItem(id).get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                    : loreManager.getItemManager().softDeleteItem(id).get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                if (!ok) {
+                    return (ApiResponse<?>) ApiResponse.error("INTERNAL_ERROR", "Failed to delete item " + id);
+                }
+                logger.info("Lore item " + (hard ? "hard" : "soft") + "-deleted via API: id " + id);
+                Map<String, Object> data = new LinkedHashMap<>();
+                data.put("id", id);
+                data.put("deleted", true);
+                data.put("mode", hard ? "hard" : "soft");
+                return (ApiResponse<?>) ApiResponse.success(data);
+            } catch (Exception e) {
+                logger.error("Error deleting item " + id, unwrapException(e));
+                return (ApiResponse<?>) ApiResponse.error("INTERNAL_ERROR", "An unexpected error occurred.");
+            }
+        });
+    }
+
+    @Override
+    public CompletableFuture<ApiResponse<?>> getItemVersions(String idStr) {
+        return CompletableFuture.supplyAsync(() -> {
+            int id;
+            try { id = Integer.parseInt(idStr); }
+            catch (NumberFormatException e) {
+                return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", "Item id must be numeric: " + idStr);
+            }
+            try {
+                Optional<ItemProperties> opt = loreManager.getItemManager().getItemPropertiesById(id)
+                    .get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                if (opt.isEmpty()) {
+                    return (ApiResponse<?>) ApiResponse.error("NOT_FOUND", "Item not found: " + id);
+                }
+                List<Map<String, Object>> versions = loreManager.getItemManager().getItemVersions(id)
+                    .get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                Map<String, Object> data = new LinkedHashMap<>();
+                data.put("itemId", id);
+                data.put("versions", versions);
+                return (ApiResponse<?>) ApiResponse.success(data);
+            } catch (Exception e) {
+                logger.error("Error reading versions for item " + id, unwrapException(e));
+                return (ApiResponse<?>) ApiResponse.error("INTERNAL_ERROR", "An unexpected error occurred.");
+            }
+        });
+    }
+
+    @Override
+    public CompletableFuture<ApiResponse<?>> rollbackItem(String idStr, String requestBody) {
+        return CompletableFuture.supplyAsync(() -> {
+            int id;
+            try { id = Integer.parseInt(idStr); }
+            catch (NumberFormatException e) {
+                return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", "Item id must be numeric: " + idStr);
+            }
+            int version;
+            try {
+                Map<?, ?> body = gson.fromJson(requestBody, Map.class);
+                Object v = body == null ? null : body.get("version");
+                if (v == null) {
+                    return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", "Body must include 'version'");
+                }
+                version = (int) Double.parseDouble(String.valueOf(v));
+            } catch (Exception e) {
+                return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", "Invalid 'version' in body");
+            }
+            try {
+                boolean ok = loreManager.getItemManager().rollbackItemToVersion(id, version)
+                    .get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                if (!ok) {
+                    return (ApiResponse<?>) ApiResponse.error("NOT_FOUND",
+                        "No snapshot to roll back to: item " + id + " version " + version);
+                }
+                logger.info("Lore item rolled back via API: id " + id + " -> version " + version);
+                Optional<ItemProperties> after = loreManager.getItemManager().getItemPropertiesById(id)
+                    .get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                Map<String, Object> data = after.map(this::itemToMap).orElseGet(LinkedHashMap::new);
+                data.put("rolledBackTo", version);
+                return (ApiResponse<?>) ApiResponse.success(data);
+            } catch (Exception e) {
+                logger.error("Error rolling back item " + id, unwrapException(e));
+                return (ApiResponse<?>) ApiResponse.error("INTERNAL_ERROR", "An unexpected error occurred.");
+            }
+        });
+    }
+
+    /** Apply the updatable fields present in {@code body} onto an existing ItemProperties (name is identity, unchanged). */
+    private void applyBodyToProps(ItemProperties p, Map<String, Object> body, List<String> warnings) {
+        String mat = asString(body.get("material"));
+        if (mat != null && !mat.isBlank()) {
+            Material m = Material.matchMaterial(mat);
+            if (m != null) p.setMaterial(m); else warnings.add("Unknown material ignored: " + mat);
+        }
+        String rarity = asString(body.get("rarity"));
+        if (rarity != null && !rarity.isBlank()) p.setRarity(rarity);
+        List<String> lore = asStringList(body.get("lore"));
+        if (lore == null) lore = asStringList(body.get("lore_text"));
+        if (lore != null) p.setLore(lore);
+        List<String> pages = asStringList(body.get("pages"));
+        if (pages != null) p.setPages(pages);
+        if (body.containsKey("enchantments")) {
+            p.setEnchantments(parseEnchantments(body.get("enchantments"), warnings));
+        }
+        String tierStr = asString(body.get("enchantmentTier"));
+        if (tierStr != null && !tierStr.isBlank()) {
+            try { p.setEnchantmentTier(EnchantmentTier.valueOf(tierStr.trim().toUpperCase())); }
+            catch (IllegalArgumentException e) { warnings.add("Unknown enchantmentTier ignored: " + tierStr); }
+        }
+        if (body.containsKey("glow")) p.setGlow(Boolean.TRUE.equals(body.get("glow")));
+        Integer cmd = asInt(body.get("customModelData"));
+        if (cmd != null) p.setCustomModelData(cmd);
+        String itemTypeStr = asString(body.get("itemType"));
+        if (itemTypeStr != null && !itemTypeStr.isBlank()) {
+            try { p.setItemType(ItemType.valueOf(itemTypeStr.trim().toUpperCase())); }
+            catch (IllegalArgumentException e) { warnings.add("Unknown itemType ignored: " + itemTypeStr); }
+        }
     }
 
     /**

@@ -804,6 +804,44 @@ public class ItemManager implements IItemService, ILoreItemResolver {
         });
     }
 
+    // ── Versioned item surface (#1528) — thin delegates to ItemRepository ──────────
+
+    /** Snapshot the item's current properties into its v1 submission (call after create). */
+    public CompletableFuture<Boolean> snapshotItemVersion(int itemId) {
+        return itemRepository == null ? CompletableFuture.completedFuture(false)
+                : itemRepository.snapshotCurrentVersion(itemId);
+    }
+
+    /** Update an item as a new content_version; returns the new version or -1. */
+    public CompletableFuture<Integer> updateItemVersioned(int itemId, ItemProperties properties) {
+        return itemRepository == null ? CompletableFuture.completedFuture(-1)
+                : itemRepository.updateItemVersioned(itemId, properties);
+    }
+
+    /** Version history for an item. */
+    public CompletableFuture<List<java.util.Map<String, Object>>> getItemVersions(int itemId) {
+        return itemRepository == null ? CompletableFuture.completedFuture(new ArrayList<>())
+                : itemRepository.getItemVersions(itemId);
+    }
+
+    /** Roll an item back to a prior content_version. */
+    public CompletableFuture<Boolean> rollbackItemToVersion(int itemId, int version) {
+        return itemRepository == null ? CompletableFuture.completedFuture(false)
+                : itemRepository.rollbackItemToVersion(itemId, version);
+    }
+
+    /** Soft-delete (hide + archive, recoverable). */
+    public CompletableFuture<Boolean> softDeleteItem(int itemId) {
+        return itemRepository == null ? CompletableFuture.completedFuture(false)
+                : itemRepository.softDeleteItem(itemId);
+    }
+
+    /** Hard-delete (purge entry + CASCADE). */
+    public CompletableFuture<Boolean> hardDeleteItem(int itemId) {
+        return itemRepository == null ? CompletableFuture.completedFuture(false)
+                : itemRepository.hardDeleteItem(itemId);
+    }
+
     /**
      * {@inheritDoc}
      * Delegates to ItemRepository.getPresetsForQuest().
