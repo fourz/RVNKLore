@@ -535,6 +535,11 @@ public class LoreApiEndpointImpl implements ILoreApiService {
         m.put("lore", dto.lore());
         m.put("pages", dto.pages());
         m.put("glow", dto.glow());
+        if (dto.enchantments() != null && !dto.enchantments().isEmpty()) {
+            Map<String, Object> ench = new LinkedHashMap<>();
+            dto.enchantments().forEach((e, lvl) -> ench.put(e.getKey().toString(), lvl));
+            m.put("enchantments", ench);
+        }
         return m;
     }
 
