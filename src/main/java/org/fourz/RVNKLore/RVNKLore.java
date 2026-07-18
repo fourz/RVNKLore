@@ -762,6 +762,11 @@ public class RVNKLore extends JavaPlugin {
         return loreManager;
     }
 
+    /** RNG item service (weighted pool rolls); may be null if not yet initialized. */
+    public org.fourz.RVNKLore.service.IRngItemService getRngItemService() {
+        return rngItemService;
+    }
+
     public LoreBookManager getLoreBookManager() {
         return loreBookManager;
     }
