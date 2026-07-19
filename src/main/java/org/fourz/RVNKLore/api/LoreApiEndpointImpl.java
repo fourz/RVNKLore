@@ -11,10 +11,15 @@ import org.fourz.RVNKLore.lore.LoreManager;
 import org.fourz.RVNKLore.lore.LoreType;
 import org.fourz.RVNKLore.data.dto.ItemPropertiesDTO;
 import org.fourz.RVNKLore.lore.item.ItemProperties;
+import org.fourz.RVNKLore.lore.item.ItemType;
 import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
 import org.fourz.RVNKLore.lore.item.collection.LoreCollection;
+import org.fourz.RVNKLore.lore.item.enchant.EnchantmentTier;
 import org.fourz.RVNKLore.lore.player.PlayerManager;
 import org.fourz.RVNKLore.service.IRngItemService;
+import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
+import org.bukkit.enchantments.Enchantment;
 import org.bukkit.inventory.ItemStack;
 import org.fourz.RVNKLore.search.LoreSearchService;
 import org.fourz.RVNKLore.search.SearchCriteria;
@@ -514,6 +519,369 @@ public class LoreApiEndpointImpl implements ILoreApiService {
                 result.put("rolled", item);
                 return ApiResponse.success(result);
             });
+    }
+
+    /**
+     * Mint a single lore item over HTTP (#1517) — the write verb for the item surface.
+     * Parses the JSON body into an {@link ItemProperties}, creates a lore_entry (type ITEM)
+     * and a lore_item via the plugin's existing persist path (which round-trips enchantments
+     * per #1503), and returns the created item in {@link #getItemById}'s shape.
+     */
+    @Override
+    public CompletableFuture<ApiResponse<?>> createItem(String requestBody) {
+        return CompletableFuture.supplyAsync(() -> {
+            Map<String, Object> body;
+            try {
+                body = gson.fromJson(requestBody, Map.class);
+            } catch (Exception e) {
+                return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", "Malformed JSON body");
+            }
+            if (body == null) {
+                return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", "Empty request body");
+            }
+
+            String name = asString(body.get("name"));
+            String materialStr = asString(body.get("material"));
+            if (name == null || name.isBlank()) {
+                return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", "Field 'name' is required");
+            }
+            if (materialStr == null || materialStr.isBlank()) {
+                return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", "Field 'material' is required");
+            }
+            Material material = Material.matchMaterial(materialStr);
+            if (material == null) {
+                return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", "Unknown material: " + materialStr);
+            }
+
+            // Enchantments {"minecraft:sharpness":5,...} — unknown keys skipped with a warning.
+            List<String> warnings = new ArrayList<>();
+            Map<Enchantment, Integer> enchantments = parseEnchantments(body.get("enchantments"), warnings);
+
+            EnchantmentTier tier = null;
+            String tierStr = asString(body.get("enchantmentTier"));
+            if (tierStr != null && !tierStr.isBlank()) {
+                try {
+                    tier = EnchantmentTier.valueOf(tierStr.trim().toUpperCase());
+                } catch (IllegalArgumentException e) {
+                    warnings.add("Unknown enchantmentTier skipped: " + tierStr);
+                }
+            }
+
+            // ItemType: explicit wins; else ENCHANTED when enchants/tier present (so the enchant
+            // apply path runs on spawn); else STANDARD.
+            ItemType itemType;
+            String itemTypeStr = asString(body.get("itemType"));
+            if (itemTypeStr != null && !itemTypeStr.isBlank()) {
+                try {
+                    itemType = ItemType.valueOf(itemTypeStr.trim().toUpperCase());
+                } catch (IllegalArgumentException e) {
+                    return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", "Unknown itemType: " + itemTypeStr);
+                }
+            } else if (!enchantments.isEmpty() || tier != null) {
+                itemType = ItemType.ENCHANTED;
+            } else {
+                itemType = ItemType.STANDARD;
+            }
+
+            String rarity = asString(body.get("rarity"));
+            String createdBy = asString(body.get("createdBy"));
+            String description = asString(body.get("description"));
+            if (description == null || description.isBlank()) {
+                description = name;  // LoreEntry requires a non-empty description
+            }
+
+            List<String> lore = asStringList(body.get("lore"));
+            if (lore == null) lore = asStringList(body.get("lore_text"));  // tool emits lore_text
+            List<String> pages = asStringList(body.get("pages"));
+
+            try {
+                // Duplicate (name, ITEM) → 409 CONFLICT (unique lore_entry(name, entry_type)).
+                java.util.List<ItemProperties> existingItems = loreManager.getItemManager()
+                    .getAllItemsWithProperties().get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                if (existingItems.stream().anyMatch(p -> name.equalsIgnoreCase(p.getDisplayName()))) {
+                    return (ApiResponse<?>) ApiResponse.error("CONFLICT",
+                        "An item named '" + name + "' already exists — use PUT /lore/items/{id} to update it.");
+                }
+
+                // 1) lore_entry (type ITEM) — an authed mint is trusted, so approve immediately.
+                // ITEM entries require material/type/rarity metadata: addLoreEntry uses it to
+                // insert the base lore_item row (item_properties filled in at step 2).
+                String entryId = UUID.randomUUID().toString();
+                LoreEntry entry = new LoreEntry(entryId, name, description, LoreType.ITEM);
+                entry.setSubmittedBy(createdBy != null ? createdBy : "rest-mint");
+                entry.setApproved(true);
+                entry.addMetadata("material", material.name());
+                entry.addMetadata("item_type", itemType.name());
+                if (rarity != null && !rarity.isBlank()) entry.addMetadata("rarity", rarity);
+
+                String validationError = loreManager.validateEntry(entry);
+                if (validationError != null) {
+                    return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", validationError);
+                }
+                boolean entrySaved = loreManager.addLoreEntry(entry).get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                if (!entrySaved) {
+                    return (ApiResponse<?>) ApiResponse.error("INTERNAL_ERROR", "Failed to save lore entry");
+                }
+
+                // 2) lore_item — reuse the ItemManager persist path (#1503 serializes enchants).
+                ItemProperties props = new ItemProperties(material, name);
+                props.setItemType(itemType);
+                if (rarity != null && !rarity.isBlank()) props.setRarity(rarity);
+                if (lore != null && !lore.isEmpty()) props.setLore(lore);
+                if (pages != null && !pages.isEmpty()) props.setPages(pages);
+                if (!enchantments.isEmpty()) props.setEnchantments(enchantments);
+                if (tier != null) props.setEnchantmentTier(tier);
+                if (Boolean.TRUE.equals(body.get("glow"))) props.setGlow(true);
+                Integer cmd = asInt(body.get("customModelData"));
+                if (cmd != null && cmd > 0) props.setCustomModelData(cmd);
+                props.setCreatedBy(createdBy != null ? createdBy : "rest-mint");
+
+                int itemId = loreManager.getItemManager()
+                    .registerLoreItemForId(UUID.fromString(entryId), props)
+                    .get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                if (itemId <= 0) {
+                    return (ApiResponse<?>) ApiResponse.error("INTERNAL_ERROR", "Failed to persist lore item");
+                }
+
+                // Snapshot the created properties into the v1 submission so version history is
+                // consistent from creation (#1528).
+                loreManager.getItemManager().snapshotItemVersion(itemId)
+                    .get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+
+                logger.info("Lore item minted via API: " + name + " (id " + itemId + ", " + itemType
+                    + ") by " + (createdBy != null ? createdBy : "rest-mint"));
+
+                // 3) Return the created item in getItemById shape (fresh from DB).
+                Optional<ItemProperties> saved = loreManager.getItemManager()
+                    .getItemPropertiesById(itemId).get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                Map<String, Object> data = saved.map(this::itemToMap).orElseGet(() -> {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("id", itemId);
+                    m.put("name", name);
+                    return m;
+                });
+                if (!warnings.isEmpty()) data.put("warnings", warnings);
+                return (ApiResponse<?>) ApiResponse.success(data);
+            } catch (Exception e) {
+                logger.error("Error minting lore item '" + name + "'", unwrapException(e));
+                return (ApiResponse<?>) ApiResponse.error("INTERNAL_ERROR", "An unexpected error occurred.");
+            }
+        });
+    }
+
+    /** Parse an enchantments JSON object ({@code {"minecraft:sharpness":5}}) into a Bukkit map. */
+    private Map<Enchantment, Integer> parseEnchantments(Object raw, List<String> warnings) {
+        Map<Enchantment, Integer> out = new LinkedHashMap<>();
+        if (!(raw instanceof Map)) return out;
+        for (Map.Entry<?, ?> e : ((Map<?, ?>) raw).entrySet()) {
+            String key = String.valueOf(e.getKey());
+            Integer lvl = asInt(e.getValue());
+            int level = lvl != null ? lvl : 1;
+            String full = key.contains(":") ? key : "minecraft:" + key;
+            NamespacedKey nk = NamespacedKey.fromString(full);
+            Enchantment ench = nk != null ? Enchantment.getByKey(nk) : null;
+            if (ench == null) {
+                warnings.add("Unknown enchantment skipped: " + key);
+            } else {
+                out.put(ench, Math.max(1, level));
+            }
+        }
+        return out;
+    }
+
+    private String asString(Object o) {
+        return o == null ? null : String.valueOf(o);
+    }
+
+    private Integer asInt(Object o) {
+        if (o == null) return null;
+        if (o instanceof Number) return ((Number) o).intValue();
+        try {
+            return (int) Double.parseDouble(String.valueOf(o));
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private List<String> asStringList(Object o) {
+        if (!(o instanceof List)) return null;
+        List<String> out = new ArrayList<>();
+        for (Object item : (List<?>) o) out.add(String.valueOf(item));
+        return out;
+    }
+
+    // ── Versioned item write surface (#1528) ─────────────────────────────────────
+
+    @Override
+    public CompletableFuture<ApiResponse<?>> updateItem(String idStr, String requestBody) {
+        return CompletableFuture.supplyAsync(() -> {
+            int id;
+            try { id = Integer.parseInt(idStr); }
+            catch (NumberFormatException e) {
+                return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", "Item id must be numeric: " + idStr);
+            }
+            try {
+                Optional<ItemProperties> opt = loreManager.getItemManager().getItemPropertiesById(id)
+                    .get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                if (opt.isEmpty()) {
+                    return (ApiResponse<?>) ApiResponse.error("NOT_FOUND", "Item not found: " + id);
+                }
+                Map<String, Object> body = gson.fromJson(requestBody, Map.class);
+                if (body == null) {
+                    return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", "Empty request body");
+                }
+                ItemProperties props = opt.get();
+                List<String> warnings = new ArrayList<>();
+                applyBodyToProps(props, body, warnings);
+
+                int ver = loreManager.getItemManager().updateItemVersioned(id, props)
+                    .get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                if (ver <= 0) {
+                    return (ApiResponse<?>) ApiResponse.error("INTERNAL_ERROR", "Failed to update item " + id);
+                }
+                logger.info("Lore item updated via API: id " + id + " -> version " + ver);
+                Optional<ItemProperties> after = loreManager.getItemManager().getItemPropertiesById(id)
+                    .get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                Map<String, Object> data = after.map(this::itemToMap).orElseGet(LinkedHashMap::new);
+                data.put("version", ver);
+                if (!warnings.isEmpty()) data.put("warnings", warnings);
+                return (ApiResponse<?>) ApiResponse.success(data);
+            } catch (Exception e) {
+                logger.error("Error updating item " + id, unwrapException(e));
+                return (ApiResponse<?>) ApiResponse.error("INTERNAL_ERROR", "An unexpected error occurred.");
+            }
+        });
+    }
+
+    @Override
+    public CompletableFuture<ApiResponse<?>> deleteItem(String idStr, boolean hard) {
+        return CompletableFuture.supplyAsync(() -> {
+            int id;
+            try { id = Integer.parseInt(idStr); }
+            catch (NumberFormatException e) {
+                return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", "Item id must be numeric: " + idStr);
+            }
+            try {
+                Optional<ItemProperties> opt = loreManager.getItemManager().getItemPropertiesById(id)
+                    .get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                if (opt.isEmpty()) {
+                    return (ApiResponse<?>) ApiResponse.error("NOT_FOUND", "Item not found: " + id);
+                }
+                boolean ok = hard
+                    ? loreManager.getItemManager().hardDeleteItem(id).get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                    : loreManager.getItemManager().softDeleteItem(id).get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                if (!ok) {
+                    return (ApiResponse<?>) ApiResponse.error("INTERNAL_ERROR", "Failed to delete item " + id);
+                }
+                logger.info("Lore item " + (hard ? "hard" : "soft") + "-deleted via API: id " + id);
+                Map<String, Object> data = new LinkedHashMap<>();
+                data.put("id", id);
+                data.put("deleted", true);
+                data.put("mode", hard ? "hard" : "soft");
+                return (ApiResponse<?>) ApiResponse.success(data);
+            } catch (Exception e) {
+                logger.error("Error deleting item " + id, unwrapException(e));
+                return (ApiResponse<?>) ApiResponse.error("INTERNAL_ERROR", "An unexpected error occurred.");
+            }
+        });
+    }
+
+    @Override
+    public CompletableFuture<ApiResponse<?>> getItemVersions(String idStr) {
+        return CompletableFuture.supplyAsync(() -> {
+            int id;
+            try { id = Integer.parseInt(idStr); }
+            catch (NumberFormatException e) {
+                return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", "Item id must be numeric: " + idStr);
+            }
+            try {
+                Optional<ItemProperties> opt = loreManager.getItemManager().getItemPropertiesById(id)
+                    .get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                if (opt.isEmpty()) {
+                    return (ApiResponse<?>) ApiResponse.error("NOT_FOUND", "Item not found: " + id);
+                }
+                List<Map<String, Object>> versions = loreManager.getItemManager().getItemVersions(id)
+                    .get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                Map<String, Object> data = new LinkedHashMap<>();
+                data.put("itemId", id);
+                data.put("versions", versions);
+                return (ApiResponse<?>) ApiResponse.success(data);
+            } catch (Exception e) {
+                logger.error("Error reading versions for item " + id, unwrapException(e));
+                return (ApiResponse<?>) ApiResponse.error("INTERNAL_ERROR", "An unexpected error occurred.");
+            }
+        });
+    }
+
+    @Override
+    public CompletableFuture<ApiResponse<?>> rollbackItem(String idStr, String requestBody) {
+        return CompletableFuture.supplyAsync(() -> {
+            int id;
+            try { id = Integer.parseInt(idStr); }
+            catch (NumberFormatException e) {
+                return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", "Item id must be numeric: " + idStr);
+            }
+            int version;
+            try {
+                Map<?, ?> body = gson.fromJson(requestBody, Map.class);
+                Object v = body == null ? null : body.get("version");
+                if (v == null) {
+                    return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", "Body must include 'version'");
+                }
+                version = (int) Double.parseDouble(String.valueOf(v));
+            } catch (Exception e) {
+                return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", "Invalid 'version' in body");
+            }
+            try {
+                boolean ok = loreManager.getItemManager().rollbackItemToVersion(id, version)
+                    .get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                if (!ok) {
+                    return (ApiResponse<?>) ApiResponse.error("NOT_FOUND",
+                        "No snapshot to roll back to: item " + id + " version " + version);
+                }
+                logger.info("Lore item rolled back via API: id " + id + " -> version " + version);
+                Optional<ItemProperties> after = loreManager.getItemManager().getItemPropertiesById(id)
+                    .get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                Map<String, Object> data = after.map(this::itemToMap).orElseGet(LinkedHashMap::new);
+                data.put("rolledBackTo", version);
+                return (ApiResponse<?>) ApiResponse.success(data);
+            } catch (Exception e) {
+                logger.error("Error rolling back item " + id, unwrapException(e));
+                return (ApiResponse<?>) ApiResponse.error("INTERNAL_ERROR", "An unexpected error occurred.");
+            }
+        });
+    }
+
+    /** Apply the updatable fields present in {@code body} onto an existing ItemProperties (name is identity, unchanged). */
+    private void applyBodyToProps(ItemProperties p, Map<String, Object> body, List<String> warnings) {
+        String mat = asString(body.get("material"));
+        if (mat != null && !mat.isBlank()) {
+            Material m = Material.matchMaterial(mat);
+            if (m != null) p.setMaterial(m); else warnings.add("Unknown material ignored: " + mat);
+        }
+        String rarity = asString(body.get("rarity"));
+        if (rarity != null && !rarity.isBlank()) p.setRarity(rarity);
+        List<String> lore = asStringList(body.get("lore"));
+        if (lore == null) lore = asStringList(body.get("lore_text"));
+        if (lore != null) p.setLore(lore);
+        List<String> pages = asStringList(body.get("pages"));
+        if (pages != null) p.setPages(pages);
+        if (body.containsKey("enchantments")) {
+            p.setEnchantments(parseEnchantments(body.get("enchantments"), warnings));
+        }
+        String tierStr = asString(body.get("enchantmentTier"));
+        if (tierStr != null && !tierStr.isBlank()) {
+            try { p.setEnchantmentTier(EnchantmentTier.valueOf(tierStr.trim().toUpperCase())); }
+            catch (IllegalArgumentException e) { warnings.add("Unknown enchantmentTier ignored: " + tierStr); }
+        }
+        if (body.containsKey("glow")) p.setGlow(Boolean.TRUE.equals(body.get("glow")));
+        Integer cmd = asInt(body.get("customModelData"));
+        if (cmd != null) p.setCustomModelData(cmd);
+        String itemTypeStr = asString(body.get("itemType"));
+        if (itemTypeStr != null && !itemTypeStr.isBlank()) {
+            try { p.setItemType(ItemType.valueOf(itemTypeStr.trim().toUpperCase())); }
+            catch (IllegalArgumentException e) { warnings.add("Unknown itemType ignored: " + itemTypeStr); }
+        }
     }
 
     /**

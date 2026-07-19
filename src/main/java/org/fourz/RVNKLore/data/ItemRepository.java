@@ -458,6 +458,309 @@ public class ItemRepository implements IItemRepository {
         });
     }
 
+    // ── Versioned item surface (#1528) ──────────────────────────────────────────
+    // lore_submission is the version history (content_version / is_current_version);
+    // lore_item.item_properties is the materialized "current" instance. Each update
+    // snapshots the item_properties JSON into a new submission version.
+
+    /** Build the item_properties JSON exactly as insertItem/updateItem persist it. */
+    @SuppressWarnings("unchecked")
+    private String buildItemPropertiesJson(ItemProperties properties) {
+        JSONObject jsonProps = new JSONObject();
+        if (properties.hasCustomProperties()) {
+            jsonProps.putAll(properties.getAllCustomProperties());
+        }
+        if (properties.getLore() != null && !properties.getLore().isEmpty()) {
+            jsonProps.put("lore_text", properties.getLore());
+        }
+        if (properties.isGlow()) {
+            jsonProps.put("is_glow", true);
+        }
+        if (properties.getSkullTexture() != null) {
+            jsonProps.put("skull_texture", properties.getSkullTexture());
+        }
+        if (properties.getPages() != null && !properties.getPages().isEmpty()) {
+            jsonProps.put("pages", properties.getPages());
+        }
+        appendEnchantJson(jsonProps, properties);
+        return jsonProps.toJSONString();
+    }
+
+    private String resolveEntryId(Connection conn, int itemId) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT lore_entry_id FROM " + t("lore_item") + " WHERE id = ?")) {
+            ps.setInt(1, itemId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getString(1) : null;
+            }
+        }
+    }
+
+    /**
+     * Snapshot the item's current item_properties into its current (v1) submission row,
+     * so version history is consistent from creation onward (#1528). Called right after
+     * a fresh item is persisted.
+     */
+    public CompletableFuture<Boolean> snapshotCurrentVersion(int itemId) {
+        return CompletableFuture.supplyAsync(() -> {
+            try (Connection conn = dbConnection.getConnection()) {
+                String entryId = resolveEntryId(conn, itemId);
+                if (entryId == null) return false;
+                String props;
+                try (PreparedStatement ps = conn.prepareStatement(
+                        "SELECT item_properties FROM " + t("lore_item") + " WHERE id = ?")) {
+                    ps.setInt(1, itemId);
+                    try (ResultSet rs = ps.executeQuery()) { props = rs.next() ? rs.getString(1) : null; }
+                }
+                try (PreparedStatement ps = conn.prepareStatement("UPDATE " + t("lore_submission")
+                        + " SET content = ? WHERE entry_id = ? AND is_current_version = TRUE")) {
+                    ps.setString(1, props);
+                    ps.setString(2, entryId);
+                    return ps.executeUpdate() > 0;
+                }
+            } catch (SQLException e) {
+                logger.error("Failed to snapshot current version for item " + itemId, e);
+                return false;
+            }
+        });
+    }
+
+    /**
+     * Update an item as a NEW version: archive the current submission, insert the next
+     * content_version (content = item_properties JSON), and re-materialize lore_item.
+     * @return the new content_version, or -1 on failure.
+     */
+    public CompletableFuture<Integer> updateItemVersioned(int itemId, ItemProperties properties) {
+        return CompletableFuture.supplyAsync(() -> {
+            final String propsJson = buildItemPropertiesJson(properties);
+            try (Connection conn = dbConnection.getConnection()) {
+                conn.setAutoCommit(false);
+                try {
+                    String entryId = resolveEntryId(conn, itemId);
+                    if (entryId == null) { conn.rollback(); return -1; }
+
+                    try (PreparedStatement ps = conn.prepareStatement("UPDATE " + t("lore_submission")
+                            + " SET is_current_version = FALSE, status = 'ARCHIVED' "
+                            + "WHERE entry_id = ? AND is_current_version = TRUE")) {
+                        ps.setString(1, entryId);
+                        ps.executeUpdate();
+                    }
+
+                    int nextVersion = 1;
+                    try (PreparedStatement ps = conn.prepareStatement("SELECT COALESCE(MAX(content_version), 0) + 1 "
+                            + "FROM " + t("lore_submission") + " WHERE entry_id = ?")) {
+                        ps.setString(1, entryId);
+                        try (ResultSet rs = ps.executeQuery()) { if (rs.next()) nextVersion = rs.getInt(1); }
+                    }
+
+                    String slug = "item-" + entryId.substring(0, Math.min(8, entryId.length())) + "-v" + nextVersion;
+                    try (PreparedStatement ps = conn.prepareStatement("INSERT INTO " + t("lore_submission")
+                            + " (entry_id, submitter_uuid, content, slug, content_version, is_current_version, status) "
+                            + "VALUES (?, 'Server', ?, ?, ?, TRUE, 'ACTIVE')")) {
+                        ps.setString(1, entryId);
+                        ps.setString(2, propsJson);
+                        ps.setString(3, slug);
+                        ps.setInt(4, nextVersion);
+                        ps.executeUpdate();
+                    }
+
+                    materializeItem(conn, itemId, properties, propsJson);
+
+                    conn.commit();
+                    return nextVersion;
+                } catch (SQLException e) {
+                    conn.rollback();
+                    logger.error("Failed versioned update for item " + itemId, e);
+                    return -1;
+                } finally {
+                    conn.setAutoCommit(true);
+                }
+            } catch (SQLException e) {
+                logger.error("Connection error in updateItemVersioned for item " + itemId, e);
+                return -1;
+            }
+        });
+    }
+
+    /** Materialize lore_item columns from properties + the prebuilt item_properties JSON. */
+    private void materializeItem(Connection conn, int itemId, ItemProperties properties, String propsJson) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("UPDATE " + t("lore_item") + " SET "
+                + "name = ?, item_type = ?, rarity = ?, material = ?, is_obtainable = ?, "
+                + "custom_model_data = ?, item_properties = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")) {
+            ps.setString(1, properties.getDisplayName());
+            ps.setString(2, properties.getItemType() != null ? properties.getItemType().name() : "STANDARD");
+            ps.setString(3, properties.getRarity() != null ? properties.getRarity() : "COMMON");
+            ps.setString(4, properties.getMaterial().name());
+            ps.setBoolean(5, properties.isObtainable());
+            if (properties.getCustomModelData() > 0) ps.setInt(6, properties.getCustomModelData());
+            else ps.setNull(6, java.sql.Types.INTEGER);
+            ps.setString(7, propsJson);
+            ps.setInt(8, itemId);
+            ps.executeUpdate();
+        }
+    }
+
+    /** List the version history (content_version, is_current, status, created_at) for an item. */
+    public CompletableFuture<List<Map<String, Object>>> getItemVersions(int itemId) {
+        return CompletableFuture.supplyAsync(() -> {
+            List<Map<String, Object>> out = new ArrayList<>();
+            try (Connection conn = dbConnection.getConnection()) {
+                String entryId = resolveEntryId(conn, itemId);
+                if (entryId == null) return out;
+                try (PreparedStatement ps = conn.prepareStatement("SELECT content_version, is_current_version, status, "
+                        + "created_at FROM " + t("lore_submission") + " WHERE entry_id = ? ORDER BY content_version")) {
+                    ps.setString(1, entryId);
+                    try (ResultSet rs = ps.executeQuery()) {
+                        while (rs.next()) {
+                            Map<String, Object> v = new HashMap<>();
+                            v.put("version", rs.getInt("content_version"));
+                            v.put("isCurrent", rs.getBoolean("is_current_version"));
+                            v.put("status", rs.getString("status"));
+                            v.put("createdAt", String.valueOf(rs.getTimestamp("created_at")));
+                            out.add(v);
+                        }
+                    }
+                }
+            } catch (SQLException e) {
+                logger.error("Failed to read versions for item " + itemId, e);
+            }
+            return out;
+        });
+    }
+
+    /**
+     * Roll an item back to a prior content_version: flip is_current flags and re-materialize
+     * lore_item.item_properties from that version's snapshot.
+     * @return true if the version existed and had an item snapshot.
+     */
+    public CompletableFuture<Boolean> rollbackItemToVersion(int itemId, int version) {
+        return CompletableFuture.supplyAsync(() -> {
+            try (Connection conn = dbConnection.getConnection()) {
+                conn.setAutoCommit(false);
+                try {
+                    String entryId = resolveEntryId(conn, itemId);
+                    if (entryId == null) { conn.rollback(); return false; }
+
+                    String content = null;
+                    try (PreparedStatement ps = conn.prepareStatement("SELECT content FROM " + t("lore_submission")
+                            + " WHERE entry_id = ? AND content_version = ?")) {
+                        ps.setString(1, entryId);
+                        ps.setInt(2, version);
+                        try (ResultSet rs = ps.executeQuery()) { if (rs.next()) content = rs.getString("content"); }
+                    }
+                    // Only roll back to versions that carry an item snapshot (item_properties JSON).
+                    if (content == null || !content.contains("\"")) { conn.rollback(); return false; }
+
+                    try (PreparedStatement ps = conn.prepareStatement("UPDATE " + t("lore_submission")
+                            + " SET is_current_version = FALSE, status = 'ARCHIVED' "
+                            + "WHERE entry_id = ? AND is_current_version = TRUE")) {
+                        ps.setString(1, entryId);
+                        ps.executeUpdate();
+                    }
+                    try (PreparedStatement ps = conn.prepareStatement("UPDATE " + t("lore_submission")
+                            + " SET is_current_version = TRUE, status = 'ACTIVE' "
+                            + "WHERE entry_id = ? AND content_version = ?")) {
+                        ps.setString(1, entryId);
+                        ps.setInt(2, version);
+                        ps.executeUpdate();
+                    }
+                    try (PreparedStatement ps = conn.prepareStatement("UPDATE " + t("lore_item")
+                            + " SET item_properties = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")) {
+                        ps.setString(1, content);
+                        ps.setInt(2, itemId);
+                        ps.executeUpdate();
+                    }
+                    conn.commit();
+                    return true;
+                } catch (SQLException e) {
+                    conn.rollback();
+                    logger.error("Failed rollback for item " + itemId + " to v" + version, e);
+                    return false;
+                } finally {
+                    conn.setAutoCommit(true);
+                }
+            } catch (SQLException e) {
+                logger.error("Connection error in rollbackItemToVersion", e);
+                return false;
+            }
+        });
+    }
+
+    /** Soft-delete: hide the item (is_obtainable=false) + archive its current submission. Recoverable. */
+    public CompletableFuture<Boolean> softDeleteItem(int itemId) {
+        return CompletableFuture.supplyAsync(() -> {
+            try (Connection conn = dbConnection.getConnection()) {
+                conn.setAutoCommit(false);
+                try {
+                    String entryId = resolveEntryId(conn, itemId);
+                    if (entryId == null) { conn.rollback(); return false; }
+                    try (PreparedStatement ps = conn.prepareStatement("UPDATE " + t("lore_item")
+                            + " SET is_obtainable = FALSE, updated_at = CURRENT_TIMESTAMP WHERE id = ?")) {
+                        ps.setInt(1, itemId);
+                        ps.executeUpdate();
+                    }
+                    try (PreparedStatement ps = conn.prepareStatement("UPDATE " + t("lore_submission")
+                            + " SET status = 'ARCHIVED' WHERE entry_id = ? AND is_current_version = TRUE")) {
+                        ps.setString(1, entryId);
+                        ps.executeUpdate();
+                    }
+                    conn.commit();
+                    return true;
+                } catch (SQLException e) {
+                    conn.rollback();
+                    logger.error("Failed soft-delete for item " + itemId, e);
+                    return false;
+                } finally {
+                    conn.setAutoCommit(true);
+                }
+            } catch (SQLException e) {
+                logger.error("Connection error in softDeleteItem", e);
+                return false;
+            }
+        });
+    }
+
+    /**
+     * Hard-delete: purge the item and all related rows. The live tables predate the
+     * {@code ON DELETE CASCADE} FKs, so children are deleted explicitly (presets, pools,
+     * lore_item, lore_submission) before the lore_entry, inside one transaction.
+     */
+    public CompletableFuture<Boolean> hardDeleteItem(int itemId) {
+        return CompletableFuture.supplyAsync(() -> {
+            try (Connection conn = dbConnection.getConnection()) {
+                conn.setAutoCommit(false);
+                try {
+                    String entryId = resolveEntryId(conn, itemId);
+                    if (entryId == null) { conn.rollback(); return false; }
+                    execById(conn, "DELETE FROM " + t("quest_item_presets") + " WHERE lore_item_id = ?", itemId);
+                    execById(conn, "DELETE FROM " + t("lore_item_rng_pool") + " WHERE lore_item_id = ?", itemId);
+                    execById(conn, "DELETE FROM " + t("lore_item") + " WHERE id = ?", itemId);
+                    execByStr(conn, "DELETE FROM " + t("lore_submission") + " WHERE entry_id = ?", entryId);
+                    execByStr(conn, "DELETE FROM " + t("lore_entry") + " WHERE id = ?", entryId);
+                    conn.commit();
+                    return true;
+                } catch (SQLException e) {
+                    conn.rollback();
+                    logger.error("Failed hard-delete for item " + itemId, e);
+                    return false;
+                } finally {
+                    conn.setAutoCommit(true);
+                }
+            } catch (SQLException e) {
+                logger.error("Connection error in hardDeleteItem for item " + itemId, e);
+                return false;
+            }
+        });
+    }
+
+    private void execById(Connection conn, String sql, int id) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(sql)) { ps.setInt(1, id); ps.executeUpdate(); }
+    }
+
+    private void execByStr(Connection conn, String sql, String v) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(sql)) { ps.setString(1, v); ps.executeUpdate(); }
+    }
+
     /**
      * Delete an item from the database
      *
