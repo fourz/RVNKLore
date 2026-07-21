@@ -70,6 +70,15 @@ public class MySQLConnection extends DatabaseConnection {
 
     @Override
     public boolean reconnect() {
+        // With socketTimeout now applied at the provider level (#1629 P4), HikariCP evicts a dropped
+        // cross-host connection and self-heals without a full pool teardown. Recreating the pool
+        // orphans any in-flight borrows and takes RVNKLore's DB offline for the reconnect window, so
+        // only do it when the pool is genuinely unusable. This reconnect previously cycled the whole
+        // pool on a single transient validation failure (#1629).
+        if (rvnkProvider != null && rvnkProvider.isValid()) {
+            logger.debug("MySQL reconnect requested but pool is valid (Hikari self-healed) — skipping teardown");
+            return true;
+        }
         try {
             if (rvnkProvider != null) {
                 rvnkProvider.close();
