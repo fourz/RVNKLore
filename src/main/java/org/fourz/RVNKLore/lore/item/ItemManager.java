@@ -584,8 +584,7 @@ public class ItemManager implements IItemService, ILoreItemResolver {
                 // a duplicate insert that would hit the UNIQUE constraint and spam the log (#1427).
                 Optional<ItemProperties> existing = itemRepository.getItemByLoreEntryId(loreEntryId.toString()).join();
                 if (existing.isPresent()) {
-                    String key = properties.getDisplayName().toLowerCase();
-                    itemNameCache.computeIfAbsent(key, k -> new ArrayList<>()).add(properties);
+                    invalidateNameCache(properties.getDisplayName());
                     loreEntryIdCache.put(loreEntryId.toString(), properties);
                     logger.debug("Lore item already registered for entry " + loreEntryId +
                         ", skipping duplicate insert: " + properties.getDisplayName());
@@ -593,9 +592,8 @@ public class ItemManager implements IItemService, ILoreItemResolver {
                 }
                 int itemId = itemRepository.insertItem(properties).join();
                 if (itemId > 0) {
-                    // Add to name cache
-                    String key = properties.getDisplayName().toLowerCase();
-                    itemNameCache.computeIfAbsent(key, k -> new ArrayList<>()).add(properties);
+                    // Invalidate name cache so the next give re-reads this row fresh from the DB
+                    invalidateNameCache(properties.getDisplayName());
                     // Add to loreEntryId cache
                     loreEntryIdCache.put(loreEntryId.toString(), properties);
                     logger.debug("Registered item in database with ID: " + itemId);
@@ -657,6 +655,23 @@ public class ItemManager implements IItemService, ILoreItemResolver {
      */
     public void refreshCacheForCommands() {
         refreshCacheSync();
+    }
+
+    /**
+     * Invalidate the name cache for a single item so the next lookup re-reads the authoritative
+     * DB row instead of a stale or duplicate cached {@link ItemProperties} (#1642).
+     *
+     * <p>The write paths previously <em>appended</em> the new props to the cached list
+     * ({@code itemNameCache.computeIfAbsent(key, ...).add(props)}). Because a mint first registers
+     * a page-less base row and then upserts the full properties, that left the empty base copy at
+     * index 0, and {@code createLoreItemByNameInternal} always hands out {@code get(0)} — so a
+     * freshly minted/updated book gave empty until a manual {@code /lore item list} refresh.
+     * Removing the key instead forces the next give to re-query the DB (a single, current row).</p>
+     */
+    private void invalidateNameCache(String displayName) {
+        if (displayName != null) {
+            itemNameCache.remove(displayName.toLowerCase());
+        }
     }
 
     // ============================================================
@@ -762,8 +777,7 @@ public class ItemManager implements IItemService, ILoreItemResolver {
                 }
                 logger.debug("Inserted lore_item id " + itemId + ": " + properties.getDisplayName());
             }
-            String key = properties.getDisplayName().toLowerCase();
-            itemNameCache.computeIfAbsent(key, k -> new ArrayList<>()).add(properties);
+            invalidateNameCache(properties.getDisplayName());
             loreEntryIdCache.put(loreEntryId.toString(), properties);
             return itemId;
         } catch (Exception e) {
@@ -815,7 +829,15 @@ public class ItemManager implements IItemService, ILoreItemResolver {
     /** Update an item as a new content_version; returns the new version or -1. */
     public CompletableFuture<Integer> updateItemVersioned(int itemId, ItemProperties properties) {
         return itemRepository == null ? CompletableFuture.completedFuture(-1)
-                : itemRepository.updateItemVersioned(itemId, properties);
+                : itemRepository.updateItemVersioned(itemId, properties)
+                    .thenApply(ver -> {
+                        // The materialized item_properties changed (e.g. book pages) — drop the
+                        // stale name-cache entry so the next give reads the new props from the DB.
+                        // Without this the REST PUT updated the DB but left the cache serving the
+                        // pre-update copy (#1642).
+                        invalidateNameCache(properties.getDisplayName());
+                        return ver;
+                    });
     }
 
     /** Version history for an item. */
@@ -827,19 +849,22 @@ public class ItemManager implements IItemService, ILoreItemResolver {
     /** Roll an item back to a prior content_version. */
     public CompletableFuture<Boolean> rollbackItemToVersion(int itemId, int version) {
         return itemRepository == null ? CompletableFuture.completedFuture(false)
-                : itemRepository.rollbackItemToVersion(itemId, version);
+                : itemRepository.rollbackItemToVersion(itemId, version)
+                    .whenComplete((ok, ex) -> { if (Boolean.TRUE.equals(ok)) refreshCacheForCommands(); });
     }
 
     /** Soft-delete (hide + archive, recoverable). */
     public CompletableFuture<Boolean> softDeleteItem(int itemId) {
         return itemRepository == null ? CompletableFuture.completedFuture(false)
-                : itemRepository.softDeleteItem(itemId);
+                : itemRepository.softDeleteItem(itemId)
+                    .whenComplete((ok, ex) -> { if (Boolean.TRUE.equals(ok)) refreshCacheForCommands(); });
     }
 
     /** Hard-delete (purge entry + CASCADE). */
     public CompletableFuture<Boolean> hardDeleteItem(int itemId) {
         return itemRepository == null ? CompletableFuture.completedFuture(false)
-                : itemRepository.hardDeleteItem(itemId);
+                : itemRepository.hardDeleteItem(itemId)
+                    .whenComplete((ok, ex) -> { if (Boolean.TRUE.equals(ok)) refreshCacheForCommands(); });
     }
 
     /**
