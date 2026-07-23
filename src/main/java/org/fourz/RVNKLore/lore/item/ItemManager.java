@@ -879,6 +879,56 @@ public class ItemManager implements IItemService, ILoreItemResolver {
         return itemRepository.getPresetsForQuest(questId);
     }
 
+    // ── #1496: RNG pool + preset authoring — thin delegators to ItemRepository ──
+
+    /**
+     * Resolve an item argument to its {@code lore_item.id}. Accepts a numeric id directly, or a
+     * display name matched case-insensitively against the item cache. Returns -1 if unresolved.
+     */
+    public int resolveDatabaseId(String itemArg) {
+        if (itemArg == null || itemArg.isBlank()) return -1;
+        String trimmed = itemArg.trim();
+        if (trimmed.matches("\\d+")) {
+            return Integer.parseInt(trimmed);
+        }
+        for (ItemProperties p : getAllItemsWithPropertiesForCommands()) {
+            if (p.getDisplayName() != null && p.getDisplayName().equalsIgnoreCase(trimmed) && p.getDatabaseId() > 0) {
+                return p.getDatabaseId();
+            }
+        }
+        return -1;
+    }
+
+    /** Add an item to an RNG pool. */
+    public CompletableFuture<Boolean> addPoolEntry(String poolId, int loreItemId, String rarityTier, int weight) {
+        return itemRepository == null ? CompletableFuture.completedFuture(false)
+                : itemRepository.addPoolEntry(poolId, loreItemId, rarityTier, weight);
+    }
+
+    /** Remove an item from an RNG pool. */
+    public CompletableFuture<Boolean> removePoolEntry(String poolId, int loreItemId) {
+        return itemRepository == null ? CompletableFuture.completedFuture(false)
+                : itemRepository.removePoolEntry(poolId, loreItemId);
+    }
+
+    /** List every entry in an RNG pool. */
+    public CompletableFuture<List<ItemRepository.PoolEntryRow>> listPoolEntries(String poolId) {
+        return itemRepository == null ? CompletableFuture.completedFuture(new ArrayList<>())
+                : itemRepository.listPoolEntries(poolId);
+    }
+
+    /** Bind an item to a quest as a preset. */
+    public CompletableFuture<Boolean> addPreset(String questId, int loreItemId, String label) {
+        return itemRepository == null ? CompletableFuture.completedFuture(false)
+                : itemRepository.addPreset(questId, loreItemId, label);
+    }
+
+    /** Unbind an item preset from a quest. */
+    public CompletableFuture<Boolean> removePreset(String questId, int loreItemId) {
+        return itemRepository == null ? CompletableFuture.completedFuture(false)
+                : itemRepository.removePreset(questId, loreItemId);
+    }
+
     /**
      * {@inheritDoc}
      */

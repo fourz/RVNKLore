@@ -320,6 +320,103 @@ public class ItemRepository implements IItemRepository {
         });
     }
 
+    // ── #1496: RNG pool + quest-preset authoring — narrow additive writes on existing tables ──
+    // (no schema change; the read paths live in getPresetsForQuest above and RngItemServiceImpl)
+
+    /** A single RNG-pool row, for the authoring `list` command. */
+    public record PoolEntryRow(int loreItemId, String rarityTier, int weight, boolean active) {}
+
+    /** Add an item to an RNG pool ({@code lore_item_rng_pool}); active by default. */
+    public CompletableFuture<Boolean> addPoolEntry(String poolId, int loreItemId, String rarityTier, int weight) {
+        return CompletableFuture.supplyAsync(() -> {
+            String sql = "INSERT INTO " + t("lore_item_rng_pool") +
+                         " (pool_id, lore_item_id, rarity_tier, weight, is_active) VALUES (?, ?, ?, ?, 1)";
+            try {
+                return dbHelper.executeUpdate(sql, stmt -> {
+                    stmt.setString(1, poolId);
+                    stmt.setInt(2, loreItemId);
+                    stmt.setString(3, rarityTier);
+                    stmt.setInt(4, weight);
+                }) > 0;
+            } catch (LoreException e) {
+                logger.error("Failed to add pool entry " + poolId + "/" + loreItemId, e);
+                return false;
+            }
+        });
+    }
+
+    /** Remove an item from an RNG pool. Returns false if no matching row existed. */
+    public CompletableFuture<Boolean> removePoolEntry(String poolId, int loreItemId) {
+        return CompletableFuture.supplyAsync(() -> {
+            String sql = "DELETE FROM " + t("lore_item_rng_pool") + " WHERE pool_id = ? AND lore_item_id = ?";
+            try {
+                return dbHelper.executeUpdate(sql, stmt -> {
+                    stmt.setString(1, poolId);
+                    stmt.setInt(2, loreItemId);
+                }) > 0;
+            } catch (LoreException e) {
+                logger.error("Failed to remove pool entry " + poolId + "/" + loreItemId, e);
+                return false;
+            }
+        });
+    }
+
+    /** List every entry in an RNG pool (all rarity tiers, active + inactive). */
+    public CompletableFuture<List<PoolEntryRow>> listPoolEntries(String poolId) {
+        return CompletableFuture.supplyAsync(() -> {
+            String sql = "SELECT lore_item_id, rarity_tier, weight, is_active FROM " + t("lore_item_rng_pool") +
+                         " WHERE pool_id = ? ORDER BY rarity_tier, weight DESC";
+            try {
+                return dbHelper.executeQuery(sql,
+                    stmt -> stmt.setString(1, poolId),
+                    rs -> {
+                        List<PoolEntryRow> rows = new ArrayList<>();
+                        while (rs.next()) {
+                            rows.add(new PoolEntryRow(rs.getInt("lore_item_id"), rs.getString("rarity_tier"),
+                                rs.getInt("weight"), rs.getInt("is_active") == 1));
+                        }
+                        return rows;
+                    });
+            } catch (LoreException e) {
+                logger.error("Failed to list pool entries for " + poolId, e);
+                return new ArrayList<>();
+            }
+        });
+    }
+
+    /** Bind an item to a quest as a preset ({@code quest_item_presets}); {@code label} may be null. */
+    public CompletableFuture<Boolean> addPreset(String questId, int loreItemId, String label) {
+        return CompletableFuture.supplyAsync(() -> {
+            String sql = "INSERT INTO " + t("quest_item_presets") + " (quest_id, lore_item_id, label) VALUES (?, ?, ?)";
+            try {
+                return dbHelper.executeUpdate(sql, stmt -> {
+                    stmt.setString(1, questId);
+                    stmt.setInt(2, loreItemId);
+                    stmt.setString(3, label);
+                }) > 0;
+            } catch (LoreException e) {
+                logger.error("Failed to add preset " + questId + "/" + loreItemId, e);
+                return false;
+            }
+        });
+    }
+
+    /** Unbind an item preset from a quest. Returns false if no matching row existed. */
+    public CompletableFuture<Boolean> removePreset(String questId, int loreItemId) {
+        return CompletableFuture.supplyAsync(() -> {
+            String sql = "DELETE FROM " + t("quest_item_presets") + " WHERE quest_id = ? AND lore_item_id = ?";
+            try {
+                return dbHelper.executeUpdate(sql, stmt -> {
+                    stmt.setString(1, questId);
+                    stmt.setInt(2, loreItemId);
+                }) > 0;
+            } catch (LoreException e) {
+                logger.error("Failed to remove preset " + questId + "/" + loreItemId, e);
+                return false;
+            }
+        });
+    }
+
     /**
      * Insert a new item into the database.
      * Uses dialect-aware generated key retrieval for MySQL/SQLite compatibility.

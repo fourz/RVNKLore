@@ -179,6 +179,12 @@ permissions:
   rvnklore.admin.item.give:
     description: Give any lore item to players via /lore item give
     default: op
+  rvnklore.admin.item.pool:
+    description: Author RNG item pools (/lore item pool add|remove|list)
+    default: op
+  rvnklore.admin.item.preset:
+    description: Author quest item presets (/lore item preset bind|unbind|list)
+    default: op
 
   # ── Admin — collections ───────────────────────────────────────────────────
   rvnklore.admin.collection.add:
