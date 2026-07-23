@@ -879,6 +879,12 @@ public class ItemManager implements IItemService, ILoreItemResolver {
         return itemRepository.getPresetsForQuest(questId);
     }
 
+    /** Obtainable WRITTEN_BOOK items — catalog backing {@code /lore book list} (#1646). */
+    public CompletableFuture<List<ItemProperties>> getObtainableWrittenBooks() {
+        return itemRepository == null ? CompletableFuture.completedFuture(new ArrayList<>())
+                : itemRepository.getObtainableWrittenBooks();
+    }
+
     // ── #1496: RNG pool + preset authoring — thin delegators to ItemRepository ──
 
     /**

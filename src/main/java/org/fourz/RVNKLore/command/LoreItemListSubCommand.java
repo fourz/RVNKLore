@@ -64,9 +64,12 @@ public class LoreItemListSubCommand implements SubCommand {
                 String dateStr = (item.getCreatedAt() != null)
                     ? new java.text.SimpleDateFormat("yyyy-MM-dd").format(new java.util.Date(item.getCreatedAt()))
                     : "Unknown";
+                // Soft-deleted items (is_obtainable=false) remain in the admin list but are
+                // marked so they're distinguishable from live items (#1645).
+                String archived = item.isObtainable() ? "" : org.bukkit.ChatColor.RED + " [archived]";
                 return org.bukkit.ChatColor.WHITE + item.getDisplayName() +
                        org.bukkit.ChatColor.GRAY + " (" + item.getItemType() + ") - " +
-                       org.bukkit.ChatColor.YELLOW + dateStr;
+                       org.bukkit.ChatColor.YELLOW + dateStr + archived;
             }
         );
     }

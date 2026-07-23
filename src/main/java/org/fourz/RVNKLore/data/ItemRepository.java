@@ -320,6 +320,33 @@ public class ItemRepository implements IItemRepository {
         });
     }
 
+    /**
+     * Obtainable WRITTEN_BOOK items — the catalog backing {@code /lore book list} (#1646).
+     * The book list previously read the lore-entry cache (unreliable + any type); this queries the
+     * item catalog directly so it deterministically lists the actual books.
+     */
+    public CompletableFuture<List<ItemProperties>> getObtainableWrittenBooks() {
+        return CompletableFuture.supplyAsync(() -> {
+            String sql = "SELECT * FROM " + t("lore_item")
+                       + " WHERE material = ? AND is_obtainable = ? ORDER BY name";
+            try {
+                return dbHelper.executeQuery(sql,
+                    stmt -> { stmt.setString(1, "WRITTEN_BOOK"); stmt.setBoolean(2, true); },
+                    rs -> {
+                        List<ItemProperties> items = new ArrayList<>();
+                        while (rs.next()) {
+                            ItemProperties item = resultSetToItemProperties(rs);
+                            if (item != null) items.add(item);
+                        }
+                        return items;
+                    });
+            } catch (LoreException e) {
+                logger.error("Failed to get obtainable written books", e);
+                return new ArrayList<>();
+            }
+        });
+    }
+
     // ── #1496: RNG pool + quest-preset authoring — narrow additive writes on existing tables ──
     // (no schema change; the read paths live in getPresetsForQuest above and RngItemServiceImpl)
 
