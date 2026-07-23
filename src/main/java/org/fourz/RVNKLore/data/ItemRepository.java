@@ -206,6 +206,39 @@ public class ItemRepository implements IItemRepository {
     }
 
     /**
+     * Get all items authored by a given creator ({@code created_by} column). For the
+     * {@code [Forge]} feature this is a player UUID string; the caller filters the
+     * returned list by base name to find an existing lineage.
+     *
+     * @param createdBy The author identifier (typically a player UUID string)
+     * @return CompletableFuture completing with all matching items (empty on error/none)
+     */
+    @Override
+    public CompletableFuture<List<ItemProperties>> getItemsByCreatedBy(String createdBy) {
+        return CompletableFuture.supplyAsync(() -> {
+            String sql = "SELECT * FROM " + t("lore_item") + " WHERE created_by = ?";
+
+            try {
+                return dbHelper.executeQuery(sql,
+                    stmt -> stmt.setString(1, createdBy),
+                    rs -> {
+                        List<ItemProperties> items = new ArrayList<>();
+                        while (rs.next()) {
+                            ItemProperties item = resultSetToItemProperties(rs);
+                            if (item != null) {
+                                items.add(item);
+                            }
+                        }
+                        return items;
+                    });
+            } catch (LoreException e) {
+                logger.error("Failed to get items by created_by: " + createdBy, e);
+                return new ArrayList<>();
+            }
+        });
+    }
+
+    /**
      * Get an item by its lore entry UUID
      *
      * @param loreEntryId The UUID of the lore entry
@@ -472,25 +505,10 @@ public class ItemRepository implements IItemRepository {
                         } else {
                             stmt.setNull(6, java.sql.Types.INTEGER);
                         }
-                        // Convert custom properties to JSON
-                        JSONObject jsonProps = new JSONObject();
-                        if (properties.hasCustomProperties()) {
-                            jsonProps.putAll(properties.getAllCustomProperties());
-                        }
-                        if (properties.getLore() != null && !properties.getLore().isEmpty()) {
-                            jsonProps.put("lore_text", properties.getLore());
-                        }
-                        if (properties.isGlow()) {
-                            jsonProps.put("is_glow", true);
-                        }
-                        if (properties.getSkullTexture() != null) {
-                            jsonProps.put("skull_texture", properties.getSkullTexture());
-                        }
-                        if (properties.getPages() != null && !properties.getPages().isEmpty()) {
-                            jsonProps.put("pages", properties.getPages());
-                        }
-                        appendEnchantJson(jsonProps, properties);
-                        stmt.setString(7, jsonProps.toJSONString());
+                        // item_properties JSON — built via the shared helper so custom_model_data
+                        // and every other field land identically in inserts, updates, and the
+                        // version snapshots copied from this column (#1528 rollback keeps CMD).
+                        stmt.setString(7, buildItemPropertiesJson(properties));
                         stmt.setString(8, properties.getCreatedBy());
                         stmt.setString(9, properties.getNbtData());
                         if (properties.getLoreEntryId() != null && !properties.getLoreEntryId().isEmpty()) {
@@ -544,25 +562,10 @@ public class ItemRepository implements IItemRepository {
                         } else {
                             stmt.setNull(6, java.sql.Types.INTEGER);
                         }
-                        // Convert custom properties to JSON
-                        JSONObject jsonProps = new JSONObject();
-                        if (properties.hasCustomProperties()) {
-                            jsonProps.putAll(properties.getAllCustomProperties());
-                        }
-                        if (properties.getLore() != null && !properties.getLore().isEmpty()) {
-                            jsonProps.put("lore_text", properties.getLore());
-                        }
-                        if (properties.isGlow()) {
-                            jsonProps.put("is_glow", true);
-                        }
-                        if (properties.getSkullTexture() != null) {
-                            jsonProps.put("skull_texture", properties.getSkullTexture());
-                        }
-                        if (properties.getPages() != null && !properties.getPages().isEmpty()) {
-                            jsonProps.put("pages", properties.getPages());
-                        }
-                        appendEnchantJson(jsonProps, properties);
-                        stmt.setString(7, jsonProps.toJSONString());
+                        // item_properties JSON — built via the shared helper so custom_model_data
+                        // and every other field land identically in inserts, updates, and the
+                        // version snapshots copied from this column (#1528 rollback keeps CMD).
+                        stmt.setString(7, buildItemPropertiesJson(properties));
                         // Set NBT data
                         stmt.setString(8, properties.getNbtData());
                         // Set lore entry ID if available, otherwise null
@@ -606,8 +609,24 @@ public class ItemRepository implements IItemRepository {
         if (properties.getPages() != null && !properties.getPages().isEmpty()) {
             jsonProps.put("pages", properties.getPages());
         }
+        // custom_model_data lives in its own lore_item column, but the version snapshot must
+        // also carry it so a rollback can restore the CMD-at-that-version (#1528 items keep CMD).
+        if (properties.getCustomModelData() > 0) {
+            jsonProps.put("custom_model_data", properties.getCustomModelData());
+        }
         appendEnchantJson(jsonProps, properties);
         return jsonProps.toJSONString();
+    }
+
+    /** Read a custom_model_data value out of a version-snapshot JSON, or null if absent/unparseable. */
+    private Integer extractCmdFromJson(String json) {
+        if (json == null || json.isEmpty()) return null;
+        try {
+            JSONObject o = (JSONObject) new JSONParser().parse(json);
+            Object v = o.get("custom_model_data");
+            if (v instanceof Number) return ((Number) v).intValue();
+        } catch (Exception ignored) {}
+        return null;
     }
 
     private String resolveEntryId(Connection conn, int itemId) throws SQLException {
@@ -788,10 +807,15 @@ public class ItemRepository implements IItemRepository {
                         ps.setInt(2, version);
                         ps.executeUpdate();
                     }
+                    // Restore both the materialized JSON and the CMD column from the snapshot,
+                    // so rolling back to a version faithfully restores that version's custom model.
+                    Integer snapCmd = extractCmdFromJson(content);
                     try (PreparedStatement ps = conn.prepareStatement("UPDATE " + t("lore_item")
-                            + " SET item_properties = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")) {
+                            + " SET item_properties = ?, custom_model_data = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")) {
                         ps.setString(1, content);
-                        ps.setInt(2, itemId);
+                        if (snapCmd != null && snapCmd > 0) ps.setInt(2, snapCmd);
+                        else ps.setNull(2, java.sql.Types.INTEGER);
+                        ps.setInt(3, itemId);
                         ps.executeUpdate();
                     }
                     conn.commit();

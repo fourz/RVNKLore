@@ -110,6 +110,9 @@ permissions:
   rvnklore.sign.library:
     description: Designate a lectern as a lore library ([library] sign tag)
     default: op
+  rvnklore.sign.forge:
+    description: Designate an anvil as a lore forge ([forge] sign tag)
+    default: op
 
   # ── Approval ──────────────────────────────────────────────────────────────
   rvnklore.approve.own:
@@ -126,6 +129,9 @@ permissions:
   rvnklore.library.submit:
     description: Trigger lore recording when placing a written book on a lectern
     default: op
+  rvnklore.forge:
+    description: Publish the held item to the lore catalog at a [forge] anvil, and enrich it with /lore item text
+    default: true
   rvnklore.notable:
     description: Deaths by this player are recorded as lore entries
     # Explicit grant only — ops should not implicitly flag every death as notable

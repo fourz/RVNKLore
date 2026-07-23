@@ -259,6 +259,51 @@ public class ItemManager implements IItemService, ILoreItemResolver {
         item.setItemMeta(meta);
     }
 
+    /**
+     * Public equivalent of {@link #applyIdPdc} for stamping an already-held {@link ItemStack}
+     * (used by the {@code [Forge]} feature). Sets the cross-plugin id keys
+     * {@code lore_item_id} / {@code lore_entry_id} / {@code lore_item_name} PLUS
+     * {@code forged_at} (epoch millis) so the item resolves back to the catalog, is
+     * discovery-ready, and carries the enrichment window read by {@code /lore item text}.
+     *
+     * @param item    the held item to stamp (mutated in place)
+     * @param itemId  the lore_item id (skipped when {@code <= 0})
+     * @param entryId the lore_entry UUID string (skipped when null/empty)
+     * @param name    the lore item name used for name-based resolution (skipped when null/empty)
+     */
+    public void stampLoreItemPdc(ItemStack item, int itemId, String entryId, String name) {
+        if (item == null) return;
+        org.bukkit.inventory.meta.ItemMeta meta = item.getItemMeta();
+        if (meta == null) return;
+        org.bukkit.persistence.PersistentDataContainer pdc = meta.getPersistentDataContainer();
+        if (itemId > 0) {
+            pdc.set(new org.bukkit.NamespacedKey(plugin, "lore_item_id"),
+                org.bukkit.persistence.PersistentDataType.INTEGER, itemId);
+        }
+        if (entryId != null && !entryId.isEmpty()) {
+            pdc.set(new org.bukkit.NamespacedKey(plugin, "lore_entry_id"),
+                org.bukkit.persistence.PersistentDataType.STRING, entryId);
+        }
+        if (name != null && !name.isEmpty()) {
+            pdc.set(new org.bukkit.NamespacedKey(plugin, "lore_item_name"),
+                org.bukkit.persistence.PersistentDataType.STRING, name);
+        }
+        pdc.set(new org.bukkit.NamespacedKey(plugin, "forged_at"),
+            org.bukkit.persistence.PersistentDataType.LONG, System.currentTimeMillis());
+        item.setItemMeta(meta);
+    }
+
+    /**
+     * Get all lore items authored by {@code createdBy} (the {@code created_by} column,
+     * a player UUID string for forged items). Thin delegate to the repository for the
+     * {@code [Forge]} lineage lookup.
+     */
+    public CompletableFuture<List<ItemProperties>> getItemsByCreatedBy(String createdBy) {
+        return itemRepository == null
+            ? CompletableFuture.completedFuture(new ArrayList<>())
+            : itemRepository.getItemsByCreatedBy(createdBy);
+    }
+
     private ItemStack createLoreItemInternal(ItemType type, String name, ItemProperties properties) {
         switch (type) {
             case ENCHANTED: {
@@ -330,6 +375,11 @@ public class ItemManager implements IItemService, ILoreItemResolver {
                                 new org.bukkit.NamespacedKey(plugin, "lore_item_name"),
                                 org.bukkit.persistence.PersistentDataType.STRING,
                                 name);
+                        }
+                        // Written books can carry a custom model (e.g. a themed cover) — the
+                        // STANDARD branch applies CMD but this book branch previously dropped it.
+                        if (properties.getCustomModelData() > 0) {
+                            bookMeta.setCustomModelData(properties.getCustomModelData());
                         }
                         item.setItemMeta(bookMeta);
                     }

@@ -246,6 +246,14 @@ library:
     # otherwise they register as PENDING for later approval.
     auto_approve: false
 
+# [Forge] anvil: right-click a [Forge]-designated anvil with an item in hand to publish
+# it to the lore catalog. See permissions rvnklore.sign.forge and rvnklore.forge.
+forge:
+  # Per-player cooldown (seconds) between forges.
+  cooldown-seconds: 60
+  # XP levels charged by /lore item text to add a descriptor line to a freshly-forged item.
+  text-xp-cost-levels: 3
+
 messages:
   generic:
     error:

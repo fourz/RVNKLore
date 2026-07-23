@@ -44,6 +44,16 @@ public interface IItemRepository {
     CompletableFuture<List<ItemProperties>> getAllItemsByName(String name);
 
     /**
+     * Get all items authored by a given creator (the {@code created_by} column, a UUID
+     * string for player-forged items). Used by the {@code [Forge]} feature to find a
+     * caller's existing lineage for content-versioning.
+     *
+     * @param createdBy the author identifier (typically a player UUID string)
+     * @return CompletableFuture completing with all items with a matching {@code created_by}
+     */
+    CompletableFuture<List<ItemProperties>> getItemsByCreatedBy(String createdBy);
+
+    /**
      * Get an item by its lore entry UUID.
      *
      * @param loreEntryId The UUID of the lore entry
