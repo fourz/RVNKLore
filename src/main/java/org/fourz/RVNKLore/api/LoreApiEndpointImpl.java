@@ -8,6 +8,7 @@ import org.fourz.RVNKLore.api.model.response.*;
 import org.fourz.RVNKLore.lore.LoreCategory;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreManager;
+import org.fourz.RVNKLore.lore.LoreMetadataKeys;
 import org.fourz.RVNKLore.lore.LoreType;
 import org.fourz.RVNKLore.data.dto.ItemPropertiesDTO;
 import org.fourz.RVNKLore.lore.item.ItemProperties;
@@ -233,6 +234,16 @@ public class LoreApiEndpointImpl implements ILoreApiService {
                             if (key.equals(denied)) {
                                 return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", "Metadata key '" + key + "' is reserved");
                             }
+                        }
+
+                        // Constrained-key validation against the canonical vocabulary (#1367).
+                        // Unknown keys are accepted (forward-compatible), logged at debug.
+                        String metaError = LoreMetadataKeys.validate(key, value);
+                        if (metaError != null) {
+                            return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", metaError);
+                        }
+                        if (!LoreMetadataKeys.isKnown(key)) {
+                            logger.debug("Ingest metadata: non-canonical key '" + key + "' accepted (forward-compatible)");
                         }
 
                         entry.addMetadata(key, value);
