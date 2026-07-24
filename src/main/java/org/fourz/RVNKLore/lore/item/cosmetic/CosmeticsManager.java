@@ -204,12 +204,12 @@ public class CosmeticsManager {
         
         // Set lore
         List<String> lore = new ArrayList<>();
-        lore.add("Â§7" + variant.getDescription());
+        lore.add("§7" + variant.getDescription());
         lore.add("");
         lore.add(variant.getRarity().getColoredDisplayName());
         
         if (variant.getType() == HeadType.ANIMATED) {
-            lore.add("Â§eâš¡ Animated (" + variant.getAnimationFrameCount() + " frames)");
+            lore.add("§e⚡ Animated (" + variant.getAnimationFrameCount() + " frames)");
         }
         
         meta.setLore(lore);      // Apply texture based on head type
@@ -304,9 +304,9 @@ public class CosmeticsManager {
         }
         // Send completion message
         if (rewards.getCompletionMessage() != null) {
-            player.sendMessage("Â§aâœ“ " + rewards.getCompletionMessage());
+            player.sendMessage("§a✓ " + rewards.getCompletionMessage());
         } else {
-            player.sendMessage("Â§aâœ“ Completed collection: " + collection.getName());
+            player.sendMessage("§a✓ Completed collection: " + collection.getName());
         }
         logger.debug("Awarded collection completion rewards to " + player.getName() +
                    " for collection: " + collection.getName());

@@ -79,7 +79,7 @@ public class LoreCollectionListSubCommand implements SubCommand {
     }
 
     private void listThemes(Player player) {
-        player.sendMessage(ChatColor.YELLOW + "âš™ " + ChatColor.BOLD + "Available Themes");
+        player.sendMessage(ChatColor.YELLOW + "⚙ " + ChatColor.BOLD + "Available Themes");
         player.sendMessage("");
         for (CollectionTheme theme : CollectionTheme.values()) {
             int count = (int) collectionManager.getAllCollectionsSync().values().stream()

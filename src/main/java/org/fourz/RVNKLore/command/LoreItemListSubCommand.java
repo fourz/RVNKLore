@@ -35,7 +35,7 @@ public class LoreItemListSubCommand implements SubCommand {
     @Override
     public boolean execute(CommandSender sender, String[] args) {
         if (itemManager == null) {
-            sender.sendMessage(org.bukkit.ChatColor.RED + "âœ– Item system is not available. Please try again later.");
+            sender.sendMessage(org.bukkit.ChatColor.RED + "✖ Item system is not available. Please try again later.");
             logger.error("ItemManager is null when listing items", null);
             return true;
         }

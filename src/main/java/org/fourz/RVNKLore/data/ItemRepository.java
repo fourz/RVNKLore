@@ -546,7 +546,8 @@ public class ItemRepository implements IItemRepository {
                         "name = ?, item_type = ?, rarity = ?, " +
                         "material = ?, is_obtainable = ?, custom_model_data = ?, " +
                         "item_properties = ?, updated_at = CURRENT_TIMESTAMP, " +
-                        "nbt_data = ?, lore_entry_id = ? " +
+                        "nbt_data = ?, lore_entry_id = ?, " +
+                        "created_by = COALESCE(?, created_by) " +
                         "WHERE id = ?";
 
             try {
@@ -574,7 +575,17 @@ public class ItemRepository implements IItemRepository {
                         } else {
                             stmt.setNull(9, java.sql.Types.VARCHAR);
                         }
-                        stmt.setInt(10, itemId);
+                        // created_by: COALESCE keeps the existing author when the update carries none
+                        // (e.g. /lore item text enrichment), and backfills it when the mint→update path
+                        // finally supplies it. Fixes forged items landing with created_by=NULL — the
+                        // ITEM post-processor pre-creates the row, so registerLoreItemForId always
+                        // UPDATEs, and this column was never written, breaking getItemsByCreatedBy re-forge.
+                        if (properties.getCreatedBy() != null && !properties.getCreatedBy().isEmpty()) {
+                            stmt.setString(10, properties.getCreatedBy());
+                        } else {
+                            stmt.setNull(10, java.sql.Types.VARCHAR);
+                        }
+                        stmt.setInt(11, itemId);
                     });
 
                 return rowsAffected > 0;

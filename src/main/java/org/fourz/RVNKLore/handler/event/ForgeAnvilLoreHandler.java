@@ -64,6 +64,12 @@ public class ForgeAnvilLoreHandler extends DefaultLoreHandler {
         // No forge permission → don't hijack the anvil; leave it as a normal anvil.
         if (!player.hasPermission("rvnklore.forge")) return;
 
+        // Forge is a deliberate sneak+right-click. A plain right-click falls through to the
+        // vanilla anvil GUI so rename/repair (and AnvilArtifactLoreHandler) stay reachable on a
+        // forge anvil. Sneaking + right-clicking a block already suppresses the vanilla GUI, so
+        // this captures a "free" gesture rather than fighting vanilla. Toggle: forge.require-sneak.
+        if (plugin.getConfig().getBoolean("forge.require-sneak", true) && !player.isSneaking()) return;
+
         // Committed to forging from here — suppress the vanilla anvil GUI.
         event.setCancelled(true);
 

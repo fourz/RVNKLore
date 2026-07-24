@@ -41,7 +41,7 @@ public class LoreItemInfoSubCommand implements SubCommand {
     public boolean execute(CommandSender sender, String[] args) {
         if (args.length == 0) {
             if (itemManager == null) {
-                sender.sendMessage(org.bukkit.ChatColor.RED + "âœ– Item system is not available. Please try again later.");
+                sender.sendMessage(org.bukkit.ChatColor.RED + "✖ Item system is not available. Please try again later.");
                 logger.error("ItemManager is null when trying to list items", null);
                 return true;
             }
@@ -51,7 +51,7 @@ public class LoreItemInfoSubCommand implements SubCommand {
         }
         String itemNameOrId = stripQuotes(String.join(" ", args));
         if (itemManager == null) {
-            sender.sendMessage(org.bukkit.ChatColor.RED + "âœ– Item system is not available. Please try again later.");
+            sender.sendMessage(org.bukkit.ChatColor.RED + "✖ Item system is not available. Please try again later.");
             logger.error("ItemManager is null when trying to get item info: " + itemNameOrId, null);
             return true;
         }

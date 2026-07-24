@@ -56,7 +56,7 @@ public class LoreItemSubCommand implements SubCommand {
         SubCommand subCommand = subCommands.get(subCommandName);
         if (subCommand != null) {
             if (!subCommand.hasPermission(sender)) {
-                sender.sendMessage(ChatColor.RED + "âœ– You don't have permission to use this command.");
+                sender.sendMessage(ChatColor.RED + "✖ You don't have permission to use this command.");
                 return true;
             }
             String[] subArgs = Arrays.copyOfRange(args, 1, args.length);
@@ -65,7 +65,7 @@ public class LoreItemSubCommand implements SubCommand {
             } catch (Exception e) {
                 String errorId = java.util.UUID.randomUUID().toString();
                 logger.error("Error ID: " + errorId + " - Error executing item command: " + subCommandName, e);
-                sender.sendMessage(ChatColor.RED + "âœ– An error occurred (ID: " + errorId + "). Please report this to an administrator.");
+                sender.sendMessage(ChatColor.RED + "✖ An error occurred (ID: " + errorId + "). Please report this to an administrator.");
                 return false;
             }
         }
@@ -77,7 +77,7 @@ public class LoreItemSubCommand implements SubCommand {
                 .execute(sender, Arrays.copyOfRange(args, 1, args.length));
         }
 
-        sender.sendMessage(ChatColor.RED + "âœ– Unknown item command: " + subCommandName);
+        sender.sendMessage(ChatColor.RED + "✖ Unknown item command: " + subCommandName);
         showUsage(sender);
         return true;
     }
@@ -96,7 +96,7 @@ public class LoreItemSubCommand implements SubCommand {
             commands,
             1,
             10,
-            cmd -> ChatColor.GRAY + "â€¢ " + cmd
+            cmd -> ChatColor.GRAY + "• " + cmd
         );
     }
 

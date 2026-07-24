@@ -249,6 +249,10 @@ library:
 # [Forge] anvil: right-click a [Forge]-designated anvil with an item in hand to publish
 # it to the lore catalog. See permissions rvnklore.sign.forge and rvnklore.forge.
 forge:
+  # Require sneak (shift) + right-click to forge. When true (default), a plain right-click on a
+  # forge anvil opens the vanilla anvil GUI (rename/repair) as normal; only sneak+right-click
+  # publishes the held item. Set false to forge on any right-click (legacy behavior).
+  require-sneak: true
   # Per-player cooldown (seconds) between forges.
   cooldown-seconds: 60
   # XP levels charged by /lore item text to add a descriptor line to a freshly-forged item.

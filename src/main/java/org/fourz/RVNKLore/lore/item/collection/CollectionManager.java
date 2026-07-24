@@ -244,11 +244,11 @@ public class CollectionManager implements ICollectionService {
             if (collectionId != null) {
                 LoreCollection collection = getCollectionSync(collectionId);
                 if (collection != null) {
-                    lore.add("Â§7Collection: Â§a" + collection.getName());
+                    lore.add("§7Collection: §a" + collection.getName());
                 }
             }
             if (properties.getRarityLevel() != null) {
-                lore.add("Â§7Rarity: Â§e" + properties.getRarityLevel());
+                lore.add("§7Rarity: §e" + properties.getRarityLevel());
             }
             meta.setLore(lore);            
             meta.setCustomModelData(properties.getCustomModelData());            
