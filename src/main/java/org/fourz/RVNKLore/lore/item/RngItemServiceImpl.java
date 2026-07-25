@@ -123,6 +123,25 @@ public class RngItemServiceImpl implements IRngItemService {
                     cmd.addProperty("value", p.getCustomModelData());
                     functions.add(cmd);
                 }
+                // #1677: restore full lore identity into the baked (static) table so a poolbake chest
+                // rolls the real item — name, rarity lore, the rvnklore PDC id, and book pages — not a
+                // bare vanilla item. set_components is the component-era canonical carrier. Verify the
+                // emitted JSON with `/lore item pool preview <pool>` (#1679) before deploying.
+                JsonObject components = buildIdentityComponents(p);
+                if (components.size() > 0) {
+                    JsonObject setComponents = new JsonObject();
+                    setComponents.addProperty("function", "minecraft:set_components");
+                    setComponents.add("components", components);
+                    functions.add(setComponents);
+                }
+                // PDC identity via set_custom_data with an explicit SNBT tag — the linchpin of #1677.
+                // The JSON set_components custom_data path stores small ints as bytes (21b), which
+                // PersistentDataType.INTEGER cannot read back; an SNBT integer literal stays TAG_Int,
+                // matching what the roll build path writes (verified on Dev, #1678).
+                JsonObject setCustomData = new JsonObject();
+                setCustomData.addProperty("function", "minecraft:set_custom_data");
+                setCustomData.addProperty("tag", buildPdcSnbt(p, e.loreItemId));
+                functions.add(setCustomData);
                 entry.add("functions", functions);
                 lootEntries.add(entry);
             }
@@ -144,6 +163,86 @@ public class RngItemServiceImpl implements IRngItemService {
             table.add("pools", pools);
             return Optional.of(new GsonBuilder().setPrettyPrinting().create().toJson(table));
         });
+    }
+
+    /**
+     * Build the {@code minecraft:set_components} payload that restores a lore item's identity in a
+     * baked (static) loot table (#1677). Covers custom_name, lore, the {@code rvnklore} PDC in
+     * custom_data (so the rolled item is resolvable as a lore item), and written_book_content pages
+     * for books that carry them. Component-format (1.20.5+/component era) — verify against a live
+     * server via {@code /lore item pool preview} before trusting on a new MC build.
+     */
+    private JsonObject buildIdentityComponents(ItemProperties p) {
+        JsonObject components = new JsonObject();
+
+        // Display name — component object so it renders without the default-italic of a bare string.
+        String name = p.getDisplayName();
+        if (name != null && !name.isEmpty()) {
+            JsonObject nameComp = new JsonObject();
+            nameComp.addProperty("text", name);
+            nameComp.addProperty("italic", false);
+            components.add("minecraft:custom_name", nameComp);
+        }
+
+        // Rarity/lore lines — best-effort visual fidelity.
+        List<String> lore = p.getLore();
+        if (lore != null && !lore.isEmpty()) {
+            JsonArray loreArr = new JsonArray();
+            for (String line : lore) {
+                JsonObject lineComp = new JsonObject();
+                lineComp.addProperty("text", line == null ? "" : line);
+                lineComp.addProperty("italic", false);
+                loreArr.add(lineComp);
+            }
+            components.add("minecraft:lore", loreArr);
+        }
+
+        // Book pages — only when the source item actually has page content (blank test items stay
+        // blank, matching the dynamic-roll lane; see #1675 blank-pages note).
+        Material mat = p.getMaterial();
+        if ((mat == Material.WRITTEN_BOOK || mat == Material.WRITABLE_BOOK)
+                && p.getPages() != null && !p.getPages().isEmpty()) {
+            JsonArray pagesArr = new JsonArray();
+            for (String pg : p.getPages()) {
+                JsonObject page = new JsonObject();
+                page.addProperty("raw", pg == null ? "" : pg);
+                pagesArr.add(page);
+            }
+            JsonObject bookContent = new JsonObject();
+            bookContent.add("pages", pagesArr);
+            if (name != null && !name.isEmpty()) {
+                JsonObject titleObj = new JsonObject();
+                titleObj.addProperty("raw", name);
+                bookContent.add("title", titleObj);
+            }
+            bookContent.addProperty("author", "");
+            components.add("minecraft:written_book_content", bookContent);
+        }
+
+        return components;
+    }
+
+    /**
+     * Build the SNBT {@code tag} for {@code minecraft:set_custom_data} that reconstructs the Bukkit
+     * PDC block ({@code custom_data.PublicBukkitValues}). Uses an SNBT integer literal for
+     * {@code lore_item_id} so it lands as TAG_Int (readable via {@code PersistentDataType.INTEGER}),
+     * unlike the JSON components path which stores it as a byte (#1677).
+     */
+    private String buildPdcSnbt(ItemProperties p, int loreItemId) {
+        StringBuilder pbv = new StringBuilder();
+        pbv.append("\"rvnklore:lore_item_id\":").append(loreItemId);
+        if (p.getLoreEntryId() != null && !p.getLoreEntryId().isEmpty()) {
+            pbv.append(",\"rvnklore:lore_entry_id\":").append(quoteSnbt(p.getLoreEntryId()));
+        }
+        if (p.getDisplayName() != null && !p.getDisplayName().isEmpty()) {
+            pbv.append(",\"rvnklore:lore_item_name\":").append(quoteSnbt(p.getDisplayName()));
+        }
+        return "{PublicBukkitValues:{" + pbv + "}}";
+    }
+
+    /** Quote and escape a string as an SNBT double-quoted string literal. */
+    private String quoteSnbt(String s) {
+        return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
     }
 
     @Override
