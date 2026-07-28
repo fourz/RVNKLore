@@ -3,6 +3,8 @@ package org.fourz.RVNKLore.data.model;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
 
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -62,6 +64,8 @@ class CollectionRewardTest {
         assertEquals(CollectionReward.RewardType.PERMISSION, CollectionReward.RewardType.fromString("permission"));
         assertEquals(CollectionReward.RewardType.CURRENCY, CollectionReward.RewardType.fromString("Currency"));
         assertEquals(CollectionReward.RewardType.COMMAND, CollectionReward.RewardType.fromString("COMMAND"));
+        assertEquals(CollectionReward.RewardType.LORE_ITEM, CollectionReward.RewardType.fromString("lore_item"));
+        assertEquals(CollectionReward.RewardType.ACHIEVEMENT, CollectionReward.RewardType.fromString("ACHIEVEMENT"));
     }
 
     @Test
@@ -72,13 +76,20 @@ class CollectionRewardTest {
     }
 
     @Test
-    @DisplayName("All four RewardType enum values exist")
+    @DisplayName("Every persisted RewardType name still resolves")
     void allRewardTypesExist() {
-        CollectionReward.RewardType[] types = CollectionReward.RewardType.values();
-        assertEquals(4, types.length);
-        assertNotNull(CollectionReward.RewardType.valueOf("ITEM"));
-        assertNotNull(CollectionReward.RewardType.valueOf("PERMISSION"));
-        assertNotNull(CollectionReward.RewardType.valueOf("CURRENCY"));
-        assertNotNull(CollectionReward.RewardType.valueOf("COMMAND"));
+        // These names are written to the reward_type column, so removing or renaming one is a
+        // data-compatibility break and must fail here. Adding a new value is not a break, so the
+        // expected count is derived from this list rather than hardcoded — the previous literal
+        // 4 went stale the moment LORE_ITEM and ACHIEVEMENT were added (#1836).
+        List<String> persisted = List.of(
+                "ITEM", "PERMISSION", "COMMAND", "CURRENCY", "LORE_ITEM", "ACHIEVEMENT");
+
+        for (String name : persisted) {
+            assertDoesNotThrow(() -> CollectionReward.RewardType.valueOf(name),
+                    name + " is persisted in reward_type and must remain a valid RewardType");
+        }
+        assertTrue(CollectionReward.RewardType.values().length >= persisted.size(),
+                "RewardType lost a value that is persisted in reward_type");
     }
 }
