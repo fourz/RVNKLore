@@ -44,6 +44,20 @@ The plugin currently has compilation errors in `LoreEntryRepository.java` due to
 5. Edit the configuration file at `plugins/RVNKLore/config.yml` to customize settings
 6. Restart again or use `/lore reload` to apply changes
 
+## Operational Mode
+
+A single master switch — `general.mode` — controls the whole plugin, so RVNKLore can be installed on a
+server but held inert or run quiet without uninstalling. It composes over the granular
+`features.*.enabled` flags.
+
+| `general.mode` | Behaviour |
+|----------------|-----------|
+| `full` (default) | Everything on: lore, items, collections, discovery, REST API, Dynmap, and player notifications. |
+| `quiet` | Full lore/items/discovery/REST, but player-facing notifications (discovery / achievement / collection) are **suppressed — data is still recorded**. |
+| `off` | Plugin loads but is **inert**: no managers, services, REST API, listeners, or commands. Flip the mode and restart to re-enable — no uninstall. |
+
+**Transitions:** `full ↔ quiet` is hot — `/lore reload` applies it immediately. Switching **to/from `off` requires a restart**, because feature registration only happens once at startup. `/lore reload` prints the active mode; the mode is also logged when the plugin enables. An absent or unrecognized value resolves to `full`.
+
 ## Usage
 
 ### Basic Commands
