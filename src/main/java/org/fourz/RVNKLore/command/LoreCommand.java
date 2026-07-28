@@ -112,7 +112,51 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
         System.arraycopy(args, 1, subCommandArgs, 0, args.length - 1);
 
         logger.debug("Executing subcommand: " + subCommandName + " with " + subCommandArgs.length + " args");
-        return subCommand.execute(sender, subCommandArgs);
+        try {
+            return subCommand.execute(sender, subCommandArgs);
+        } catch (Throwable t) {
+            // #1831: a DB stall/outage used to escape as an unhandled CommandException — the operator
+            // got a raw stack trace and "An unexpected error occurred". Degrade cleanly instead, for
+            // EVERY subcommand (many go through .join() sync wrappers that can throw on timeout).
+            if (isDatabaseUnavailable(t)) {
+                sender.sendMessage(ChatColor.RED + "The lore database is temporarily unavailable. "
+                        + "Please try again in a moment.");
+                logger.warning("Lore database unavailable during '/lore " + subCommandName + "': "
+                        + rootCauseMessage(t));
+            } else {
+                sender.sendMessage(ChatColor.RED + "That command failed unexpectedly. Check the console for details.");
+                logger.error("Unhandled error in '/lore " + subCommandName + "'",
+                        t instanceof Exception ? (Exception) t : new RuntimeException(t));
+            }
+            return true; // handled — do not let Bukkit print an unhandled-exception trace
+        }
+    }
+
+    /**
+     * True when a throwable's cause chain indicates the database is unreachable rather than a genuine
+     * command bug — connection timeouts, pool exhaustion, socket read timeouts. (#1831)
+     */
+    private boolean isDatabaseUnavailable(Throwable t) {
+        for (Throwable c = t; c != null; c = c.getCause()) {
+            if (c instanceof org.fourz.rvnkcore.api.exception.DatabaseException
+                    || c instanceof java.sql.SQLTransientConnectionException
+                    || c instanceof java.sql.SQLNonTransientConnectionException
+                    || c instanceof java.net.SocketTimeoutException
+                    || c instanceof java.util.concurrent.TimeoutException) {
+                return true;
+            }
+            if (c.getCause() == c) break; // defensive: self-referential cause
+        }
+        return false;
+    }
+
+    /** Deepest cause message, for a one-line operator log instead of a full trace. (#1831) */
+    private String rootCauseMessage(Throwable t) {
+        Throwable c = t;
+        while (c.getCause() != null && c.getCause() != c) {
+            c = c.getCause();
+        }
+        return c.getClass().getSimpleName() + ": " + c.getMessage();
     }
 
     /**

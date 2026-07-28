@@ -91,7 +91,7 @@ public class CityLoreHandler implements LoreHandler {
 
     private boolean containsInvalidCharacters(String text) {
         // Check for illegal formatting codes or characters
-        return text.contains("Â§") ||
+        return text.contains("§") ||
                text.matches(".*[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F].*");
     }
 

@@ -12,6 +12,7 @@ import java.util.concurrent.CompletableFuture;
 
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.data.DatabaseConnection;
+import org.fourz.RVNKLore.data.DatabaseHelper;
 import org.fourz.rvnkcore.data.FallbackTracker;
 import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.lore.LoreType;
@@ -31,12 +32,14 @@ public class PlayerRepository implements IPlayerRepository {
     private final RVNKLore plugin;
     private final LogManager logger;
     private final DatabaseConnection dbConnection;
+    private final DatabaseHelper dbHelper;
     private final FallbackTracker fallbackTracker;
     private final JSONParser jsonParser;
 
     public PlayerRepository(RVNKLore plugin, DatabaseConnection dbConnection) {
         this.plugin = plugin;
         this.dbConnection = dbConnection;
+        this.dbHelper = new DatabaseHelper(plugin);
         this.logger = LogManager.getInstance(plugin, "PlayerRepository");
         this.fallbackTracker = new FallbackTracker(
                 plugin.getConfig().getInt("database.fallback.maxFailuresBeforeFallback", 3),
@@ -279,8 +282,14 @@ public class PlayerRepository implements IPlayerRepository {
     public CompletableFuture<Boolean> recordLoreDiscovery(UUID playerUuid, String entryId) {
         return CompletableFuture.supplyAsync(() -> {
             // First check if already discovered to avoid duplicates
-            String checkSql = "SELECT COUNT(*) FROM " + t("player_discoveries") + " WHERE player_uuid = ? AND entry_id = ?";
-            String insertSql = "INSERT INTO " + t("player_discoveries") + " (player_uuid, entry_id, discovered_at) VALUES (?, ?, ?)";
+            // #1832: lore_discovery is the single authoritative discovery table. The old
+            // player_discoveries table was a ghost — created inside an error handler, never in the
+            // schema DDL, and a strict subset of this one (verified 0 rows unique to it on every
+            // tier). trigger_type is NOT NULL here; this minimal path has no trigger context, so it
+            // records LEGACY. DiscoveryManager's enriched path supplies the real trigger/location.
+            String checkSql = "SELECT COUNT(*) FROM " + t("lore_discovery") + " WHERE player_uuid = ? AND entry_id = ?";
+            String insertSql = "INSERT INTO " + t("lore_discovery")
+                    + " (player_uuid, entry_id, trigger_type, discovered_at) VALUES (?, ?, 'LEGACY', ?)";
 
             try (Connection conn = dbConnection.getConnection()) {
                 // Check if already exists
@@ -296,27 +305,18 @@ public class PlayerRepository implements IPlayerRepository {
                     }
                 }
 
-                // Insert new discovery
-                try (PreparedStatement insertStmt = conn.prepareStatement(insertSql)) {
-                    insertStmt.setString(1, playerUuid.toString());
-                    insertStmt.setString(2, entryId);
-                    insertStmt.setTimestamp(3, new java.sql.Timestamp(System.currentTimeMillis()));
-
-                    int rows = insertStmt.executeUpdate();
-                    if (rows > 0) {
-                        logger.debug("Recorded discovery: player=" + playerUuid + ", entry=" + entryId);
-                        return true;
-                    }
+                // executeUpdateOn, not executeUpdate: the duplicate check above ran on `conn`, so
+                // the insert stays on that connection rather than taking a fresh pooled one (#1838).
+                int rows = dbHelper.executeUpdateOn(conn, insertSql, stmt -> {
+                    stmt.setString(1, playerUuid.toString());
+                    stmt.setString(2, entryId);
+                    stmt.setTimestamp(3, new java.sql.Timestamp(System.currentTimeMillis()));
+                });
+                if (rows > 0) {
+                    logger.debug("Recorded discovery: player=" + playerUuid + ", entry=" + entryId);
+                    return true;
                 }
             } catch (SQLException e) {
-                // Table might not exist - try to create it
-                if (e.getMessage().contains("player_discoveries") || e.getMessage().contains("no such table")) {
-                    logger.warning("player_discoveries table may not exist, attempting to create...");
-                    if (createDiscoveriesTable()) {
-                        // Retry the insert
-                        return recordLoreDiscoveryDirect(playerUuid, entryId);
-                    }
-                }
                 logger.error("Error recording lore discovery: " + playerUuid + ", " + entryId, e);
                 fallbackTracker.recordFailure();
             } catch (IllegalStateException e) {
@@ -326,46 +326,6 @@ public class PlayerRepository implements IPlayerRepository {
 
             return false;
         });
-    }
-
-    /**
-     * Helper to create the player_discoveries table if it doesn't exist.
-     */
-    private boolean createDiscoveriesTable() {
-        String createSql = "CREATE TABLE IF NOT EXISTS " + t("player_discoveries") + " (" +
-            "id " + dbConnection.getDialect().getAutoIncrementPK() + ", " +
-            "player_uuid VARCHAR(36) NOT NULL, " +
-            "entry_id VARCHAR(36) NOT NULL, " +
-            "discovered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
-            "UNIQUE(player_uuid, entry_id))";
-
-        try (Connection conn = dbConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(createSql)) {
-            stmt.executeUpdate();
-            logger.debug("Created player_discoveries table");
-            return true;
-        } catch (SQLException e) {
-            logger.error("Failed to create player_discoveries table", e);
-            return false;
-        }
-    }
-
-    /**
-     * Direct insert without checking (used after table creation).
-     */
-    private boolean recordLoreDiscoveryDirect(UUID playerUuid, String entryId) {
-        String ignoreKeyword = "MySQL".equals(dbConnection.getDialect().getName()) ? "INSERT IGNORE INTO " : "INSERT OR IGNORE INTO ";
-        String insertSql = ignoreKeyword + t("player_discoveries") + " (player_uuid, entry_id, discovered_at) VALUES (?, ?, ?)";
-        try (Connection conn = dbConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(insertSql)) {
-            stmt.setString(1, playerUuid.toString());
-            stmt.setString(2, entryId);
-            stmt.setTimestamp(3, new java.sql.Timestamp(System.currentTimeMillis()));
-            return stmt.executeUpdate() > 0;
-        } catch (SQLException e) {
-            logger.error("Failed to record discovery after table creation", e);
-            return false;
-        }
     }
 
     /**

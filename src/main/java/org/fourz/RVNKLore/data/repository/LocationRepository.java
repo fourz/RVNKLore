@@ -2,6 +2,8 @@ package org.fourz.RVNKLore.data.repository;
 
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.data.DatabaseConnection;
+import org.fourz.RVNKLore.data.DatabaseHelper;
+import org.fourz.RVNKLore.exception.LoreException;
 import org.fourz.RVNKLore.data.model.LoreLocation;
 import org.fourz.rvnkcore.util.log.LogManager;
 
@@ -20,10 +22,12 @@ public class LocationRepository implements ILocationRepository {
     private final RVNKLore plugin;
     private final LogManager logger;
     private final DatabaseConnection dbConnection;
+    private final DatabaseHelper dbHelper;
 
     public LocationRepository(RVNKLore plugin, DatabaseConnection dbConnection) {
         this.plugin = plugin;
         this.dbConnection = dbConnection;
+        this.dbHelper = new DatabaseHelper(plugin);
         this.logger = LogManager.getInstance(plugin, "LocationRepository");
     }
 
@@ -37,28 +41,23 @@ public class LocationRepository implements ILocationRepository {
             String sql = "INSERT INTO " + t("lore_location") +
                     " (entry_id, world, x, y, z, location_type, label) VALUES (?, ?, ?, ?, ?, ?, ?)";
 
-            try (Connection conn = dbConnection.getConnection();
-                 PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-
-                stmt.setString(1, location.getEntryId());
-                stmt.setString(2, location.getWorld());
-                stmt.setDouble(3, location.getX());
-                stmt.setDouble(4, location.getY());
-                stmt.setDouble(5, location.getZ());
-                stmt.setString(6, location.getLocationType() != null ? location.getLocationType() : "PRIMARY");
-                stmt.setString(7, location.getLabel());
-
-                int affected = stmt.executeUpdate();
-                if (affected > 0) {
-                    try (ResultSet keys = stmt.getGeneratedKeys()) {
-                        if (keys.next()) {
-                            location.setId(keys.getInt(1));
-                        }
-                    }
+            try {
+                // id is auto-increment, so a successful insert always yields a key; -1 means no rows.
+                int generatedId = dbHelper.executeInsertAndGetKey(sql, stmt -> {
+                    stmt.setString(1, location.getEntryId());
+                    stmt.setString(2, location.getWorld());
+                    stmt.setDouble(3, location.getX());
+                    stmt.setDouble(4, location.getY());
+                    stmt.setDouble(5, location.getZ());
+                    stmt.setString(6, location.getLocationType() != null ? location.getLocationType() : "PRIMARY");
+                    stmt.setString(7, location.getLabel());
+                });
+                if (generatedId > 0) {
+                    location.setId(generatedId);
                     location.setCreatedAt(Instant.now());
                     return location;
                 }
-            } catch (SQLException e) {
+            } catch (LoreException e) {
                 logger.error("Failed to save lore location for entry: " + location.getEntryId(), e);
             }
             return null;
@@ -151,12 +150,9 @@ public class LocationRepository implements ILocationRepository {
         return CompletableFuture.supplyAsync(() -> {
             String sql = "DELETE FROM " + t("lore_location") + " WHERE entry_id = ?";
 
-            try (Connection conn = dbConnection.getConnection();
-                 PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-                stmt.setString(1, entryId);
-                return stmt.executeUpdate() > 0;
-            } catch (SQLException e) {
+            try {
+                return dbHelper.executeUpdate(sql, stmt -> stmt.setString(1, entryId)) > 0;
+            } catch (LoreException e) {
                 logger.error("Failed to delete locations for entry: " + entryId, e);
                 return false;
             }
@@ -168,12 +164,9 @@ public class LocationRepository implements ILocationRepository {
         return CompletableFuture.supplyAsync(() -> {
             String sql = "DELETE FROM " + t("lore_location") + " WHERE id = ?";
 
-            try (Connection conn = dbConnection.getConnection();
-                 PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-                stmt.setInt(1, locationId);
-                return stmt.executeUpdate() > 0;
-            } catch (SQLException e) {
+            try {
+                return dbHelper.executeUpdate(sql, stmt -> stmt.setInt(1, locationId)) > 0;
+            } catch (LoreException e) {
                 logger.error("Failed to delete location: " + locationId, e);
                 return false;
             }

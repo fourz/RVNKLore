@@ -95,6 +95,15 @@ class RngPoolSchemaTest {
                 return CompletableFuture.completedFuture(List.of());
             }
             @Override
+            public CompletableFuture<List<org.fourz.RVNKLore.service.PoolItemEntry>> getPoolEntries(
+                    String poolId, String rarityTier) {
+                return CompletableFuture.completedFuture(List.of());
+            }
+            @Override
+            public CompletableFuture<Optional<String>> poolToLootTableJson(String poolId, String rarityTier) {
+                return CompletableFuture.completedFuture(Optional.empty());
+            }
+            @Override
             public boolean isInFallbackMode() { return false; }
         };
 

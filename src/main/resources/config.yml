@@ -4,6 +4,15 @@ general:
   # Default: WARNING (quiet mode - set INFO for verbose operational logs)
   logLevel: WARNING
 
+  # Master operational mode (#1824). One switch over all RVNKLore features:
+  #   full  - everything on (lore, items, discovery, REST API, Dynmap, notifications)
+  #   quiet - lore/items/discovery/REST all work, but player-facing notifications
+  #           (discovery / achievement / collection) are suppressed. Data is still recorded.
+  #   off   - plugin loaded but INERT: no services/REST/listeners/commands registered.
+  #           Flip this and restart to enable; no uninstall needed.
+  # Absent or unknown -> full. full<->quiet is hot (via /lore reload); off<->on needs a restart.
+  mode: full
+
 features:
   # Set any subsystem to false to disable it at startup.
   # Discovery, achievements, and collections share the player progression loop.
@@ -92,9 +101,11 @@ storage:
     #   Set back to false before the next restart.
     purgeData: false
   # ───────────────────────────────────────────────────────────────────────────
-  # mysql: section is no longer used. When storage.type=mysql, RVNKLore reuses
-  # the shared ConnectionProvider from RVNKCore (no separate pool created).
-  # Connection details are configured in RVNKCore's config.yml only.
+  # RVNKLore builds its OWN MySQL pool from this block (RVNKCore-MySQL-Pool-RVNKLore) via
+  # MySQLConnection -> ConnectionProviderFactory — it does NOT reuse RVNKCore's shared provider
+  # (the old comment here was wrong; #1822/#1803). host/port/database/username/password must be
+  # present in the DEPLOYED config for each tier; the pool lifetimes are set in MySQLConnection.java
+  # (tuned for the cross-host DB per #1817/#1822).
   mysql:
     tablePrefix:
   sqlite:
@@ -246,6 +257,18 @@ library:
     # otherwise they register as PENDING for later approval.
     auto_approve: false
 
+# [Forge] anvil: right-click a [Forge]-designated anvil with an item in hand to publish
+# it to the lore catalog. See permissions rvnklore.sign.forge and rvnklore.forge.
+forge:
+  # Require sneak (shift) + right-click to forge. When true (default), a plain right-click on a
+  # forge anvil opens the vanilla anvil GUI (rename/repair) as normal; only sneak+right-click
+  # publishes the held item. Set false to forge on any right-click (legacy behavior).
+  require-sneak: true
+  # Per-player cooldown (seconds) between forges.
+  cooldown-seconds: 60
+  # XP levels charged by /lore item text to add a descriptor line to a freshly-forged item.
+  text-xp-cost-levels: 3
+
 messages:
   generic:
     error:
@@ -258,3 +281,43 @@ messages:
     - '[Help]'
     no_held_item:
     - 'You must be holding an item!'
+
+# ---------------------------------------------------------------------------
+# Cluster-shared lore content (#1834)
+#
+# Shares lore CONTENT network-wide while keeping WORLD-BEARING data per-server.
+#
+#   shared    lore_entry, lore_submission, lore_item, lore_metadata, collection,
+#             collection_item, collection_reward, quest_item_presets,
+#             lore_item_rng_pool, and player progress
+#   local     lore_location, lore_discovery, lore_map
+#
+# The local set stays per-server because every one of them stores a world name plus
+# coordinates, and two servers can each have a world called "world". Sharing them would
+# silently merge places that have nothing to do with each other.
+#
+# role: authoritative  this server OWNS the shared content; the cluster database is its
+#                      own database, so no second pool is opened.
+# role: member         shared content is read from and written to cluster.mysql below.
+#
+# Leave enabled: false on an isolated tier (Dev). While clustering is off nothing is
+# treated as shared, so behaviour is identical to a standalone server.
+#
+# Note this also arms the #1833 fail-closed rule: with clustering on, writes to shared
+# tables are refused while the database is in SQLite fallback, because the authoritative
+# tier keeps writing them throughout and a local write could not be merged back.
+# ---------------------------------------------------------------------------
+cluster:
+  enabled: false
+  role: member
+  mysql:
+    host: ''
+    port: 3306
+    database: ''
+    username: ''
+    password: ''
+    useSSL: false
+    tablePrefix: 'rvnklore_'
+    connectionTimeout: 30000
+    idleTimeout: 120000
+    maxLifetime: 180000

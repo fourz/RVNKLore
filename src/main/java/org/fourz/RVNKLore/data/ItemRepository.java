@@ -206,6 +206,39 @@ public class ItemRepository implements IItemRepository {
     }
 
     /**
+     * Get all items authored by a given creator ({@code created_by} column). For the
+     * {@code [Forge]} feature this is a player UUID string; the caller filters the
+     * returned list by base name to find an existing lineage.
+     *
+     * @param createdBy The author identifier (typically a player UUID string)
+     * @return CompletableFuture completing with all matching items (empty on error/none)
+     */
+    @Override
+    public CompletableFuture<List<ItemProperties>> getItemsByCreatedBy(String createdBy) {
+        return CompletableFuture.supplyAsync(() -> {
+            String sql = "SELECT * FROM " + t("lore_item") + " WHERE created_by = ?";
+
+            try {
+                return dbHelper.executeQuery(sql,
+                    stmt -> stmt.setString(1, createdBy),
+                    rs -> {
+                        List<ItemProperties> items = new ArrayList<>();
+                        while (rs.next()) {
+                            ItemProperties item = resultSetToItemProperties(rs);
+                            if (item != null) {
+                                items.add(item);
+                            }
+                        }
+                        return items;
+                    });
+            } catch (LoreException e) {
+                logger.error("Failed to get items by created_by: " + createdBy, e);
+                return new ArrayList<>();
+            }
+        });
+    }
+
+    /**
      * Get an item by its lore entry UUID
      *
      * @param loreEntryId The UUID of the lore entry
@@ -321,6 +354,130 @@ public class ItemRepository implements IItemRepository {
     }
 
     /**
+     * Obtainable WRITTEN_BOOK items — the catalog backing {@code /lore book list} (#1646).
+     * The book list previously read the lore-entry cache (unreliable + any type); this queries the
+     * item catalog directly so it deterministically lists the actual books.
+     */
+    public CompletableFuture<List<ItemProperties>> getObtainableWrittenBooks() {
+        return CompletableFuture.supplyAsync(() -> {
+            String sql = "SELECT * FROM " + t("lore_item")
+                       + " WHERE material = ? AND is_obtainable = ? ORDER BY name";
+            try {
+                return dbHelper.executeQuery(sql,
+                    stmt -> { stmt.setString(1, "WRITTEN_BOOK"); stmt.setBoolean(2, true); },
+                    rs -> {
+                        List<ItemProperties> items = new ArrayList<>();
+                        while (rs.next()) {
+                            ItemProperties item = resultSetToItemProperties(rs);
+                            if (item != null) items.add(item);
+                        }
+                        return items;
+                    });
+            } catch (LoreException e) {
+                logger.error("Failed to get obtainable written books", e);
+                return new ArrayList<>();
+            }
+        });
+    }
+
+    // ── #1496: RNG pool + quest-preset authoring — narrow additive writes on existing tables ──
+    // (no schema change; the read paths live in getPresetsForQuest above and RngItemServiceImpl)
+
+    /** A single RNG-pool row, for the authoring `list` command. */
+    public record PoolEntryRow(int loreItemId, String rarityTier, int weight, boolean active) {}
+
+    /** Add an item to an RNG pool ({@code lore_item_rng_pool}); active by default. */
+    public CompletableFuture<Boolean> addPoolEntry(String poolId, int loreItemId, String rarityTier, int weight) {
+        return CompletableFuture.supplyAsync(() -> {
+            String sql = "INSERT INTO " + t("lore_item_rng_pool") +
+                         " (pool_id, lore_item_id, rarity_tier, weight, is_active) VALUES (?, ?, ?, ?, 1)";
+            try {
+                return dbHelper.executeUpdate(sql, stmt -> {
+                    stmt.setString(1, poolId);
+                    stmt.setInt(2, loreItemId);
+                    stmt.setString(3, rarityTier);
+                    stmt.setInt(4, weight);
+                }) > 0;
+            } catch (LoreException e) {
+                logger.error("Failed to add pool entry " + poolId + "/" + loreItemId, e);
+                return false;
+            }
+        });
+    }
+
+    /** Remove an item from an RNG pool. Returns false if no matching row existed. */
+    public CompletableFuture<Boolean> removePoolEntry(String poolId, int loreItemId) {
+        return CompletableFuture.supplyAsync(() -> {
+            String sql = "DELETE FROM " + t("lore_item_rng_pool") + " WHERE pool_id = ? AND lore_item_id = ?";
+            try {
+                return dbHelper.executeUpdate(sql, stmt -> {
+                    stmt.setString(1, poolId);
+                    stmt.setInt(2, loreItemId);
+                }) > 0;
+            } catch (LoreException e) {
+                logger.error("Failed to remove pool entry " + poolId + "/" + loreItemId, e);
+                return false;
+            }
+        });
+    }
+
+    /** List every entry in an RNG pool (all rarity tiers, active + inactive). */
+    public CompletableFuture<List<PoolEntryRow>> listPoolEntries(String poolId) {
+        return CompletableFuture.supplyAsync(() -> {
+            String sql = "SELECT lore_item_id, rarity_tier, weight, is_active FROM " + t("lore_item_rng_pool") +
+                         " WHERE pool_id = ? ORDER BY rarity_tier, weight DESC";
+            try {
+                return dbHelper.executeQuery(sql,
+                    stmt -> stmt.setString(1, poolId),
+                    rs -> {
+                        List<PoolEntryRow> rows = new ArrayList<>();
+                        while (rs.next()) {
+                            rows.add(new PoolEntryRow(rs.getInt("lore_item_id"), rs.getString("rarity_tier"),
+                                rs.getInt("weight"), rs.getInt("is_active") == 1));
+                        }
+                        return rows;
+                    });
+            } catch (LoreException e) {
+                logger.error("Failed to list pool entries for " + poolId, e);
+                return new ArrayList<>();
+            }
+        });
+    }
+
+    /** Bind an item to a quest as a preset ({@code quest_item_presets}); {@code label} may be null. */
+    public CompletableFuture<Boolean> addPreset(String questId, int loreItemId, String label) {
+        return CompletableFuture.supplyAsync(() -> {
+            String sql = "INSERT INTO " + t("quest_item_presets") + " (quest_id, lore_item_id, label) VALUES (?, ?, ?)";
+            try {
+                return dbHelper.executeUpdate(sql, stmt -> {
+                    stmt.setString(1, questId);
+                    stmt.setInt(2, loreItemId);
+                    stmt.setString(3, label);
+                }) > 0;
+            } catch (LoreException e) {
+                logger.error("Failed to add preset " + questId + "/" + loreItemId, e);
+                return false;
+            }
+        });
+    }
+
+    /** Unbind an item preset from a quest. Returns false if no matching row existed. */
+    public CompletableFuture<Boolean> removePreset(String questId, int loreItemId) {
+        return CompletableFuture.supplyAsync(() -> {
+            String sql = "DELETE FROM " + t("quest_item_presets") + " WHERE quest_id = ? AND lore_item_id = ?";
+            try {
+                return dbHelper.executeUpdate(sql, stmt -> {
+                    stmt.setString(1, questId);
+                    stmt.setInt(2, loreItemId);
+                }) > 0;
+            } catch (LoreException e) {
+                logger.error("Failed to remove preset " + questId + "/" + loreItemId, e);
+                return false;
+            }
+        });
+    }
+
+    /**
      * Insert a new item into the database.
      * Uses dialect-aware generated key retrieval for MySQL/SQLite compatibility.
      *
@@ -348,25 +505,10 @@ public class ItemRepository implements IItemRepository {
                         } else {
                             stmt.setNull(6, java.sql.Types.INTEGER);
                         }
-                        // Convert custom properties to JSON
-                        JSONObject jsonProps = new JSONObject();
-                        if (properties.hasCustomProperties()) {
-                            jsonProps.putAll(properties.getAllCustomProperties());
-                        }
-                        if (properties.getLore() != null && !properties.getLore().isEmpty()) {
-                            jsonProps.put("lore_text", properties.getLore());
-                        }
-                        if (properties.isGlow()) {
-                            jsonProps.put("is_glow", true);
-                        }
-                        if (properties.getSkullTexture() != null) {
-                            jsonProps.put("skull_texture", properties.getSkullTexture());
-                        }
-                        if (properties.getPages() != null && !properties.getPages().isEmpty()) {
-                            jsonProps.put("pages", properties.getPages());
-                        }
-                        appendEnchantJson(jsonProps, properties);
-                        stmt.setString(7, jsonProps.toJSONString());
+                        // item_properties JSON — built via the shared helper so custom_model_data
+                        // and every other field land identically in inserts, updates, and the
+                        // version snapshots copied from this column (#1528 rollback keeps CMD).
+                        stmt.setString(7, buildItemPropertiesJson(properties));
                         stmt.setString(8, properties.getCreatedBy());
                         stmt.setString(9, properties.getNbtData());
                         if (properties.getLoreEntryId() != null && !properties.getLoreEntryId().isEmpty()) {
@@ -404,7 +546,8 @@ public class ItemRepository implements IItemRepository {
                         "name = ?, item_type = ?, rarity = ?, " +
                         "material = ?, is_obtainable = ?, custom_model_data = ?, " +
                         "item_properties = ?, updated_at = CURRENT_TIMESTAMP, " +
-                        "nbt_data = ?, lore_entry_id = ? " +
+                        "nbt_data = ?, lore_entry_id = ?, " +
+                        "created_by = COALESCE(?, created_by) " +
                         "WHERE id = ?";
 
             try {
@@ -420,25 +563,10 @@ public class ItemRepository implements IItemRepository {
                         } else {
                             stmt.setNull(6, java.sql.Types.INTEGER);
                         }
-                        // Convert custom properties to JSON
-                        JSONObject jsonProps = new JSONObject();
-                        if (properties.hasCustomProperties()) {
-                            jsonProps.putAll(properties.getAllCustomProperties());
-                        }
-                        if (properties.getLore() != null && !properties.getLore().isEmpty()) {
-                            jsonProps.put("lore_text", properties.getLore());
-                        }
-                        if (properties.isGlow()) {
-                            jsonProps.put("is_glow", true);
-                        }
-                        if (properties.getSkullTexture() != null) {
-                            jsonProps.put("skull_texture", properties.getSkullTexture());
-                        }
-                        if (properties.getPages() != null && !properties.getPages().isEmpty()) {
-                            jsonProps.put("pages", properties.getPages());
-                        }
-                        appendEnchantJson(jsonProps, properties);
-                        stmt.setString(7, jsonProps.toJSONString());
+                        // item_properties JSON — built via the shared helper so custom_model_data
+                        // and every other field land identically in inserts, updates, and the
+                        // version snapshots copied from this column (#1528 rollback keeps CMD).
+                        stmt.setString(7, buildItemPropertiesJson(properties));
                         // Set NBT data
                         stmt.setString(8, properties.getNbtData());
                         // Set lore entry ID if available, otherwise null
@@ -447,7 +575,17 @@ public class ItemRepository implements IItemRepository {
                         } else {
                             stmt.setNull(9, java.sql.Types.VARCHAR);
                         }
-                        stmt.setInt(10, itemId);
+                        // created_by: COALESCE keeps the existing author when the update carries none
+                        // (e.g. /lore item text enrichment), and backfills it when the mint→update path
+                        // finally supplies it. Fixes forged items landing with created_by=NULL — the
+                        // ITEM post-processor pre-creates the row, so registerLoreItemForId always
+                        // UPDATEs, and this column was never written, breaking getItemsByCreatedBy re-forge.
+                        if (properties.getCreatedBy() != null && !properties.getCreatedBy().isEmpty()) {
+                            stmt.setString(10, properties.getCreatedBy());
+                        } else {
+                            stmt.setNull(10, java.sql.Types.VARCHAR);
+                        }
+                        stmt.setInt(11, itemId);
                     });
 
                 return rowsAffected > 0;
@@ -482,8 +620,24 @@ public class ItemRepository implements IItemRepository {
         if (properties.getPages() != null && !properties.getPages().isEmpty()) {
             jsonProps.put("pages", properties.getPages());
         }
+        // custom_model_data lives in its own lore_item column, but the version snapshot must
+        // also carry it so a rollback can restore the CMD-at-that-version (#1528 items keep CMD).
+        if (properties.getCustomModelData() > 0) {
+            jsonProps.put("custom_model_data", properties.getCustomModelData());
+        }
         appendEnchantJson(jsonProps, properties);
         return jsonProps.toJSONString();
+    }
+
+    /** Read a custom_model_data value out of a version-snapshot JSON, or null if absent/unparseable. */
+    private Integer extractCmdFromJson(String json) {
+        if (json == null || json.isEmpty()) return null;
+        try {
+            JSONObject o = (JSONObject) new JSONParser().parse(json);
+            Object v = o.get("custom_model_data");
+            if (v instanceof Number) return ((Number) v).intValue();
+        } catch (Exception ignored) {}
+        return null;
     }
 
     private String resolveEntryId(Connection conn, int itemId) throws SQLException {
@@ -512,12 +666,13 @@ public class ItemRepository implements IItemRepository {
                     ps.setInt(1, itemId);
                     try (ResultSet rs = ps.executeQuery()) { props = rs.next() ? rs.getString(1) : null; }
                 }
-                try (PreparedStatement ps = conn.prepareStatement("UPDATE " + t("lore_submission")
-                        + " SET content = ? WHERE entry_id = ? AND is_current_version = TRUE")) {
-                    ps.setString(1, props);
-                    ps.setString(2, entryId);
-                    return ps.executeUpdate() > 0;
-                }
+                final String snapshotProps = props;
+                final String snapshotEntryId = entryId;
+                return dbHelper.executeUpdateOn(conn, "UPDATE " + t("lore_submission")
+                        + " SET content = ? WHERE entry_id = ? AND is_current_version = TRUE", ps -> {
+                    ps.setString(1, snapshotProps);
+                    ps.setString(2, snapshotEntryId);
+                }) > 0;
             } catch (SQLException e) {
                 logger.error("Failed to snapshot current version for item " + itemId, e);
                 return false;
@@ -539,12 +694,10 @@ public class ItemRepository implements IItemRepository {
                     String entryId = resolveEntryId(conn, itemId);
                     if (entryId == null) { conn.rollback(); return -1; }
 
-                    try (PreparedStatement ps = conn.prepareStatement("UPDATE " + t("lore_submission")
+                    dbHelper.executeUpdateOn(conn, "UPDATE " + t("lore_submission")
                             + " SET is_current_version = FALSE, status = 'ARCHIVED' "
-                            + "WHERE entry_id = ? AND is_current_version = TRUE")) {
-                        ps.setString(1, entryId);
-                        ps.executeUpdate();
-                    }
+                            + "WHERE entry_id = ? AND is_current_version = TRUE",
+                            ps -> ps.setString(1, entryId));
 
                     int nextVersion = 1;
                     try (PreparedStatement ps = conn.prepareStatement("SELECT COALESCE(MAX(content_version), 0) + 1 "
@@ -554,15 +707,15 @@ public class ItemRepository implements IItemRepository {
                     }
 
                     String slug = "item-" + entryId.substring(0, Math.min(8, entryId.length())) + "-v" + nextVersion;
-                    try (PreparedStatement ps = conn.prepareStatement("INSERT INTO " + t("lore_submission")
+                    final int versionToWrite = nextVersion;
+                    dbHelper.executeUpdateOn(conn, "INSERT INTO " + t("lore_submission")
                             + " (entry_id, submitter_uuid, content, slug, content_version, is_current_version, status) "
-                            + "VALUES (?, 'Server', ?, ?, ?, TRUE, 'ACTIVE')")) {
+                            + "VALUES (?, 'Server', ?, ?, ?, TRUE, 'ACTIVE')", ps -> {
                         ps.setString(1, entryId);
                         ps.setString(2, propsJson);
                         ps.setString(3, slug);
-                        ps.setInt(4, nextVersion);
-                        ps.executeUpdate();
-                    }
+                        ps.setInt(4, versionToWrite);
+                    });
 
                     materializeItem(conn, itemId, properties, propsJson);
 
@@ -584,9 +737,9 @@ public class ItemRepository implements IItemRepository {
 
     /** Materialize lore_item columns from properties + the prebuilt item_properties JSON. */
     private void materializeItem(Connection conn, int itemId, ItemProperties properties, String propsJson) throws SQLException {
-        try (PreparedStatement ps = conn.prepareStatement("UPDATE " + t("lore_item") + " SET "
+        dbHelper.executeUpdateOn(conn, "UPDATE " + t("lore_item") + " SET "
                 + "name = ?, item_type = ?, rarity = ?, material = ?, is_obtainable = ?, "
-                + "custom_model_data = ?, item_properties = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")) {
+                + "custom_model_data = ?, item_properties = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", ps -> {
             ps.setString(1, properties.getDisplayName());
             ps.setString(2, properties.getItemType() != null ? properties.getItemType().name() : "STANDARD");
             ps.setString(3, properties.getRarity() != null ? properties.getRarity() : "COMMON");
@@ -596,8 +749,7 @@ public class ItemRepository implements IItemRepository {
             else ps.setNull(6, java.sql.Types.INTEGER);
             ps.setString(7, propsJson);
             ps.setInt(8, itemId);
-            ps.executeUpdate();
-        }
+        });
     }
 
     /** List the version history (content_version, is_current, status, created_at) for an item. */
@@ -651,25 +803,27 @@ public class ItemRepository implements IItemRepository {
                     // Only roll back to versions that carry an item snapshot (item_properties JSON).
                     if (content == null || !content.contains("\"")) { conn.rollback(); return false; }
 
-                    try (PreparedStatement ps = conn.prepareStatement("UPDATE " + t("lore_submission")
+                    dbHelper.executeUpdateOn(conn, "UPDATE " + t("lore_submission")
                             + " SET is_current_version = FALSE, status = 'ARCHIVED' "
-                            + "WHERE entry_id = ? AND is_current_version = TRUE")) {
-                        ps.setString(1, entryId);
-                        ps.executeUpdate();
-                    }
-                    try (PreparedStatement ps = conn.prepareStatement("UPDATE " + t("lore_submission")
+                            + "WHERE entry_id = ? AND is_current_version = TRUE",
+                            ps -> ps.setString(1, entryId));
+                    dbHelper.executeUpdateOn(conn, "UPDATE " + t("lore_submission")
                             + " SET is_current_version = TRUE, status = 'ACTIVE' "
-                            + "WHERE entry_id = ? AND content_version = ?")) {
+                            + "WHERE entry_id = ? AND content_version = ?", ps -> {
                         ps.setString(1, entryId);
                         ps.setInt(2, version);
-                        ps.executeUpdate();
-                    }
-                    try (PreparedStatement ps = conn.prepareStatement("UPDATE " + t("lore_item")
-                            + " SET item_properties = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")) {
-                        ps.setString(1, content);
-                        ps.setInt(2, itemId);
-                        ps.executeUpdate();
-                    }
+                    });
+                    // Restore both the materialized JSON and the CMD column from the snapshot,
+                    // so rolling back to a version faithfully restores that version's custom model.
+                    Integer snapCmd = extractCmdFromJson(content);
+                    final String snapshotContent = content;
+                    dbHelper.executeUpdateOn(conn, "UPDATE " + t("lore_item")
+                            + " SET item_properties = ?, custom_model_data = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", ps -> {
+                        ps.setString(1, snapshotContent);
+                        if (snapCmd != null && snapCmd > 0) ps.setInt(2, snapCmd);
+                        else ps.setNull(2, java.sql.Types.INTEGER);
+                        ps.setInt(3, itemId);
+                    });
                     conn.commit();
                     return true;
                 } catch (SQLException e) {
@@ -694,16 +848,12 @@ public class ItemRepository implements IItemRepository {
                 try {
                     String entryId = resolveEntryId(conn, itemId);
                     if (entryId == null) { conn.rollback(); return false; }
-                    try (PreparedStatement ps = conn.prepareStatement("UPDATE " + t("lore_item")
-                            + " SET is_obtainable = FALSE, updated_at = CURRENT_TIMESTAMP WHERE id = ?")) {
-                        ps.setInt(1, itemId);
-                        ps.executeUpdate();
-                    }
-                    try (PreparedStatement ps = conn.prepareStatement("UPDATE " + t("lore_submission")
-                            + " SET status = 'ARCHIVED' WHERE entry_id = ? AND is_current_version = TRUE")) {
-                        ps.setString(1, entryId);
-                        ps.executeUpdate();
-                    }
+                    dbHelper.executeUpdateOn(conn, "UPDATE " + t("lore_item")
+                            + " SET is_obtainable = FALSE, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                            ps -> ps.setInt(1, itemId));
+                    dbHelper.executeUpdateOn(conn, "UPDATE " + t("lore_submission")
+                            + " SET status = 'ARCHIVED' WHERE entry_id = ? AND is_current_version = TRUE",
+                            ps -> ps.setString(1, entryId));
                     conn.commit();
                     return true;
                 } catch (SQLException e) {
@@ -754,11 +904,11 @@ public class ItemRepository implements IItemRepository {
     }
 
     private void execById(Connection conn, String sql, int id) throws SQLException {
-        try (PreparedStatement ps = conn.prepareStatement(sql)) { ps.setInt(1, id); ps.executeUpdate(); }
+        dbHelper.executeUpdateOn(conn, sql, ps -> ps.setInt(1, id));
     }
 
     private void execByStr(Connection conn, String sql, String v) throws SQLException {
-        try (PreparedStatement ps = conn.prepareStatement(sql)) { ps.setString(1, v); ps.executeUpdate(); }
+        dbHelper.executeUpdateOn(conn, sql, ps -> ps.setString(1, v));
     }
 
     /**

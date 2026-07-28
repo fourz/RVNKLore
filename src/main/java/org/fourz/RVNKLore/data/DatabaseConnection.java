@@ -202,8 +202,10 @@ public abstract class DatabaseConnection {
                 "z DOUBLE NOT NULL, " +
                 "location_type VARCHAR(30) DEFAULT 'PRIMARY', " +
                 "label VARCHAR(100), " +
-                "created_at " + timestampDefault + ", " +
-                "FOREIGN KEY (entry_id) REFERENCES " + loreEntry + "(id) ON DELETE CASCADE" +
+                "created_at " + timestampDefault +
+                // #1839: no FOREIGN KEY into lore_entry. This table stays per-server for the
+                // #1834 split and a foreign key cannot span databases. Cleanup on entry
+                // delete is done explicitly in LoreEntryRepository.deleteLoreEntry.
             ")";
             stmt.execute(createLoreLocationTable);
             createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "lore_location_entry ON " + loreLocation + "(entry_id)");
@@ -222,8 +224,10 @@ public abstract class DatabaseConnection {
                 "z DOUBLE, " +
                 "is_first_discovery " + boolType + " NOT NULL DEFAULT FALSE, " +
                 "discovered_at " + timestampDefault + ", " +
-                "CONSTRAINT uq_" + tablePrefix + "lore_discovery_player_entry UNIQUE (player_uuid, entry_id), " +
-                "FOREIGN KEY (entry_id) REFERENCES " + loreEntry + "(id) ON DELETE CASCADE" +
+                "CONSTRAINT uq_" + tablePrefix + "lore_discovery_player_entry UNIQUE (player_uuid, entry_id)" +
+                // #1839: no FOREIGN KEY into lore_entry. This table stays per-server for the
+                // #1834 split and a foreign key cannot span databases. Cleanup on entry
+                // delete is done explicitly in LoreEntryRepository.deleteLoreEntry.
             ")";
             stmt.execute(createLoreDiscoveryTable);
             createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "lore_discovery_player ON " + loreDiscovery + "(player_uuid)");
@@ -273,8 +277,10 @@ public abstract class DatabaseConnection {
                 "dimension VARCHAR(64) NOT NULL DEFAULT 'NORMAL', " +
                 "pixel_data MEDIUMTEXT, " +
                 "created_by VARCHAR(64), " +
-                "created_at " + timestampDefault + ", " +
-                "FOREIGN KEY (lore_entry_id) REFERENCES " + loreEntry + "(id) ON DELETE SET NULL" +
+                "created_at " + timestampDefault +
+                // #1839: no FOREIGN KEY into lore_entry. This table stays per-server for the
+                // #1834 split and a foreign key cannot span databases. Cleanup on entry
+                // delete is done explicitly in LoreEntryRepository.deleteLoreEntry.
             ")";
             stmt.execute(createLoreMapTable);
             createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "lore_map_entry ON " + loreMap + "(lore_entry_id)");
@@ -335,8 +341,10 @@ public abstract class DatabaseConnection {
             "dimension VARCHAR(64) NOT NULL DEFAULT 'NORMAL', " +
             "pixel_data MEDIUMTEXT, " +
             "created_by VARCHAR(64), " +
-            "created_at " + timestampDefault + ", " +
-            "FOREIGN KEY (lore_entry_id) REFERENCES " + loreEntry + "(id) ON DELETE SET NULL" +
+            "created_at " + timestampDefault +
+            // #1839: no FOREIGN KEY into lore_entry — lore_map stays per-server for the
+            // #1834 split and a foreign key cannot span databases. This is the second
+            // lore_map DDL path (the ensure/upgrade one); both had to lose the constraint.
         ")";
         createTableSafely(stmt, ensureLoreMap, TABLE_LORE_MAP);
         createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "lore_map_entry ON " + loreMap + "(lore_entry_id)");
@@ -423,6 +431,265 @@ public abstract class DatabaseConnection {
 
         createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "player_collection_items_player ON " + playerCollectionItems + "(player_uuid)");
         createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "player_collection_items_collection ON " + playerCollectionItems + "(collection_id)");
+
+        // Must run before anything that depends on foreign keys or transactions (#1840).
+        convertLegacyTablesToInnoDB(stmt);
+
+        // Runs last: the tables must exist before their constraints can be inspected (#1839).
+        dropLegacyEntryForeignKeys(stmt);
+
+        // lore_metadata.lore_id was declared VARCHAR(36) while lore_entry.id is CHAR(36). InnoDB
+        // requires matching types for a foreign key, so that mismatch alone would block the
+        // constraint below with errno 150 — likely part of why it was never created. The table is
+        // empty on every tier, so the widening is free.
+        modifyColumnType(stmt, table(TABLE_LORE_METADATA), "lore_id", "CHAR(36) NOT NULL");
+
+        // Then add the cluster-internal constraints that protect the shared canon.
+        createClusterInternalForeignKeys(stmt);
+    }
+
+    /**
+     * Drop the legacy foreign keys from per-server tables into {@code lore_entry} (#1839).
+     *
+     * <p>{@code lore_location}, {@code lore_discovery} and {@code lore_map} stay per-server for the
+     * #1834 connection split, while {@code lore_entry} moves to the cluster pool — and a foreign key
+     * cannot span databases. The constraints have been removed from the shipped DDL, but every
+     * existing tier already has the tables, so a DDL change alone reaches none of them (#1563/#1592).
+     * This migration is what actually removes them.</p>
+     *
+     * <p>The constraints were declared unnamed, so MySQL auto-generated names like
+     * {@code rvnklore_lore_location_ibfk_1}. They are looked up in {@code information_schema} rather
+     * than guessed.</p>
+     *
+     * <p>MySQL-only: SQLite cannot drop a foreign key, and its fallback file is transient and
+     * recreated from the corrected DDL anyway.</p>
+     */
+    private void dropLegacyEntryForeignKeys(Statement stmt) {
+        if (!"MySQL".equals(dialect.getName())) {
+            return;
+        }
+        String[] perServerTables = {
+            table(TABLE_LORE_LOCATION),
+            table(TABLE_LORE_DISCOVERY),
+            table(TABLE_LORE_MAP)
+        };
+        String loreEntryTable = table(TABLE_LORE_ENTRY);
+
+        for (String tableName : perServerTables) {
+            java.util.List<String> constraints = new java.util.ArrayList<>();
+            String lookup =
+                "SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE "
+                + "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" + tableName + "' "
+                + "AND REFERENCED_TABLE_NAME = '" + loreEntryTable + "'";
+            try (java.sql.ResultSet rs = stmt.executeQuery(lookup)) {
+                while (rs.next()) {
+                    constraints.add(rs.getString(1));
+                }
+            } catch (SQLException e) {
+                logger.warning("Could not inspect foreign keys on " + tableName + ": " + e.getMessage());
+                continue;
+            }
+
+            for (String constraint : constraints) {
+                try {
+                    stmt.execute("ALTER TABLE " + tableName + " DROP FOREIGN KEY " + constraint);
+                    logger.warning("Migration #1839: dropped foreign key " + constraint + " on "
+                            + tableName + " (per-server table must not reference the cluster-shared "
+                            + loreEntryTable + ")");
+                } catch (SQLException e) {
+                    logger.error("Migration #1839: failed to drop foreign key " + constraint + " on "
+                            + tableName + " — the #1834 connection split will fail until it is gone", e);
+                }
+            }
+        }
+    }
+
+    /**
+     * Create the cluster-internal foreign keys into {@code lore_entry} that were declared in the DDL
+     * but never actually exist on any tier.
+     *
+     * <p>The DDL has carried {@code FOREIGN KEY ... REFERENCES lore_entry(id) ON DELETE CASCADE} for
+     * {@code lore_submission}, {@code lore_item} and {@code lore_metadata} for a long time, but the
+     * tables predate those clauses and {@code CREATE TABLE IF NOT EXISTS} never re-applies them — so
+     * the constraints were only ever aspirational. That is not cosmetic: without them a submission or
+     * item can outlive its entry, and every tier had already accumulated such rows.</p>
+     *
+     * <p>Unlike the per-server tables in #1839, these three stay <b>co-located</b> with
+     * {@code lore_entry} in the cluster pool, so a real constraint is both possible and wanted — it
+     * is what protects the shared canon once #1834 splits the pools.</p>
+     *
+     * <p>Named explicitly rather than left to MySQL's {@code _ibfk_N} auto-naming, so they can be
+     * found and reasoned about later.</p>
+     *
+     * <p><b>Never fails a boot.</b> If orphan rows exist the ALTER is rejected by InnoDB; that is
+     * logged with the count and the constraint is skipped, because refusing to start a server over a
+     * data-integrity backlog would be a worse outcome than running without the constraint.</p>
+     */
+    private void createClusterInternalForeignKeys(Statement stmt) {
+        if (!"MySQL".equals(dialect.getName())) {
+            return;
+        }
+        // Bail out early and loudly on a storage engine that cannot hold foreign keys, rather than
+        // issuing ALTERs that "succeed" and do nothing.
+        String engine = tableEngine(stmt, table(TABLE_LORE_ENTRY));
+        if (engine != null && !"innodb".equalsIgnoreCase(engine)) {
+            logger.error("Lore tables use the " + engine + " engine, which does not support foreign "
+                    + "keys — it accepts the syntax and discards the constraint. No referential "
+                    + "integrity is enforced between lore_entry and its submissions/items/metadata, "
+                    + "and transactions are also unavailable on this engine, so rollbacks silently do "
+                    + "nothing. Convert the lore tables to InnoDB to fix both.", null);
+            return;
+        }
+        // child table, child column, constraint suffix
+        String[][] relations = {
+            {table(TABLE_LORE_SUBMISSION), "entry_id",      "lore_submission_entry"},
+            {table(TABLE_LORE_ITEM),       "lore_entry_id", "lore_item_entry"},
+            {table(TABLE_LORE_METADATA),   "lore_id",       "lore_metadata_entry"}
+        };
+        String parent = table(TABLE_LORE_ENTRY);
+
+        for (String[] relation : relations) {
+            String child = relation[0];
+            String column = relation[1];
+            String constraint = "fk_" + tablePrefix + relation[2];
+
+            // Attempt the ALTER unconditionally rather than pre-checking whether the constraint
+            // exists. An "already exists" error is loud, harmless and self-correcting; a pre-check
+            // that fails open would silently skip the constraint and leave the canon unprotected —
+            // which is exactly the class of silent no-op this migration exists to clean up.
+            try {
+                stmt.execute("ALTER TABLE " + child + " ADD CONSTRAINT " + constraint
+                        + " FOREIGN KEY (" + column + ") REFERENCES " + parent + "(id) ON DELETE CASCADE");
+
+                // Verify rather than trust the absence of an exception. MyISAM parses FOREIGN KEY
+                // and silently DISCARDS it — no error, no constraint. That is why the FKs declared
+                // in this DDL have never existed on any tier, and reporting success here without
+                // checking would repeat exactly that lie.
+                if (!constraintPresent(stmt, child, constraint)) {
+                    logger.error("Migration: " + constraint + " on " + child + " reported success but "
+                            + "does not exist. The table engine almost certainly does not support "
+                            + "foreign keys (MyISAM silently ignores them). Referential integrity for "
+                            + parent + " is NOT enforced.", null);
+                    continue;
+                }
+                logger.warning("Migration: added missing foreign key " + constraint + " on " + child
+                        + " — " + child + "." + column + " now cascades from " + parent);
+            } catch (SQLException e) {
+                String msg = e.getMessage() != null ? e.getMessage() : "";
+                String lower = msg.toLowerCase();
+                if (lower.contains("duplicate") || lower.contains("already exists")) {
+                    logger.debug("Migration: " + constraint + " already present on " + child);
+                    continue;
+                }
+                logger.warning("Migration: could not add " + constraint + " on " + child + ": " + msg);
+                logger.warning("  Most likely orphan rows in " + child + " (rows whose " + column
+                        + " has no matching " + parent + ".id), or a column type mismatch against "
+                        + parent + ".id. Resolve those and restart; the server continues without "
+                        + "this constraint, so the shared canon is unprotected until it is fixed.");
+            }
+        }
+    }
+
+    /**
+     * Convert any lore table still on a non-InnoDB engine (#1840).
+     *
+     * <p>RVNKLore's DDL never specified an engine, so on a host whose default is MyISAM — which is
+     * the case on the Interserver box all three tiers use — every lore table was created as MyISAM.
+     * That is not a performance footnote:</p>
+     *
+     * <ul>
+     *   <li><b>Foreign keys are silently discarded.</b> MyISAM parses {@code FOREIGN KEY} and throws
+     *       it away without error, so every constraint this schema declares has never existed and
+     *       nothing has ever cascaded. That is where the orphan rows came from.</li>
+     *   <li><b>Transactions do nothing.</b> {@code setAutoCommit(false)}, {@code commit()} and
+     *       {@code rollback()} are no-ops, so multi-step writes are not atomic and a failure partway
+     *       leaves partial data behind.</li>
+     * </ul>
+     *
+     * <p>Idempotent: tables already on InnoDB are skipped, so this costs one cheap query per boot
+     * once converted. Runs with the plugin's own credentials, which is what lets it fix a tier where
+     * external tooling only has a read-only database user.</p>
+     */
+    private void convertLegacyTablesToInnoDB(Statement stmt) {
+        if (!"MySQL".equals(dialect.getName())) {
+            return;
+        }
+        java.util.List<String> pending = new java.util.ArrayList<>();
+        String lookup = "SELECT TABLE_NAME FROM information_schema.TABLES "
+                + "WHERE TABLE_SCHEMA = DATABASE() AND ENGINE IS NOT NULL AND ENGINE <> 'InnoDB' "
+                + "AND TABLE_NAME IN (" + quotedLoreTableList() + ")";
+        try (java.sql.ResultSet rs = stmt.executeQuery(lookup)) {
+            while (rs.next()) {
+                pending.add(rs.getString(1));
+            }
+        } catch (SQLException e) {
+            logger.warning("Could not check lore table storage engines: " + e.getMessage());
+            return;
+        }
+        if (pending.isEmpty()) {
+            return;
+        }
+
+        logger.warning("Migration #1840: " + pending.size() + " lore table(s) are not InnoDB. Foreign "
+                + "keys and transactions do not work on those engines; converting now.");
+        int converted = 0;
+        for (String tableName : pending) {
+            try {
+                stmt.execute("ALTER TABLE " + tableName + " ENGINE=InnoDB");
+                converted++;
+                logger.info("Migration #1840: converted " + tableName + " to InnoDB");
+            } catch (SQLException e) {
+                logger.error("Migration #1840: could not convert " + tableName + " to InnoDB — "
+                        + "foreign keys and transactions remain unavailable for it", e);
+            }
+        }
+        logger.warning("Migration #1840: converted " + converted + "/" + pending.size()
+                + " lore table(s) to InnoDB");
+    }
+
+    /** Every lore table this plugin owns, quoted for an IN clause. */
+    private String quotedLoreTableList() {
+        String[] bases = {
+            TABLE_LORE_ENTRY, TABLE_LORE_SUBMISSION, TABLE_LORE_ITEM, TABLE_LORE_METADATA,
+            TABLE_COLLECTION, TABLE_COLLECTION_ITEM, TABLE_COLLECTION_REWARD,
+            TABLE_PLAYER_COLLECTION_PROGRESS, TABLE_PLAYER_COLLECTION_ITEMS,
+            TABLE_PLAYER_ACHIEVEMENT, TABLE_PLAYER_REWARD_CLAIM,
+            TABLE_LORE_LOCATION, TABLE_LORE_DISCOVERY, TABLE_LORE_MAP,
+            TABLE_QUEST_ITEM_PRESETS, TABLE_LORE_ITEM_RNG_POOL
+        };
+        StringBuilder sb = new StringBuilder();
+        for (String base : bases) {
+            if (sb.length() > 0) {
+                sb.append(", ");
+            }
+            sb.append('\'').append(table(base)).append('\'');
+        }
+        return sb.toString();
+    }
+
+    /** @return the storage engine for a table, or null if it cannot be determined. */
+    private String tableEngine(Statement stmt, String tableName) {
+        String sql = "SELECT ENGINE FROM information_schema.TABLES "
+                + "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" + tableName + "'";
+        try (java.sql.ResultSet rs = stmt.executeQuery(sql)) {
+            return rs.next() ? rs.getString(1) : null;
+        } catch (SQLException e) {
+            logger.debug("Could not read engine for " + tableName + ": " + e.getMessage());
+            return null;
+        }
+    }
+
+    /** @return true when the named foreign key actually exists — checked, not assumed. */
+    private boolean constraintPresent(Statement stmt, String tableName, String constraintName) {
+        String sql = "SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS "
+                + "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" + tableName + "' "
+                + "AND CONSTRAINT_NAME = '" + constraintName + "' AND CONSTRAINT_TYPE = 'FOREIGN KEY'";
+        try (java.sql.ResultSet rs = stmt.executeQuery(sql)) {
+            return rs.next() && rs.getInt(1) > 0;
+        } catch (SQLException e) {
+            logger.debug("Could not verify constraint " + constraintName + ": " + e.getMessage());
+            return false;
+        }
     }
 
     private void modifyColumnType(Statement stmt, String tableName, String column, String definition) {

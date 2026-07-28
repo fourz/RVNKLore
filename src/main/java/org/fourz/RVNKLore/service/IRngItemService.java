@@ -33,6 +33,31 @@ public interface IRngItemService {
     CompletableFuture<List<Integer>> getPoolItemIds(String poolId, String rarityTier);
 
     /**
+     * List a pool's weighted entries (item id + weight + rarity tier), for consumers that need the
+     * pool's composition — e.g. building a loot table or a weighted find-table. GH#1670.
+     *
+     * @param poolId     The pool identifier
+     * @param rarityTier Rarity tier filter, or null for all active tiers
+     * @return Future containing the weighted entries (empty if pool is empty/unknown)
+     */
+    CompletableFuture<List<PoolItemEntry>> getPoolEntries(String poolId, String rarityTier);
+
+    /**
+     * Render a pool as a vanilla {@code minecraft:chest} loot-table JSON string (for the "bake a pool
+     * into a datapack loot table" lane). Each entry maps a lore item to a weighted loot entry
+     * (material + custom_model_data, best-effort). GH#1670.
+     *
+     * <p><b>Fidelity caveat:</b> a vanilla loot table cannot carry the PDC {@code lore_item_id} tag, so
+     * baked items are visual look-alikes, not registered lore items. For true lore items (identity,
+     * resolve-back, collection/vote hooks) use {@link #roll(String, String)} to fill containers directly.
+     *
+     * @param poolId     The pool identifier
+     * @param rarityTier Rarity tier filter, or null for all active tiers
+     * @return Future containing the loot-table JSON, or empty if the pool has no resolvable items
+     */
+    CompletableFuture<Optional<String>> poolToLootTableJson(String poolId, String rarityTier);
+
+    /**
      * Check if the service is in fallback mode.
      *
      * @return true if operating in degraded mode

@@ -2,6 +2,7 @@ package org.fourz.RVNKLore.data.repository;
 
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.data.DatabaseConnection;
+import org.fourz.RVNKLore.data.DatabaseHelper;
 import org.fourz.rvnkcore.util.log.LogManager;
 
 import java.sql.*;
@@ -17,10 +18,12 @@ public class DiscoveryRepository implements IDiscoveryRepository {
     private final RVNKLore plugin;
     private final LogManager logger;
     private final DatabaseConnection dbConnection;
+    private final DatabaseHelper dbHelper;
 
     public DiscoveryRepository(RVNKLore plugin, DatabaseConnection dbConnection) {
         this.plugin = plugin;
         this.dbConnection = dbConnection;
+        this.dbHelper = new DatabaseHelper(plugin);
         this.logger = LogManager.getInstance(plugin, "DiscoveryRepository");
     }
 
@@ -53,7 +56,10 @@ public class DiscoveryRepository implements IDiscoveryRepository {
                         " (player_uuid, entry_id, trigger_type, world, x, y, z, is_first_discovery)" +
                         " VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
 
-                try (PreparedStatement stmt = conn.prepareStatement(insertSql)) {
+                // executeUpdateOn, not executeUpdate: the duplicate check above ran on `conn`, and
+                // the insert must stay on that same connection rather than take a fresh one from
+                // the pool (#1838).
+                return dbHelper.executeUpdateOn(conn, insertSql, stmt -> {
                     stmt.setString(1, playerUuid.toString());
                     stmt.setString(2, entryId);
                     stmt.setString(3, triggerType);
@@ -68,9 +74,7 @@ public class DiscoveryRepository implements IDiscoveryRepository {
                         stmt.setNull(7, Types.DOUBLE);
                     }
                     stmt.setBoolean(8, isFirstDiscovery);
-
-                    return stmt.executeUpdate() > 0;
-                }
+                }) > 0;
             } catch (SQLException e) {
                 logger.error("Failed to record discovery: player=" + playerUuid + ", entry=" + entryId, e);
                 return false;

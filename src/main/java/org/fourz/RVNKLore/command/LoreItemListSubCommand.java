@@ -35,7 +35,7 @@ public class LoreItemListSubCommand implements SubCommand {
     @Override
     public boolean execute(CommandSender sender, String[] args) {
         if (itemManager == null) {
-            sender.sendMessage(org.bukkit.ChatColor.RED + "âœ– Item system is not available. Please try again later.");
+            sender.sendMessage(org.bukkit.ChatColor.RED + "✖ Item system is not available. Please try again later.");
             logger.error("ItemManager is null when listing items", null);
             return true;
         }
@@ -64,9 +64,15 @@ public class LoreItemListSubCommand implements SubCommand {
                 String dateStr = (item.getCreatedAt() != null)
                     ? new java.text.SimpleDateFormat("yyyy-MM-dd").format(new java.util.Date(item.getCreatedAt()))
                     : "Unknown";
-                return org.bukkit.ChatColor.WHITE + item.getDisplayName() +
+                // Soft-deleted items (is_obtainable=false) remain in the admin list but are
+                // marked so they're distinguishable from live items (#1645).
+                String archived = item.isObtainable() ? "" : org.bukkit.ChatColor.RED + " [archived]";
+                // Numeric id (G5, #1681) — the lore_item_id the pool/PDC/loot system uses, so the
+                // list is a usable index for `pool add`/`item info <id>` rather than name guesswork.
+                return org.bukkit.ChatColor.DARK_GRAY + "#" + item.getDatabaseId() + " " +
+                       org.bukkit.ChatColor.WHITE + item.getDisplayName() +
                        org.bukkit.ChatColor.GRAY + " (" + item.getItemType() + ") - " +
-                       org.bukkit.ChatColor.YELLOW + dateStr;
+                       org.bukkit.ChatColor.YELLOW + dateStr + archived;
             }
         );
     }

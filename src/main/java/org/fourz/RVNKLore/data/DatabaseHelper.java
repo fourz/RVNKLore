@@ -23,7 +23,6 @@ import java.sql.Statement;
 public class DatabaseHelper {
     private final RVNKLore plugin;
     private final LogManager logger;
-    private final DatabaseManager databaseManager;
 
     // Retry configuration
     private static final int maxRetries = 3;
@@ -31,8 +30,23 @@ public class DatabaseHelper {
 
     public DatabaseHelper(RVNKLore plugin) {
         this.plugin = plugin;
-        this.databaseManager = plugin.getDatabaseManager();
         this.logger = LogManager.getInstance(plugin, "DatabaseHelper");
+    }
+
+    /**
+     * Resolve the DatabaseManager at use time.
+     *
+     * <p>This must not be captured in the constructor. Repositories wired by
+     * {@code DatabaseManager.wireRepositories()} are built while the DatabaseManager constructor is
+     * still running, so {@code plugin.getDatabaseManager()} is still null at that moment and the
+     * captured reference would stay null for the object's life — every pooled write from those
+     * repositories then NPEs (#1838). Resolving here also means a fallback or recovery swap is
+     * picked up rather than frozen, the same reason ItemManager was changed in #1835.</p>
+     *
+     * @return the current DatabaseManager, or null before the plugin has built one
+     */
+    private DatabaseManager db() {
+        return plugin.getDatabaseManager();
     }
 
     /**
@@ -49,9 +63,9 @@ public class DatabaseHelper {
         while (retryCount < maxRetries) {
             try {
                 // Check if connection pool is valid
-                if (!databaseManager.isConnected()) {
+                if (!db().isConnected()) {
                     logger.warning("Database connection pool unavailable, attempting to reconnect...");
-                    boolean reconnected = databaseManager.reconnect();
+                    boolean reconnected = db().reconnect();
                     if (!reconnected) {
                         throw new SQLException("Failed to reconnect to database");
                     }
@@ -94,12 +108,12 @@ public class DatabaseHelper {
      * @return true if connection is valid, false otherwise
      */
     private boolean validateConnection() {
-        if (databaseManager.isConnected()) {
+        if (db().isConnected()) {
             return true;
         }
         
         logger.warning("Database connection lost, attempting to reconnect...");
-        boolean reconnected = databaseManager.reconnect();
+        boolean reconnected = db().reconnect();
         
         if (reconnected) {
             logger.info("Successfully reconnected to database");
@@ -131,7 +145,7 @@ public class DatabaseHelper {
     public <T> T executeQuery(String sql, PreparedStatementSetter paramSetter, ResultSetHandler<T> resultHandler) throws LoreException {
         return executeWithRetry(() -> {
             // Get fresh connection from pool - MUST use try-with-resources
-            try (Connection conn = databaseManager.getConnection();
+            try (Connection conn = db().getConnection();
                  PreparedStatement stmt = conn.prepareStatement(sql)) {
                 // Set parameters if provided
                 if (paramSetter != null) {
@@ -156,17 +170,26 @@ public class DatabaseHelper {
      * @throws LoreException If the update fails
      */
     public int executeUpdate(String sql, PreparedStatementSetter paramSetter) throws LoreException {
+        guardFallbackWrite(sql);
         return executeWithRetry(() -> {
             // Get fresh connection from pool - MUST use try-with-resources
-            try (Connection conn = databaseManager.getConnection();
+            // #1834: route to the pool owning this statement's table. Falls through to the
+            // primary whenever clustering is off or this tier is authoritative.
+            DatabaseConnection pool = db().connectionForStatement(sql);
+            try (Connection conn = pool.getConnection();
                  PreparedStatement stmt = conn.prepareStatement(sql)) {
+                java.util.List<FallbackWriteLog.Bind> binds = new java.util.ArrayList<>();
+                PreparedStatement target = journalling() ? FallbackWriteLog.recordingProxy(stmt, binds) : stmt;
+
                 // Set parameters if provided
                 if (paramSetter != null) {
-                    paramSetter.setParameters(stmt);
+                    paramSetter.setParameters(target);
                 }
 
                 // Execute update
-                return stmt.executeUpdate();
+                int affected = stmt.executeUpdate();
+                journal(sql, binds);
+                return affected;
             }
         });
     }
@@ -187,11 +210,11 @@ public class DatabaseHelper {
      */
     public int executeInsertWithGeneratedKey(String baseInsertSql, String idColumn,
             PreparedStatementSetter paramSetter) throws LoreException {
-        SQLDialect dialect = databaseManager.getDatabaseConnection().getDialect();
+        SQLDialect dialect = db().getDatabaseConnection().getDialect();
 
         return executeWithRetry(() -> {
             // Get fresh connection from pool - MUST use try-with-resources
-            try (Connection conn = databaseManager.getConnection()) {
+            try (Connection conn = db().getConnection()) {
 
                 if (dialect.requiresGeneratedKeysFlag()) {
                     // MySQL approach: use getGeneratedKeys()
@@ -229,7 +252,7 @@ public class DatabaseHelper {
      */
     public int executeInsertAndGetKey(String sql, PreparedStatementSetter paramSetter) throws LoreException {
         return executeWithRetry(() -> {
-            try (Connection conn = databaseManager.getConnection()) {
+            try (Connection conn = db().getConnection()) {
                 // For SQLite with RETURNING clause
                 if (sql.toUpperCase().contains("RETURNING")) {
                     try (PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -265,13 +288,119 @@ public class DatabaseHelper {
     }
     
     /**
+     * Execute an update on a caller-supplied connection.
+     *
+     * <p>Companion to {@link #executeUpdate(String, PreparedStatementSetter)} for writes that must
+     * stay on a specific connection — chiefly the multi-write transactions in
+     * {@code LoreEntryRepository} and {@code SubmissionManager}. Routing those through the pooled
+     * variant would scatter one transaction's writes across different connections and silently lose
+     * atomicity, so they use this instead (#1838).</p>
+     *
+     * <p>Deliberately <b>not</b> wrapped in {@link #executeWithRetry}: retrying a single statement
+     * inside a transaction that has already failed is incorrect — the transaction is poisoned and
+     * the caller owns the rollback. The connection is likewise not closed here; the caller opened it
+     * and owns its lifecycle.</p>
+     *
+     * <p>Funnelling every write through {@code DatabaseHelper} is what gives #1833 a single place to
+     * record outage-era writes for reconcile-on-recovery.</p>
+     *
+     * @param conn The caller-managed connection to execute on (not closed by this method)
+     * @param sql The SQL update statement
+     * @param paramSetter Sets parameters on the prepared statement; may be null
+     * @return The number of rows affected
+     * @throws SQLException If the update fails — propagated so the caller can roll back
+     */
+    public int executeUpdateOn(Connection conn, String sql, PreparedStatementSetter paramSetter)
+            throws SQLException {
+        guardFallbackWriteUnchecked(sql);
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            java.util.List<FallbackWriteLog.Bind> binds = new java.util.ArrayList<>();
+            PreparedStatement target = journalling() ? FallbackWriteLog.recordingProxy(stmt, binds) : stmt;
+            if (paramSetter != null) {
+                paramSetter.setParameters(target);
+            }
+            int affected = stmt.executeUpdate();
+            journal(sql, binds);
+            return affected;
+        }
+    }
+
+    // ==================== Fallback gate + journal (#1833) ====================
+
+    /** @return true when writes are landing on the SQLite fallback and must be journalled. */
+    private boolean journalling() {
+        DatabaseManager manager = db();
+        return manager != null && manager.isInFallbackMode() && manager.getFallbackWriteLog() != null;
+    }
+
+    /**
+     * Record a fallback-era write so it can be replayed to the primary on recovery (#1833).
+     * Silent no-op when running normally.
+     */
+    private void journal(String sql, java.util.List<FallbackWriteLog.Bind> binds) {
+        if (!journalling()) {
+            return;
+        }
+        db().getFallbackWriteLog().record(sql, binds);
+    }
+
+    /**
+     * Refuse writes to cluster-shared tables while running on the fallback store.
+     *
+     * <p>An outage here is a <em>connectivity</em> outage — the authoritative tier keeps writing the
+     * shared content tables throughout — so a local write would diverge from the canon with no safe
+     * merge back. Per-server tables are unaffected and stay fully writable, which is what keeps
+     * discoveries and locations working during an outage. See {@link LoreTableScope}.</p>
+     *
+     * <p>Until #1834 declares tables shared this is effectively inert on a non-clustered server,
+     * because nothing is cluster-shared yet.</p>
+     */
+    private void guardFallbackWrite(String sql) throws LoreException {
+        String refusal = fallbackRefusal(sql);
+        if (refusal != null) {
+            throw new LoreException(refusal, LoreException.LoreExceptionType.DATABASE_ERROR);
+        }
+    }
+
+    /** Same gate for the transactional path, which propagates SQLException rather than LoreException. */
+    private void guardFallbackWriteUnchecked(String sql) throws SQLException {
+        String refusal = fallbackRefusal(sql);
+        if (refusal != null) {
+            throw new SQLException(refusal);
+        }
+    }
+
+    private String fallbackRefusal(String sql) {
+        DatabaseManager manager = db();
+        if (manager == null || !manager.isInFallbackMode()) {
+            return null;
+        }
+        // On a standalone server nothing is actually shared — no other tier writes these rows — so
+        // refusing would cost availability and buy nothing. The gate arms only once #1834 turns
+        // clustering on, which keeps this change behaviour-neutral on Dev/Event/prod today.
+        if (!manager.isClusterEnabled()) {
+            return null;
+        }
+        String table = FallbackWriteLog.extractTable(sql);
+        if (table == null || !LoreTableScope.isShared(table)) {
+            return null;
+        }
+        String message = "Refusing to write shared lore table '" + table
+                + "' while the database is in fallback mode — the authoritative tier owns this data and"
+                + " a local write could not be merged back (#1833). Per-server lore still works;"
+                + " retry once the primary database recovers.";
+        logger.warning(message);
+        return message;
+    }
+
+    /**
      * Begin a transaction
-     * 
+     *
      * @return the Connection with autoCommit disabled
      * @throws SQLException if a database access error occurs
      */
     public Connection beginTransaction() throws SQLException {
-        Connection conn = databaseManager.getConnection();
+        Connection conn = db().getConnection();
         conn.setAutoCommit(false);
         return conn;
     }

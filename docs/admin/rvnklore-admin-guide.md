@@ -150,15 +150,35 @@ Give any lore item to a player. The item must exist in the lore database.
 
 **View item information:**
 ```
-/lore item info <uuid>
+/lore item info <id | name | uuid>
 ```
-View detailed information about a lore item by its UUID (full or 8-character short ID).
+View detailed information about a lore item. Accepts the numeric `lore_item_id` (the id used by RNG
+pools, the loot PDC, and `item list`), a display name, or a UUID (full or 8-character short ID). For a
+numeric id the output includes content diagnostics — Material, CustomModelData, Rarity, Lore lines,
+and for WRITTEN_BOOK the page count (or a red `0 - book has NO page content`). (#1680)
 
 **List all items:**
 ```
 /lore item list [page]
 ```
-List all lore items in the database with pagination.
+List all lore items with pagination. Each row is prefixed with its numeric `#<id>` so the list doubles
+as an index for `item info <id>` and `pool add`. (#1681)
+
+### RNG Item Pools (`/lore item pool`)
+
+```
+/lore item pool add <pool> <id|name> [tier] [weight]   # add an item to a weighted RNG pool
+/lore item pool remove <pool> <id|name>                # remove an item
+/lore item pool list <pool>                            # list entries — "item <id> <Name> [TIER] w<weight>"
+/lore item pool preview <pool> [tier]                  # dry-run: dump the loot-table JSON `bake` would emit
+```
+
+`pool preview` renders exactly what `/world structure loot bake <pool>` (RVNKWorlds) will register as a
+static loot table — a console dry-run that needs no datapack and no in-game chest. Use it to confirm a
+baked table carries each item's identity: a `minecraft:set_custom_data` with
+`PublicBukkitValues."rvnklore:lore_item_id"` as an SNBT **int** (not `<n>b` byte, which
+`PersistentDataType.INTEGER` cannot read). Baked poolbake chests roll fully identified lore items
+(name, rarity lore, PDC id, book pages) as of RVNKLore 1.0.67 / #1677.
 
 ### Book Management
 
@@ -409,9 +429,10 @@ See [README.md](../../README.md) for complete API examples.
 | `/lore collection add <id> <name> <desc>` | `rvnklore.admin.collection.add` | Create collection |
 | `/lore item give <player> <item>` | `rvnklore.admin.item.give` | Give item to player |
 | `/lore item spawn <item>` | `rvnklore.admin.item.give` | Spawn item at your location |
-| `/lore item info <uuid>` | `rvnklore.admin` | View item details |
-| `/lore item list [page]` | `rvnklore.admin` | List all items |
+| `/lore item info <id\|name\|uuid>` | `rvnklore.admin` | View item details + content diagnostics |
+| `/lore item list [page]` | `rvnklore.admin` | List all items (rows prefixed `#<id>`) |
 | `/lore item tag <uuid> <tag>` | `rvnklore.item.tag` | Tag a lore item |
+| `/lore item pool add\|remove\|list\|preview` | `rvnklore.admin.item.pool` | Author + preview RNG item pools |
 | `/lore book give <player> <entry_id> [rarity]` | `rvnklore.book.give` | Give lore book |
 | `/lore book list [page] [type]` | `rvnklore.book.list` | List available books |
 | `/lore achievement list [page]` | `rvnklore.achievement` | List achievements |

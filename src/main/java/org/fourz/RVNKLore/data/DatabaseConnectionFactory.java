@@ -2,6 +2,7 @@ package org.fourz.RVNKLore.data;
 
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.rvnkcore.config.dto.DatabaseSettingsDTO;
+import org.fourz.rvnkcore.config.dto.MySQLSettingsDTO;
 import org.fourz.rvnkcore.config.dto.SQLiteSettingsDTO;
 import org.fourz.RVNKLore.data.dialect.MySQLDialect;
 import org.fourz.RVNKLore.data.dialect.SQLDialect;
@@ -52,6 +53,40 @@ public class DatabaseConnectionFactory {
             this.usingFallback = false;
             return new SQLiteConnection(plugin, dialect, settings.getSqliteSettings());
         }
+    }
+
+    /**
+     * Create the cluster connection for shared lore content (#1834).
+     *
+     * <p>Reads {@code cluster.mysql.*}. Only a <b>member</b> tier needs this: on the authoritative
+     * tier the cluster database is its own database, so {@link DatabaseManager} reuses the primary
+     * connection instead of opening a second pool — the same idiom RVNKCore uses.</p>
+     *
+     * @return a cluster DatabaseConnection, or null when {@code cluster.mysql} is not configured
+     */
+    public DatabaseConnection createClusterConnection() {
+        String host = plugin.getConfig().getString("cluster.mysql.host", null);
+        String database = plugin.getConfig().getString("cluster.mysql.database", null);
+        if (host == null || host.isBlank() || database == null || database.isBlank()) {
+            logger.error("cluster.role is 'member' but cluster.mysql.host/database are not set — "
+                    + "shared lore content cannot be reached", null);
+            return null;
+        }
+
+        MySQLSettingsDTO clusterSettings = new MySQLSettingsDTO(
+            host,
+            plugin.getConfig().getInt("cluster.mysql.port", 3306),
+            database,
+            plugin.getConfig().getString("cluster.mysql.username", ""),
+            plugin.getConfig().getString("cluster.mysql.password", ""),
+            plugin.getConfig().getBoolean("cluster.mysql.useSSL", false),
+            plugin.getConfig().getString("cluster.mysql.tablePrefix", "")
+        );
+
+        // The cluster is MySQL by definition — a shared pool cannot be a local SQLite file.
+        SQLDialect clusterDialect = new MySQLDialect();
+        logger.info("Cluster: shared lore content will be served from " + host + "/" + database);
+        return new MySQLConnection(plugin, clusterDialect, clusterSettings, "cluster.mysql");
     }
 
     /**

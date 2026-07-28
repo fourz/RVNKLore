@@ -11,7 +11,6 @@ import org.fourz.RVNKLore.data.repository.LocationRepository;
 import org.fourz.RVNKLore.data.repository.MapRepository;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
-import org.fourz.RVNKLore.lore.player.PlayerRepository;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -42,10 +41,14 @@ public class DatabaseManager {
     private final DatabaseConnectionFactory connectionFactory;
     private final FallbackTracker fallbackTracker;
     private DatabaseConnection connection;
+    /**
+     * Pool serving cluster-shared lore content (#1834). Null when clustering is off or this server is
+     * the authoritative tier — in both cases the shared content is the local database and a second
+     * pool would be waste.
+     */
+    private DatabaseConnection clusterConnection;
     private DatabaseHelper databaseHelper;
     private LoreEntryRepository loreRepository;
-    private PlayerRepository playerRepository;
-    private ItemRepository itemRepository;
     private LocationRepository locationRepository;
     private DiscoveryRepository discoveryRepository;
     private AchievementRepository achievementRepository;
@@ -56,6 +59,124 @@ public class DatabaseManager {
     private volatile boolean inFallbackMode = false;
     private int reconnectAttempts = 0;
     private static final int MAX_RECONNECT_ATTEMPTS = 5;
+    private final int maxFailuresBeforeFallback;
+    private final int recoveryTimeMinutes;
+    private final FallbackWriteLog fallbackWriteLog;
+
+    /**
+     * Journal of writes made while on the SQLite fallback, replayed to the primary on recovery.
+     *
+     * @return the write log, never null
+     */
+    public FallbackWriteLog getFallbackWriteLog() {
+        return fallbackWriteLog;
+    }
+
+    /**
+     * Whether this server participates in the lore cluster.
+     *
+     * <p>Gates the #1833 fail-closed rule: refusing writes to shared tables only makes sense once
+     * another tier is actually writing them. On a standalone server every table is effectively
+     * per-server, so refusing anything would cost availability during an outage and buy no safety.
+     * Defaults to false, which keeps behaviour identical to before #1833 until #1834 turns it on.</p>
+     *
+     * @return true when {@code cluster.enabled} is set in config.yml
+     */
+    public boolean isClusterEnabled() {
+        return plugin.getConfig().getBoolean("cluster.enabled", false);
+    }
+
+    /**
+     * @return {@code authoritative} when this server owns the shared lore content, else {@code member}
+     */
+    public String getClusterRole() {
+        return plugin.getConfig().getString("cluster.role", "member");
+    }
+
+    /** @return true when this server owns the cluster database rather than reading someone else's. */
+    public boolean isClusterAuthoritative() {
+        return "authoritative".equalsIgnoreCase(getClusterRole());
+    }
+
+    /**
+     * The connection serving cluster-shared lore content (#1834).
+     *
+     * <p>Falls back to the local connection whenever clustering is off or this server is the
+     * authoritative tier — in both cases the shared content <em>is</em> the local database, so there
+     * is no second pool. Callers can therefore use this unconditionally without branching.</p>
+     *
+     * @return the connection shared lore content should be read from and written to
+     */
+    public DatabaseConnection getClusterConnection() {
+        return clusterConnection != null ? clusterConnection : connection;
+    }
+
+    /**
+     * Route a statement to the pool that owns its table (#1834).
+     *
+     * <p>Per-statement rather than per-repository, because two repositories legitimately touch both
+     * groups: {@code PlayerRepository} reads cluster lore while writing per-server discoveries, and
+     * {@code LoreEntryRepository} deletes per-server satellite rows when removing a cluster entry
+     * (#1839). No single statement spans both, which is what makes this safe.</p>
+     *
+     * @param sql the statement about to run
+     * @return the connection that owns the statement's table
+     */
+    public DatabaseConnection connectionForStatement(String sql) {
+        if (clusterConnection == null) {
+            return connection;
+        }
+        String table = FallbackWriteLog.extractTable(sql);
+        return (table != null && LoreTableScope.isShared(table)) ? clusterConnection : connection;
+    }
+
+    /**
+     * Reload lore into memory after a reconcile pass so replayed rows are actually visible.
+     *
+     * <p>Without this the replay lands in the database but the in-memory cache still holds the
+     * pre-outage view, so {@code /lore get} reports the entry as missing — indistinguishable from the
+     * reconcile having failed. Caught on Dev while verifying #1833: the row was in MySQL and only a
+     * manual {@code /lore reload} revealed it.</p>
+     *
+     * <p>Best-effort and never allowed to fail the recovery: the data is already durable at this
+     * point, and a stale cache is recoverable with a reload.</p>
+     */
+    private void refreshLoreCacheAfterReconcile() {
+        try {
+            if (plugin.getLoreManager() != null) {
+                plugin.getLoreManager().reloadLore();
+                logger.info("Lore cache refreshed after reconcile — replayed entries are now visible");
+            }
+        } catch (Exception e) {
+            logger.warning("Reconcile succeeded but the lore cache could not be refreshed; run "
+                    + "/lore reload to see replayed entries: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Resolve a fallback tuning value from config.
+     *
+     * <p>The shipped config.yml defines these under {@code storage.fallback.*}, which is the
+     * documented path and wins. {@code database.fallback.*} is accepted as a legacy alias so an
+     * operator who previously set it does not silently lose their override. Prior to #1835 only
+     * the legacy path was read, so the documented keys had no effect at all.</p>
+     *
+     * @param key      the leaf key name under the fallback block
+     * @param defaultValue value to use when neither path is present
+     * @return the effective value
+     */
+    private int resolveFallbackInt(String key, int defaultValue) {
+        if (plugin.getConfig().isSet("storage.fallback." + key)) {
+            return plugin.getConfig().getInt("storage.fallback." + key, defaultValue);
+        }
+        if (plugin.getConfig().isSet("database.fallback." + key)) {
+            int legacy = plugin.getConfig().getInt("database.fallback." + key, defaultValue);
+            logger.warning("Using legacy config path database.fallback." + key
+                    + " — move this to storage.fallback." + key);
+            return legacy;
+        }
+        return defaultValue;
+    }
 
     /**
      * Create a new DatabaseManager instance
@@ -68,10 +189,17 @@ public class DatabaseManager {
 
         // Initialize components
         this.connectionFactory = new DatabaseConnectionFactory(plugin);
+        this.maxFailuresBeforeFallback = resolveFallbackInt("maxFailuresBeforeFallback", 3);
+        this.recoveryTimeMinutes = resolveFallbackInt("recoveryTimeMinutes", 5);
         this.fallbackTracker = new FallbackTracker(
-                plugin.getConfig().getInt("database.fallback.maxFailuresBeforeFallback", 3),
-                plugin.getConfig().getInt("database.fallback.recoveryTimeMinutes", 5) * 60 * 1000L,
+                maxFailuresBeforeFallback,
+                recoveryTimeMinutes * 60 * 1000L,
                 LogManager.getInstance(plugin, "FallbackTracker"));
+        logger.info("Fallback tuning: maxFailuresBeforeFallback=" + maxFailuresBeforeFallback
+                + ", recoveryTimeMinutes=" + recoveryTimeMinutes);
+        // Built before initializeDatabase() so a journal left by a previous outage is loaded and
+        // ready to replay the moment the primary comes back (#1833).
+        this.fallbackWriteLog = new FallbackWriteLog(plugin);
         initializeDatabase();
     }
 
@@ -97,6 +225,7 @@ public class DatabaseManager {
                 connection.purgeAllData();
             }
 
+            initializeClusterConnection();
             wireRepositories(connection);
 
             connectionValid = true;
@@ -104,6 +233,25 @@ public class DatabaseManager {
             reconnectAttempts = 0;
             fallbackTracker.recordSuccess();
             logger.info("Database initialized successfully");
+
+            // An outage that spanned a restart leaves a durable journal but produces no recovery
+            // transition — the server simply boots onto a healthy primary. Without this the pending
+            // writes would sit on disk forever, which is the failure the journal exists to prevent
+            // (#1833). Off the main thread: this is blocking DB I/O during enable.
+            if (fallbackWriteLog != null && !fallbackWriteLog.isEmpty()) {
+                final int carried = fallbackWriteLog.pendingCount();
+                logger.warning("Found " + carried + " un-reconciled write(s) from a previous outage —"
+                        + " replaying to the primary database now");
+                plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+                    try (Connection primaryHandle = connection.getConnection()) {
+                        fallbackWriteLog.replayTo(primaryHandle);
+                        refreshLoreCacheAfterReconcile();
+                    } catch (Exception e) {
+                        logger.error("Startup reconcile failed; the journal is retained and will be "
+                                + "retried on the next recovery", e);
+                    }
+                });
+            }
         } catch (Exception e) {
             connectionValid = false;
             fallbackTracker.recordFailure();
@@ -113,6 +261,53 @@ public class DatabaseManager {
             if (connectionFactory.isFallbackEnabled()) {
                 attemptFallbackConnection();
             }
+        }
+    }
+
+    /**
+     * Open the cluster pool for shared lore content, if this server is a member (#1834).
+     *
+     * <p>No-op in three cases, each for a different reason:</p>
+     * <ul>
+     *   <li>clustering off — nothing is shared, everything is local</li>
+     *   <li>authoritative — the cluster database <em>is</em> this database, so a second pool to the
+     *       same schema would double the connections for no benefit</li>
+     *   <li>fallback mode — the primary is already unreachable; the cluster almost certainly is too,
+     *       and #1833 refuses shared writes while in fallback anyway</li>
+     * </ul>
+     *
+     * <p>A member that cannot reach the cluster does <b>not</b> silently fall back to serving shared
+     * content from its local tables. That would present a stale private copy of the canon as if it
+     * were the real thing — the divergence this whole split exists to prevent. It fails loudly and
+     * leaves shared lore unavailable instead.</p>
+     */
+    private void initializeClusterConnection() {
+        clusterConnection = null;
+        if (!isClusterEnabled()) {
+            return;
+        }
+        if (isClusterAuthoritative()) {
+            logger.info("Cluster: role=authoritative — shared lore content is served from this "
+                    + "server's own database; no second pool opened");
+            return;
+        }
+
+        try {
+            DatabaseConnection cluster = connectionFactory.createClusterConnection();
+            if (cluster == null) {
+                logger.error("Cluster: role=member but no usable cluster.mysql configuration — shared "
+                        + "lore content is UNAVAILABLE. Refusing to serve it from local tables, which "
+                        + "would present a stale copy of the canon as authoritative.", null);
+                return;
+            }
+            cluster.initialize();
+            cluster.createTables();
+            clusterConnection = cluster;
+            logger.info("Cluster: role=member — shared lore content served from the cluster pool");
+        } catch (Exception e) {
+            logger.error("Cluster: failed to reach the cluster database — shared lore content is "
+                    + "UNAVAILABLE. Per-server lore (discoveries, locations, maps) is unaffected.", e);
+            clusterConnection = null;
         }
     }
 
@@ -143,8 +338,7 @@ public class DatabaseManager {
             logger.warning("=== RUNNING IN FALLBACK MODE ===");
             logger.warning("SQLite fallback connection established successfully");
             logger.warning("Data will be stored locally until MySQL connection is restored");
-            logger.warning("Recovery will be attempted in " +
-                plugin.getConfig().getInt("storage.fallback.recoveryTimeMinutes", 5) + " minutes");
+            logger.warning("Recovery will be attempted in " + recoveryTimeMinutes + " minutes");
         } catch (Exception fallbackError) {
             connectionValid = false;
             inFallbackMode = false;
@@ -438,6 +632,21 @@ public class DatabaseManager {
             primaryConnection.initialize();
             primaryConnection.createTables();
 
+            // Replay outage-era writes BEFORE the fallback handle is closed (#1833). The primary is
+            // live and validated at this point, and the fallback connection is still open, so a
+            // failure here leaves both the journal and the fallback store intact for the next
+            // attempt rather than stranding the data.
+            if (fallbackWriteLog != null && !fallbackWriteLog.isEmpty()) {
+                try (java.sql.Connection primaryHandle = primaryConnection.getConnection()) {
+                    fallbackWriteLog.replayTo(primaryHandle);
+                    refreshLoreCacheAfterReconcile();
+                } catch (Exception replayError) {
+                    // Recovery still proceeds — the journal is durable and retries on the next pass.
+                    logger.error("Reconcile pass failed; outage-era writes remain journalled and will "
+                            + "be retried", replayError);
+                }
+            }
+
             // If successful, switch from fallback to primary
             if (connection != null) {
                 try {
@@ -471,12 +680,26 @@ public class DatabaseManager {
      * @param conn The active DatabaseConnection to bind repositories to
      */
     private void wireRepositories(DatabaseConnection conn) {
-        loreRepository = new LoreEntryRepository(plugin, conn);
+        // #1834: repositories are bound by the pool their READS use. Writes route per statement in
+        // DatabaseHelper, because two repositories legitimately touch both groups — but no single
+        // statement does, and every repository's reads are single-pool (verified against the JOIN
+        // graph: nothing joins cluster content to per-server world-bearing tables).
+        //
+        // getClusterConnection() returns the local connection whenever clustering is off or this
+        // tier is authoritative, so this is identical to the old wiring in those cases.
+        DatabaseConnection cluster = getClusterConnection();
+
+        // Cluster-shared content
+        loreRepository = new LoreEntryRepository(plugin, cluster);
+        achievementRepository = new AchievementRepository(plugin, cluster);
+        collectionRewardRepository = new CollectionRewardRepository(plugin, cluster);
+
+        // Per-server, world-bearing — these carry a world name and must never be shared
         locationRepository = new LocationRepository(plugin, conn);
         discoveryRepository = new DiscoveryRepository(plugin, conn);
-        achievementRepository = new AchievementRepository(plugin, conn);
-        collectionRewardRepository = new CollectionRewardRepository(plugin, conn);
         mapRepository = new MapRepository(plugin, conn);
+
+        // Backups run against the local database; the authoritative tier owns backing up the canon.
         backupService = new DatabaseBackupService(plugin, conn);
     }
 
@@ -560,6 +783,13 @@ public class DatabaseManager {
     public void close() {
         if (connection != null) {
             connection.close();
+        }
+        // #1834: the cluster pool is a separate HikariCP pool on a member tier and would otherwise
+        // leak its connections across a reload. Null on an authoritative tier or with clustering off,
+        // where it is the same object as `connection` and must not be closed twice.
+        if (clusterConnection != null) {
+            clusterConnection.close();
+            clusterConnection = null;
         }
     }
 

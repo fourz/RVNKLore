@@ -6,6 +6,7 @@ import org.bukkit.Location;
 import org.bukkit.World;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.lore.LoreEntry;
+import org.fourz.RVNKLore.lore.LoreMetadataKeys;
 import org.fourz.RVNKLore.lore.LoreType;
 import org.fourz.rvnkcore.util.log.LogManager;
 import org.yaml.snakeyaml.Yaml;
@@ -327,7 +328,17 @@ public class LoreImporter {
             if (json.has("metadata") && json.get("metadata").isJsonObject()) {
                 JsonObject metadataJson = json.getAsJsonObject("metadata");
                 for (Map.Entry<String, JsonElement> metaEntry : metadataJson.entrySet()) {
-                    entry.addMetadata(metaEntry.getKey(), metaEntry.getValue().getAsString());
+                    String key = metaEntry.getKey();
+                    String value = metaEntry.getValue().getAsString();
+                    String metaError = LoreMetadataKeys.validate(key, value);
+                    if (metaError != null) {
+                        warnings.add(metaError + " - skipped");
+                        continue;
+                    }
+                    if (!LoreMetadataKeys.isKnown(key)) {
+                        logger.debug("Import metadata: non-canonical key '" + key + "' accepted");
+                    }
+                    entry.addMetadata(key, value);
                 }
             }
 
@@ -401,7 +412,17 @@ public class LoreImporter {
             if (map.containsKey("metadata") && map.get("metadata") instanceof Map) {
                 Map<String, String> metadata = (Map<String, String>) map.get("metadata");
                 for (Map.Entry<String, String> metaEntry : metadata.entrySet()) {
-                    entry.addMetadata(metaEntry.getKey(), metaEntry.getValue());
+                    String key = metaEntry.getKey();
+                    String value = metaEntry.getValue();
+                    String metaError = LoreMetadataKeys.validate(key, value);
+                    if (metaError != null) {
+                        warnings.add(metaError + " - skipped");
+                        continue;
+                    }
+                    if (!LoreMetadataKeys.isKnown(key)) {
+                        logger.debug("Import metadata: non-canonical key '" + key + "' accepted");
+                    }
+                    entry.addMetadata(key, value);
                 }
             }
 

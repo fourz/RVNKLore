@@ -124,9 +124,9 @@ public class HandlerEventLogger implements Listener {
      * Send event statistics to a player
      */
     public void sendStatisticsToPlayer(Player player) {
-        player.sendMessage("Â§6Â§lHandler Event Statistics:");
+        player.sendMessage("§6§lHandler Event Statistics:");
         eventCounts.forEach((eventClass, count) -> 
-            player.sendMessage("Â§e  " + eventClass.getSimpleName() + "Â§7: " + count + " events")
+            player.sendMessage("§e  " + eventClass.getSimpleName() + "§7: " + count + " events")
         );
     }
 }

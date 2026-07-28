@@ -2,6 +2,8 @@ package org.fourz.RVNKLore.data.repository;
 
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.data.DatabaseConnection;
+import org.fourz.RVNKLore.data.DatabaseHelper;
+import org.fourz.RVNKLore.exception.LoreException;
 import org.fourz.RVNKLore.lore.map.LoreMap;
 import org.fourz.RVNKLore.lore.map.MapSubtype;
 import org.fourz.rvnkcore.util.log.LogManager;
@@ -20,9 +22,11 @@ import java.util.concurrent.CompletableFuture;
 public class MapRepository implements IMapRepository {
     private final LogManager logger;
     private final DatabaseConnection dbConnection;
+    private final DatabaseHelper dbHelper;
 
     public MapRepository(RVNKLore plugin, DatabaseConnection dbConnection) {
         this.dbConnection = dbConnection;
+        this.dbHelper = new DatabaseHelper(plugin);
         this.logger = LogManager.getInstance(plugin, "MapRepository");
     }
 
@@ -36,30 +40,25 @@ public class MapRepository implements IMapRepository {
             String sql = "INSERT INTO " + t("lore_map") +
                     " (lore_entry_id, map_subtype, center_x, center_z, scale, world_name, dimension, pixel_data, created_by)" +
                     " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
-            try (Connection conn = dbConnection.getConnection();
-                 PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-
-                stmt.setString(1, map.getLoreEntryId());
-                stmt.setString(2, map.getSubtype() != null ? map.getSubtype().name() : MapSubtype.ATLAS.name());
-                stmt.setInt(3, map.getCenterX());
-                stmt.setInt(4, map.getCenterZ());
-                stmt.setInt(5, map.getScale());
-                stmt.setString(6, map.getWorldName());
-                stmt.setString(7, map.getDimension());
-                stmt.setString(8, map.getPixelData());
-                stmt.setString(9, map.getCreatedBy());
-
-                int affected = stmt.executeUpdate();
-                if (affected > 0) {
-                    try (ResultSet keys = stmt.getGeneratedKeys()) {
-                        if (keys.next()) {
-                            map.setId(keys.getInt(1));
-                        }
-                    }
+            try {
+                // id is auto-increment, so a successful insert always yields a key; -1 means no rows.
+                int generatedId = dbHelper.executeInsertAndGetKey(sql, stmt -> {
+                    stmt.setString(1, map.getLoreEntryId());
+                    stmt.setString(2, map.getSubtype() != null ? map.getSubtype().name() : MapSubtype.ATLAS.name());
+                    stmt.setInt(3, map.getCenterX());
+                    stmt.setInt(4, map.getCenterZ());
+                    stmt.setInt(5, map.getScale());
+                    stmt.setString(6, map.getWorldName());
+                    stmt.setString(7, map.getDimension());
+                    stmt.setString(8, map.getPixelData());
+                    stmt.setString(9, map.getCreatedBy());
+                });
+                if (generatedId > 0) {
+                    map.setId(generatedId);
                     map.setCreatedAt(Instant.now());
                     return Optional.of(map);
                 }
-            } catch (SQLException e) {
+            } catch (LoreException e) {
                 logger.error("Failed to save lore map", e);
             }
             return Optional.empty();
@@ -123,12 +122,12 @@ public class MapRepository implements IMapRepository {
     public CompletableFuture<Boolean> updatePixelData(int mapId, String base64PixelData) {
         return CompletableFuture.supplyAsync(() -> {
             String sql = "UPDATE " + t("lore_map") + " SET pixel_data = ? WHERE id = ?";
-            try (Connection conn = dbConnection.getConnection();
-                 PreparedStatement stmt = conn.prepareStatement(sql)) {
-                stmt.setString(1, base64PixelData);
-                stmt.setInt(2, mapId);
-                return stmt.executeUpdate() > 0;
-            } catch (SQLException e) {
+            try {
+                return dbHelper.executeUpdate(sql, stmt -> {
+                    stmt.setString(1, base64PixelData);
+                    stmt.setInt(2, mapId);
+                }) > 0;
+            } catch (LoreException e) {
                 logger.error("Failed to update pixel data for map: " + mapId, e);
                 return false;
             }
@@ -139,11 +138,9 @@ public class MapRepository implements IMapRepository {
     public CompletableFuture<Boolean> deleteById(int mapId) {
         return CompletableFuture.supplyAsync(() -> {
             String sql = "DELETE FROM " + t("lore_map") + " WHERE id = ?";
-            try (Connection conn = dbConnection.getConnection();
-                 PreparedStatement stmt = conn.prepareStatement(sql)) {
-                stmt.setInt(1, mapId);
-                return stmt.executeUpdate() > 0;
-            } catch (SQLException e) {
+            try {
+                return dbHelper.executeUpdate(sql, stmt -> stmt.setInt(1, mapId)) > 0;
+            } catch (LoreException e) {
                 logger.error("Failed to delete lore map: " + mapId, e);
                 return false;
             }
@@ -154,11 +151,9 @@ public class MapRepository implements IMapRepository {
     public CompletableFuture<Boolean> deleteByEntryId(String entryId) {
         return CompletableFuture.supplyAsync(() -> {
             String sql = "DELETE FROM " + t("lore_map") + " WHERE lore_entry_id = ?";
-            try (Connection conn = dbConnection.getConnection();
-                 PreparedStatement stmt = conn.prepareStatement(sql)) {
-                stmt.setString(1, entryId);
-                return stmt.executeUpdate() >= 0;
-            } catch (SQLException e) {
+            try {
+                return dbHelper.executeUpdate(sql, stmt -> stmt.setString(1, entryId)) >= 0;
+            } catch (LoreException e) {
                 logger.error("Failed to delete lore maps for entry: " + entryId, e);
                 return false;
             }

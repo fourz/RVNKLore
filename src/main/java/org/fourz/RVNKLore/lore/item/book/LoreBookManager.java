@@ -14,6 +14,8 @@ import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreManager;
 import org.fourz.RVNKLore.lore.LoreType;
+import org.fourz.RVNKLore.lore.item.ItemManager;
+import org.fourz.RVNKLore.lore.item.ItemProperties;
 import org.fourz.RVNKLore.service.ILoreBookService;
 import org.fourz.rvnkcore.util.log.LogManager;
 
@@ -345,32 +347,32 @@ public class LoreBookManager implements ILoreBookService {
     }
 
     /**
-     * Get all obtainable lore books (entries that are approved).
+     * Get all obtainable lore books, sourced from the WRITTEN_BOOK item catalog (#1646).
      *
-     * @return CompletableFuture with list of available entry IDs and names
+     * <p>Previously this iterated the lore-entry cache ({@code getAllLoreEntriesSync}) and kept any
+     * approved entry — which read from an unreliable cache (under-reporting books) and applied no
+     * material/type filter (listing non-book entries as books). It now queries the {@code lore_item}
+     * catalog for obtainable WRITTEN_BOOK items, so the list is deterministic and actually books.</p>
+     *
+     * @return CompletableFuture with the list of obtainable book items (id = lore_entry_id, or name)
      */
     public CompletableFuture<List<BookListEntry>> getObtainableBooks() {
-        return CompletableFuture.supplyAsync(() -> {
+        ItemManager itemManager = loreManager.getItemManager();
+        if (itemManager == null) {
+            return CompletableFuture.completedFuture(new ArrayList<>());
+        }
+        return itemManager.getObtainableWrittenBooks().thenApply(items -> {
             List<BookListEntry> books = new ArrayList<>();
-            List<LoreEntry> entries = loreManager.getAllLoreEntriesSync();
-
-            for (LoreEntry entry : entries) {
-                if (entry.isApproved()) {
-                    BookRarity rarity = determineRarity(entry);
-                    books.add(new BookListEntry(
-                        entry.getId(),
-                        entry.getName(),
-                        entry.getType(),
-                        rarity
-                    ));
-                }
+            for (ItemProperties item : items) {
+                String id = item.getLoreEntryId() != null ? item.getLoreEntryId() : item.getDisplayName();
+                books.add(new BookListEntry(
+                    id,
+                    item.getDisplayName(),
+                    LoreType.ITEM,
+                    BookRarity.fromString(item.getRarity())
+                ));
             }
-
-            // Sort by type then name
-            books.sort(Comparator
-                .comparing((BookListEntry b) -> b.type().name())
-                .thenComparing(BookListEntry::name));
-
+            books.sort(Comparator.comparing(BookListEntry::name));
             return books;
         });
     }
