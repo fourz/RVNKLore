@@ -202,8 +202,10 @@ public abstract class DatabaseConnection {
                 "z DOUBLE NOT NULL, " +
                 "location_type VARCHAR(30) DEFAULT 'PRIMARY', " +
                 "label VARCHAR(100), " +
-                "created_at " + timestampDefault + ", " +
-                "FOREIGN KEY (entry_id) REFERENCES " + loreEntry + "(id) ON DELETE CASCADE" +
+                "created_at " + timestampDefault +
+                // #1839: no FOREIGN KEY into lore_entry. This table stays per-server for the
+                // #1834 split and a foreign key cannot span databases. Cleanup on entry
+                // delete is done explicitly in LoreEntryRepository.deleteLoreEntry.
             ")";
             stmt.execute(createLoreLocationTable);
             createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "lore_location_entry ON " + loreLocation + "(entry_id)");
@@ -222,8 +224,10 @@ public abstract class DatabaseConnection {
                 "z DOUBLE, " +
                 "is_first_discovery " + boolType + " NOT NULL DEFAULT FALSE, " +
                 "discovered_at " + timestampDefault + ", " +
-                "CONSTRAINT uq_" + tablePrefix + "lore_discovery_player_entry UNIQUE (player_uuid, entry_id), " +
-                "FOREIGN KEY (entry_id) REFERENCES " + loreEntry + "(id) ON DELETE CASCADE" +
+                "CONSTRAINT uq_" + tablePrefix + "lore_discovery_player_entry UNIQUE (player_uuid, entry_id)" +
+                // #1839: no FOREIGN KEY into lore_entry. This table stays per-server for the
+                // #1834 split and a foreign key cannot span databases. Cleanup on entry
+                // delete is done explicitly in LoreEntryRepository.deleteLoreEntry.
             ")";
             stmt.execute(createLoreDiscoveryTable);
             createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "lore_discovery_player ON " + loreDiscovery + "(player_uuid)");
@@ -273,8 +277,10 @@ public abstract class DatabaseConnection {
                 "dimension VARCHAR(64) NOT NULL DEFAULT 'NORMAL', " +
                 "pixel_data MEDIUMTEXT, " +
                 "created_by VARCHAR(64), " +
-                "created_at " + timestampDefault + ", " +
-                "FOREIGN KEY (lore_entry_id) REFERENCES " + loreEntry + "(id) ON DELETE SET NULL" +
+                "created_at " + timestampDefault +
+                // #1839: no FOREIGN KEY into lore_entry. This table stays per-server for the
+                // #1834 split and a foreign key cannot span databases. Cleanup on entry
+                // delete is done explicitly in LoreEntryRepository.deleteLoreEntry.
             ")";
             stmt.execute(createLoreMapTable);
             createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "lore_map_entry ON " + loreMap + "(lore_entry_id)");
@@ -335,8 +341,10 @@ public abstract class DatabaseConnection {
             "dimension VARCHAR(64) NOT NULL DEFAULT 'NORMAL', " +
             "pixel_data MEDIUMTEXT, " +
             "created_by VARCHAR(64), " +
-            "created_at " + timestampDefault + ", " +
-            "FOREIGN KEY (lore_entry_id) REFERENCES " + loreEntry + "(id) ON DELETE SET NULL" +
+            "created_at " + timestampDefault +
+            // #1839: no FOREIGN KEY into lore_entry — lore_map stays per-server for the
+            // #1834 split and a foreign key cannot span databases. This is the second
+            // lore_map DDL path (the ensure/upgrade one); both had to lose the constraint.
         ")";
         createTableSafely(stmt, ensureLoreMap, TABLE_LORE_MAP);
         createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "lore_map_entry ON " + loreMap + "(lore_entry_id)");
@@ -423,6 +431,65 @@ public abstract class DatabaseConnection {
 
         createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "player_collection_items_player ON " + playerCollectionItems + "(player_uuid)");
         createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "player_collection_items_collection ON " + playerCollectionItems + "(collection_id)");
+
+        // Runs last: the tables must exist before their constraints can be inspected (#1839).
+        dropLegacyEntryForeignKeys(stmt);
+    }
+
+    /**
+     * Drop the legacy foreign keys from per-server tables into {@code lore_entry} (#1839).
+     *
+     * <p>{@code lore_location}, {@code lore_discovery} and {@code lore_map} stay per-server for the
+     * #1834 connection split, while {@code lore_entry} moves to the cluster pool — and a foreign key
+     * cannot span databases. The constraints have been removed from the shipped DDL, but every
+     * existing tier already has the tables, so a DDL change alone reaches none of them (#1563/#1592).
+     * This migration is what actually removes them.</p>
+     *
+     * <p>The constraints were declared unnamed, so MySQL auto-generated names like
+     * {@code rvnklore_lore_location_ibfk_1}. They are looked up in {@code information_schema} rather
+     * than guessed.</p>
+     *
+     * <p>MySQL-only: SQLite cannot drop a foreign key, and its fallback file is transient and
+     * recreated from the corrected DDL anyway.</p>
+     */
+    private void dropLegacyEntryForeignKeys(Statement stmt) {
+        if (!"MySQL".equals(dialect.getName())) {
+            return;
+        }
+        String[] perServerTables = {
+            table(TABLE_LORE_LOCATION),
+            table(TABLE_LORE_DISCOVERY),
+            table(TABLE_LORE_MAP)
+        };
+        String loreEntryTable = table(TABLE_LORE_ENTRY);
+
+        for (String tableName : perServerTables) {
+            java.util.List<String> constraints = new java.util.ArrayList<>();
+            String lookup =
+                "SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE "
+                + "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" + tableName + "' "
+                + "AND REFERENCED_TABLE_NAME = '" + loreEntryTable + "'";
+            try (java.sql.ResultSet rs = stmt.executeQuery(lookup)) {
+                while (rs.next()) {
+                    constraints.add(rs.getString(1));
+                }
+            } catch (SQLException e) {
+                logger.warning("Could not inspect foreign keys on " + tableName + ": " + e.getMessage());
+                continue;
+            }
+
+            for (String constraint : constraints) {
+                try {
+                    stmt.execute("ALTER TABLE " + tableName + " DROP FOREIGN KEY " + constraint);
+                    logger.warning("Migration #1839: dropped foreign key " + constraint + " on "
+                            + tableName + " (per-server table must not reference the cluster-shared "
+                            + loreEntryTable + ")");
+                } catch (SQLException e) {
+                    logger.error("Migration #1839: failed to drop foreign key " + constraint + " on "
+                            + tableName + " — the #1834 connection split will fail until it is gone", e);
+                }
+            }
+        }
     }
 
     private void modifyColumnType(Statement stmt, String tableName, String column, String definition) {

@@ -204,8 +204,26 @@ public class LoreEntryRepository implements ILoreEntryRepository {
                 conn.setAutoCommit(false);
 
                 try {
-                    // Delete from lore_entry will cascade to lore_submission and lore_item
-                    // due to foreign key constraints with ON DELETE CASCADE
+                    // lore_submission and lore_item still cascade — they stay co-located with
+                    // lore_entry in the cluster pool, so their FKs are untouched.
+                    //
+                    // lore_location, lore_discovery and lore_map do NOT cascade any more. Their FKs
+                    // into lore_entry were dropped in #1839 because a foreign key cannot span
+                    // databases and those tables stay per-server for the #1834 split. Their rows
+                    // must be removed here or they orphan. Local rows go first: if the entry delete
+                    // then fails and rolls back, we have removed satellite rows for an entry that
+                    // still exists, which a re-run repairs — the reverse would leave orphans
+                    // pointing at nothing with no way to find them.
+                    String entryIdText = id.toString();
+                    dbHelper.executeUpdateOn(conn, "DELETE FROM " + t("lore_location")
+                            + " WHERE entry_id = ?", stmt -> stmt.setString(1, entryIdText));
+                    dbHelper.executeUpdateOn(conn, "DELETE FROM " + t("lore_discovery")
+                            + " WHERE entry_id = ?", stmt -> stmt.setString(1, entryIdText));
+                    // Matches the old ON DELETE SET NULL: the map survives, it just loses its link.
+                    dbHelper.executeUpdateOn(conn, "UPDATE " + t("lore_map")
+                            + " SET lore_entry_id = NULL WHERE lore_entry_id = ?",
+                            stmt -> stmt.setString(1, entryIdText));
+
                     String sql = "DELETE FROM " + t("lore_entry") + " WHERE id = ?";
 
                     {
