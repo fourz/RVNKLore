@@ -23,7 +23,6 @@ import java.sql.Statement;
 public class DatabaseHelper {
     private final RVNKLore plugin;
     private final LogManager logger;
-    private final DatabaseManager databaseManager;
 
     // Retry configuration
     private static final int maxRetries = 3;
@@ -31,8 +30,23 @@ public class DatabaseHelper {
 
     public DatabaseHelper(RVNKLore plugin) {
         this.plugin = plugin;
-        this.databaseManager = plugin.getDatabaseManager();
         this.logger = LogManager.getInstance(plugin, "DatabaseHelper");
+    }
+
+    /**
+     * Resolve the DatabaseManager at use time.
+     *
+     * <p>This must not be captured in the constructor. Repositories wired by
+     * {@code DatabaseManager.wireRepositories()} are built while the DatabaseManager constructor is
+     * still running, so {@code plugin.getDatabaseManager()} is still null at that moment and the
+     * captured reference would stay null for the object's life — every pooled write from those
+     * repositories then NPEs (#1838). Resolving here also means a fallback or recovery swap is
+     * picked up rather than frozen, the same reason ItemManager was changed in #1835.</p>
+     *
+     * @return the current DatabaseManager, or null before the plugin has built one
+     */
+    private DatabaseManager db() {
+        return plugin.getDatabaseManager();
     }
 
     /**
@@ -49,9 +63,9 @@ public class DatabaseHelper {
         while (retryCount < maxRetries) {
             try {
                 // Check if connection pool is valid
-                if (!databaseManager.isConnected()) {
+                if (!db().isConnected()) {
                     logger.warning("Database connection pool unavailable, attempting to reconnect...");
-                    boolean reconnected = databaseManager.reconnect();
+                    boolean reconnected = db().reconnect();
                     if (!reconnected) {
                         throw new SQLException("Failed to reconnect to database");
                     }
@@ -94,12 +108,12 @@ public class DatabaseHelper {
      * @return true if connection is valid, false otherwise
      */
     private boolean validateConnection() {
-        if (databaseManager.isConnected()) {
+        if (db().isConnected()) {
             return true;
         }
         
         logger.warning("Database connection lost, attempting to reconnect...");
-        boolean reconnected = databaseManager.reconnect();
+        boolean reconnected = db().reconnect();
         
         if (reconnected) {
             logger.info("Successfully reconnected to database");
@@ -131,7 +145,7 @@ public class DatabaseHelper {
     public <T> T executeQuery(String sql, PreparedStatementSetter paramSetter, ResultSetHandler<T> resultHandler) throws LoreException {
         return executeWithRetry(() -> {
             // Get fresh connection from pool - MUST use try-with-resources
-            try (Connection conn = databaseManager.getConnection();
+            try (Connection conn = db().getConnection();
                  PreparedStatement stmt = conn.prepareStatement(sql)) {
                 // Set parameters if provided
                 if (paramSetter != null) {
@@ -158,7 +172,7 @@ public class DatabaseHelper {
     public int executeUpdate(String sql, PreparedStatementSetter paramSetter) throws LoreException {
         return executeWithRetry(() -> {
             // Get fresh connection from pool - MUST use try-with-resources
-            try (Connection conn = databaseManager.getConnection();
+            try (Connection conn = db().getConnection();
                  PreparedStatement stmt = conn.prepareStatement(sql)) {
                 // Set parameters if provided
                 if (paramSetter != null) {
@@ -187,11 +201,11 @@ public class DatabaseHelper {
      */
     public int executeInsertWithGeneratedKey(String baseInsertSql, String idColumn,
             PreparedStatementSetter paramSetter) throws LoreException {
-        SQLDialect dialect = databaseManager.getDatabaseConnection().getDialect();
+        SQLDialect dialect = db().getDatabaseConnection().getDialect();
 
         return executeWithRetry(() -> {
             // Get fresh connection from pool - MUST use try-with-resources
-            try (Connection conn = databaseManager.getConnection()) {
+            try (Connection conn = db().getConnection()) {
 
                 if (dialect.requiresGeneratedKeysFlag()) {
                     // MySQL approach: use getGeneratedKeys()
@@ -229,7 +243,7 @@ public class DatabaseHelper {
      */
     public int executeInsertAndGetKey(String sql, PreparedStatementSetter paramSetter) throws LoreException {
         return executeWithRetry(() -> {
-            try (Connection conn = databaseManager.getConnection()) {
+            try (Connection conn = db().getConnection()) {
                 // For SQLite with RETURNING clause
                 if (sql.toUpperCase().contains("RETURNING")) {
                     try (PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -304,7 +318,7 @@ public class DatabaseHelper {
      * @throws SQLException if a database access error occurs
      */
     public Connection beginTransaction() throws SQLException {
-        Connection conn = databaseManager.getConnection();
+        Connection conn = db().getConnection();
         conn.setAutoCommit(false);
         return conn;
     }
