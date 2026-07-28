@@ -11,7 +11,6 @@ import org.fourz.RVNKLore.data.repository.LocationRepository;
 import org.fourz.RVNKLore.data.repository.MapRepository;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
-import org.fourz.RVNKLore.lore.player.PlayerRepository;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -44,8 +43,6 @@ public class DatabaseManager {
     private DatabaseConnection connection;
     private DatabaseHelper databaseHelper;
     private LoreEntryRepository loreRepository;
-    private PlayerRepository playerRepository;
-    private ItemRepository itemRepository;
     private LocationRepository locationRepository;
     private DiscoveryRepository discoveryRepository;
     private AchievementRepository achievementRepository;
@@ -56,6 +53,33 @@ public class DatabaseManager {
     private volatile boolean inFallbackMode = false;
     private int reconnectAttempts = 0;
     private static final int MAX_RECONNECT_ATTEMPTS = 5;
+    private final int maxFailuresBeforeFallback;
+    private final int recoveryTimeMinutes;
+
+    /**
+     * Resolve a fallback tuning value from config.
+     *
+     * <p>The shipped config.yml defines these under {@code storage.fallback.*}, which is the
+     * documented path and wins. {@code database.fallback.*} is accepted as a legacy alias so an
+     * operator who previously set it does not silently lose their override. Prior to #1835 only
+     * the legacy path was read, so the documented keys had no effect at all.</p>
+     *
+     * @param key      the leaf key name under the fallback block
+     * @param defaultValue value to use when neither path is present
+     * @return the effective value
+     */
+    private int resolveFallbackInt(String key, int defaultValue) {
+        if (plugin.getConfig().isSet("storage.fallback." + key)) {
+            return plugin.getConfig().getInt("storage.fallback." + key, defaultValue);
+        }
+        if (plugin.getConfig().isSet("database.fallback." + key)) {
+            int legacy = plugin.getConfig().getInt("database.fallback." + key, defaultValue);
+            logger.warning("Using legacy config path database.fallback." + key
+                    + " — move this to storage.fallback." + key);
+            return legacy;
+        }
+        return defaultValue;
+    }
 
     /**
      * Create a new DatabaseManager instance
@@ -68,10 +92,14 @@ public class DatabaseManager {
 
         // Initialize components
         this.connectionFactory = new DatabaseConnectionFactory(plugin);
+        this.maxFailuresBeforeFallback = resolveFallbackInt("maxFailuresBeforeFallback", 3);
+        this.recoveryTimeMinutes = resolveFallbackInt("recoveryTimeMinutes", 5);
         this.fallbackTracker = new FallbackTracker(
-                plugin.getConfig().getInt("database.fallback.maxFailuresBeforeFallback", 3),
-                plugin.getConfig().getInt("database.fallback.recoveryTimeMinutes", 5) * 60 * 1000L,
+                maxFailuresBeforeFallback,
+                recoveryTimeMinutes * 60 * 1000L,
                 LogManager.getInstance(plugin, "FallbackTracker"));
+        logger.info("Fallback tuning: maxFailuresBeforeFallback=" + maxFailuresBeforeFallback
+                + ", recoveryTimeMinutes=" + recoveryTimeMinutes);
         initializeDatabase();
     }
 
@@ -143,8 +171,7 @@ public class DatabaseManager {
             logger.warning("=== RUNNING IN FALLBACK MODE ===");
             logger.warning("SQLite fallback connection established successfully");
             logger.warning("Data will be stored locally until MySQL connection is restored");
-            logger.warning("Recovery will be attempted in " +
-                plugin.getConfig().getInt("storage.fallback.recoveryTimeMinutes", 5) + " minutes");
+            logger.warning("Recovery will be attempted in " + recoveryTimeMinutes + " minutes");
         } catch (Exception fallbackError) {
             connectionValid = false;
             inFallbackMode = false;

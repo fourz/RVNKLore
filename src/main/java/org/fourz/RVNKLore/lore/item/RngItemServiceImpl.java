@@ -8,6 +8,7 @@ import org.bukkit.inventory.ItemStack;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.data.DatabaseConnection;
 import org.fourz.RVNKLore.data.DatabaseHelper;
+import org.fourz.RVNKLore.data.DatabaseManager;
 import org.fourz.RVNKLore.exception.LoreException;
 import org.fourz.RVNKLore.service.IRngItemService;
 import org.fourz.RVNKLore.service.PoolItemEntry;
@@ -32,7 +33,6 @@ public class RngItemServiceImpl implements IRngItemService {
 
     private final RVNKLore plugin;
     private final LogManager logger;
-    private final DatabaseConnection dbConnection;
     private final DatabaseHelper dbHelper;
     private final ItemManager itemManager;
     private boolean fallbackMode = false;
@@ -40,9 +40,22 @@ public class RngItemServiceImpl implements IRngItemService {
     public RngItemServiceImpl(RVNKLore plugin, DatabaseConnection dbConnection, ItemManager itemManager) {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "RngItemServiceImpl");
-        this.dbConnection = dbConnection;
         this.dbHelper = new DatabaseHelper(plugin);
         this.itemManager = itemManager;
+    }
+
+    /**
+     * Resolve the live database connection at use time.
+     *
+     * <p>The connection passed to the constructor is deliberately ignored: it is captured during
+     * plugin startup and would go stale the moment a fallback or recovery swap replaced it (#1835).
+     * The constructor parameter is retained so existing call sites keep compiling.</p>
+     *
+     * @return the current connection, or null when the database is unavailable
+     */
+    private DatabaseConnection dbConnection() {
+        DatabaseManager dbManager = plugin.getDatabaseManager();
+        return dbManager == null ? null : dbManager.getDatabaseConnection();
     }
 
     @Override
@@ -252,7 +265,7 @@ public class RngItemServiceImpl implements IRngItemService {
 
     private CompletableFuture<List<PoolEntry>> getWeightedEntries(String poolId, String rarityTier) {
         return CompletableFuture.supplyAsync(() -> {
-            String table = dbConnection.table(DatabaseConnection.TABLE_LORE_ITEM_RNG_POOL);
+            String table = dbConnection().table(DatabaseConnection.TABLE_LORE_ITEM_RNG_POOL);
             String sql;
             Object[] params;
 

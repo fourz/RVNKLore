@@ -7,6 +7,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.data.DatabaseConnection;
+import org.fourz.RVNKLore.data.DatabaseManager;
 import org.fourz.RVNKLore.data.ItemRepository;
 import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.lore.item.enchant.EnchantManager;
@@ -42,7 +43,8 @@ public class ItemManager implements IItemService, ILoreItemResolver {
     private CosmeticsManager cosmeticItem;
     private CollectionManager collectionManager;
     private CustomModelDataManager modelDataManager;
-    private ItemRepository itemRepository;
+    private ItemRepository cachedItemRepository;
+    private DatabaseConnection boundConnection;
       // Caches for better performance
     private final Map<String, List<ItemProperties>> itemNameCache = new ConcurrentHashMap<>();
     private final Map<String, ItemProperties> loreEntryIdCache = new ConcurrentHashMap<>();
@@ -52,15 +54,9 @@ public class ItemManager implements IItemService, ILoreItemResolver {
     public ItemManager(RVNKLore plugin) {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "ItemManager");
-        // Initialize database repository
-        if (plugin.getDatabaseManager() != null && plugin.getDatabaseManager().isConnected()) {
-            DatabaseConnection dbConnection = plugin.getDatabaseManager().getDatabaseConnection();
-            if (dbConnection != null) {
-                this.itemRepository = new ItemRepository(plugin, dbConnection);
-            } else {
-                logger.warning("Database connection is null, ItemRepository will not be available");
-            }
-        } else {
+        // ItemRepository is resolved lazily through itemRepository() so that a fallback or
+        // recovery connection swap is picked up at use time rather than frozen at construction (#1835).
+        if (plugin.getDatabaseManager() == null || !plugin.getDatabaseManager().isConnected()) {
             logger.warning("Database not available - some item features may be limited");
         }
 
@@ -74,6 +70,34 @@ public class ItemManager implements IItemService, ILoreItemResolver {
         plugin.getServer().getScheduler().runTaskAsynchronously(plugin, this::initializeCache);
     }
     
+
+    /**
+     * Resolve the ItemRepository bound to the database connection that is live right now.
+     *
+     * <p>Before #1835 this was captured once in the constructor, so after a fallback (or recovery)
+     * connection swap every item operation kept writing through the old, dead connection. Rebinding
+     * whenever the manager hands back a different connection instance keeps item access coherent
+     * across a swap.</p>
+     *
+     * @return the current repository, or null when the database is unavailable
+     */
+    private ItemRepository itemRepository() {
+        DatabaseManager dbManager = plugin.getDatabaseManager();
+        if (dbManager == null || !dbManager.isConnected()) {
+            return null;
+        }
+        DatabaseConnection current = dbManager.getDatabaseConnection();
+        if (current == null) {
+            return null;
+        }
+        if (cachedItemRepository == null || boundConnection != current) {
+            cachedItemRepository = new ItemRepository(plugin, current);
+            boundConnection = current;
+            logger.debug("ItemRepository (re)bound to the active database connection");
+        }
+        return cachedItemRepository;
+    }
+
     /**
      * Get the enchantment manager for enchanted item generation and management.
      * 
@@ -299,9 +323,9 @@ public class ItemManager implements IItemService, ILoreItemResolver {
      * {@code [Forge]} lineage lookup.
      */
     public CompletableFuture<List<ItemProperties>> getItemsByCreatedBy(String createdBy) {
-        return itemRepository == null
+        return itemRepository() == null
             ? CompletableFuture.completedFuture(new ArrayList<>())
-            : itemRepository.getItemsByCreatedBy(createdBy);
+            : itemRepository().getItemsByCreatedBy(createdBy);
     }
 
     private ItemStack createLoreItemInternal(ItemType type, String name, ItemProperties properties) {
@@ -430,7 +454,7 @@ public class ItemManager implements IItemService, ILoreItemResolver {
     private List<String> getAllItemNamesSync() {
         List<String> names = new ArrayList<>();
         
-        if (itemRepository != null && cacheInitialized) {
+        if (itemRepository() != null && cacheInitialized) {
             names.addAll(itemNameCache.keySet());
         } else {
             if (cosmeticItem != null) {
@@ -452,12 +476,12 @@ public class ItemManager implements IItemService, ILoreItemResolver {
      */
     private ItemStack createLoreItemByNameInternal(String itemName) {
         String key = itemName.toLowerCase();
-        if (itemRepository != null && cacheInitialized && itemNameCache.containsKey(key)) {
+        if (itemRepository() != null && cacheInitialized && itemNameCache.containsKey(key)) {
             ItemProperties props = itemNameCache.get(key).get(0);
             return createLoreItemInternal(props.getItemType(), itemName, props);
         }
-        if (itemRepository != null) {
-            List<ItemProperties> propsList = itemRepository.getAllItemsByName(itemName).join();
+        if (itemRepository() != null) {
+            List<ItemProperties> propsList = itemRepository().getAllItemsByName(itemName).join();
             if (!propsList.isEmpty()) {
                 itemNameCache.put(key, propsList);
                 return createLoreItemInternal(propsList.get(0).getItemType(), itemName, propsList.get(0));
@@ -484,7 +508,7 @@ public class ItemManager implements IItemService, ILoreItemResolver {
      * Initialize or refresh the item cache from database
      */
     private void initializeCache() {
-        if (itemRepository == null) {
+        if (itemRepository() == null) {
             logger.warning("Cannot initialize cache: ItemRepository is null");
             return;
         }
@@ -496,7 +520,7 @@ public class ItemManager implements IItemService, ILoreItemResolver {
             collectionCache.clear();
             
             // Load all items
-            List<ItemProperties> allItems = itemRepository.getAllItems().join();
+            List<ItemProperties> allItems = itemRepository().getAllItems().join();
             for (ItemProperties item : allItems) {
                 String key = item.getDisplayName().toLowerCase();
                 itemNameCache.computeIfAbsent(key, k -> new ArrayList<>()).add(item);
@@ -506,10 +530,10 @@ public class ItemManager implements IItemService, ILoreItemResolver {
             }
             
             // Load all collections in parallel
-            Map<Integer, String> collections = itemRepository.getAllCollections().join();
+            Map<Integer, String> collections = itemRepository().getAllCollections().join();
             Map<Integer, CompletableFuture<List<ItemProperties>>> collectionFutures = new HashMap<>();
             for (Integer collectionId : collections.keySet()) {
-                collectionFutures.put(collectionId, itemRepository.getItemsByCollection(collectionId));
+                collectionFutures.put(collectionId, itemRepository().getItemsByCollection(collectionId));
             }
             CompletableFuture.allOf(collectionFutures.values().toArray(new CompletableFuture[0])).join();
             for (Map.Entry<Integer, CompletableFuture<List<ItemProperties>>> entry : collectionFutures.entrySet()) {
@@ -581,7 +605,7 @@ public class ItemManager implements IItemService, ILoreItemResolver {
     private List<ItemProperties> getAllItemsWithPropertiesSync() {
         List<ItemProperties> result = new ArrayList<>();
 
-        if (itemRepository != null && cacheInitialized) {
+        if (itemRepository() != null && cacheInitialized) {
             for (List<ItemProperties> list : itemNameCache.values()) {
                 result.addAll(list);
             }
@@ -627,12 +651,12 @@ public class ItemManager implements IItemService, ILoreItemResolver {
         // Add lore entry ID reference to item properties
         properties.setLoreEntryId(loreEntryId.toString());
         // Store in database
-        if (itemRepository != null) {
+        if (itemRepository() != null) {
             try {
                 // A lore item already registered for this entry (e.g. a book re-placed on a
                 // lectern) is not an error — short-circuit to the existing id instead of attempting
                 // a duplicate insert that would hit the UNIQUE constraint and spam the log (#1427).
-                Optional<ItemProperties> existing = itemRepository.getItemByLoreEntryId(loreEntryId.toString()).join();
+                Optional<ItemProperties> existing = itemRepository().getItemByLoreEntryId(loreEntryId.toString()).join();
                 if (existing.isPresent()) {
                     invalidateNameCache(properties.getDisplayName());
                     loreEntryIdCache.put(loreEntryId.toString(), properties);
@@ -640,7 +664,7 @@ public class ItemManager implements IItemService, ILoreItemResolver {
                         ", skipping duplicate insert: " + properties.getDisplayName());
                     return existing.get().getDatabaseId();
                 }
-                int itemId = itemRepository.insertItem(properties).join();
+                int itemId = itemRepository().insertItem(properties).join();
                 if (itemId > 0) {
                     // Invalidate name cache so the next give re-reads this row fresh from the DB
                     invalidateNameCache(properties.getDisplayName());
@@ -803,24 +827,24 @@ public class ItemManager implements IItemService, ILoreItemResolver {
             logger.warning("Cannot upsert lore item with null ID or properties");
             return -1;
         }
-        if (itemRepository == null) {
+        if (itemRepository() == null) {
             logger.warning("ItemRepository is not available, item properties will not be persisted");
             return -1;
         }
         properties.setLoreEntryId(loreEntryId.toString());
         try {
-            Optional<ItemProperties> existing = itemRepository.getItemByLoreEntryId(loreEntryId.toString()).join();
+            Optional<ItemProperties> existing = itemRepository().getItemByLoreEntryId(loreEntryId.toString()).join();
             int itemId;
             if (existing.isPresent()) {
                 itemId = existing.get().getDatabaseId();
-                if (!itemRepository.updateItem(itemId, properties).join()) {
+                if (!itemRepository().updateItem(itemId, properties).join()) {
                     logger.warning("Failed to update item_properties for item id " + itemId);
                     return -1;
                 }
                 logger.debug("Updated item_properties for existing lore_item id " + itemId
                     + ": " + properties.getDisplayName());
             } else {
-                itemId = itemRepository.insertItem(properties).join();
+                itemId = itemRepository().insertItem(properties).join();
                 if (itemId <= 0) {
                     logger.warning("Failed to insert lore item: " + properties.getDisplayName());
                     return -1;
@@ -850,19 +874,19 @@ public class ItemManager implements IItemService, ILoreItemResolver {
      */
     @Override
     public CompletableFuture<Optional<org.bukkit.inventory.ItemStack>> createLoreItem(int itemId) {
-        if (itemRepository == null) {
+        if (itemRepository() == null) {
             return CompletableFuture.completedFuture(Optional.empty());
         }
-        return itemRepository.getItemById(itemId).thenApply(optProps ->
+        return itemRepository().getItemById(itemId).thenApply(optProps ->
             optProps.map(props -> createLoreItemInternal(props.getItemType(), props.getDisplayName(), props)));
     }
 
     public CompletableFuture<Optional<ItemProperties>> getItemPropertiesById(int itemId) {
-        if (itemRepository == null) {
+        if (itemRepository() == null) {
             logger.warning("getItemPropertiesById(" + itemId + "): itemRepository is null");
             return CompletableFuture.completedFuture(Optional.empty());
         }
-        return itemRepository.getItemById(itemId).thenApply(opt -> {
+        return itemRepository().getItemById(itemId).thenApply(opt -> {
             logger.debug("getItemPropertiesById(" + itemId + "): " + (opt.isPresent() ? opt.get().getDisplayName() : "empty"));
             return opt;
         });
@@ -872,14 +896,14 @@ public class ItemManager implements IItemService, ILoreItemResolver {
 
     /** Snapshot the item's current properties into its v1 submission (call after create). */
     public CompletableFuture<Boolean> snapshotItemVersion(int itemId) {
-        return itemRepository == null ? CompletableFuture.completedFuture(false)
-                : itemRepository.snapshotCurrentVersion(itemId);
+        return itemRepository() == null ? CompletableFuture.completedFuture(false)
+                : itemRepository().snapshotCurrentVersion(itemId);
     }
 
     /** Update an item as a new content_version; returns the new version or -1. */
     public CompletableFuture<Integer> updateItemVersioned(int itemId, ItemProperties properties) {
-        return itemRepository == null ? CompletableFuture.completedFuture(-1)
-                : itemRepository.updateItemVersioned(itemId, properties)
+        return itemRepository() == null ? CompletableFuture.completedFuture(-1)
+                : itemRepository().updateItemVersioned(itemId, properties)
                     .thenApply(ver -> {
                         // The materialized item_properties changed (e.g. book pages) — drop the
                         // stale name-cache entry so the next give reads the new props from the DB.
@@ -892,28 +916,28 @@ public class ItemManager implements IItemService, ILoreItemResolver {
 
     /** Version history for an item. */
     public CompletableFuture<List<java.util.Map<String, Object>>> getItemVersions(int itemId) {
-        return itemRepository == null ? CompletableFuture.completedFuture(new ArrayList<>())
-                : itemRepository.getItemVersions(itemId);
+        return itemRepository() == null ? CompletableFuture.completedFuture(new ArrayList<>())
+                : itemRepository().getItemVersions(itemId);
     }
 
     /** Roll an item back to a prior content_version. */
     public CompletableFuture<Boolean> rollbackItemToVersion(int itemId, int version) {
-        return itemRepository == null ? CompletableFuture.completedFuture(false)
-                : itemRepository.rollbackItemToVersion(itemId, version)
+        return itemRepository() == null ? CompletableFuture.completedFuture(false)
+                : itemRepository().rollbackItemToVersion(itemId, version)
                     .whenComplete((ok, ex) -> { if (Boolean.TRUE.equals(ok)) refreshCacheForCommands(); });
     }
 
     /** Soft-delete (hide + archive, recoverable). */
     public CompletableFuture<Boolean> softDeleteItem(int itemId) {
-        return itemRepository == null ? CompletableFuture.completedFuture(false)
-                : itemRepository.softDeleteItem(itemId)
+        return itemRepository() == null ? CompletableFuture.completedFuture(false)
+                : itemRepository().softDeleteItem(itemId)
                     .whenComplete((ok, ex) -> { if (Boolean.TRUE.equals(ok)) refreshCacheForCommands(); });
     }
 
     /** Hard-delete (purge entry + CASCADE). */
     public CompletableFuture<Boolean> hardDeleteItem(int itemId) {
-        return itemRepository == null ? CompletableFuture.completedFuture(false)
-                : itemRepository.hardDeleteItem(itemId)
+        return itemRepository() == null ? CompletableFuture.completedFuture(false)
+                : itemRepository().hardDeleteItem(itemId)
                     .whenComplete((ok, ex) -> { if (Boolean.TRUE.equals(ok)) refreshCacheForCommands(); });
     }
 
@@ -923,16 +947,16 @@ public class ItemManager implements IItemService, ILoreItemResolver {
      */
     @Override
     public CompletableFuture<List<ItemProperties>> getPresetsForQuest(String questId) {
-        if (itemRepository == null) {
+        if (itemRepository() == null) {
             return CompletableFuture.completedFuture(new ArrayList<>());
         }
-        return itemRepository.getPresetsForQuest(questId);
+        return itemRepository().getPresetsForQuest(questId);
     }
 
     /** Obtainable WRITTEN_BOOK items — catalog backing {@code /lore book list} (#1646). */
     public CompletableFuture<List<ItemProperties>> getObtainableWrittenBooks() {
-        return itemRepository == null ? CompletableFuture.completedFuture(new ArrayList<>())
-                : itemRepository.getObtainableWrittenBooks();
+        return itemRepository() == null ? CompletableFuture.completedFuture(new ArrayList<>())
+                : itemRepository().getObtainableWrittenBooks();
     }
 
     // ── #1496: RNG pool + preset authoring — thin delegators to ItemRepository ──
@@ -957,32 +981,32 @@ public class ItemManager implements IItemService, ILoreItemResolver {
 
     /** Add an item to an RNG pool. */
     public CompletableFuture<Boolean> addPoolEntry(String poolId, int loreItemId, String rarityTier, int weight) {
-        return itemRepository == null ? CompletableFuture.completedFuture(false)
-                : itemRepository.addPoolEntry(poolId, loreItemId, rarityTier, weight);
+        return itemRepository() == null ? CompletableFuture.completedFuture(false)
+                : itemRepository().addPoolEntry(poolId, loreItemId, rarityTier, weight);
     }
 
     /** Remove an item from an RNG pool. */
     public CompletableFuture<Boolean> removePoolEntry(String poolId, int loreItemId) {
-        return itemRepository == null ? CompletableFuture.completedFuture(false)
-                : itemRepository.removePoolEntry(poolId, loreItemId);
+        return itemRepository() == null ? CompletableFuture.completedFuture(false)
+                : itemRepository().removePoolEntry(poolId, loreItemId);
     }
 
     /** List every entry in an RNG pool. */
     public CompletableFuture<List<ItemRepository.PoolEntryRow>> listPoolEntries(String poolId) {
-        return itemRepository == null ? CompletableFuture.completedFuture(new ArrayList<>())
-                : itemRepository.listPoolEntries(poolId);
+        return itemRepository() == null ? CompletableFuture.completedFuture(new ArrayList<>())
+                : itemRepository().listPoolEntries(poolId);
     }
 
     /** Bind an item to a quest as a preset. */
     public CompletableFuture<Boolean> addPreset(String questId, int loreItemId, String label) {
-        return itemRepository == null ? CompletableFuture.completedFuture(false)
-                : itemRepository.addPreset(questId, loreItemId, label);
+        return itemRepository() == null ? CompletableFuture.completedFuture(false)
+                : itemRepository().addPreset(questId, loreItemId, label);
     }
 
     /** Unbind an item preset from a quest. */
     public CompletableFuture<Boolean> removePreset(String questId, int loreItemId) {
-        return itemRepository == null ? CompletableFuture.completedFuture(false)
-                : itemRepository.removePreset(questId, loreItemId);
+        return itemRepository() == null ? CompletableFuture.completedFuture(false)
+                : itemRepository().removePreset(questId, loreItemId);
     }
 
     /**
