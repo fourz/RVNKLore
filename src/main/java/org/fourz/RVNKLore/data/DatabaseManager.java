@@ -55,6 +55,53 @@ public class DatabaseManager {
     private static final int MAX_RECONNECT_ATTEMPTS = 5;
     private final int maxFailuresBeforeFallback;
     private final int recoveryTimeMinutes;
+    private final FallbackWriteLog fallbackWriteLog;
+
+    /**
+     * Journal of writes made while on the SQLite fallback, replayed to the primary on recovery.
+     *
+     * @return the write log, never null
+     */
+    public FallbackWriteLog getFallbackWriteLog() {
+        return fallbackWriteLog;
+    }
+
+    /**
+     * Whether this server participates in the lore cluster.
+     *
+     * <p>Gates the #1833 fail-closed rule: refusing writes to shared tables only makes sense once
+     * another tier is actually writing them. On a standalone server every table is effectively
+     * per-server, so refusing anything would cost availability during an outage and buy no safety.
+     * Defaults to false, which keeps behaviour identical to before #1833 until #1834 turns it on.</p>
+     *
+     * @return true when {@code cluster.enabled} is set in config.yml
+     */
+    public boolean isClusterEnabled() {
+        return plugin.getConfig().getBoolean("cluster.enabled", false);
+    }
+
+    /**
+     * Reload lore into memory after a reconcile pass so replayed rows are actually visible.
+     *
+     * <p>Without this the replay lands in the database but the in-memory cache still holds the
+     * pre-outage view, so {@code /lore get} reports the entry as missing — indistinguishable from the
+     * reconcile having failed. Caught on Dev while verifying #1833: the row was in MySQL and only a
+     * manual {@code /lore reload} revealed it.</p>
+     *
+     * <p>Best-effort and never allowed to fail the recovery: the data is already durable at this
+     * point, and a stale cache is recoverable with a reload.</p>
+     */
+    private void refreshLoreCacheAfterReconcile() {
+        try {
+            if (plugin.getLoreManager() != null) {
+                plugin.getLoreManager().reloadLore();
+                logger.info("Lore cache refreshed after reconcile — replayed entries are now visible");
+            }
+        } catch (Exception e) {
+            logger.warning("Reconcile succeeded but the lore cache could not be refreshed; run "
+                    + "/lore reload to see replayed entries: " + e.getMessage());
+        }
+    }
 
     /**
      * Resolve a fallback tuning value from config.
@@ -100,6 +147,9 @@ public class DatabaseManager {
                 LogManager.getInstance(plugin, "FallbackTracker"));
         logger.info("Fallback tuning: maxFailuresBeforeFallback=" + maxFailuresBeforeFallback
                 + ", recoveryTimeMinutes=" + recoveryTimeMinutes);
+        // Built before initializeDatabase() so a journal left by a previous outage is loaded and
+        // ready to replay the moment the primary comes back (#1833).
+        this.fallbackWriteLog = new FallbackWriteLog(plugin);
         initializeDatabase();
     }
 
@@ -132,6 +182,25 @@ public class DatabaseManager {
             reconnectAttempts = 0;
             fallbackTracker.recordSuccess();
             logger.info("Database initialized successfully");
+
+            // An outage that spanned a restart leaves a durable journal but produces no recovery
+            // transition — the server simply boots onto a healthy primary. Without this the pending
+            // writes would sit on disk forever, which is the failure the journal exists to prevent
+            // (#1833). Off the main thread: this is blocking DB I/O during enable.
+            if (fallbackWriteLog != null && !fallbackWriteLog.isEmpty()) {
+                final int carried = fallbackWriteLog.pendingCount();
+                logger.warning("Found " + carried + " un-reconciled write(s) from a previous outage —"
+                        + " replaying to the primary database now");
+                plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+                    try (Connection primaryHandle = connection.getConnection()) {
+                        fallbackWriteLog.replayTo(primaryHandle);
+                        refreshLoreCacheAfterReconcile();
+                    } catch (Exception e) {
+                        logger.error("Startup reconcile failed; the journal is retained and will be "
+                                + "retried on the next recovery", e);
+                    }
+                });
+            }
         } catch (Exception e) {
             connectionValid = false;
             fallbackTracker.recordFailure();
@@ -464,6 +533,21 @@ public class DatabaseManager {
             DatabaseConnection primaryConnection = connectionFactory.createConnection();
             primaryConnection.initialize();
             primaryConnection.createTables();
+
+            // Replay outage-era writes BEFORE the fallback handle is closed (#1833). The primary is
+            // live and validated at this point, and the fallback connection is still open, so a
+            // failure here leaves both the journal and the fallback store intact for the next
+            // attempt rather than stranding the data.
+            if (fallbackWriteLog != null && !fallbackWriteLog.isEmpty()) {
+                try (java.sql.Connection primaryHandle = primaryConnection.getConnection()) {
+                    fallbackWriteLog.replayTo(primaryHandle);
+                    refreshLoreCacheAfterReconcile();
+                } catch (Exception replayError) {
+                    // Recovery still proceeds — the journal is durable and retries on the next pass.
+                    logger.error("Reconcile pass failed; outage-era writes remain journalled and will "
+                            + "be retried", replayError);
+                }
+            }
 
             // If successful, switch from fallback to primary
             if (connection != null) {

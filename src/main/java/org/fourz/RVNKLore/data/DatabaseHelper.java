@@ -170,17 +170,23 @@ public class DatabaseHelper {
      * @throws LoreException If the update fails
      */
     public int executeUpdate(String sql, PreparedStatementSetter paramSetter) throws LoreException {
+        guardFallbackWrite(sql);
         return executeWithRetry(() -> {
             // Get fresh connection from pool - MUST use try-with-resources
             try (Connection conn = db().getConnection();
                  PreparedStatement stmt = conn.prepareStatement(sql)) {
+                java.util.List<FallbackWriteLog.Bind> binds = new java.util.ArrayList<>();
+                PreparedStatement target = journalling() ? FallbackWriteLog.recordingProxy(stmt, binds) : stmt;
+
                 // Set parameters if provided
                 if (paramSetter != null) {
-                    paramSetter.setParameters(stmt);
+                    paramSetter.setParameters(target);
                 }
 
                 // Execute update
-                return stmt.executeUpdate();
+                int affected = stmt.executeUpdate();
+                journal(sql, binds);
+                return affected;
             }
         });
     }
@@ -303,12 +309,85 @@ public class DatabaseHelper {
      */
     public int executeUpdateOn(Connection conn, String sql, PreparedStatementSetter paramSetter)
             throws SQLException {
+        guardFallbackWriteUnchecked(sql);
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            java.util.List<FallbackWriteLog.Bind> binds = new java.util.ArrayList<>();
+            PreparedStatement target = journalling() ? FallbackWriteLog.recordingProxy(stmt, binds) : stmt;
             if (paramSetter != null) {
-                paramSetter.setParameters(stmt);
+                paramSetter.setParameters(target);
             }
-            return stmt.executeUpdate();
+            int affected = stmt.executeUpdate();
+            journal(sql, binds);
+            return affected;
         }
+    }
+
+    // ==================== Fallback gate + journal (#1833) ====================
+
+    /** @return true when writes are landing on the SQLite fallback and must be journalled. */
+    private boolean journalling() {
+        DatabaseManager manager = db();
+        return manager != null && manager.isInFallbackMode() && manager.getFallbackWriteLog() != null;
+    }
+
+    /**
+     * Record a fallback-era write so it can be replayed to the primary on recovery (#1833).
+     * Silent no-op when running normally.
+     */
+    private void journal(String sql, java.util.List<FallbackWriteLog.Bind> binds) {
+        if (!journalling()) {
+            return;
+        }
+        db().getFallbackWriteLog().record(sql, binds);
+    }
+
+    /**
+     * Refuse writes to cluster-shared tables while running on the fallback store.
+     *
+     * <p>An outage here is a <em>connectivity</em> outage — the authoritative tier keeps writing the
+     * shared content tables throughout — so a local write would diverge from the canon with no safe
+     * merge back. Per-server tables are unaffected and stay fully writable, which is what keeps
+     * discoveries and locations working during an outage. See {@link LoreTableScope}.</p>
+     *
+     * <p>Until #1834 declares tables shared this is effectively inert on a non-clustered server,
+     * because nothing is cluster-shared yet.</p>
+     */
+    private void guardFallbackWrite(String sql) throws LoreException {
+        String refusal = fallbackRefusal(sql);
+        if (refusal != null) {
+            throw new LoreException(refusal, LoreException.LoreExceptionType.DATABASE_ERROR);
+        }
+    }
+
+    /** Same gate for the transactional path, which propagates SQLException rather than LoreException. */
+    private void guardFallbackWriteUnchecked(String sql) throws SQLException {
+        String refusal = fallbackRefusal(sql);
+        if (refusal != null) {
+            throw new SQLException(refusal);
+        }
+    }
+
+    private String fallbackRefusal(String sql) {
+        DatabaseManager manager = db();
+        if (manager == null || !manager.isInFallbackMode()) {
+            return null;
+        }
+        // On a standalone server nothing is actually shared — no other tier writes these rows — so
+        // refusing would cost availability and buy nothing. The gate arms only once #1834 turns
+        // clustering on, which keeps this change behaviour-neutral on Dev/Event/prod today.
+        if (!manager.isClusterEnabled()) {
+            return null;
+        }
+        String table = FallbackWriteLog.extractTable(sql);
+        if (table == null || !LoreTableScope.isShared(table)) {
+            return null;
+        }
+        String message = "Refusing to write shared lore table '" + table
+                + "' while the database is in fallback mode — the authoritative tier owns this data and"
+                + " a local write could not be merged back (#1833). Per-server lore still works;"
+                + " retry once the primary database recovers.";
+        logger.warning(message);
+        return message;
     }
 
     /**

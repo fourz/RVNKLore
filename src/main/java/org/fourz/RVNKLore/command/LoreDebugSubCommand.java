@@ -49,6 +49,7 @@ public class LoreDebugSubCommand implements SubCommand {
             sender.sendMessage(ChatColor.YELLOW + "/lore debug loglevel [level]" + ChatColor.WHITE + " - View/change runtime log level");
             sender.sendMessage(ChatColor.YELLOW + "/lore debug dynmap [refresh]" + ChatColor.WHITE + " - Dynmap integration status / refresh markers");
             sender.sendMessage(ChatColor.YELLOW + "/lore debug setup" + ChatColor.WHITE + " - Bootstrap LuckPerms permission defaults");
+            sender.sendMessage(ChatColor.YELLOW + "/lore debug fallback" + ChatColor.WHITE + " - Fallback mode + pending reconcile state");
             return true;
         }
 
@@ -91,10 +92,50 @@ public class LoreDebugSubCommand implements SubCommand {
             case "setup":
                 return executeSetup(sender);
 
+            case "fallback":
+                return fallbackStatus(sender);
+
             default:
                 sender.sendMessage(ChatColor.RED + "Unknown debug command: " + action);
                 return false;
         }
+    }
+
+    /**
+     * Report fallback mode and how many outage-era writes are waiting to be replayed (#1833).
+     *
+     * <p>A silent fallback is the failure mode this whole epic exists to prevent, so the state is
+     * made explicit rather than left to be inferred from logs.</p>
+     */
+    private boolean fallbackStatus(CommandSender sender) {
+        org.fourz.RVNKLore.data.DatabaseManager dbManager = plugin.getDatabaseManager();
+        if (dbManager == null) {
+            sender.sendMessage(ChatColor.RED + "✖ Database manager unavailable.");
+            return true;
+        }
+
+        boolean inFallback = dbManager.isInFallbackMode();
+        sender.sendMessage(ChatColor.GOLD + "=== Lore Database Fallback ===");
+        sender.sendMessage(ChatColor.WHITE + "Mode: "
+                + (inFallback ? ChatColor.RED + "FALLBACK (local SQLite)" : ChatColor.GREEN + "primary"));
+        sender.sendMessage(ChatColor.WHITE + "Fallback enabled in config: "
+                + (dbManager.isFallbackEnabled() ? ChatColor.GREEN + "yes" : ChatColor.YELLOW + "no"));
+
+        org.fourz.RVNKLore.data.FallbackWriteLog writeLog = dbManager.getFallbackWriteLog();
+        int pending = writeLog == null ? 0 : writeLog.pendingCount();
+        sender.sendMessage(ChatColor.WHITE + "Writes awaiting reconcile: "
+                + (pending == 0 ? ChatColor.GREEN + "0" : ChatColor.YELLOW + String.valueOf(pending)));
+
+        if (inFallback) {
+            sender.sendMessage(ChatColor.YELLOW + "⚠ Shared lore tables are read-only while in fallback.");
+            sender.sendMessage(ChatColor.GRAY + "   Per-server lore (discoveries, locations, maps) still works");
+            sender.sendMessage(ChatColor.GRAY + "   and replays to the primary automatically on recovery.");
+        }
+        if (pending > 0) {
+            sender.sendMessage(ChatColor.GRAY + "   Journal: plugins/RVNKLore/.reconcile-pending");
+        }
+        sender.sendMessage(ChatColor.GRAY + "   Failed replays are quarantined to .reconcile-failed");
+        return true;
     }
 
     private boolean runDiagnostics(CommandSender sender, String[] args) {
@@ -473,7 +514,8 @@ public class LoreDebugSubCommand implements SubCommand {
     @Override
     public List<String> getTabCompletions(CommandSender sender, String[] args) {
         if (args.length == 1) {
-            return Arrays.asList("diagnostics", "check", "handlers", "fix", "player", "seed", "loglevel", "dynmap");
+            return Arrays.asList("diagnostics", "check", "handlers", "fix", "player", "seed", "loglevel",
+                    "dynmap", "setup", "fallback");
         }
 
         if (args.length >= 2 && args[0].equalsIgnoreCase("seed")) {
