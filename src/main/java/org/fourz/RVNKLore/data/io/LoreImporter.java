@@ -286,6 +286,21 @@ public class LoreImporter {
                 return null;
             }
 
+            // #1644: reject non-UUID ids at the door. LoreEntry.getUUID() does UUID.fromString(id)
+            // and eight call sites depend on it — /lore delete, the forge anvil handler, death lore,
+            // voting rewards, LoreManager, the item post-processor, collections and reward handlers.
+            // An entry imported with an arbitrary string id parses and persists fine, then throws
+            // IllegalArgumentException on every one of those paths and can never be deleted.
+            // Failing the import is recoverable; admitting the row is not.
+            try {
+                java.util.UUID.fromString(id);
+            } catch (IllegalArgumentException e) {
+                warnings.add("Entry id is not a valid UUID: '" + id + "' (entry '" + name
+                    + "'). Ids must be UUIDs — an entry with a non-UUID id cannot be deleted "
+                    + "or resolved once imported. Omit the id to have one generated.");
+                return null;
+            }
+
             LoreType type;
             try {
                 type = LoreType.valueOf(typeStr.toUpperCase());
@@ -367,6 +382,21 @@ public class LoreImporter {
 
             if (id == null || name == null || description == null || typeStr == null) {
                 warnings.add("Entry missing required fields (id, name, description, or type)");
+                return null;
+            }
+
+            // #1644: reject non-UUID ids at the door. LoreEntry.getUUID() does UUID.fromString(id)
+            // and eight call sites depend on it — /lore delete, the forge anvil handler, death lore,
+            // voting rewards, LoreManager, the item post-processor, collections and reward handlers.
+            // An entry imported with an arbitrary string id parses and persists fine, then throws
+            // IllegalArgumentException on every one of those paths and can never be deleted.
+            // Failing the import is recoverable; admitting the row is not.
+            try {
+                java.util.UUID.fromString(id);
+            } catch (IllegalArgumentException e) {
+                warnings.add("Entry id is not a valid UUID: '" + id + "' (entry '" + name
+                    + "'). Ids must be UUIDs — an entry with a non-UUID id cannot be deleted "
+                    + "or resolved once imported. Omit the id to have one generated.");
                 return null;
             }
 

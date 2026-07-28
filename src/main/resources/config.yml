@@ -30,7 +30,7 @@ features:
     enabled: true
 
 lore:
-  nearbyRadius: 50.0
+  nearbyRadius: 20.0
   requireApproval: true
   # Player-death lore creation:
   #   none        - no lore entries from player deaths (default)

@@ -73,7 +73,7 @@ public class ConfigManager {
         config.addDefault("storage.mysql.database", "minecraft");
         config.addDefault("storage.mysql.username", "root");
         config.addDefault("storage.mysql.password", "");
-        config.addDefault("lore.nearbyRadius", 50.0);
+        config.addDefault("lore.nearbyRadius", 20.0);
         config.addDefault("lore.requireApproval", true);
         config.addDefault("lore.playerDeath.mode", "none");
         config.addDefault("features.collections.enabled", true);
@@ -219,7 +219,7 @@ public class ConfigManager {
     }
     
     public double getNearbyRadius() {
-        return config.getDouble("lore.nearbyRadius", 50.0);
+        return config.getDouble("lore.nearbyRadius", 20.0);
     }
 
     /**

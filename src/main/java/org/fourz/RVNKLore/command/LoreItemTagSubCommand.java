@@ -17,7 +17,13 @@ import java.util.stream.Collectors;
 
 /**
  * /lore item tag <entry-name> — stamp the held item with a lore entry's display name,
- * description lore lines, and PDC key {@code rvnklore:entry_id}.
+ * description lore lines, and PDC key {@code rvnklore:lore_entry_id}.
+ *
+ * <p>#1651: the key is {@code lore_entry_id}, not {@code entry_id}. Behavior-Spec §3 and #741
+ * say {@code entry_id}, but the code has always stamped {@code lore_entry_id} and discovery,
+ * the book manager and collection scanning all read that name. Confirmed against a live item
+ * 2026-07-28 — minted lore items in player inventories carry {@code rvnklore:lore_entry_id},
+ * so renaming the key would orphan every item already in the world. The spec is what is wrong.</p>
  */
 public class LoreItemTagSubCommand implements SubCommand {
 
