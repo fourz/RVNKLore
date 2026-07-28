@@ -92,9 +92,11 @@ storage:
     #   Set back to false before the next restart.
     purgeData: false
   # ───────────────────────────────────────────────────────────────────────────
-  # mysql: section is no longer used. When storage.type=mysql, RVNKLore reuses
-  # the shared ConnectionProvider from RVNKCore (no separate pool created).
-  # Connection details are configured in RVNKCore's config.yml only.
+  # RVNKLore builds its OWN MySQL pool from this block (RVNKCore-MySQL-Pool-RVNKLore) via
+  # MySQLConnection -> ConnectionProviderFactory — it does NOT reuse RVNKCore's shared provider
+  # (the old comment here was wrong; #1822/#1803). host/port/database/username/password must be
+  # present in the DEPLOYED config for each tier; the pool lifetimes are set in MySQLConnection.java
+  # (tuned for the cross-host DB per #1817/#1822).
   mysql:
     tablePrefix:
   sqlite:

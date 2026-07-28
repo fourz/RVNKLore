@@ -40,10 +40,15 @@ public class MySQLConnection extends DatabaseConnection {
             .password(mysql.getPassword())
             .useSSL(mysql.isUseSSL())
             .maxConnections(mysql.getPoolSize())
-            .minIdleConnections(2)
+            // Cross-host MySQL (#1822, following #1817): the DB is on a different host and network
+            // gear silently drops idle TCP with no FIN. minIdle>0 holds connections that then go
+            // stale ("No operations allowed after connection closed"), and a long idleTimeout lets
+            // them sit past the network's drop window. Hold none idle, and retire/replace before the
+            // network kills them. These match RVNKCore/RVNKWorlds' proven-stable values.
+            .minIdleConnections(0)
             .connectionTimeoutMs(30000L)
-            .idleTimeoutMs(300000L)
-            .maxLifetimeMs(580000L)
+            .idleTimeoutMs(120000L)
+            .maxLifetimeMs(180000L)
             .build();
 
         try {
