@@ -196,26 +196,28 @@ public class DiscoveryManager {
             firstDiscoverers.put(entryId, playerUuid);
         }
 
-        // Record in PlayerManager (legacy player_discoveries table)
-        CompletableFuture<Boolean> legacyRecord = trackWrite(playerManager.recordLoreDiscovery(playerUuid, entryId));
-
-        // Also persist to enriched lore_discovery table with full context
-        if (discoveryRepository != null) {
-            String world = location != null && location.getWorld() != null ? location.getWorld().getName() : null;
-            Double x = location != null ? location.getX() : null;
-            Double y = location != null ? location.getY() : null;
-            Double z = location != null ? location.getZ() : null;
-
-            trackWrite(discoveryRepository.recordDiscovery(playerUuid, entryId,
-                    triggerType != null ? triggerType.name() : "UNKNOWN",
-                    world, x, y, z, isFirstDiscovery)
-                .exceptionally(ex -> {
-                    logger.warning("Failed to persist enriched discovery: " + ex.getMessage());
-                    return false;
-                }));
+        // #1832: both paths now write the SAME table (lore_discovery), which has a
+        // UNIQUE(player_uuid, entry_id) constraint — so they must not both run. Prefer the enriched
+        // write (full trigger/location context); the PlayerManager path is only a fallback for when
+        // the discovery repository is unavailable.
+        if (discoveryRepository == null) {
+            return trackWrite(playerManager.recordLoreDiscovery(playerUuid, entryId));
         }
 
-        return legacyRecord;
+        // Persist to lore_discovery with full context — this is now the authoritative write, so its
+        // result is what the caller gets (#1832).
+        String world = location != null && location.getWorld() != null ? location.getWorld().getName() : null;
+        Double x = location != null ? location.getX() : null;
+        Double y = location != null ? location.getY() : null;
+        Double z = location != null ? location.getZ() : null;
+
+        return trackWrite(discoveryRepository.recordDiscovery(playerUuid, entryId,
+                triggerType != null ? triggerType.name() : "UNKNOWN",
+                world, x, y, z, isFirstDiscovery)
+            .exceptionally(ex -> {
+                logger.warning("Failed to persist discovery: " + ex.getMessage());
+                return false;
+            }));
     }
 
     /**
