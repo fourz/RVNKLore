@@ -296,7 +296,7 @@ public class LoreImporter {
                 java.util.UUID.fromString(id);
             } catch (IllegalArgumentException e) {
                 warnings.add("Entry id is not a valid UUID: '" + id + "' (entry '" + name
-                    + "'). Ids must be UUIDs — an entry with a non-UUID id cannot be deleted "
+                    + "'). Ids must be UUIDs - an entry with a non-UUID id cannot be deleted "
                     + "or resolved once imported. Omit the id to have one generated.");
                 return null;
             }
@@ -395,7 +395,7 @@ public class LoreImporter {
                 java.util.UUID.fromString(id);
             } catch (IllegalArgumentException e) {
                 warnings.add("Entry id is not a valid UUID: '" + id + "' (entry '" + name
-                    + "'). Ids must be UUIDs — an entry with a non-UUID id cannot be deleted "
+                    + "'). Ids must be UUIDs - an entry with a non-UUID id cannot be deleted "
                     + "or resolved once imported. Omit the id to have one generated.");
                 return null;
             }
