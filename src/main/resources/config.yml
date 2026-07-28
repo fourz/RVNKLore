@@ -281,3 +281,43 @@ messages:
     - '[Help]'
     no_held_item:
     - 'You must be holding an item!'
+
+# ---------------------------------------------------------------------------
+# Cluster-shared lore content (#1834)
+#
+# Shares lore CONTENT network-wide while keeping WORLD-BEARING data per-server.
+#
+#   shared    lore_entry, lore_submission, lore_item, lore_metadata, collection,
+#             collection_item, collection_reward, quest_item_presets,
+#             lore_item_rng_pool, and player progress
+#   local     lore_location, lore_discovery, lore_map
+#
+# The local set stays per-server because every one of them stores a world name plus
+# coordinates, and two servers can each have a world called "world". Sharing them would
+# silently merge places that have nothing to do with each other.
+#
+# role: authoritative  this server OWNS the shared content; the cluster database is its
+#                      own database, so no second pool is opened.
+# role: member         shared content is read from and written to cluster.mysql below.
+#
+# Leave enabled: false on an isolated tier (Dev). While clustering is off nothing is
+# treated as shared, so behaviour is identical to a standalone server.
+#
+# Note this also arms the #1833 fail-closed rule: with clustering on, writes to shared
+# tables are refused while the database is in SQLite fallback, because the authoritative
+# tier keeps writing them throughout and a local write could not be merged back.
+# ---------------------------------------------------------------------------
+cluster:
+  enabled: false
+  role: member
+  mysql:
+    host: ''
+    port: 3306
+    database: ''
+    username: ''
+    password: ''
+    useSSL: false
+    tablePrefix: 'rvnklore_'
+    connectionTimeout: 30000
+    idleTimeout: 120000
+    maxLifetime: 180000

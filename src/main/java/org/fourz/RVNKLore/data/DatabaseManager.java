@@ -41,6 +41,12 @@ public class DatabaseManager {
     private final DatabaseConnectionFactory connectionFactory;
     private final FallbackTracker fallbackTracker;
     private DatabaseConnection connection;
+    /**
+     * Pool serving cluster-shared lore content (#1834). Null when clustering is off or this server is
+     * the authoritative tier — in both cases the shared content is the local database and a second
+     * pool would be waste.
+     */
+    private DatabaseConnection clusterConnection;
     private DatabaseHelper databaseHelper;
     private LoreEntryRepository loreRepository;
     private LocationRepository locationRepository;
@@ -78,6 +84,50 @@ public class DatabaseManager {
      */
     public boolean isClusterEnabled() {
         return plugin.getConfig().getBoolean("cluster.enabled", false);
+    }
+
+    /**
+     * @return {@code authoritative} when this server owns the shared lore content, else {@code member}
+     */
+    public String getClusterRole() {
+        return plugin.getConfig().getString("cluster.role", "member");
+    }
+
+    /** @return true when this server owns the cluster database rather than reading someone else's. */
+    public boolean isClusterAuthoritative() {
+        return "authoritative".equalsIgnoreCase(getClusterRole());
+    }
+
+    /**
+     * The connection serving cluster-shared lore content (#1834).
+     *
+     * <p>Falls back to the local connection whenever clustering is off or this server is the
+     * authoritative tier — in both cases the shared content <em>is</em> the local database, so there
+     * is no second pool. Callers can therefore use this unconditionally without branching.</p>
+     *
+     * @return the connection shared lore content should be read from and written to
+     */
+    public DatabaseConnection getClusterConnection() {
+        return clusterConnection != null ? clusterConnection : connection;
+    }
+
+    /**
+     * Route a statement to the pool that owns its table (#1834).
+     *
+     * <p>Per-statement rather than per-repository, because two repositories legitimately touch both
+     * groups: {@code PlayerRepository} reads cluster lore while writing per-server discoveries, and
+     * {@code LoreEntryRepository} deletes per-server satellite rows when removing a cluster entry
+     * (#1839). No single statement spans both, which is what makes this safe.</p>
+     *
+     * @param sql the statement about to run
+     * @return the connection that owns the statement's table
+     */
+    public DatabaseConnection connectionForStatement(String sql) {
+        if (clusterConnection == null) {
+            return connection;
+        }
+        String table = FallbackWriteLog.extractTable(sql);
+        return (table != null && LoreTableScope.isShared(table)) ? clusterConnection : connection;
     }
 
     /**
@@ -175,6 +225,7 @@ public class DatabaseManager {
                 connection.purgeAllData();
             }
 
+            initializeClusterConnection();
             wireRepositories(connection);
 
             connectionValid = true;
@@ -210,6 +261,53 @@ public class DatabaseManager {
             if (connectionFactory.isFallbackEnabled()) {
                 attemptFallbackConnection();
             }
+        }
+    }
+
+    /**
+     * Open the cluster pool for shared lore content, if this server is a member (#1834).
+     *
+     * <p>No-op in three cases, each for a different reason:</p>
+     * <ul>
+     *   <li>clustering off — nothing is shared, everything is local</li>
+     *   <li>authoritative — the cluster database <em>is</em> this database, so a second pool to the
+     *       same schema would double the connections for no benefit</li>
+     *   <li>fallback mode — the primary is already unreachable; the cluster almost certainly is too,
+     *       and #1833 refuses shared writes while in fallback anyway</li>
+     * </ul>
+     *
+     * <p>A member that cannot reach the cluster does <b>not</b> silently fall back to serving shared
+     * content from its local tables. That would present a stale private copy of the canon as if it
+     * were the real thing — the divergence this whole split exists to prevent. It fails loudly and
+     * leaves shared lore unavailable instead.</p>
+     */
+    private void initializeClusterConnection() {
+        clusterConnection = null;
+        if (!isClusterEnabled()) {
+            return;
+        }
+        if (isClusterAuthoritative()) {
+            logger.info("Cluster: role=authoritative — shared lore content is served from this "
+                    + "server's own database; no second pool opened");
+            return;
+        }
+
+        try {
+            DatabaseConnection cluster = connectionFactory.createClusterConnection();
+            if (cluster == null) {
+                logger.error("Cluster: role=member but no usable cluster.mysql configuration — shared "
+                        + "lore content is UNAVAILABLE. Refusing to serve it from local tables, which "
+                        + "would present a stale copy of the canon as authoritative.", null);
+                return;
+            }
+            cluster.initialize();
+            cluster.createTables();
+            clusterConnection = cluster;
+            logger.info("Cluster: role=member — shared lore content served from the cluster pool");
+        } catch (Exception e) {
+            logger.error("Cluster: failed to reach the cluster database — shared lore content is "
+                    + "UNAVAILABLE. Per-server lore (discoveries, locations, maps) is unaffected.", e);
+            clusterConnection = null;
         }
     }
 
@@ -582,12 +680,26 @@ public class DatabaseManager {
      * @param conn The active DatabaseConnection to bind repositories to
      */
     private void wireRepositories(DatabaseConnection conn) {
-        loreRepository = new LoreEntryRepository(plugin, conn);
+        // #1834: repositories are bound by the pool their READS use. Writes route per statement in
+        // DatabaseHelper, because two repositories legitimately touch both groups — but no single
+        // statement does, and every repository's reads are single-pool (verified against the JOIN
+        // graph: nothing joins cluster content to per-server world-bearing tables).
+        //
+        // getClusterConnection() returns the local connection whenever clustering is off or this
+        // tier is authoritative, so this is identical to the old wiring in those cases.
+        DatabaseConnection cluster = getClusterConnection();
+
+        // Cluster-shared content
+        loreRepository = new LoreEntryRepository(plugin, cluster);
+        achievementRepository = new AchievementRepository(plugin, cluster);
+        collectionRewardRepository = new CollectionRewardRepository(plugin, cluster);
+
+        // Per-server, world-bearing — these carry a world name and must never be shared
         locationRepository = new LocationRepository(plugin, conn);
         discoveryRepository = new DiscoveryRepository(plugin, conn);
-        achievementRepository = new AchievementRepository(plugin, conn);
-        collectionRewardRepository = new CollectionRewardRepository(plugin, conn);
         mapRepository = new MapRepository(plugin, conn);
+
+        // Backups run against the local database; the authoritative tier owns backing up the canon.
         backupService = new DatabaseBackupService(plugin, conn);
     }
 
@@ -671,6 +783,13 @@ public class DatabaseManager {
     public void close() {
         if (connection != null) {
             connection.close();
+        }
+        // #1834: the cluster pool is a separate HikariCP pool on a member tier and would otherwise
+        // leak its connections across a reload. Null on an authoritative tier or with clustering off,
+        // where it is the same object as `connection` and must not be closed twice.
+        if (clusterConnection != null) {
+            clusterConnection.close();
+            clusterConnection = null;
         }
     }
 

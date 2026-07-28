@@ -25,8 +25,32 @@ public class MySQLConnection extends DatabaseConnection {
     private static final long MAX_SAFE_IDLE_TIMEOUT_MS = 120000L;
     private static final long MAX_SAFE_MAX_LIFETIME_MS = 180000L;
 
+    /** Config path this connection reads its credentials and pool settings from. */
+    private final String configPath;
+
+    /** Explicit settings, used for the cluster pool; null means read the primary storage block. */
+    private final MySQLSettingsDTO settingsOverride;
+
     public MySQLConnection(RVNKLore plugin, SQLDialect dialect) {
+        this(plugin, dialect, null, "storage.mysql");
+    }
+
+    /**
+     * Create a connection against an explicit MySQL target.
+     *
+     * <p>Used for the cluster pool (#1834), which reads {@code cluster.mysql.*} rather than
+     * {@code storage.mysql.*}. Everything else — the cross-host pool ceilings, the provider
+     * plumbing — is deliberately shared, so the cluster pool inherits the same #1822 protections
+     * as the primary rather than quietly getting different ones.</p>
+     *
+     * @param settingsOverride explicit target; null falls back to the configured storage block
+     * @param configPath       config path the pool timeouts are read from
+     */
+    public MySQLConnection(RVNKLore plugin, SQLDialect dialect,
+                           MySQLSettingsDTO settingsOverride, String configPath) {
         super(plugin, dialect);
+        this.settingsOverride = settingsOverride;
+        this.configPath = configPath;
     }
 
     /**
@@ -45,7 +69,7 @@ public class MySQLConnection extends DatabaseConnection {
      * @return the effective value
      */
     private long resolvePoolTimeout(String key, long ceiling, long fallback) {
-        long requested = plugin.getConfig().getLong("storage.mysql." + key, fallback);
+        long requested = plugin.getConfig().getLong(configPath + "." + key, fallback);
         if (requested > ceiling) {
             logger.warning("Capping pool " + key + " for cross-host safety: " + requested + " -> "
                     + ceiling + "ms (config exceeded the safe ceiling)");
@@ -59,9 +83,11 @@ public class MySQLConnection extends DatabaseConnection {
         logger.debug("Initializing MySQL connection...");
         lastConnectionError = null;
 
-        MySQLSettingsDTO mysql = plugin.getConfigManager().getDatabaseSettings().getMysqlSettings();
+        MySQLSettingsDTO mysql = settingsOverride != null
+            ? settingsOverride
+            : plugin.getConfigManager().getDatabaseSettings().getMysqlSettings();
         if (mysql == null) {
-            throw new SQLException("MySQL settings not configured in storage.mysql.*");
+            throw new SQLException("MySQL settings not configured in " + configPath + ".*");
         }
 
         DatabaseConfig config = DatabaseConfig.builder()
@@ -82,7 +108,7 @@ public class MySQLConnection extends DatabaseConnection {
             // #1837: read from config and clamp, rather than hardcode. The keys were previously
             // declared in every live config.yml and silently ignored.
             .minIdleConnections(0)
-            .connectionTimeoutMs(plugin.getConfig().getLong("storage.mysql.connectionTimeout", 30000L))
+            .connectionTimeoutMs(plugin.getConfig().getLong(configPath + ".connectionTimeout", 30000L))
             .idleTimeoutMs(resolvePoolTimeout("idleTimeout", MAX_SAFE_IDLE_TIMEOUT_MS, MAX_SAFE_IDLE_TIMEOUT_MS))
             .maxLifetimeMs(resolvePoolTimeout("maxLifetime", MAX_SAFE_MAX_LIFETIME_MS, MAX_SAFE_MAX_LIFETIME_MS))
             .build();

@@ -121,6 +121,26 @@ public class LoreDebugSubCommand implements SubCommand {
         sender.sendMessage(ChatColor.WHITE + "Fallback enabled in config: "
                 + (dbManager.isFallbackEnabled() ? ChatColor.GREEN + "yes" : ChatColor.YELLOW + "no"));
 
+        // #1834: cluster posture. A member that cannot reach the cluster serves no shared lore at
+        // all rather than falling back to its own stale copy, so this needs to be visible.
+        if (dbManager.isClusterEnabled()) {
+            boolean authoritative = dbManager.isClusterAuthoritative();
+            sender.sendMessage(ChatColor.WHITE + "Cluster: " + ChatColor.AQUA + "enabled"
+                    + ChatColor.WHITE + " (role: " + dbManager.getClusterRole() + ")");
+            if (!authoritative) {
+                boolean reachable = dbManager.getClusterConnection() != null
+                        && dbManager.getClusterConnection().isConnected();
+                sender.sendMessage(ChatColor.WHITE + "Shared lore content: "
+                        + (reachable ? ChatColor.GREEN + "available from the cluster"
+                                     : ChatColor.RED + "UNAVAILABLE — cluster unreachable"));
+            } else {
+                sender.sendMessage(ChatColor.GRAY + "   This server owns the shared lore content.");
+            }
+        } else {
+            sender.sendMessage(ChatColor.WHITE + "Cluster: " + ChatColor.GRAY
+                    + "disabled (all lore is local to this server)");
+        }
+
         org.fourz.RVNKLore.data.FallbackWriteLog writeLog = dbManager.getFallbackWriteLog();
         int pending = writeLog == null ? 0 : writeLog.pendingCount();
         sender.sendMessage(ChatColor.WHITE + "Writes awaiting reconcile: "

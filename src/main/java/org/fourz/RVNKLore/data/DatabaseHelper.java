@@ -173,7 +173,10 @@ public class DatabaseHelper {
         guardFallbackWrite(sql);
         return executeWithRetry(() -> {
             // Get fresh connection from pool - MUST use try-with-resources
-            try (Connection conn = db().getConnection();
+            // #1834: route to the pool owning this statement's table. Falls through to the
+            // primary whenever clustering is off or this tier is authoritative.
+            DatabaseConnection pool = db().connectionForStatement(sql);
+            try (Connection conn = pool.getConnection();
                  PreparedStatement stmt = conn.prepareStatement(sql)) {
                 java.util.List<FallbackWriteLog.Bind> binds = new java.util.ArrayList<>();
                 PreparedStatement target = journalling() ? FallbackWriteLog.recordingProxy(stmt, binds) : stmt;

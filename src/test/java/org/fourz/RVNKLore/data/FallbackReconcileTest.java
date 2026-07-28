@@ -120,4 +120,62 @@ class FallbackReconcileTest {
                     "per-server writes must stay available during an outage");
         }
     }
+
+    @Nested
+    @DisplayName("Cluster routing (#1834)")
+    class ClusterRouting {
+
+        @Test
+        @DisplayName("Content statements route to the cluster pool")
+        void contentRoutesToCluster() {
+            // These are the statements a member tier must send to the authoritative database.
+            assertTrue(LoreTableScope.isShared(FallbackWriteLog.extractTable(
+                    "INSERT INTO rvnklore_lore_entry (id, entry_type, name) VALUES (?, ?, ?)")));
+            assertTrue(LoreTableScope.isShared(FallbackWriteLog.extractTable(
+                    "UPDATE rvnklore_lore_submission SET content = ? WHERE entry_id = ?")));
+            assertTrue(LoreTableScope.isShared(FallbackWriteLog.extractTable(
+                    "DELETE FROM rvnklore_collection_reward WHERE id = ?")));
+        }
+
+        @Test
+        @DisplayName("World-bearing statements stay on the local pool")
+        void worldBearingStaysLocal() {
+            // Sharing these would merge coordinates from worlds that only share a name.
+            assertTrue(LoreTableScope.isPerServer(FallbackWriteLog.extractTable(
+                    "INSERT INTO rvnklore_lore_discovery (player_uuid, entry_id) VALUES (?, ?)")));
+            assertTrue(LoreTableScope.isPerServer(FallbackWriteLog.extractTable(
+                    "DELETE FROM rvnklore_lore_location WHERE entry_id = ?")));
+            assertTrue(LoreTableScope.isPerServer(FallbackWriteLog.extractTable(
+                    "UPDATE rvnklore_lore_map SET lore_entry_id = NULL WHERE lore_entry_id = ?")));
+        }
+
+        @Test
+        @DisplayName("The #1839 delete cleanup routes each statement to a different pool")
+        void deleteCleanupSplitsAcrossPools() {
+            // deleteLoreEntry issues these four in order. The first three are per-server and the
+            // last is cluster-shared, which is precisely why routing is per-statement and why the
+            // delete is no longer one transaction once the pools differ.
+            String[] localFirst = {
+                "DELETE FROM rvnklore_lore_location WHERE entry_id = ?",
+                "DELETE FROM rvnklore_lore_discovery WHERE entry_id = ?",
+                "UPDATE rvnklore_lore_map SET lore_entry_id = NULL WHERE lore_entry_id = ?"
+            };
+            for (String sql : localFirst) {
+                assertTrue(LoreTableScope.isPerServer(FallbackWriteLog.extractTable(sql)),
+                        "cleanup must hit the local pool: " + sql);
+            }
+            assertTrue(LoreTableScope.isShared(FallbackWriteLog.extractTable(
+                    "DELETE FROM rvnklore_lore_entry WHERE id = ?")),
+                    "the entry itself lives in the cluster pool");
+        }
+
+        @Test
+        @DisplayName("An unparseable statement routes local, never to the cluster")
+        void unparseableRoutesLocal() {
+            // Routing an unrecognised statement to the cluster would let an unknown write reach the
+            // authoritative canon. Defaulting local keeps a mistake confined to one server.
+            assertNull(FallbackWriteLog.extractTable("SELECT 1"));
+            assertTrue(LoreTableScope.isPerServer(FallbackWriteLog.extractTable("SELECT 1")));
+        }
+    }
 }
