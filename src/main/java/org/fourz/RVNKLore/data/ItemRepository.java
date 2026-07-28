@@ -666,12 +666,13 @@ public class ItemRepository implements IItemRepository {
                     ps.setInt(1, itemId);
                     try (ResultSet rs = ps.executeQuery()) { props = rs.next() ? rs.getString(1) : null; }
                 }
-                try (PreparedStatement ps = conn.prepareStatement("UPDATE " + t("lore_submission")
-                        + " SET content = ? WHERE entry_id = ? AND is_current_version = TRUE")) {
-                    ps.setString(1, props);
-                    ps.setString(2, entryId);
-                    return ps.executeUpdate() > 0;
-                }
+                final String snapshotProps = props;
+                final String snapshotEntryId = entryId;
+                return dbHelper.executeUpdateOn(conn, "UPDATE " + t("lore_submission")
+                        + " SET content = ? WHERE entry_id = ? AND is_current_version = TRUE", ps -> {
+                    ps.setString(1, snapshotProps);
+                    ps.setString(2, snapshotEntryId);
+                }) > 0;
             } catch (SQLException e) {
                 logger.error("Failed to snapshot current version for item " + itemId, e);
                 return false;
@@ -693,12 +694,10 @@ public class ItemRepository implements IItemRepository {
                     String entryId = resolveEntryId(conn, itemId);
                     if (entryId == null) { conn.rollback(); return -1; }
 
-                    try (PreparedStatement ps = conn.prepareStatement("UPDATE " + t("lore_submission")
+                    dbHelper.executeUpdateOn(conn, "UPDATE " + t("lore_submission")
                             + " SET is_current_version = FALSE, status = 'ARCHIVED' "
-                            + "WHERE entry_id = ? AND is_current_version = TRUE")) {
-                        ps.setString(1, entryId);
-                        ps.executeUpdate();
-                    }
+                            + "WHERE entry_id = ? AND is_current_version = TRUE",
+                            ps -> ps.setString(1, entryId));
 
                     int nextVersion = 1;
                     try (PreparedStatement ps = conn.prepareStatement("SELECT COALESCE(MAX(content_version), 0) + 1 "
@@ -708,15 +707,15 @@ public class ItemRepository implements IItemRepository {
                     }
 
                     String slug = "item-" + entryId.substring(0, Math.min(8, entryId.length())) + "-v" + nextVersion;
-                    try (PreparedStatement ps = conn.prepareStatement("INSERT INTO " + t("lore_submission")
+                    final int versionToWrite = nextVersion;
+                    dbHelper.executeUpdateOn(conn, "INSERT INTO " + t("lore_submission")
                             + " (entry_id, submitter_uuid, content, slug, content_version, is_current_version, status) "
-                            + "VALUES (?, 'Server', ?, ?, ?, TRUE, 'ACTIVE')")) {
+                            + "VALUES (?, 'Server', ?, ?, ?, TRUE, 'ACTIVE')", ps -> {
                         ps.setString(1, entryId);
                         ps.setString(2, propsJson);
                         ps.setString(3, slug);
-                        ps.setInt(4, nextVersion);
-                        ps.executeUpdate();
-                    }
+                        ps.setInt(4, versionToWrite);
+                    });
 
                     materializeItem(conn, itemId, properties, propsJson);
 
@@ -738,9 +737,9 @@ public class ItemRepository implements IItemRepository {
 
     /** Materialize lore_item columns from properties + the prebuilt item_properties JSON. */
     private void materializeItem(Connection conn, int itemId, ItemProperties properties, String propsJson) throws SQLException {
-        try (PreparedStatement ps = conn.prepareStatement("UPDATE " + t("lore_item") + " SET "
+        dbHelper.executeUpdateOn(conn, "UPDATE " + t("lore_item") + " SET "
                 + "name = ?, item_type = ?, rarity = ?, material = ?, is_obtainable = ?, "
-                + "custom_model_data = ?, item_properties = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")) {
+                + "custom_model_data = ?, item_properties = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", ps -> {
             ps.setString(1, properties.getDisplayName());
             ps.setString(2, properties.getItemType() != null ? properties.getItemType().name() : "STANDARD");
             ps.setString(3, properties.getRarity() != null ? properties.getRarity() : "COMMON");
@@ -750,8 +749,7 @@ public class ItemRepository implements IItemRepository {
             else ps.setNull(6, java.sql.Types.INTEGER);
             ps.setString(7, propsJson);
             ps.setInt(8, itemId);
-            ps.executeUpdate();
-        }
+        });
     }
 
     /** List the version history (content_version, is_current, status, created_at) for an item. */
@@ -805,30 +803,27 @@ public class ItemRepository implements IItemRepository {
                     // Only roll back to versions that carry an item snapshot (item_properties JSON).
                     if (content == null || !content.contains("\"")) { conn.rollback(); return false; }
 
-                    try (PreparedStatement ps = conn.prepareStatement("UPDATE " + t("lore_submission")
+                    dbHelper.executeUpdateOn(conn, "UPDATE " + t("lore_submission")
                             + " SET is_current_version = FALSE, status = 'ARCHIVED' "
-                            + "WHERE entry_id = ? AND is_current_version = TRUE")) {
-                        ps.setString(1, entryId);
-                        ps.executeUpdate();
-                    }
-                    try (PreparedStatement ps = conn.prepareStatement("UPDATE " + t("lore_submission")
+                            + "WHERE entry_id = ? AND is_current_version = TRUE",
+                            ps -> ps.setString(1, entryId));
+                    dbHelper.executeUpdateOn(conn, "UPDATE " + t("lore_submission")
                             + " SET is_current_version = TRUE, status = 'ACTIVE' "
-                            + "WHERE entry_id = ? AND content_version = ?")) {
+                            + "WHERE entry_id = ? AND content_version = ?", ps -> {
                         ps.setString(1, entryId);
                         ps.setInt(2, version);
-                        ps.executeUpdate();
-                    }
+                    });
                     // Restore both the materialized JSON and the CMD column from the snapshot,
                     // so rolling back to a version faithfully restores that version's custom model.
                     Integer snapCmd = extractCmdFromJson(content);
-                    try (PreparedStatement ps = conn.prepareStatement("UPDATE " + t("lore_item")
-                            + " SET item_properties = ?, custom_model_data = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")) {
-                        ps.setString(1, content);
+                    final String snapshotContent = content;
+                    dbHelper.executeUpdateOn(conn, "UPDATE " + t("lore_item")
+                            + " SET item_properties = ?, custom_model_data = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", ps -> {
+                        ps.setString(1, snapshotContent);
                         if (snapCmd != null && snapCmd > 0) ps.setInt(2, snapCmd);
                         else ps.setNull(2, java.sql.Types.INTEGER);
                         ps.setInt(3, itemId);
-                        ps.executeUpdate();
-                    }
+                    });
                     conn.commit();
                     return true;
                 } catch (SQLException e) {
@@ -853,16 +848,12 @@ public class ItemRepository implements IItemRepository {
                 try {
                     String entryId = resolveEntryId(conn, itemId);
                     if (entryId == null) { conn.rollback(); return false; }
-                    try (PreparedStatement ps = conn.prepareStatement("UPDATE " + t("lore_item")
-                            + " SET is_obtainable = FALSE, updated_at = CURRENT_TIMESTAMP WHERE id = ?")) {
-                        ps.setInt(1, itemId);
-                        ps.executeUpdate();
-                    }
-                    try (PreparedStatement ps = conn.prepareStatement("UPDATE " + t("lore_submission")
-                            + " SET status = 'ARCHIVED' WHERE entry_id = ? AND is_current_version = TRUE")) {
-                        ps.setString(1, entryId);
-                        ps.executeUpdate();
-                    }
+                    dbHelper.executeUpdateOn(conn, "UPDATE " + t("lore_item")
+                            + " SET is_obtainable = FALSE, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                            ps -> ps.setInt(1, itemId));
+                    dbHelper.executeUpdateOn(conn, "UPDATE " + t("lore_submission")
+                            + " SET status = 'ARCHIVED' WHERE entry_id = ? AND is_current_version = TRUE",
+                            ps -> ps.setString(1, entryId));
                     conn.commit();
                     return true;
                 } catch (SQLException e) {
@@ -913,11 +904,11 @@ public class ItemRepository implements IItemRepository {
     }
 
     private void execById(Connection conn, String sql, int id) throws SQLException {
-        try (PreparedStatement ps = conn.prepareStatement(sql)) { ps.setInt(1, id); ps.executeUpdate(); }
+        dbHelper.executeUpdateOn(conn, sql, ps -> ps.setInt(1, id));
     }
 
     private void execByStr(Connection conn, String sql, String v) throws SQLException {
-        try (PreparedStatement ps = conn.prepareStatement(sql)) { ps.setString(1, v); ps.executeUpdate(); }
+        dbHelper.executeUpdateOn(conn, sql, ps -> ps.setString(1, v));
     }
 
     /**
