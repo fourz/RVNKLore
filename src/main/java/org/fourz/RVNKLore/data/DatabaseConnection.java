@@ -432,6 +432,9 @@ public abstract class DatabaseConnection {
         createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "player_collection_items_player ON " + playerCollectionItems + "(player_uuid)");
         createIndexSafely(stmt, "CREATE INDEX idx_" + tablePrefix + "player_collection_items_collection ON " + playerCollectionItems + "(collection_id)");
 
+        // Must run before anything that depends on foreign keys or transactions (#1840).
+        convertLegacyTablesToInnoDB(stmt);
+
         // Runs last: the tables must exist before their constraints can be inspected (#1839).
         dropLegacyEntryForeignKeys(stmt);
 
@@ -585,6 +588,83 @@ public abstract class DatabaseConnection {
                         + "this constraint, so the shared canon is unprotected until it is fixed.");
             }
         }
+    }
+
+    /**
+     * Convert any lore table still on a non-InnoDB engine (#1840).
+     *
+     * <p>RVNKLore's DDL never specified an engine, so on a host whose default is MyISAM — which is
+     * the case on the Interserver box all three tiers use — every lore table was created as MyISAM.
+     * That is not a performance footnote:</p>
+     *
+     * <ul>
+     *   <li><b>Foreign keys are silently discarded.</b> MyISAM parses {@code FOREIGN KEY} and throws
+     *       it away without error, so every constraint this schema declares has never existed and
+     *       nothing has ever cascaded. That is where the orphan rows came from.</li>
+     *   <li><b>Transactions do nothing.</b> {@code setAutoCommit(false)}, {@code commit()} and
+     *       {@code rollback()} are no-ops, so multi-step writes are not atomic and a failure partway
+     *       leaves partial data behind.</li>
+     * </ul>
+     *
+     * <p>Idempotent: tables already on InnoDB are skipped, so this costs one cheap query per boot
+     * once converted. Runs with the plugin's own credentials, which is what lets it fix a tier where
+     * external tooling only has a read-only database user.</p>
+     */
+    private void convertLegacyTablesToInnoDB(Statement stmt) {
+        if (!"MySQL".equals(dialect.getName())) {
+            return;
+        }
+        java.util.List<String> pending = new java.util.ArrayList<>();
+        String lookup = "SELECT TABLE_NAME FROM information_schema.TABLES "
+                + "WHERE TABLE_SCHEMA = DATABASE() AND ENGINE IS NOT NULL AND ENGINE <> 'InnoDB' "
+                + "AND TABLE_NAME IN (" + quotedLoreTableList() + ")";
+        try (java.sql.ResultSet rs = stmt.executeQuery(lookup)) {
+            while (rs.next()) {
+                pending.add(rs.getString(1));
+            }
+        } catch (SQLException e) {
+            logger.warning("Could not check lore table storage engines: " + e.getMessage());
+            return;
+        }
+        if (pending.isEmpty()) {
+            return;
+        }
+
+        logger.warning("Migration #1840: " + pending.size() + " lore table(s) are not InnoDB. Foreign "
+                + "keys and transactions do not work on those engines; converting now.");
+        int converted = 0;
+        for (String tableName : pending) {
+            try {
+                stmt.execute("ALTER TABLE " + tableName + " ENGINE=InnoDB");
+                converted++;
+                logger.info("Migration #1840: converted " + tableName + " to InnoDB");
+            } catch (SQLException e) {
+                logger.error("Migration #1840: could not convert " + tableName + " to InnoDB — "
+                        + "foreign keys and transactions remain unavailable for it", e);
+            }
+        }
+        logger.warning("Migration #1840: converted " + converted + "/" + pending.size()
+                + " lore table(s) to InnoDB");
+    }
+
+    /** Every lore table this plugin owns, quoted for an IN clause. */
+    private String quotedLoreTableList() {
+        String[] bases = {
+            TABLE_LORE_ENTRY, TABLE_LORE_SUBMISSION, TABLE_LORE_ITEM, TABLE_LORE_METADATA,
+            TABLE_COLLECTION, TABLE_COLLECTION_ITEM, TABLE_COLLECTION_REWARD,
+            TABLE_PLAYER_COLLECTION_PROGRESS, TABLE_PLAYER_COLLECTION_ITEMS,
+            TABLE_PLAYER_ACHIEVEMENT, TABLE_PLAYER_REWARD_CLAIM,
+            TABLE_LORE_LOCATION, TABLE_LORE_DISCOVERY, TABLE_LORE_MAP,
+            TABLE_QUEST_ITEM_PRESETS, TABLE_LORE_ITEM_RNG_POOL
+        };
+        StringBuilder sb = new StringBuilder();
+        for (String base : bases) {
+            if (sb.length() > 0) {
+                sb.append(", ");
+            }
+            sb.append('\'').append(table(base)).append('\'');
+        }
+        return sb.toString();
     }
 
     /** @return the storage engine for a table, or null if it cannot be determined. */
