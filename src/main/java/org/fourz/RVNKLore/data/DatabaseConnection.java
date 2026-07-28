@@ -434,6 +434,15 @@ public abstract class DatabaseConnection {
 
         // Runs last: the tables must exist before their constraints can be inspected (#1839).
         dropLegacyEntryForeignKeys(stmt);
+
+        // lore_metadata.lore_id was declared VARCHAR(36) while lore_entry.id is CHAR(36). InnoDB
+        // requires matching types for a foreign key, so that mismatch alone would block the
+        // constraint below with errno 150 — likely part of why it was never created. The table is
+        // empty on every tier, so the widening is free.
+        modifyColumnType(stmt, table(TABLE_LORE_METADATA), "lore_id", "CHAR(36) NOT NULL");
+
+        // Then add the cluster-internal constraints that protect the shared canon.
+        createClusterInternalForeignKeys(stmt);
     }
 
     /**
@@ -489,6 +498,117 @@ public abstract class DatabaseConnection {
                             + tableName + " — the #1834 connection split will fail until it is gone", e);
                 }
             }
+        }
+    }
+
+    /**
+     * Create the cluster-internal foreign keys into {@code lore_entry} that were declared in the DDL
+     * but never actually exist on any tier.
+     *
+     * <p>The DDL has carried {@code FOREIGN KEY ... REFERENCES lore_entry(id) ON DELETE CASCADE} for
+     * {@code lore_submission}, {@code lore_item} and {@code lore_metadata} for a long time, but the
+     * tables predate those clauses and {@code CREATE TABLE IF NOT EXISTS} never re-applies them — so
+     * the constraints were only ever aspirational. That is not cosmetic: without them a submission or
+     * item can outlive its entry, and every tier had already accumulated such rows.</p>
+     *
+     * <p>Unlike the per-server tables in #1839, these three stay <b>co-located</b> with
+     * {@code lore_entry} in the cluster pool, so a real constraint is both possible and wanted — it
+     * is what protects the shared canon once #1834 splits the pools.</p>
+     *
+     * <p>Named explicitly rather than left to MySQL's {@code _ibfk_N} auto-naming, so they can be
+     * found and reasoned about later.</p>
+     *
+     * <p><b>Never fails a boot.</b> If orphan rows exist the ALTER is rejected by InnoDB; that is
+     * logged with the count and the constraint is skipped, because refusing to start a server over a
+     * data-integrity backlog would be a worse outcome than running without the constraint.</p>
+     */
+    private void createClusterInternalForeignKeys(Statement stmt) {
+        if (!"MySQL".equals(dialect.getName())) {
+            return;
+        }
+        // Bail out early and loudly on a storage engine that cannot hold foreign keys, rather than
+        // issuing ALTERs that "succeed" and do nothing.
+        String engine = tableEngine(stmt, table(TABLE_LORE_ENTRY));
+        if (engine != null && !"innodb".equalsIgnoreCase(engine)) {
+            logger.error("Lore tables use the " + engine + " engine, which does not support foreign "
+                    + "keys — it accepts the syntax and discards the constraint. No referential "
+                    + "integrity is enforced between lore_entry and its submissions/items/metadata, "
+                    + "and transactions are also unavailable on this engine, so rollbacks silently do "
+                    + "nothing. Convert the lore tables to InnoDB to fix both.", null);
+            return;
+        }
+        // child table, child column, constraint suffix
+        String[][] relations = {
+            {table(TABLE_LORE_SUBMISSION), "entry_id",      "lore_submission_entry"},
+            {table(TABLE_LORE_ITEM),       "lore_entry_id", "lore_item_entry"},
+            {table(TABLE_LORE_METADATA),   "lore_id",       "lore_metadata_entry"}
+        };
+        String parent = table(TABLE_LORE_ENTRY);
+
+        for (String[] relation : relations) {
+            String child = relation[0];
+            String column = relation[1];
+            String constraint = "fk_" + tablePrefix + relation[2];
+
+            // Attempt the ALTER unconditionally rather than pre-checking whether the constraint
+            // exists. An "already exists" error is loud, harmless and self-correcting; a pre-check
+            // that fails open would silently skip the constraint and leave the canon unprotected —
+            // which is exactly the class of silent no-op this migration exists to clean up.
+            try {
+                stmt.execute("ALTER TABLE " + child + " ADD CONSTRAINT " + constraint
+                        + " FOREIGN KEY (" + column + ") REFERENCES " + parent + "(id) ON DELETE CASCADE");
+
+                // Verify rather than trust the absence of an exception. MyISAM parses FOREIGN KEY
+                // and silently DISCARDS it — no error, no constraint. That is why the FKs declared
+                // in this DDL have never existed on any tier, and reporting success here without
+                // checking would repeat exactly that lie.
+                if (!constraintPresent(stmt, child, constraint)) {
+                    logger.error("Migration: " + constraint + " on " + child + " reported success but "
+                            + "does not exist. The table engine almost certainly does not support "
+                            + "foreign keys (MyISAM silently ignores them). Referential integrity for "
+                            + parent + " is NOT enforced.", null);
+                    continue;
+                }
+                logger.warning("Migration: added missing foreign key " + constraint + " on " + child
+                        + " — " + child + "." + column + " now cascades from " + parent);
+            } catch (SQLException e) {
+                String msg = e.getMessage() != null ? e.getMessage() : "";
+                String lower = msg.toLowerCase();
+                if (lower.contains("duplicate") || lower.contains("already exists")) {
+                    logger.debug("Migration: " + constraint + " already present on " + child);
+                    continue;
+                }
+                logger.warning("Migration: could not add " + constraint + " on " + child + ": " + msg);
+                logger.warning("  Most likely orphan rows in " + child + " (rows whose " + column
+                        + " has no matching " + parent + ".id), or a column type mismatch against "
+                        + parent + ".id. Resolve those and restart; the server continues without "
+                        + "this constraint, so the shared canon is unprotected until it is fixed.");
+            }
+        }
+    }
+
+    /** @return the storage engine for a table, or null if it cannot be determined. */
+    private String tableEngine(Statement stmt, String tableName) {
+        String sql = "SELECT ENGINE FROM information_schema.TABLES "
+                + "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" + tableName + "'";
+        try (java.sql.ResultSet rs = stmt.executeQuery(sql)) {
+            return rs.next() ? rs.getString(1) : null;
+        } catch (SQLException e) {
+            logger.debug("Could not read engine for " + tableName + ": " + e.getMessage());
+            return null;
+        }
+    }
+
+    /** @return true when the named foreign key actually exists — checked, not assumed. */
+    private boolean constraintPresent(Statement stmt, String tableName, String constraintName) {
+        String sql = "SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS "
+                + "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" + tableName + "' "
+                + "AND CONSTRAINT_NAME = '" + constraintName + "' AND CONSTRAINT_TYPE = 'FOREIGN KEY'";
+        try (java.sql.ResultSet rs = stmt.executeQuery(sql)) {
+            return rs.next() && rs.getInt(1) > 0;
+        } catch (SQLException e) {
+            logger.debug("Could not verify constraint " + constraintName + ": " + e.getMessage());
+            return false;
         }
     }
 
