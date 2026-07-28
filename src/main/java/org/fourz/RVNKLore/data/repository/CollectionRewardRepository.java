@@ -2,6 +2,8 @@ package org.fourz.RVNKLore.data.repository;
 
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.data.DatabaseConnection;
+import org.fourz.RVNKLore.data.DatabaseHelper;
+import org.fourz.RVNKLore.exception.LoreException;
 import org.fourz.RVNKLore.data.model.CollectionReward;
 import org.fourz.rvnkcore.util.log.LogManager;
 
@@ -18,10 +20,12 @@ public class CollectionRewardRepository implements ICollectionRewardRepository {
     private final RVNKLore plugin;
     private final LogManager logger;
     private final DatabaseConnection dbConnection;
+    private final DatabaseHelper dbHelper;
 
     public CollectionRewardRepository(RVNKLore plugin, DatabaseConnection dbConnection) {
         this.plugin = plugin;
         this.dbConnection = dbConnection;
+        this.dbHelper = new DatabaseHelper(plugin);
         this.logger = LogManager.getInstance(plugin, "CollectionRewardRepository");
     }
 
@@ -57,21 +61,20 @@ public class CollectionRewardRepository implements ICollectionRewardRepository {
             String sql = "INSERT INTO " + t("collection_reward") +
                     " (collection_id, reward_type, reward_data, is_claimed) VALUES (?, ?, ?, 0)";
 
-            try (Connection conn = dbConnection.getConnection();
-                 PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-                stmt.setString(1, reward.getCollectionId());
-                stmt.setString(2, reward.getRewardType().name());
-                stmt.setString(3, reward.getRewardData());
-                int rows = stmt.executeUpdate();
-                if (rows > 0) {
-                    try (ResultSet keys = stmt.getGeneratedKeys()) {
-                        if (keys.next()) {
-                            reward.setId(keys.getInt(1));
-                        }
-                    }
+            try {
+                // id is auto-increment, so a successful insert always yields a key; -1 means the
+                // insert affected no rows.
+                int generatedId = dbHelper.executeInsertAndGetKey(sql, stmt -> {
+                    stmt.setString(1, reward.getCollectionId());
+                    stmt.setString(2, reward.getRewardType().name());
+                    stmt.setString(3, reward.getRewardData());
+                });
+                if (generatedId > 0) {
+                    reward.setId(generatedId);
+                    return true;
                 }
-                return rows > 0;
-            } catch (SQLException e) {
+                return false;
+            } catch (LoreException e) {
                 logger.error("Failed to add reward: " + reward, e);
                 return false;
             }
@@ -83,11 +86,9 @@ public class CollectionRewardRepository implements ICollectionRewardRepository {
         return CompletableFuture.supplyAsync(() -> {
             String sql = "DELETE FROM " + t("collection_reward") + " WHERE id = ?";
 
-            try (Connection conn = dbConnection.getConnection();
-                 PreparedStatement stmt = conn.prepareStatement(sql)) {
-                stmt.setInt(1, rewardId);
-                return stmt.executeUpdate() > 0;
-            } catch (SQLException e) {
+            try {
+                return dbHelper.executeUpdate(sql, stmt -> stmt.setInt(1, rewardId)) > 0;
+            } catch (LoreException e) {
                 logger.error("Failed to remove reward: " + rewardId, e);
                 return false;
             }
@@ -115,13 +116,13 @@ public class CollectionRewardRepository implements ICollectionRewardRepository {
                     }
                 }
 
-                // Insert claim
-                try (PreparedStatement insert = conn.prepareStatement(insertSql)) {
-                    insert.setInt(1, rewardId);
-                    insert.setString(2, playerId.toString());
-                    insert.setLong(3, System.currentTimeMillis());
-                    return insert.executeUpdate() > 0;
-                }
+                // executeUpdateOn, not executeUpdate: the already-claimed check above ran on `conn`,
+                // so the insert stays on that connection instead of taking a fresh pooled one (#1838).
+                return dbHelper.executeUpdateOn(conn, insertSql, stmt -> {
+                    stmt.setInt(1, rewardId);
+                    stmt.setString(2, playerId.toString());
+                    stmt.setLong(3, System.currentTimeMillis());
+                }) > 0;
             } catch (SQLException e) {
                 logger.error("Failed to claim reward " + rewardId + " for player " + playerId, e);
                 return false;

@@ -3,6 +3,8 @@ package org.fourz.RVNKLore.data.repository;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.achievement.AchievementProgress;
 import org.fourz.RVNKLore.data.DatabaseConnection;
+import org.fourz.RVNKLore.data.DatabaseHelper;
+import org.fourz.RVNKLore.exception.LoreException;
 import org.fourz.rvnkcore.util.log.LogManager;
 
 import java.sql.*;
@@ -17,10 +19,12 @@ public class AchievementRepository implements IAchievementRepository {
     private final RVNKLore plugin;
     private final LogManager logger;
     private final DatabaseConnection dbConnection;
+    private final DatabaseHelper dbHelper;
 
     public AchievementRepository(RVNKLore plugin, DatabaseConnection dbConnection) {
         this.plugin = plugin;
         this.dbConnection = dbConnection;
+        this.dbHelper = new DatabaseHelper(plugin);
         this.logger = LogManager.getInstance(plugin, "AchievementRepository");
     }
 
@@ -46,18 +50,18 @@ public class AchievementRepository implements IAchievementRepository {
                     " rewards_claimed = VALUES(rewards_claimed), completed_at = VALUES(completed_at)";
             }
 
-            try (Connection conn = dbConnection.getConnection();
-                 PreparedStatement stmt = conn.prepareStatement(sql)) {
-                stmt.setString(1, progress.getPlayerId().toString());
-                stmt.setString(2, progress.getAchievementId());
-                stmt.setInt(3, progress.getCurrentProgress());
-                stmt.setInt(4, progress.getTargetProgress());
-                stmt.setBoolean(5, progress.isCompleted());
-                stmt.setBoolean(6, progress.isRewardsClaimed());
-                stmt.setLong(7, progress.getStartedAt());
-                stmt.setLong(8, progress.getCompletedAt());
-                return stmt.executeUpdate() > 0;
-            } catch (SQLException e) {
+            try {
+                return dbHelper.executeUpdate(sql, stmt -> {
+                    stmt.setString(1, progress.getPlayerId().toString());
+                    stmt.setString(2, progress.getAchievementId());
+                    stmt.setInt(3, progress.getCurrentProgress());
+                    stmt.setInt(4, progress.getTargetProgress());
+                    stmt.setBoolean(5, progress.isCompleted());
+                    stmt.setBoolean(6, progress.isRewardsClaimed());
+                    stmt.setLong(7, progress.getStartedAt());
+                    stmt.setLong(8, progress.getCompletedAt());
+                }) > 0;
+            } catch (LoreException e) {
                 logger.error("Failed to save achievement progress: " + progress, e);
                 return false;
             }
@@ -113,12 +117,12 @@ public class AchievementRepository implements IAchievementRepository {
             String sql = "DELETE FROM " + t("player_achievement") +
                     " WHERE player_uuid = ? AND achievement_id = ?";
 
-            try (Connection conn = dbConnection.getConnection();
-                 PreparedStatement stmt = conn.prepareStatement(sql)) {
-                stmt.setString(1, playerId.toString());
-                stmt.setString(2, achievementId);
-                return stmt.executeUpdate() > 0;
-            } catch (SQLException e) {
+            try {
+                return dbHelper.executeUpdate(sql, stmt -> {
+                    stmt.setString(1, playerId.toString());
+                    stmt.setString(2, achievementId);
+                }) > 0;
+            } catch (LoreException e) {
                 logger.error("Failed to delete achievement progress", e);
                 return false;
             }
@@ -130,11 +134,9 @@ public class AchievementRepository implements IAchievementRepository {
         return CompletableFuture.supplyAsync(() -> {
             String sql = "DELETE FROM " + t("player_achievement") + " WHERE player_uuid = ?";
 
-            try (Connection conn = dbConnection.getConnection();
-                 PreparedStatement stmt = conn.prepareStatement(sql)) {
-                stmt.setString(1, playerId.toString());
-                return stmt.executeUpdate() > 0;
-            } catch (SQLException e) {
+            try {
+                return dbHelper.executeUpdate(sql, stmt -> stmt.setString(1, playerId.toString())) > 0;
+            } catch (LoreException e) {
                 logger.error("Failed to delete all progress for: " + playerId, e);
                 return false;
             }

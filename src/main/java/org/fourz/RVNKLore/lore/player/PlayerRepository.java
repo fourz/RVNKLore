@@ -12,6 +12,7 @@ import java.util.concurrent.CompletableFuture;
 
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.data.DatabaseConnection;
+import org.fourz.RVNKLore.data.DatabaseHelper;
 import org.fourz.rvnkcore.data.FallbackTracker;
 import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.lore.LoreType;
@@ -31,12 +32,14 @@ public class PlayerRepository implements IPlayerRepository {
     private final RVNKLore plugin;
     private final LogManager logger;
     private final DatabaseConnection dbConnection;
+    private final DatabaseHelper dbHelper;
     private final FallbackTracker fallbackTracker;
     private final JSONParser jsonParser;
 
     public PlayerRepository(RVNKLore plugin, DatabaseConnection dbConnection) {
         this.plugin = plugin;
         this.dbConnection = dbConnection;
+        this.dbHelper = new DatabaseHelper(plugin);
         this.logger = LogManager.getInstance(plugin, "PlayerRepository");
         this.fallbackTracker = new FallbackTracker(
                 plugin.getConfig().getInt("database.fallback.maxFailuresBeforeFallback", 3),
@@ -302,17 +305,16 @@ public class PlayerRepository implements IPlayerRepository {
                     }
                 }
 
-                // Insert new discovery
-                try (PreparedStatement insertStmt = conn.prepareStatement(insertSql)) {
-                    insertStmt.setString(1, playerUuid.toString());
-                    insertStmt.setString(2, entryId);
-                    insertStmt.setTimestamp(3, new java.sql.Timestamp(System.currentTimeMillis()));
-
-                    int rows = insertStmt.executeUpdate();
-                    if (rows > 0) {
-                        logger.debug("Recorded discovery: player=" + playerUuid + ", entry=" + entryId);
-                        return true;
-                    }
+                // executeUpdateOn, not executeUpdate: the duplicate check above ran on `conn`, so
+                // the insert stays on that connection rather than taking a fresh pooled one (#1838).
+                int rows = dbHelper.executeUpdateOn(conn, insertSql, stmt -> {
+                    stmt.setString(1, playerUuid.toString());
+                    stmt.setString(2, entryId);
+                    stmt.setTimestamp(3, new java.sql.Timestamp(System.currentTimeMillis()));
+                });
+                if (rows > 0) {
+                    logger.debug("Recorded discovery: player=" + playerUuid + ", entry=" + entryId);
+                    return true;
                 }
             } catch (SQLException e) {
                 logger.error("Error recording lore discovery: " + playerUuid + ", " + entryId, e);

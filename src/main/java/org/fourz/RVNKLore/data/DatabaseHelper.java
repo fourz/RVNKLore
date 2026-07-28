@@ -265,8 +265,41 @@ public class DatabaseHelper {
     }
     
     /**
+     * Execute an update on a caller-supplied connection.
+     *
+     * <p>Companion to {@link #executeUpdate(String, PreparedStatementSetter)} for writes that must
+     * stay on a specific connection — chiefly the multi-write transactions in
+     * {@code LoreEntryRepository} and {@code SubmissionManager}. Routing those through the pooled
+     * variant would scatter one transaction's writes across different connections and silently lose
+     * atomicity, so they use this instead (#1838).</p>
+     *
+     * <p>Deliberately <b>not</b> wrapped in {@link #executeWithRetry}: retrying a single statement
+     * inside a transaction that has already failed is incorrect — the transaction is poisoned and
+     * the caller owns the rollback. The connection is likewise not closed here; the caller opened it
+     * and owns its lifecycle.</p>
+     *
+     * <p>Funnelling every write through {@code DatabaseHelper} is what gives #1833 a single place to
+     * record outage-era writes for reconcile-on-recovery.</p>
+     *
+     * @param conn The caller-managed connection to execute on (not closed by this method)
+     * @param sql The SQL update statement
+     * @param paramSetter Sets parameters on the prepared statement; may be null
+     * @return The number of rows affected
+     * @throws SQLException If the update fails — propagated so the caller can roll back
+     */
+    public int executeUpdateOn(Connection conn, String sql, PreparedStatementSetter paramSetter)
+            throws SQLException {
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            if (paramSetter != null) {
+                paramSetter.setParameters(stmt);
+            }
+            return stmt.executeUpdate();
+        }
+    }
+
+    /**
      * Begin a transaction
-     * 
+     *
      * @return the Connection with autoCommit disabled
      * @throws SQLException if a database access error occurs
      */
