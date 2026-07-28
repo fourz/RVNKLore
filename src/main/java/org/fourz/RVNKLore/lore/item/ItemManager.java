@@ -424,6 +424,14 @@ public class ItemManager implements IItemService, ILoreItemResolver {
                     if (properties.getCustomModelData() > 0) {
                         meta.setCustomModelData(properties.getCustomModelData());
                     }
+                    // #1843: honour the glow flag. It was persisted and round-tripped through the DTO
+                    // but never reached the ItemStack, so glow:true was inert on every STANDARD item.
+                    // Rarity-driven glint stays book-only (BookRarity/LoreBookManager) — this is the
+                    // explicit per-item control, not a rarity rule.
+                    if (properties.isGlow()) {
+                        meta.addEnchant(org.bukkit.enchantments.Enchantment.UNBREAKING, 1, true);
+                        meta.addItemFlags(org.bukkit.inventory.ItemFlag.HIDE_ENCHANTS);
+                    }
                     if (properties.getDatabaseId() > 0) {
                         org.bukkit.NamespacedKey itemIdKey = new org.bukkit.NamespacedKey(plugin, "lore_item_id");
                         meta.getPersistentDataContainer().set(itemIdKey,

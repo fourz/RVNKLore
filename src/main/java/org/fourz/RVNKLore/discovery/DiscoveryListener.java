@@ -19,6 +19,7 @@ import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
@@ -240,6 +241,24 @@ public class DiscoveryListener implements Listener {
                 }
             }
         }
+    }
+
+    /**
+     * Handles arrival by teleport for location-based discovery (#1842).
+     *
+     * <p>{@link PlayerTeleportEvent} subclasses {@link PlayerMoveEvent} but declares its own
+     * {@code HandlerList} and overrides {@code getHandlers()}. Bukkit dispatches via
+     * {@code event.getHandlers()}, so a listener registered for {@code PlayerMoveEvent} is
+     * <strong>never</strong> invoked for a teleport — the subclass relationship is misleading.
+     * Without this handler every portal, {@code /tp}, {@code /world tp}, {@code /home} and
+     * quest teleport silently skipped discovery entirely.</p>
+     *
+     * <p>Delegates to {@link #onPlayerMove}; its chunk-boundary guard still applies, and a
+     * teleport nearly always crosses chunks so the scan runs once per arrival.</p>
+     */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onPlayerTeleport(PlayerTeleportEvent event) {
+        onPlayerMove(event);
     }
 
     /**
