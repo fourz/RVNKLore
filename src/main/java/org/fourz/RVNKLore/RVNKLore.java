@@ -103,6 +103,15 @@ public class RVNKLore extends JavaPlugin {
 
         registerShutdownHook();
 
+        // #1826: off mode — loaded but INERT. Register no managers/services/REST/listeners/commands.
+        // registerShutdownHook already ran, so onDisable's removeShutdownHook + null-guarded
+        // cleanupManagers stay safe with nothing initialized. Flip general.mode + restart to enable.
+        if (configManager.getMode().isInert()) {
+            logger.warning("RVNKLore mode=off — plugin is INERT (no features registered). "
+                    + "Set general.mode to 'full' or 'quiet' and restart to enable.");
+            return;
+        }
+
         logger.info("Initializing RVNKLore...");
 
         try {
@@ -113,7 +122,10 @@ public class RVNKLore extends JavaPlugin {
             registerIntegrations();
             startBackgroundTasks();
 
-            logger.info("RVNKLore has been enabled!");
+            logger.info("RVNKLore has been enabled! (mode: " + configManager.getMode().name().toLowerCase() + ")");
+            if (configManager.getMode().suppressesNotifications()) {
+                logger.info("mode=quiet — player-facing lore notifications are suppressed (data still recorded).");
+            }
         } catch (Exception e) {
             logger.error("Failed to initialize plugin", e);
             getServer().getPluginManager().disablePlugin(this);

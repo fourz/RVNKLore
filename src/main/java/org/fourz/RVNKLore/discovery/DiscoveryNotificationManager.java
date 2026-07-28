@@ -67,6 +67,13 @@ public class DiscoveryNotificationManager {
             return;
         }
 
+        // #1827: quiet mode suppresses ALL player-facing lore notifications. The discovery is already
+        // recorded upstream in DiscoveryManager; only the player-facing send is gated.
+        if (plugin.getConfigManager().areNotificationsSuppressed()) {
+            logger.debug("Discovery notification suppressed — RVNKLore mode=quiet");
+            return;
+        }
+
         Player player = event.getPlayer();
         LoreEntry entry = event.getLoreEntry();
 

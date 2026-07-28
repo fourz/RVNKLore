@@ -20,15 +20,20 @@ import java.util.UUID;
  */
 public class CollectionNotificationListener implements Listener {
 
+    private final RVNKLore plugin;
     private final LogManager logger;
 
     public CollectionNotificationListener(RVNKLore plugin) {
+        this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, getClass());
     }
 
     @EventHandler
     public void onCollectionChange(CollectionChangeEvent event) {
         if (!event.isCompletion()) return;
+
+        // #1827: quiet mode suppresses ALL player-facing lore notifications (progress still recorded).
+        if (plugin.getConfigManager().areNotificationsSuppressed()) return;
 
         UUID playerUuid = event.getPlayerUuid();
         if (playerUuid == null) return;

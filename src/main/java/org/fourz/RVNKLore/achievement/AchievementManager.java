@@ -302,6 +302,12 @@ public class AchievementManager {
      * Respects PlayerPreferencesService if available, falls back to config-based settings.
      */
     private void sendUnlockNotification(Player player, Achievement achievement) {
+        // #1827: quiet mode suppresses ALL player-facing lore notifications. The achievement is already
+        // unlocked/recorded and rewards are granted separately; only the player-facing send is gated.
+        if (plugin.getConfigManager().areNotificationsSuppressed()) {
+            logger.debug("Achievement notification suppressed — RVNKLore mode=quiet");
+            return;
+        }
         PlayerPreferencesService prefs = RVNKCore.getServiceSafe(PlayerPreferencesService.class);
         if (prefs != null) {
             UUID playerId = player.getUniqueId();

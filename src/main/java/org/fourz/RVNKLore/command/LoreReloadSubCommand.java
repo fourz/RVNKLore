@@ -3,6 +3,7 @@ package org.fourz.RVNKLore.command;
 import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.config.LoreMode;
 import org.fourz.rvnkcore.util.log.LogManager;
 
 import java.util.ArrayList;
@@ -39,6 +40,17 @@ public class LoreReloadSubCommand implements SubCommand {
         plugin.getLoreManager().reloadLore();
         
         sender.sendMessage(ChatColor.GREEN + "RVNKLore plugin has been reloaded successfully!");
+
+        // #1828: surface the active mode. full<->quiet is hot (dispatch reads getMode() live);
+        // switching to off needs a restart because feature registration only happens in onEnable.
+        LoreMode mode = plugin.getConfigManager().getMode();
+        sender.sendMessage(ChatColor.GRAY + "Mode: " + ChatColor.WHITE + mode.name().toLowerCase());
+        if (mode == LoreMode.OFF) {
+            sender.sendMessage(ChatColor.YELLOW + "Note: mode=off takes effect on the next restart "
+                    + "(features are still running until then).");
+        } else if (mode.suppressesNotifications()) {
+            sender.sendMessage(ChatColor.GRAY + "Player-facing lore notifications are suppressed (quiet mode).");
+        }
         return true;
     }
 

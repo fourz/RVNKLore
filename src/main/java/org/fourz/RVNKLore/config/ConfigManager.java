@@ -247,6 +247,33 @@ public class ConfigManager {
     // ==================== Feature Toggles ====================
 
     /**
+     * Master operational mode (#1824): {@code full}, {@code quiet}, or {@code off}, read from
+     * {@code general.mode}. Absent or unrecognized values default to {@link LoreMode#FULL} so an
+     * existing config that lacks the key behaves exactly as before (the packaged default is never
+     * written over an existing file — #1592). Composes over the {@code features.*.enabled} flags.
+     */
+    public LoreMode getMode() {
+        String raw = config.getString("general.mode", "full").trim().toLowerCase();
+        switch (raw) {
+            case "full":  return LoreMode.FULL;
+            case "quiet": return LoreMode.QUIET;
+            case "off":   return LoreMode.OFF;
+            default:
+                logger.warning("Unknown general.mode '" + raw + "' — defaulting to 'full'. Valid: full | quiet | off");
+                return LoreMode.FULL;
+        }
+    }
+
+    /**
+     * True when player-facing lore notifications must be suppressed globally (mode {@code quiet}).
+     * The underlying data (discoveries, achievements, collection progress) is still recorded upstream;
+     * only the player-facing send is gated. Per-type control (#1475) layers on top of this. (#1827)
+     */
+    public boolean areNotificationsSuppressed() {
+        return getMode().suppressesNotifications();
+    }
+
+    /**
      * Check if a named feature subsystem is enabled.
      * All features default to true when the key is absent.
      */

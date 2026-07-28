@@ -4,6 +4,15 @@ general:
   # Default: WARNING (quiet mode - set INFO for verbose operational logs)
   logLevel: WARNING
 
+  # Master operational mode (#1824). One switch over all RVNKLore features:
+  #   full  - everything on (lore, items, discovery, REST API, Dynmap, notifications)
+  #   quiet - lore/items/discovery/REST all work, but player-facing notifications
+  #           (discovery / achievement / collection) are suppressed. Data is still recorded.
+  #   off   - plugin loaded but INERT: no services/REST/listeners/commands registered.
+  #           Flip this and restart to enable; no uninstall needed.
+  # Absent or unknown -> full. full<->quiet is hot (via /lore reload); off<->on needs a restart.
+  mode: full
+
 features:
   # Set any subsystem to false to disable it at startup.
   # Discovery, achievements, and collections share the player progression loop.
