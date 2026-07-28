@@ -4,6 +4,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.data.DatabaseHelper;
 import org.fourz.rvnkcore.data.FallbackTracker;
 import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.lore.LoreEntry;
@@ -36,12 +37,14 @@ public class LoreEntryRepository implements ILoreEntryRepository {
     private final RVNKLore plugin;
     private final LogManager logger;
     private final DatabaseConnection dbConnection;
+    private final DatabaseHelper dbHelper;
     private final JSONParser jsonParser;
     private final FallbackTracker fallbackTracker;
 
     public LoreEntryRepository(RVNKLore plugin, DatabaseConnection dbConnection) {
         this.plugin = plugin;
         this.dbConnection = dbConnection;
+        this.dbHelper = new DatabaseHelper(plugin);
         this.logger = LogManager.getInstance(plugin, "LoreEntryRepository");
         this.jsonParser = new JSONParser();
         this.fallbackTracker = new FallbackTracker(
@@ -139,25 +142,22 @@ public class LoreEntryRepository implements ILoreEntryRepository {
                 try {
                     // Step 1: Update base lore_entry record
                     String updateEntrySql = "UPDATE " + t("lore_entry") + " SET name = ? WHERE id = ?";
-                    try (PreparedStatement stmt = conn.prepareStatement(updateEntrySql)) {
+                    int rowsAffected = dbHelper.executeUpdateOn(conn, updateEntrySql, stmt -> {
                         stmt.setString(1, entry.getName());
                         stmt.setString(2, entry.getId());
-                        int rowsAffected = stmt.executeUpdate();
-
-                        if (rowsAffected == 0) {
-                            throw new SQLException("Failed to update lore entry record");
-                        }
+                    });
+                    if (rowsAffected == 0) {
+                        throw new SQLException("Failed to update lore entry record");
                     }
 
                     // Step 2: Update specialized record if applicable
                     if (entry.getType() == LoreType.ITEM) {
                         String updateItemSql = "UPDATE " + t("lore_item") + " SET name = ?, nbt_data = ? WHERE lore_entry_id = ?";
-                        try (PreparedStatement stmt = conn.prepareStatement(updateItemSql)) {
+                        dbHelper.executeUpdateOn(conn, updateItemSql, stmt -> {
                             stmt.setString(1, entry.getName());
                             stmt.setString(2, entry.getNbtData());
                             stmt.setString(3, entry.getId());
-                            stmt.executeUpdate();
-                        }
+                        });
                     }
 
                     // Step 3: Get next version number
@@ -166,10 +166,7 @@ public class LoreEntryRepository implements ILoreEntryRepository {
                     // Step 4: Mark existing current version as not current
                     String updateCurrentSql = "UPDATE " + t("lore_submission") + " SET is_current_version = FALSE " +
                                               "WHERE entry_id = ? AND is_current_version = TRUE";
-                    try (PreparedStatement stmt = conn.prepareStatement(updateCurrentSql)) {
-                        stmt.setString(1, entry.getId());
-                        stmt.executeUpdate();
-                    }
+                    dbHelper.executeUpdateOn(conn, updateCurrentSql, stmt -> stmt.setString(1, entry.getId()));
 
                     // Step 5: Create new submission version with incremented version number
                     boolean submissionCreated = insertLoreSubmission(entry.getId(), entry, conn, nextVersion);
@@ -211,9 +208,9 @@ public class LoreEntryRepository implements ILoreEntryRepository {
                     // due to foreign key constraints with ON DELETE CASCADE
                     String sql = "DELETE FROM " + t("lore_entry") + " WHERE id = ?";
 
-                    try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-                        stmt.setString(1, id.toString());
-                        int rowsAffected = stmt.executeUpdate();
+                    {
+                        int rowsAffected = dbHelper.executeUpdateOn(conn, sql,
+                                stmt -> stmt.setString(1, id.toString()));
 
                         if (rowsAffected == 0) {
                             logger.warning("No lore entry found with ID: " + id);
@@ -477,16 +474,15 @@ public class LoreEntryRepository implements ILoreEntryRepository {
                     String sql = "UPDATE " + t("lore_submission") + " " +
                                  "SET approval_status = 'REJECTED', approved_at = CURRENT_TIMESTAMP, rejection_reason = ? " +
                                  "WHERE entry_id = ? AND is_current_version = TRUE";
-                    try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                    int rowsAffected = dbHelper.executeUpdateOn(conn, sql, stmt -> {
                         stmt.setString(1, reason);
                         stmt.setString(2, entryId);
-                        int rowsAffected = stmt.executeUpdate();
-                        if (rowsAffected == 0) {
-                            throw new java.sql.SQLException("No current submission found for entry: " + entryId);
-                        }
-                        conn.commit();
-                        return true;
+                    });
+                    if (rowsAffected == 0) {
+                        throw new java.sql.SQLException("No current submission found for entry: " + entryId);
                     }
+                    conn.commit();
+                    return true;
                 } catch (java.sql.SQLException e) {
                     conn.rollback();
                     logger.error("Failed to reject lore entry: " + entryId, e);
@@ -511,18 +507,16 @@ public class LoreEntryRepository implements ILoreEntryRepository {
                                  "SET approval_status = 'APPROVED', approved_by = ?, approved_at = CURRENT_TIMESTAMP " +
                                  "WHERE entry_id = ? AND is_current_version = TRUE";
 
-                    try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                    int rowsAffected = dbHelper.executeUpdateOn(conn, sql, stmt -> {
                         stmt.setString(1, approvedBy);
                         stmt.setString(2, entryId);
-
-                        int rowsAffected = stmt.executeUpdate();
-                        if (rowsAffected == 0) {
-                            throw new SQLException("No current submission found for entry: " + entryId);
-                        }
-
-                        conn.commit();
-                        return true;
+                    });
+                    if (rowsAffected == 0) {
+                        throw new SQLException("No current submission found for entry: " + entryId);
                     }
+
+                    conn.commit();
+                    return true;
                 } catch (SQLException e) {
                     conn.rollback();
                     logger.error("Failed to approve lore entry: " + entryId, e);
@@ -561,11 +555,12 @@ public class LoreEntryRepository implements ILoreEntryRepository {
     private String insertLoreEntry(LoreEntry entry, Connection conn) throws SQLException {
         // Use provided UUID string as primary key
         String sql = "INSERT INTO " + t("lore_entry") + " (id, entry_type, name) VALUES (?, ?, ?)";
-        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setString(1, entry.getId());
-            stmt.setString(2, entry.getType().name());
-            stmt.setString(3, entry.getName());
-            int affected = stmt.executeUpdate();
+        try {
+            int affected = dbHelper.executeUpdateOn(conn, sql, stmt -> {
+                stmt.setString(1, entry.getId());
+                stmt.setString(2, entry.getType().name());
+                stmt.setString(3, entry.getName());
+            });
             return affected > 0 ? entry.getId() : null;
         } catch (java.sql.SQLIntegrityConstraintViolationException e) {
             entry.addMetadata("validation_errors",
@@ -605,7 +600,7 @@ public class LoreEntryRepository implements ILoreEntryRepository {
                     String updateSql = "UPDATE " + t("lore_item") +
                         " SET name = ?, material = ?, item_type = ?, rarity = ?, is_obtainable = ?, nbt_data = ?" +
                         " WHERE lore_entry_id = ?";
-                    try (PreparedStatement stmt = conn.prepareStatement(updateSql)) {
+                    return dbHelper.executeUpdateOn(conn, updateSql, stmt -> {
                         stmt.setString(1, entry.getName());
                         stmt.setString(2, material);
                         stmt.setString(3, itemType);
@@ -613,15 +608,14 @@ public class LoreEntryRepository implements ILoreEntryRepository {
                         stmt.setBoolean(5, obtainable);
                         stmt.setString(6, nbtData);
                         stmt.setString(7, entryId);
-                        return stmt.executeUpdate() > 0;
-                    }
+                    }) > 0;
                 }
             }
         }
 
         String sql = "INSERT INTO " + t("lore_item") +
             " (lore_entry_id, name, material, item_type, rarity, is_obtainable, nbt_data) VALUES (?, ?, ?, ?, ?, ?, ?)";
-        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+        return dbHelper.executeUpdateOn(conn, sql, stmt -> {
             stmt.setString(1, entryId);
             stmt.setString(2, entry.getName());
             stmt.setString(3, material);
@@ -629,8 +623,7 @@ public class LoreEntryRepository implements ILoreEntryRepository {
             stmt.setString(5, rarity);
             stmt.setBoolean(6, obtainable);
             stmt.setString(7, nbtData);
-            return stmt.executeUpdate() > 0;
-        }
+        }) > 0;
     }
 
     /**
@@ -670,7 +663,7 @@ public class LoreEntryRepository implements ILoreEntryRepository {
     @SuppressWarnings("unchecked")
     private boolean insertLoreSubmission(String entryId, LoreEntry entry, Connection conn, int version) throws SQLException {
         String sql = "INSERT INTO " + t("lore_submission") + " (entry_id, submitter_uuid, content, slug, content_version, is_current_version) VALUES (?, ?, ?, ?, ?, TRUE)";
-        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+        return dbHelper.executeUpdateOn(conn, sql, stmt -> {
             stmt.setString(1, entryId);
             // Defensive: use "Server" if submittedBy is null or empty
             // submittedBy should be either a UUID string or "Server"
@@ -707,8 +700,7 @@ public class LoreEntryRepository implements ILoreEntryRepository {
             String slug = generateVersionedSlug(entry.getName(), version) + "-" + entryId.substring(0, Math.min(8, entryId.length()));
             stmt.setString(4, slug);
             stmt.setInt(5, version);
-            return stmt.executeUpdate() > 0;
-        }
+        }) > 0;
     }
 
     /**
@@ -850,11 +842,10 @@ public class LoreEntryRepository implements ILoreEntryRepository {
                 try {
                     // Update base name in lore_entry
                     String updateName = "UPDATE " + t("lore_entry") + " SET name = ? WHERE id = ?";
-                    try (PreparedStatement stmt = conn.prepareStatement(updateName)) {
+                    dbHelper.executeUpdateOn(conn, updateName, stmt -> {
                         stmt.setString(1, entry.getName());
                         stmt.setString(2, entry.getId());
-                        stmt.executeUpdate();
-                    }
+                    });
 
                     // Read current content JSON, patch description, write back
                     String readContent = "SELECT content FROM " + t("lore_submission") +
@@ -888,12 +879,12 @@ public class LoreEntryRepository implements ILoreEntryRepository {
                     String updateSubmission = "UPDATE " + t("lore_submission") +
                                              " SET content = ?, visibility = ?" +
                                              " WHERE entry_id = ? AND is_current_version = TRUE";
-                    try (PreparedStatement stmt = conn.prepareStatement(updateSubmission)) {
-                        stmt.setString(1, updatedContent);
+                    final String contentToWrite = updatedContent;
+                    dbHelper.executeUpdateOn(conn, updateSubmission, stmt -> {
+                        stmt.setString(1, contentToWrite);
                         stmt.setString(2, entry.getVisibility() != null ? entry.getVisibility() : "PUBLIC");
                         stmt.setString(3, entry.getId());
-                        stmt.executeUpdate();
-                    }
+                    });
 
                     conn.commit();
                     return true;
@@ -916,16 +907,14 @@ public class LoreEntryRepository implements ILoreEntryRepository {
             String sql = "UPDATE " + t("lore_submission") +
                          " SET status = 'ARCHIVED', visibility = 'HIDDEN'" +
                          " WHERE entry_id = ? AND is_current_version = TRUE";
-            try (Connection conn = dbConnection.getConnection();
-                 PreparedStatement stmt = conn.prepareStatement(sql)) {
-                stmt.setString(1, id.toString());
-                int rows = stmt.executeUpdate();
+            try {
+                int rows = dbHelper.executeUpdate(sql, stmt -> stmt.setString(1, id.toString()));
                 if (rows == 0) {
                     logger.warning("softDeleteEntry: no current submission for " + id);
                     return false;
                 }
                 return true;
-            } catch (SQLException e) {
+            } catch (org.fourz.RVNKLore.exception.LoreException e) {
                 logger.error("Failed to soft-delete lore entry: " + id, e);
                 return false;
             }
