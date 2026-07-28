@@ -17,8 +17,41 @@ import java.sql.*;
  */
 public class MySQLConnection extends DatabaseConnection {
 
+    /**
+     * Cross-host safety ceilings (#1822, following #1817). The database sits on another host and
+     * network gear silently drops idle TCP with no FIN, so a connection must be retired before the
+     * network kills it. Config may ask for <em>lower</em> values, never higher.
+     */
+    private static final long MAX_SAFE_IDLE_TIMEOUT_MS = 120000L;
+    private static final long MAX_SAFE_MAX_LIFETIME_MS = 180000L;
+
     public MySQLConnection(RVNKLore plugin, SQLDialect dialect) {
         super(plugin, dialect);
+    }
+
+    /**
+     * Resolve a pool timeout from config, clamped to the cross-host ceiling.
+     *
+     * <p>Before #1837 these values were hardcoded and {@code storage.mysql.idleTimeout} /
+     * {@code maxLifetime} were never parsed at all — the live configs declared 600000/1800000 while
+     * the pool quietly ran at 120000/180000. The numbers happened to be the safe ones, but an
+     * operator reading the config saw something that was not true, and tuning them during an
+     * incident would have done nothing. Reading then clamping makes the config honest without
+     * giving up the guarantee.</p>
+     *
+     * @param key      config key under {@code storage.mysql}
+     * @param ceiling  the highest value permitted regardless of config
+     * @param fallback value when the key is absent
+     * @return the effective value
+     */
+    private long resolvePoolTimeout(String key, long ceiling, long fallback) {
+        long requested = plugin.getConfig().getLong("storage.mysql." + key, fallback);
+        if (requested > ceiling) {
+            logger.warning("Capping pool " + key + " for cross-host safety: " + requested + " -> "
+                    + ceiling + "ms (config exceeded the safe ceiling)");
+            return ceiling;
+        }
+        return requested;
     }
 
     @Override
@@ -45,10 +78,13 @@ public class MySQLConnection extends DatabaseConnection {
             // stale ("No operations allowed after connection closed"), and a long idleTimeout lets
             // them sit past the network's drop window. Hold none idle, and retire/replace before the
             // network kills them. These match RVNKCore/RVNKWorlds' proven-stable values.
+            //
+            // #1837: read from config and clamp, rather than hardcode. The keys were previously
+            // declared in every live config.yml and silently ignored.
             .minIdleConnections(0)
-            .connectionTimeoutMs(30000L)
-            .idleTimeoutMs(120000L)
-            .maxLifetimeMs(180000L)
+            .connectionTimeoutMs(plugin.getConfig().getLong("storage.mysql.connectionTimeout", 30000L))
+            .idleTimeoutMs(resolvePoolTimeout("idleTimeout", MAX_SAFE_IDLE_TIMEOUT_MS, MAX_SAFE_IDLE_TIMEOUT_MS))
+            .maxLifetimeMs(resolvePoolTimeout("maxLifetime", MAX_SAFE_MAX_LIFETIME_MS, MAX_SAFE_MAX_LIFETIME_MS))
             .build();
 
         try {
