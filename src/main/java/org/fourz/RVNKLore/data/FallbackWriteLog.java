@@ -19,8 +19,10 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -130,7 +132,7 @@ public class FallbackWriteLog {
                         + " tier; review before recovery.");
             }
         }
-        pending.add(new JournalEntry(sql, binds));
+        pending.add(new JournalEntry(sql, binds, extractColumns(sql), table));
         persist();
     }
 
@@ -155,6 +157,15 @@ public class FallbackWriteLog {
      * quarantined to {@code .reconcile-failed} and dropped from the pending set, so the loop
      * converges instead of warning about the same row forever.</p>
      *
+     * <p><b>Dependency-aware (#1833).</b> Recorded order is preserved but is not sufficient on its
+     * own: a child row can commit while its parent is still failing, and if the parent is eventually
+     * abandoned the child is left orphaned. So within each pass, a child whose parent failed is
+     * <em>held back</em> — skipped without consuming one of its own attempts — and if the parent is
+     * quarantined its dependents are quarantined alongside it. Holding back rather than cascading at
+     * quarantine time is what actually closes the hole: {@link #MAX_ATTEMPTS} is counted across
+     * recovery events, so a parent that quarantines on pass three had already let its children commit
+     * on pass one. See {@link LoreTableDependencies}.</p>
+     *
      * @param primary the recovered primary connection
      * @return a short human-readable summary, or null if there was nothing to do
      */
@@ -171,11 +182,40 @@ public class FallbackWriteLog {
         }
         int replayed = 0;
         int quarantined = 0;
+        int cascaded = 0;
+        int held = 0;
         int stillPending = 0;
+        // Parent rows that failed this pass — their dependents must wait rather than orphan themselves.
+        Set<String> unresolvedParents = new HashSet<>();
+        // Parent rows abandoned this pass — their dependents are unreconcilable and follow them out.
+        Set<String> abandonedParents = new HashSet<>();
         try {
             logger.warning("Primary database recovered — replaying " + snapshot.size()
                     + " outage-era write(s)");
             for (JournalEntry entry : snapshot) {
+                String blockingParent = entry.firstRefIn(abandonedParents);
+                if (blockingParent != null) {
+                    // The parent was just abandoned; applying this would create the orphan #1833's
+                    // verification found. Quarantine it with the parent named, so the pair can be
+                    // reviewed together in .reconcile-failed.
+                    quarantine(entry, new SQLException("parent row was quarantined in the same "
+                            + "reconcile pass (" + blockingParent + ") — replaying this would orphan it"));
+                    synchronized (this) {
+                        pending.remove(entry);
+                    }
+                    cascaded++;
+                    continue;
+                }
+                blockingParent = entry.firstRefIn(unresolvedParents);
+                if (blockingParent != null) {
+                    // Deliberately does NOT increment attempts — a dependent must not burn its retry
+                    // budget waiting on a parent that has budget of its own left.
+                    held++;
+                    logger.warning("Holding back " + abbreviate(entry.sql) + " — its parent row ("
+                            + blockingParent + ") has not reconciled yet; it will retry on the next "
+                            + "recovery without consuming an attempt");
+                    continue;
+                }
                 try {
                     apply(primary, entry);
                     synchronized (this) {
@@ -184,14 +224,21 @@ public class FallbackWriteLog {
                     replayed++;
                 } catch (Exception e) {
                     entry.attempts++;
+                    String ownKey = entry.parentKey();
                     if (entry.attempts >= MAX_ATTEMPTS) {
                         quarantine(entry, e);
                         synchronized (this) {
                             pending.remove(entry);
                         }
                         quarantined++;
+                        if (ownKey != null) {
+                            abandonedParents.add(ownKey);
+                        }
                     } else {
                         stillPending++;
+                        if (ownKey != null) {
+                            unresolvedParents.add(ownKey);
+                        }
                         logger.warning("Replay failed (attempt " + entry.attempts + "/" + MAX_ATTEMPTS
                                 + ") for " + abbreviate(entry.sql) + ": " + e.getMessage());
                     }
@@ -204,11 +251,13 @@ public class FallbackWriteLog {
 
         String summary = "Reconcile: " + replayed + " replayed"
                 + (quarantined > 0 ? ", " + quarantined + " quarantined to .reconcile-failed" : "")
+                + (cascaded > 0 ? ", " + cascaded + " quarantined as dependents of an abandoned parent" : "")
+                + (held > 0 ? ", " + held + " held back pending a parent row" : "")
                 + (stillPending > 0 ? ", " + stillPending + " still pending" : "");
-        if (quarantined > 0) {
+        if (quarantined > 0 || cascaded > 0) {
             logger.error(summary + " — quarantined writes were NOT applied; inspect "
                     + quarantineFile.getName(), null);
-        } else if (stillPending > 0) {
+        } else if (stillPending > 0 || held > 0) {
             logger.warning(summary);
         } else {
             logger.info(summary);
@@ -325,6 +374,66 @@ public class FallbackWriteLog {
         return table.isEmpty() ? null : table;
     }
 
+    /**
+     * Pull the column list out of an {@code INSERT INTO t (a, b, c) VALUES (?, ?, ?)}.
+     *
+     * <p>Only INSERTs are parsed, and that is sufficient: creating an orphan requires inserting a
+     * child row, so dependency tracking only ever needs to read a foreign key off an INSERT. UPDATEs
+     * and DELETEs return an empty list and replay exactly as they did before, with no dependency
+     * handling — an UPDATE cannot bring a row into existence.</p>
+     *
+     * <p>Positional binds map one-to-one onto this list. A trailing {@code ON DUPLICATE KEY UPDATE}
+     * adds further binds beyond it, which is harmless: the leading N still align with the columns.</p>
+     *
+     * @param sql the executed statement
+     * @return lowercase column names in declaration order, empty if not a parsable INSERT
+     */
+    static List<String> extractColumns(String sql) {
+        List<String> cols = new ArrayList<>();
+        if (sql == null) {
+            return cols;
+        }
+        String s = sql.trim().replaceAll("\\s+", " ");
+        String upper = s.toUpperCase(Locale.ROOT);
+        if (!upper.startsWith("INSERT ")) {
+            return cols;
+        }
+        int open = s.indexOf('(');
+        if (open < 0) {
+            return cols;
+        }
+        int depth = 0;
+        int close = -1;
+        for (int i = open; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c == '(') {
+                depth++;
+            } else if (c == ')') {
+                depth--;
+                if (depth == 0) {
+                    close = i;
+                    break;
+                }
+            }
+        }
+        if (close < 0) {
+            return cols;
+        }
+        // Guard against parsing a VALUES tuple as a column list, which would silently misalign every
+        // index — only accept a group with no placeholders in it.
+        String inner = s.substring(open + 1, close);
+        if (inner.contains("?")) {
+            return cols;
+        }
+        for (String raw : inner.split(",")) {
+            String col = raw.trim().replace("`", "").replace("\"", "").toLowerCase(Locale.ROOT);
+            if (!col.isEmpty()) {
+                cols.add(col);
+            }
+        }
+        return cols;
+    }
+
     private static String abbreviate(String sql) {
         if (sql == null) {
             return "(null)";
@@ -419,17 +528,107 @@ public class FallbackWriteLog {
     static final class JournalEntry {
         final String sql;
         final List<Bind> binds;
+        /** Column names for an INSERT, positionally aligned with {@link #binds}; empty otherwise. */
+        final List<String> columns;
+        /** Target table as recorded, bare or prefixed. */
+        final String table;
         int attempts;
 
-        JournalEntry(String sql, List<Bind> binds) {
+        JournalEntry(String sql, List<Bind> binds, List<String> columns, String table) {
             this.sql = sql;
             this.binds = binds;
+            this.columns = columns == null ? new ArrayList<>() : columns;
+            this.table = table;
+        }
+
+        /**
+         * Value of a named column, read from the positionally-aligned binds.
+         *
+         * @param column lowercase column name
+         * @return the bound value as a string, or null if the column is absent or unbound
+         */
+        private String valueOf(String column) {
+            int idx = columns.indexOf(column);
+            if (idx < 0) {
+                return null;
+            }
+            // Binds are 1-based and may arrive out of order, so match on the recorded index rather
+            // than assuming the setter calls happened left to right.
+            for (Bind b : binds) {
+                if (b.index == idx + 1) {
+                    return b.value == null ? null : String.valueOf(b.value);
+                }
+            }
+            return null;
+        }
+
+        /**
+         * This row's own identity as a parent, for dependents to match against.
+         *
+         * @return {@code parentTable#id}, or null if this row cannot be anyone's parent
+         */
+        String parentKey() {
+            if (table == null || !LoreTableDependencies.isParent(table)) {
+                return null;
+            }
+            String id = valueOf("id");
+            if (id == null) {
+                return null;
+            }
+            return LoreTableDependencies.canonicalParent(table) + "#" + id;
+        }
+
+        /**
+         * Parent rows this row depends on, one key per declared foreign key that is actually bound.
+         *
+         * @return keys in {@code parentTable#id} form; empty when this row has no parents
+         */
+        List<String> parentRefs() {
+            List<String> refs = new ArrayList<>();
+            if (table == null || columns.isEmpty()) {
+                return refs;
+            }
+            for (LoreTableDependencies.Dep dep : LoreTableDependencies.parentsOf(table)) {
+                String value = valueOf(dep.column);
+                if (value != null) {
+                    refs.add(LoreTableDependencies.canonicalParent(dep.parentTable) + "#" + value);
+                }
+            }
+            return refs;
+        }
+
+        /**
+         * First parent reference present in the given set.
+         *
+         * @param keys parent keys to test against
+         * @return the matching key, or null if this row depends on none of them
+         */
+        String firstRefIn(Set<String> keys) {
+            if (keys.isEmpty()) {
+                return null;
+            }
+            for (String ref : parentRefs()) {
+                if (keys.contains(ref)) {
+                    return ref;
+                }
+            }
+            return null;
         }
 
         JsonObject toJson() {
             JsonObject o = new JsonObject();
             o.addProperty("sql", sql);
             o.addProperty("attempts", attempts);
+            if (table != null) {
+                o.addProperty("table", table);
+            }
+            if (!columns.isEmpty()) {
+                JsonArray cols = new JsonArray();
+                for (String c : columns) {
+                    cols.add(c);
+                }
+                o.add("columns", cols);
+            }
             JsonArray arr = new JsonArray();
             for (Bind b : binds) {
                 arr.add(b.toJson());
@@ -444,7 +643,21 @@ public class FallbackWriteLog {
             for (int i = 0; i < arr.size(); i++) {
                 binds.add(Bind.fromJson(arr.get(i).getAsJsonObject()));
             }
-            JournalEntry e = new JournalEntry(o.get("sql").getAsString(), binds);
+            String sql = o.get("sql").getAsString();
+            // Journals written before #1833's dependency awareness carry neither field. Re-derive both
+            // from the SQL rather than treating an older entry as dependency-free, which would let it
+            // replay with exactly the orphaning behaviour this change removes.
+            List<String> columns = new ArrayList<>();
+            if (o.has("columns")) {
+                JsonArray cols = o.getAsJsonArray("columns");
+                for (int i = 0; i < cols.size(); i++) {
+                    columns.add(cols.get(i).getAsString());
+                }
+            } else {
+                columns = extractColumns(sql);
+            }
+            String table = o.has("table") ? o.get("table").getAsString() : extractTable(sql);
+            JournalEntry e = new JournalEntry(sql, binds, columns, table);
             e.attempts = o.has("attempts") ? o.get("attempts").getAsInt() : 0;
             return e;
         }
