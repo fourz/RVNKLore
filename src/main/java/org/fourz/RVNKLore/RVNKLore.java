@@ -268,8 +268,26 @@ public class RVNKLore extends JavaPlugin {
         Runtime.getRuntime().addShutdownHook(shutdownHook);
     }
 
+    /**
+     * Periodic database health check (#1856).
+     *
+     * <p>Runs <b>asynchronously</b>. It previously used {@code scheduleSyncRepeatingTask}, which put
+     * {@link org.fourz.RVNKLore.data.DatabaseManager#isConnected()} — a HikariCP pool borrow against
+     * a cross-host MySQL — directly on the server thread. When that pool degrades, the borrow parks
+     * in {@code ConcurrentBag.borrow} and takes the whole server with it. Reproduced on both tiers
+     * on 2026-08-01 within seven minutes of each other; Dev tripped a 10-second Paper watchdog on
+     * exactly that frame.</p>
+     *
+     * <p>The <i>reconnect</i> was already dispatched async (#858) — this closes the other half. The
+     * body touches no Bukkit API: it reads the database manager and logs, both safe off-thread. The
+     * reconnect keeps its own async dispatch so the guarded {@code isReconnecting} handoff is
+     * unchanged.</p>
+     *
+     * <p>A health check is diagnostic by nature; nothing about it needs to be synchronous with a
+     * tick. That is the whole argument for this change.</p>
+     */
     private void startHealthCheck() {
-        healthCheckTaskId = getServer().getScheduler().scheduleSyncRepeatingTask(this, () -> {
+        healthCheckTaskId = getServer().getScheduler().runTaskTimerAsynchronously(this, () -> {
             if (databaseManager == null) {
                 return;
             }
@@ -298,7 +316,7 @@ public class RVNKLore extends JavaPlugin {
                     logger.warning("Reconnect already in progress, skipping");
                 }
             }
-        }, 1200L, 1200L); // Check every minute (20 ticks/sec * 60 sec)
+        }, 1200L, 1200L).getTaskId(); // Check every minute (20 ticks/sec * 60 sec)
     }
 
     @Override
