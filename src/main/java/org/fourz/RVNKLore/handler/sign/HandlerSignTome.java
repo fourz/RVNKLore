@@ -9,8 +9,11 @@ import org.bukkit.block.Sign;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
+import org.bukkit.event.block.Action;
 import org.bukkit.event.block.SignChangeEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerTakeLecternBookEvent;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.fourz.RVNKLore.RVNKLore;
@@ -72,6 +75,16 @@ public class HandlerSignTome extends DefaultLoreHandler {
      * overwritten a tick later.</p>
      */
     private static final long RESTOCK_DELAY_TICKS = 15L;
+
+    /**
+     * How many times the post-take refill will wait and look again.
+     *
+     * <p>The take event fires before the transfer completes, so the first look can still see the
+     * outgoing book. Treating "slot occupied" as "already stocked" and giving up makes a failed
+     * refill indistinguishable from a successful one — which is exactly how the original defect
+     * hid. Retrying instead turns that ambiguity into either a refill or a log line.</p>
+     */
+    private static final int MAX_RESTOCK_ATTEMPTS = 3;
 
     private final LogManager logger;
 
@@ -144,12 +157,62 @@ public class HandlerSignTome extends DefaultLoreHandler {
         player.sendMessage(ChatColor.GREEN + "This lectern now hands out '" + itemName + "'.");
 
         // Sign-first build: stock it now, so a tome lectern is never an empty-looking quest-giver.
+        // Next tick, because the sign's own lines are not committed until this event resolves.
         if (onLectern == null) {
             final String book = itemName;
-            Bukkit.getScheduler().runTask(plugin, () -> restock(lectern, book));
+            Bukkit.getScheduler().runTask(plugin, () -> stock(lectern, book));
         }
         logger.debug("Tome lectern designated by " + player.getName() + " at "
             + lectern.getLocation() + " -> " + itemName);
+    }
+
+    /**
+     * Refills an <b>empty</b> tome lectern when a player interacts with it.
+     *
+     * <p>This — not the post-take refill — is what keeps a tome lectern working. A lectern can be
+     * emptied by a great many things other than a player taking the book: a server restart, a chunk
+     * reload, a hopper, a block break, an admin {@code fill}. A scheduled refill hung off the take
+     * event heals exactly one of those. Refilling on interact heals all of them, needs no
+     * bookkeeping, and costs nothing until somebody actually clicks.</p>
+     *
+     * <p><b>Nothing is ever handed straight to the player.</b> The lectern is always the
+     * intermediary: click one refills it, and the player then takes the book through the lectern's
+     * own control exactly as they would from a lectern that was already stocked. Auto-giving on the
+     * second click was considered and rejected — it would make a just-refilled lectern behave
+     * differently from an already-stocked one for no gain.</p>
+     *
+     * <p>The event is cancelled so the empty-lectern GUI does not open on the same click. That is
+     * what makes it read as "the lectern refilled itself" rather than "an empty lectern opened".
+     * A side effect worth knowing: an admin can no longer hand-place a <i>different</i> book on a
+     * designated tome lectern, because the click refills it with the signed book instead. That is
+     * the intended reading — the sign declares what the lectern hands out.</p>
+     *
+     * @param event the interact event
+     */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onInteract(PlayerInteractEvent event) {
+        if (event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
+        // Off-hand fires a second event for the same click; without this the refill runs twice.
+        if (event.getHand() != EquipmentSlot.HAND) return;
+
+        Block block = event.getClickedBlock();
+        if (block == null || block.getType() != Material.LECTERN) return;
+
+        // A stocked lectern must behave exactly like vanilla — open, read, take.
+        if (bookOn(block) != null) return;
+
+        Block signBlock = LecternSignUtil.findTomeSign(block);
+        if (signBlock == null) return;
+        if (!(signBlock.getState() instanceof Sign sign)) return;
+
+        String itemName = LecternSignUtil.readLineFromTaggedSide(sign, LecternSignUtil.TOME_TAG, 1);
+        if (itemName == null || itemName.isEmpty()) return;
+
+        event.setCancelled(true);
+        if (stock(block, itemName)) {
+            logger.debug("Tome lectern refilled on interact by " + event.getPlayer().getName()
+                + " at " + block.getLocation() + " -> " + itemName);
+        }
     }
 
     /**
@@ -158,6 +221,11 @@ public class HandlerSignTome extends DefaultLoreHandler {
      * <p>The take itself stays vanilla — the player uses the lectern's own Take Book control, so
      * the transfer and its animation are the ones they already know. This adds the refill and the
      * one-per-player guard, nothing else.</p>
+     *
+     * <p>Since {@link #onInteract} landed this refill is no longer load-bearing — an empty lectern
+     * heals on the next click regardless. What it still provides is the <i>visible beat</i>: the
+     * lectern refilling a moment after the take, so the restock reads as deliberate rather than as
+     * "you took the last copy".</p>
      *
      * @param event the take-book event
      */
@@ -168,6 +236,11 @@ public class HandlerSignTome extends DefaultLoreHandler {
 
         Block block = lectern.getBlock();
         Block signBlock = LecternSignUtil.findTomeSign(block);
+        // Logged either way: this fires for every lectern on the server, so a null sign is the
+        // normal case and cannot be a warning. It is also the leading suspect for the refill not
+        // firing — findTomeSign walks lectern -> sign, a direction designation never exercises.
+        logger.debug("Lectern take at " + block.getLocation() + "; tome sign "
+            + (signBlock == null ? "not found" : "found"));
         if (signBlock == null) return;
         if (!(signBlock.getState() instanceof Sign sign)) return;
 
@@ -193,8 +266,35 @@ public class HandlerSignTome extends DefaultLoreHandler {
         }
 
         final String book = itemName;
-        Bukkit.getScheduler().runTaskLater(plugin, () -> restock(block, book), RESTOCK_DELAY_TICKS);
+        scheduleRefill(block, book, 1);
         logger.debug("Tome lectern gave '" + itemName + "' to " + player.getName() + "; restocking");
+    }
+
+    /**
+     * Waits a beat, then refills the lectern — retrying while the outgoing book is still in the slot.
+     *
+     * @param lectern  the lectern block
+     * @param itemName the lore item name
+     * @param attempt  1-based attempt counter
+     */
+    private void scheduleRefill(Block lectern, String itemName, int attempt) {
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (lectern.getType() != Material.LECTERN) return;    // broken since we scheduled
+
+            if (bookOn(lectern) != null) {
+                // Still occupied. Either the transfer has not completed yet, or somebody restocked
+                // it in the meantime — indistinguishable from here, so look again rather than
+                // assume the happy one.
+                if (attempt < MAX_RESTOCK_ATTEMPTS) {
+                    scheduleRefill(lectern, itemName, attempt + 1);
+                } else {
+                    logger.debug("Tome lectern at " + lectern.getLocation() + " still holds a book"
+                        + " after " + attempt + " attempts; leaving it alone");
+                }
+                return;
+            }
+            stock(lectern, itemName);
+        }, RESTOCK_DELAY_TICKS);
     }
 
     /**
@@ -202,20 +302,20 @@ public class HandlerSignTome extends DefaultLoreHandler {
      *
      * @param lectern  the lectern block
      * @param itemName the lore item name
+     * @return true when the book was placed
      */
-    private void restock(Block lectern, String itemName) {
-        if (lectern.getType() != Material.LECTERN) return;        // broken since we scheduled
-        if (!(lectern.getState() instanceof Lectern state)) return;
-        if (state.getInventory().getItem(0) != null) return;      // already stocked by someone else
+    private boolean stock(Block lectern, String itemName) {
+        if (!(lectern.getState() instanceof Lectern state)) return false;
 
         ItemStack book = createBook(itemName);
         if (book == null) {
-            logger.warning("Tome lectern could not restock '" + itemName + "' at "
+            logger.warning("Tome lectern could not stock '" + itemName + "' at "
                 + lectern.getLocation() + " — item did not resolve");
-            return;
+            return false;
         }
         state.getInventory().setItem(0, book);
         state.update(true, false);
+        return true;
     }
 
     /** @return the book currently on the lectern, or null */
