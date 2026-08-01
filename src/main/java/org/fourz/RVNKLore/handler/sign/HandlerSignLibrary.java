@@ -24,6 +24,17 @@ import org.fourz.rvnkcore.util.log.LogManager;
  */
 public class HandlerSignLibrary extends DefaultLoreHandler {
     private static final String LIBRARY_SIGN_HEADER = "[Library]";
+
+    /**
+     * Line-0 text written when a {@code [Library]} sign is refused.
+     *
+     * <p>Must NOT strip down to {@code [Library]}. This previously wrote {@code RED + "[Library]"},
+     * which looks refused but still reads as the tag once colour is stripped — so
+     * {@code LecternSignUtil.isLibraryLectern} matched it and the lectern was designated anyway,
+     * cataloguing books placed on it despite the refusal. Found while fixing the same flaw in the
+     * copied-from pattern (#1888).</p>
+     */
+    private static final String REJECTED_HEADER = ChatColor.RED + "[!Library]";
     private final LogManager logger;
 
     public HandlerSignLibrary(RVNKLore plugin) {
@@ -47,7 +58,7 @@ public class HandlerSignLibrary extends DefaultLoreHandler {
 
         if (!player.hasPermission("rvnklore.sign.library")) {
             logger.debug(player.getName() + " tried to create a library sign but lacks permission");
-            event.setLine(0, ChatColor.RED + "[Library]");
+            event.setLine(0, REJECTED_HEADER);
             player.sendMessage(ChatColor.RED + "You don't have permission to create library signs.");
             return;
         }
@@ -55,7 +66,7 @@ public class HandlerSignLibrary extends DefaultLoreHandler {
         // The sign must be mounted on a lectern for the designation to mean anything.
         Block attached = LecternSignUtil.getAttachedBlock(block);
         if (attached == null || attached.getType() != Material.LECTERN) {
-            event.setLine(0, ChatColor.RED + "[Library]");
+            event.setLine(0, REJECTED_HEADER);
             player.sendMessage(ChatColor.RED + "A [Library] sign must be placed on a lectern.");
             return;
         }

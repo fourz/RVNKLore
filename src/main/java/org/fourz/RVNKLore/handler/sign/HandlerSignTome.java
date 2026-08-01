@@ -1,16 +1,16 @@
 package org.fourz.RVNKLore.handler.sign;
 
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
+import org.bukkit.block.Lectern;
 import org.bukkit.block.Sign;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
-import org.bukkit.event.block.Action;
 import org.bukkit.event.block.SignChangeEvent;
-import org.bukkit.event.player.PlayerInteractEvent;
-import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.event.player.PlayerTakeLecternBookEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.fourz.RVNKLore.RVNKLore;
@@ -20,36 +20,58 @@ import org.fourz.RVNKLore.util.LecternSignUtil;
 import org.fourz.rvnkcore.util.log.LogManager;
 
 /**
- * Designates a lectern as a book-dispensing "quest-giver" lectern (#1888).
+ * Designates a lectern as a self-restocking "quest-giver" lectern (#1888).
  *
- * <p>A sign reading {@code [Tome]} on line 1 and a lore item name on line 2, mounted on any face of
- * a lectern, marks that lectern. Right-clicking it hands the player their own copy of that book,
- * once.</p>
+ * <p>A {@code [Tome]} sign mounted on a lectern turns it into a dispenser for one lore book. The
+ * lectern is <b>always visibly stocked</b>: a player opens it, takes the book, and the lectern
+ * refills a moment later. The refill is on a short delay on purpose so the player <i>sees</i> it —
+ * that is what reads as "this is a dispenser" rather than "you just took the only copy".</p>
+ *
+ * <h3>Two ways to build one</h3>
+ * <ol>
+ *   <li><b>Sign first.</b> Write {@code [Tome]} with the book name on line 2. The lectern is stocked
+ *       automatically as part of the designation.</li>
+ *   <li><b>Book first.</b> Put a minted lore book on the lectern, then write {@code [Tome]} with
+ *       <b>no name</b> — the name is read off the book already there and written onto the sign, so
+ *       the lectern still declares what it gives.</li>
+ * </ol>
  *
  * <h3>The inverse of {@code [Library]}</h3>
  * {@link HandlerSignLibrary} is an <b>ingestion</b> point — books placed on it are catalogued as
- * lore. This is the other direction. They share {@link LecternSignUtil}'s scanning, which is
- * tag-agnostic.
+ * lore. This hands books out. They share {@link LecternSignUtil}'s tag-agnostic scanning.
  *
  * <h3>Why a sign rather than block NBT</h3>
- * Quest-giver lecterns were previously hand-built by writing block NBT. One of them
- * (Chapter 1's start lectern, {@code alphac -315,118,446}) vanished from Event with no record of how
- * it had been made, leaving the chain unstartable — #1881. A sign is placeable, visible in-world,
- * says which book it gives, and is rebuilt with two blocks. The physical sign IS the designation;
- * remove it and the lectern is ordinary again.
- *
- * <h3>One per player, and the limit of that</h3>
- * The guard is a plain inventory check: already holding a copy means no second one. That stops
- * spam-clicking, double-gives and accidents — the failure modes that actually occur. A player who
- * chests or drops the book <b>can</b> take another. This is deliberately <i>take-one</i>, not
- * <i>claim-once</i>; the book is a reference copy, not a reward. A hard claim-once would belong in
- * {@code lore_discovery}, which already carries {@code UNIQUE(player_uuid, entry_id)}.
+ * Quest-giver lecterns used to be hand-built by writing block NBT. Chapter 1's start lectern
+ * (#1881) vanished from Event with no record of how it was made — and its book had never been
+ * minted, so there was nothing to rebuild it from. A sign is placeable, visible, names its own
+ * book, and refuses a book that does not exist in the catalog.
  *
  * @since 1.0.89
  */
 public class HandlerSignTome extends DefaultLoreHandler {
 
     private static final String PERMISSION_CREATE = "rvnklore.sign.tome";
+
+    /**
+     * Line-0 text written when a {@code [Tome]} sign is refused.
+     *
+     * <p>Must NOT strip down to {@link LecternSignUtil#TOME_TAG}. Marking a rejection with
+     * {@code RED + "[Tome]"} looks refused but still reads as the tag once colour is stripped, so
+     * the lectern gets designated anyway. Observed on Event: a sign refused for naming a
+     * nonexistent book still dispensed, failing at the give instead of never being a tome lectern.
+     * {@code HandlerSignLibrary} carried the identical flaw.</p>
+     */
+    private static final String REJECTED_TAG = ChatColor.RED + "[!Tome]";
+
+    /**
+     * Ticks between a player taking the book and the lectern refilling.
+     *
+     * <p>Not zero, on purpose. An instant refill is indistinguishable from the take having failed;
+     * a visible beat reads as the lectern restocking itself. Also necessary mechanically — the
+     * take event fires <i>before</i> the book leaves the lectern, so an immediate write would be
+     * overwritten a tick later.</p>
+     */
+    private static final long RESTOCK_DELAY_TICKS = 15L;
 
     private final LogManager logger;
 
@@ -64,12 +86,9 @@ public class HandlerSignTome extends DefaultLoreHandler {
     }
 
     /**
-     * Validates and formats a {@code [Tome]} sign as it is written.
+     * Validates a {@code [Tome]} sign, resolves its book, and stocks the lectern.
      *
-     * <p>Refuses the designation unless the sign is on a lectern <b>and</b> line 2 resolves to a
-     * real lore item. Creating a sign that points at nothing would produce a lectern that looks like
-     * a quest-giver and silently does nothing — the failure is much cheaper here, at placement,
-     * where the builder is standing right there.</p>
+     * <p>Line 2 is optional when the lectern already holds a book — that is the book-first build.</p>
      *
      * @param event the sign change event
      */
@@ -83,138 +102,160 @@ public class HandlerSignTome extends DefaultLoreHandler {
         Player player = event.getPlayer();
 
         if (!player.hasPermission(PERMISSION_CREATE)) {
-            event.setLine(0, ChatColor.RED + LecternSignUtil.TOME_TAG);
+            event.setLine(0, REJECTED_TAG);
             player.sendMessage(ChatColor.RED + "You don't have permission to create tome lecterns.");
             return;
         }
 
-        Block attached = LecternSignUtil.getAttachedBlock(event.getBlock());
-        if (attached == null || attached.getType() != Material.LECTERN) {
-            event.setLine(0, ChatColor.RED + LecternSignUtil.TOME_TAG);
+        Block lectern = LecternSignUtil.getAttachedBlock(event.getBlock());
+        if (lectern == null || lectern.getType() != Material.LECTERN) {
+            event.setLine(0, REJECTED_TAG);
             player.sendMessage(ChatColor.RED + "A " + LecternSignUtil.TOME_TAG
                 + " sign must be placed on a lectern.");
             return;
         }
 
         String itemName = event.getLine(1) == null ? "" : event.getLine(1).trim();
+        ItemStack onLectern = bookOn(lectern);
+
+        // Book-first build: no name given, so read it off the book already on the lectern.
         if (itemName.isEmpty()) {
-            event.setLine(0, ChatColor.RED + LecternSignUtil.TOME_TAG);
-            player.sendMessage(ChatColor.RED + "Line 2 must be the lore item name to dispense.");
-            return;
+            itemName = displayName(onLectern);
+            if (itemName == null) {
+                event.setLine(0, REJECTED_TAG);
+                player.sendMessage(ChatColor.RED
+                    + "Put a lore book on the lectern first, or name one on line 2.");
+                return;
+            }
+            event.setLine(1, itemName);
         }
 
-        // Resolve by NAME, never by id: a freshly minted item is unreachable by id (#1887), and a
+        // Resolve by NAME, never by id — a freshly minted item is unreachable by id (#1887), and a
         // name on the sign is readable by whoever walks past it.
         if (!loreItemExists(itemName)) {
-            event.setLine(0, ChatColor.RED + LecternSignUtil.TOME_TAG);
+            event.setLine(0, REJECTED_TAG);
             player.sendMessage(ChatColor.RED + "No lore item named '" + itemName + "'.");
             player.sendMessage(ChatColor.GRAY + "   Mint it first, then place this sign.");
             return;
         }
 
-        event.setLine(0, ChatColor.DARK_AQUA + "[" + ChatColor.AQUA + "Tome" + ChatColor.DARK_AQUA + "]");
+        event.setLine(0, ChatColor.DARK_AQUA + "[" + ChatColor.AQUA + "Tome"
+            + ChatColor.DARK_AQUA + "]");
         player.sendMessage(ChatColor.GREEN + "This lectern now hands out '" + itemName + "'.");
+
+        // Sign-first build: stock it now, so a tome lectern is never an empty-looking quest-giver.
+        if (onLectern == null) {
+            final String book = itemName;
+            Bukkit.getScheduler().runTask(plugin, () -> restock(lectern, book));
+        }
         logger.debug("Tome lectern designated by " + player.getName() + " at "
-            + event.getBlock().getLocation() + " -> " + itemName);
+            + lectern.getLocation() + " -> " + itemName);
     }
 
     /**
-     * Dispenses the named book on right-click.
+     * Lets a player take the book, then refills the lectern.
      *
-     * <p>Cancels the interaction unconditionally on a designated lectern. That is deliberate: a
-     * right-click on a lectern <i>while holding a book</i> vanilla-places that book onto it, which
-     * would collide head-on with take-a-copy — and on a lectern that also carried a
-     * {@code [Library]} sign the player would be <i>submitting</i> a book while trying to take
-     * one.</p>
+     * <p>The take itself stays vanilla — the player uses the lectern's own Take Book control, so
+     * the transfer and its animation are the ones they already know. This adds the refill and the
+     * one-per-player guard, nothing else.</p>
      *
-     * @param event the interact event
+     * @param event the take-book event
      */
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
-    public void onInteract(PlayerInteractEvent event) {
-        if (event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
-        // Off-hand fires a second event for the same click; ignore it or the player gets two.
-        if (event.getHand() != EquipmentSlot.HAND) return;
+    public void onTakeBook(PlayerTakeLecternBookEvent event) {
+        Lectern lectern = event.getLectern();
+        if (lectern == null) return;
 
-        Block block = event.getClickedBlock();
-        if (block == null || block.getType() != Material.LECTERN) return;
-
+        Block block = lectern.getBlock();
         Block signBlock = LecternSignUtil.findTomeSign(block);
         if (signBlock == null) return;
         if (!(signBlock.getState() instanceof Sign sign)) return;
 
         String itemName = LecternSignUtil.readLineFromTaggedSide(sign, LecternSignUtil.TOME_TAG, 1);
-
-        // Past this point the lectern is ours — never let vanilla place a held book onto it.
-        event.setCancelled(true);
+        if (itemName == null || itemName.isEmpty()) return;
 
         Player player = event.getPlayer();
-        if (itemName == null || itemName.isEmpty()) {
-            player.sendMessage(ChatColor.RED + "This tome lectern has no book set on line 2.");
-            return;
-        }
 
+        // One per player. An inventory check, so this is take-one rather than claim-once: a player
+        // who chests the book can take another. Deliberate — the book is a reference copy, not a
+        // reward. A hard claim-once belongs in lore_discovery, which already carries
+        // UNIQUE(player_uuid, entry_id).
         if (hasCopy(player, itemName)) {
+            event.setCancelled(true);
             player.sendMessage(ChatColor.YELLOW + "You already carry '" + itemName + "'.");
             return;
         }
 
         if (player.getInventory().firstEmpty() == -1) {
+            event.setCancelled(true);
             player.sendMessage(ChatColor.RED + "Your inventory is full.");
             return;
         }
 
-        giveLoreItem(itemName, player);
-        logger.debug("Tome lectern dispensed '" + itemName + "' to " + player.getName());
+        final String book = itemName;
+        Bukkit.getScheduler().runTaskLater(plugin, () -> restock(block, book), RESTOCK_DELAY_TICKS);
+        logger.debug("Tome lectern gave '" + itemName + "' to " + player.getName() + "; restocking");
     }
 
     /**
-     * Whether the player already carries this book.
+     * Puts a fresh copy of the named book on the lectern.
      *
-     * <p>Matches on the item's display name with colour stripped, so a renamed-by-colour copy still
-     * counts and an unrelated written book does not block the dispense.</p>
+     * @param lectern  the lectern block
+     * @param itemName the lore item name
      */
+    private void restock(Block lectern, String itemName) {
+        if (lectern.getType() != Material.LECTERN) return;        // broken since we scheduled
+        if (!(lectern.getState() instanceof Lectern state)) return;
+        if (state.getInventory().getItem(0) != null) return;      // already stocked by someone else
+
+        ItemStack book = createBook(itemName);
+        if (book == null) {
+            logger.warning("Tome lectern could not restock '" + itemName + "' at "
+                + lectern.getLocation() + " — item did not resolve");
+            return;
+        }
+        state.getInventory().setItem(0, book);
+        state.update(true, false);
+    }
+
+    /** @return the book currently on the lectern, or null */
+    private ItemStack bookOn(Block lectern) {
+        if (!(lectern.getState() instanceof Lectern state)) return null;
+        return state.getInventory().getItem(0);
+    }
+
+    /** @return the stack's display name with colour stripped, or null */
+    private String displayName(ItemStack stack) {
+        if (stack == null) return null;
+        ItemMeta meta = stack.getItemMeta();
+        if (meta == null || !meta.hasDisplayName()) return null;
+        String name = ChatColor.stripColor(meta.getDisplayName());
+        return (name == null || name.isBlank()) ? null : name.trim();
+    }
+
+    /** @return true when the player already carries this book */
     private boolean hasCopy(Player player, String itemName) {
         for (ItemStack stack : player.getInventory().getContents()) {
-            if (stack == null) continue;
-            ItemMeta meta = stack.getItemMeta();
-            if (meta == null || !meta.hasDisplayName()) continue;
-            String name = ChatColor.stripColor(meta.getDisplayName());
-            if (name != null && name.trim().equalsIgnoreCase(itemName)) {
-                return true;
-            }
+            String name = displayName(stack);
+            if (name != null && name.equalsIgnoreCase(itemName)) return true;
         }
         return false;
     }
 
-    /**
-     * Resolves a lore item by name through ItemManager.
-     *
-     * @return true when an item with this name exists in the catalog
-     */
-    private boolean loreItemExists(String itemName) {
+    /** @return a fresh copy of the named lore item, or null when it does not resolve */
+    private ItemStack createBook(String itemName) {
         try {
             org.fourz.RVNKLore.lore.item.ItemManager items = items();
-            return items != null && items.createLoreItemSync(itemName) != null;
+            return items == null ? null : items.createLoreItemSync(itemName);
         } catch (Exception e) {
-            logger.debug("Lore item lookup failed for '" + itemName + "': " + e.getMessage());
-            return false;
+            logger.debug("Lore item build failed for '" + itemName + "': " + e.getMessage());
+            return null;
         }
     }
 
-    /** Hands the named lore item to the player, by name (see #1887). */
-    private void giveLoreItem(String itemName, Player player) {
-        try {
-            items().giveItemToPlayer(itemName, player)
-                .thenAccept(ok -> {
-                    if (!Boolean.TRUE.equals(ok)) {
-                        logger.warning("Tome lectern could not give '" + itemName
-                            + "' to " + player.getName());
-                    }
-                });
-        } catch (Exception e) {
-            logger.error("Tome lectern give failed for '" + itemName + "'", e);
-            player.sendMessage(ChatColor.RED + "Could not hand you that book — see console.");
-        }
+    /** @return true when a lore item with this name exists in the catalog */
+    private boolean loreItemExists(String itemName) {
+        return createBook(itemName) != null;
     }
 
     /**
