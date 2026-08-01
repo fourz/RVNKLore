@@ -6,6 +6,7 @@ import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.block.Lectern;
 import org.bukkit.block.Sign;
+import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -305,16 +306,43 @@ public class HandlerSignTome extends DefaultLoreHandler {
      * @return true when the book was placed
      */
     private boolean stock(Block lectern, String itemName) {
-        if (!(lectern.getState() instanceof Lectern state)) return false;
-
         ItemStack book = createBook(itemName);
         if (book == null) {
             logger.warning("Tome lectern could not stock '" + itemName + "' at "
                 + lectern.getLocation() + " — item did not resolve");
             return false;
         }
+
+        // Putting a stack in slot 0 is only half of stocking a lectern. The block carries a
+        // has_book property and while it is false the block holds nothing — the book is not
+        // rendered, not serialised into the block's NBT, and not returned by a later read. Every
+        // symptom of #1902 came from this: stock() reported success, the block's NBT stayed
+        // "components: {}", the next read saw an empty lectern, and the refill fired again. It
+        // looked like the designation had been lost across restarts when no book was ever written.
+        //
+        // The property has a getter but no setter — vanilla only ever sets it via placeBook — so it
+        // is flipped by rebuilding the block data from its own string form, which preserves facing
+        // and powered without having to enumerate them.
+        BlockData data = lectern.getBlockData();
+        if (data instanceof org.bukkit.block.data.type.Lectern ld && !ld.hasBook()) {
+            lectern.setBlockData(
+                Bukkit.createBlockData(data.getAsString().replace("has_book=false", "has_book=true")),
+                false);   // no physics: nothing neighbouring needs to react
+        }
+
+        // Re-read the state: the block data write above invalidates any handle taken before it.
+        if (!(lectern.getState() instanceof Lectern state)) return false;
         state.getInventory().setItem(0, book);
         state.update(true, false);
+
+        // Read it back through the same accessor the rest of this class uses. The old version
+        // returned true on the strength of having called the setters, which is precisely how a
+        // no-op reported success for two builds and sent the diagnosis after the wrong component.
+        if (bookOn(lectern) == null) {
+            logger.warning("Tome lectern at " + lectern.getLocation() + " did not accept '"
+                + itemName + "' — slot still empty after write");
+            return false;
+        }
         return true;
     }
 
