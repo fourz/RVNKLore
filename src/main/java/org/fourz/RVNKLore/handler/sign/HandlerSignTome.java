@@ -332,8 +332,23 @@ public class HandlerSignTome extends DefaultLoreHandler {
 
         // Re-read the state: the block data write above invalidates any handle taken before it.
         if (!(lectern.getState() instanceof Lectern state)) return false;
+
+        // Two writes, because CraftBukkit's behaviour here depends on whether getInventory() hands
+        // back the live tile-entity inventory or a snapshot, and getting that wrong is what made
+        // the previous two attempts look correct while changing nothing.
+        //
+        // For a PLACED lectern getInventory() is live, so this write lands immediately and calling
+        // update() afterwards would apply the snapshot captured before it and undo the write. If it
+        // is instead a snapshot, this write goes nowhere until update() is called. Rather than bet
+        // on one, write, check, and only then reach for the other path.
         state.getInventory().setItem(0, book);
-        state.update(true, false);
+
+        if (bookOn(lectern) == null) {
+            if (lectern.getState() instanceof Lectern snapshot) {
+                snapshot.getInventory().setItem(0, book);
+                snapshot.update(true, false);
+            }
+        }
 
         // Read it back through the same accessor the rest of this class uses. The old version
         // returned true on the strength of having called the setters, which is precisely how a
