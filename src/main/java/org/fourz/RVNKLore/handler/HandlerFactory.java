@@ -130,6 +130,7 @@ public class HandlerFactory {
             handlerClasses.put("SIGN_SHRINE", org.fourz.RVNKLore.handler.sign.HandlerSignShrine.class);
             handlerClasses.put("SIGN_CITY", org.fourz.RVNKLore.handler.sign.HandlerSignCity.class);
             handlerClasses.put("SIGN_LIBRARY", org.fourz.RVNKLore.handler.sign.HandlerSignLibrary.class);
+            handlerClasses.put("SIGN_TOME", org.fourz.RVNKLore.handler.sign.HandlerSignTome.class);
             handlerClasses.put("SIGN_FORGE", org.fourz.RVNKLore.handler.sign.HandlerSignForge.class);
             handlerClasses.put("FORGE_ANVIL", org.fourz.RVNKLore.handler.event.ForgeAnvilLoreHandler.class);
 
@@ -186,7 +187,7 @@ public class HandlerFactory {
         String[] eventHandlerKeys = {
             "ANVIL_ARTIFACT", "ARMOR_STAND", "BOSS_KILL", "LECTERN_BOOK", "PLAYER_DEATH", "PLAYER_JOIN",
             "SIGN_LANDMARK", "SIGN_MONUMENT", "SIGN_TAVERN", "SIGN_GUILD", "SIGN_SHRINE",
-            "SIGN_CITY", "SIGN_LIBRARY", "SIGN_FORGE", "FORGE_ANVIL"
+            "SIGN_CITY", "SIGN_LIBRARY", "SIGN_TOME", "SIGN_FORGE", "FORGE_ANVIL"
         };
         for (String key : eventHandlerKeys) {
             try {

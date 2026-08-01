@@ -110,6 +110,9 @@ permissions:
   rvnklore.sign.library:
     description: Designate a lectern as a lore library ([library] sign tag)
     default: op
+  rvnklore.sign.tome:
+    description: Allows creating a [Tome] quest-giver lectern that dispenses a lore book
+    default: op
   rvnklore.sign.forge:
     description: Designate an anvil as a lore forge ([forge] sign tag)
     default: op
