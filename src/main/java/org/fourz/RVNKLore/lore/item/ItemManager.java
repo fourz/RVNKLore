@@ -967,16 +967,75 @@ public class ItemManager implements IItemService, ILoreItemResolver {
 
     /** Update an item as a new content_version; returns the new version or -1. */
     public CompletableFuture<Integer> updateItemVersioned(int itemId, ItemProperties properties) {
-        return itemRepository() == null ? CompletableFuture.completedFuture(-1)
-                : itemRepository().updateItemVersioned(itemId, properties)
-                    .thenApply(ver -> {
-                        // The materialized item_properties changed (e.g. book pages) — drop the
-                        // stale name-cache entry so the next give reads the new props from the DB.
-                        // Without this the REST PUT updated the DB but left the cache serving the
-                        // pre-update copy (#1642).
-                        invalidateNameCache(properties.getDisplayName());
+        if (itemRepository() == null) {
+            return CompletableFuture.completedFuture(-1);
+        }
+        return itemRepository().updateItemVersioned(itemId, properties)
+            .thenCompose(ver -> {
+                // The materialized item_properties changed (e.g. book pages) — drop the stale
+                // name-cache entry so the next give reads the new props from the DB (#1642).
+                invalidateNameCache(properties.getDisplayName());
+                // ...then seat the row we just wrote back under its current name (#1917).
+                //
+                // Removing alone was not enough. Lookups that read the cache WITHOUT a DB fallback
+                // — getAllItemsWithPropertiesSync, and so the REST ?name= endpoint — then reported
+                // the item as missing rather than re-reading it, so a read -> PUT -> read sequence
+                // broke in the middle and looked like absent data. At scale that silently no-opped
+                // a 30-item rename pass and reported every row as skipped.
+                //
+                // Repopulating one key rather than calling refreshCacheForCommands() is deliberate:
+                // the sibling delete/rollback paths reload the whole cache, which would turn a bulk
+                // update of N items into N full reloads — exactly the case this bug was found in.
+                return itemRepository().getItemById(itemId)
+                    .thenApply(opt -> {
+                        opt.ifPresent(this::seatInNameCache);
+                        return ver;
+                    })
+                    .exceptionally(ex -> {
+                        // A failed re-read must not fail the update — the write already succeeded,
+                        // and the invalidate above plus the lookup fallback keep reads correct.
+                        logger.warning("Post-update name-cache refresh failed for item " + itemId
+                            + ": " + ex.getMessage());
                         return ver;
                     });
+            });
+    }
+
+    /** Seat a single item in the name cache under its current display name (#1917). */
+    private void seatInNameCache(ItemProperties props) {
+        if (props == null || props.getDisplayName() == null || props.getDisplayName().isEmpty()) {
+            return;
+        }
+        List<ItemProperties> one = new ArrayList<>();
+        one.add(props);
+        itemNameCache.put(props.getDisplayName().toLowerCase(), one);
+    }
+
+    /**
+     * Resolve an item by display name, falling through to the database on a cache miss (#1917).
+     *
+     * <p>The cache is not authoritative: {@link #invalidateNameCache} deliberately evicts a key on
+     * every versioned update, so a name that exists in the database can be absent from the cache at
+     * any moment. Callers that read {@code itemNameCache} directly report those items as missing —
+     * which is the bug. This re-queries on a miss and seats the result, so the cache converges
+     * instead of silently shrinking.</p>
+     */
+    public CompletableFuture<Optional<ItemProperties>> getItemPropertiesByName(String name) {
+        if (name == null || name.isEmpty() || itemRepository() == null) {
+            return CompletableFuture.completedFuture(Optional.empty());
+        }
+        String key = name.toLowerCase();
+        List<ItemProperties> cached = cacheInitialized ? itemNameCache.get(key) : null;
+        if (cached != null && !cached.isEmpty()) {
+            return CompletableFuture.completedFuture(Optional.of(cached.get(0)));
+        }
+        return itemRepository().getAllItemsByName(name).thenApply(list -> {
+            if (list == null || list.isEmpty()) {
+                return Optional.empty();
+            }
+            itemNameCache.put(key, new ArrayList<>(list));
+            return Optional.of(list.get(0));
+        });
     }
 
     /** Version history for an item. */

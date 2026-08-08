@@ -459,15 +459,17 @@ public class LoreApiEndpointImpl implements ILoreApiService {
 
     @Override
     public CompletableFuture<ApiResponse<?>> getItemByName(String name) {
-        return loreManager.getItemManager().getAllItemsWithProperties()
-            .<ApiResponse<?>>handle((list, ex) -> {
+        // #1917: was a cache-only scan (getAllItemsWithProperties reads itemNameCache and never
+        // falls back to the DB). Because every versioned update evicts the item's key, a
+        // read -> PUT -> read sequence reported the item as missing with no flush in between —
+        // data that plainly existed in lore_item. getItemPropertiesByName re-queries on a miss.
+        return loreManager.getItemManager().getItemPropertiesByName(name)
+            .<ApiResponse<?>>handle((opt, ex) -> {
                 if (ex != null) {
                     logger.error("Error retrieving item by name '" + name + "'", unwrapException(ex));
                     return ApiResponse.error("INTERNAL_ERROR", "An unexpected error occurred.");
                 }
-                return list.stream()
-                    .filter(p -> name.equalsIgnoreCase(p.getDisplayName()))
-                    .findFirst()
+                return opt
                     .map(props -> ApiResponse.success(itemToMap(props)))
                     .orElse(ApiResponse.error("NOT_FOUND", "Item not found: " + name));
             });
