@@ -18,6 +18,7 @@ import org.fourz.RVNKLore.lore.item.collection.LoreCollection;
 import org.fourz.RVNKLore.lore.item.enchant.EnchantmentTier;
 import org.fourz.RVNKLore.lore.player.PlayerManager;
 import org.fourz.RVNKLore.service.IRngItemService;
+import org.fourz.RVNKLore.util.HeadUtil;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.enchantments.Enchantment;
@@ -645,6 +646,19 @@ public class LoreApiEndpointImpl implements ILoreApiService {
                 if (Boolean.TRUE.equals(body.get("glow"))) props.setGlow(true);
                 Integer cmd = asInt(body.get("customModelData"));
                 if (cmd != null && cmd > 0) props.setCustomModelData(cmd);
+                // Head texture (#1914). Previously unmintable: the field persisted and round-tripped
+                // through the DTO but no write path accepted it, so heads could only be textured by a
+                // direct DB write. Validated here so a bad blob is rejected at mint instead of
+                // surfacing later as a blank head.
+                String skullTexture = asString(body.get("skullTexture"));
+                if (skullTexture != null && !skullTexture.isBlank()) {
+                    if (HeadUtil.isValidTextureData(skullTexture)
+                            && HeadUtil.hasExtractableTextureUrl(skullTexture)) {
+                        props.setSkullTexture(skullTexture);
+                    } else {
+                        warnings.add("Invalid skullTexture ignored: no skin URL could be decoded");
+                    }
+                }
                 props.setCreatedBy(createdBy != null ? createdBy : "rest-mint");
 
                 int itemId = loreManager.getItemManager()
@@ -888,6 +902,19 @@ public class LoreApiEndpointImpl implements ILoreApiService {
         if (body.containsKey("glow")) p.setGlow(Boolean.TRUE.equals(body.get("glow")));
         Integer cmd = asInt(body.get("customModelData"));
         if (cmd != null) p.setCustomModelData(cmd);
+        // Head texture (#1914). An explicit null/empty clears it, matching how the other nullable
+        // fields behave on PUT; anything else must decode to a real skin URL or it is dropped with
+        // a warning rather than stored as something that will render blank.
+        if (body.containsKey("skullTexture")) {
+            String tex = asString(body.get("skullTexture"));
+            if (tex == null || tex.isBlank()) {
+                p.setSkullTexture(null);
+            } else if (HeadUtil.isValidTextureData(tex) && HeadUtil.hasExtractableTextureUrl(tex)) {
+                p.setSkullTexture(tex);
+            } else {
+                warnings.add("Invalid skullTexture ignored: no skin URL could be decoded");
+            }
+        }
         String itemTypeStr = asString(body.get("itemType"));
         if (itemTypeStr != null && !itemTypeStr.isBlank()) {
             try { p.setItemType(ItemType.valueOf(itemTypeStr.trim().toUpperCase())); }

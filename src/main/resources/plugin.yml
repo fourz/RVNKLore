@@ -194,6 +194,9 @@ permissions:
   rvnklore.admin.item.preset:
     description: Author quest item presets (/lore item preset bind|unbind|list)
     default: op
+  rvnklore.admin.item.texture:
+    description: Set or clear a lore item's head texture (/lore item texture)
+    default: op
 
   # ── Admin — collections ───────────────────────────────────────────────────
   rvnklore.admin.collection.add:
