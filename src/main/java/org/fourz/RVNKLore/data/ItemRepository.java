@@ -602,11 +602,38 @@ public class ItemRepository implements IItemRepository {
     // snapshots the item_properties JSON into a new submission version.
 
     /** Build the item_properties JSON exactly as insertItem/updateItem persist it. */
+    /**
+     * Keys {@link #buildItemPropertiesJson} owns outright. Each has a typed field on
+     * {@link ItemProperties}, and that field — not a leftover custom property — decides what gets
+     * written (#1918).
+     */
+    private static final List<String> MANAGED_PROPERTY_KEYS = List.of(
+        "lore_text", "is_glow", "skull_texture", "pages", "custom_model_data",
+        "enchantments", "enchantment_tier");
+
     @SuppressWarnings("unchecked")
     private String buildItemPropertiesJson(ItemProperties properties) {
         JSONObject jsonProps = new JSONObject();
         if (properties.hasCustomProperties()) {
             jsonProps.putAll(properties.getAllCustomProperties());
+        }
+        // #1918: every managed key is dropped here and then re-written below from its typed field,
+        // so the typed field is authoritative and an empty one actually ERASES the key.
+        //
+        // Without this, clearing any of them silently does nothing. The read path copies EVERY
+        // item_properties key into customProperties as well, so each managed key exists twice; an
+        // empty typed field merely skips its explicit put, and the putAll above writes the stale
+        // copy straight back. The operation reports success and the row is unchanged. Found via
+        // skull_texture on #1914 — "Cleared head texture (version 3)" with the blob still in the
+        // row — and the same shape applied to lore_text, is_glow, pages and custom_model_data.
+        //
+        // The one behaviour change worth naming: an item whose typed field is empty but whose
+        // custom-property copy is set now loses that value on its next write, where before the
+        // stale copy won. Checked before making it — collection_item.item_config is the only other
+        // writer of custom properties (see getCollectionItems), and it holds zero rows on both Dev
+        // and Event, so nothing in the live catalog relies on the old shadowing.
+        for (String managed : MANAGED_PROPERTY_KEYS) {
+            jsonProps.remove(managed);
         }
         if (properties.getLore() != null && !properties.getLore().isEmpty()) {
             jsonProps.put("lore_text", properties.getLore());
@@ -616,21 +643,6 @@ public class ItemRepository implements IItemRepository {
         }
         if (properties.getSkullTexture() != null) {
             jsonProps.put("skull_texture", properties.getSkullTexture());
-        } else {
-            // The typed field is authoritative, so a null must actually erase the key (#1914).
-            // Without this remove, clearing a texture silently does nothing: the read path copies
-            // EVERY json key into customProperties as well, so skull_texture exists twice, and the
-            // putAll above writes the stale copy straight back. The clear reports success and the
-            // head keeps its old skin. Caught on Dev by reading the row instead of trusting the
-            // "Cleared head texture" message.
-            //
-            // NOTE: the same shadowing applies to lore_text / is_glow / pages / custom_model_data —
-            // each is skipped rather than removed when its typed field is empty, so a stale custom
-            // property would survive there too. Deliberately NOT changed here: making all five
-            // authoritative in one go would alter serialization for existing items (an item whose
-            // typed glow is false but whose custom is_glow is true would flip on next write), and
-            // that deserves its own change with its own verification.
-            jsonProps.remove("skull_texture");
         }
         if (properties.getPages() != null && !properties.getPages().isEmpty()) {
             jsonProps.put("pages", properties.getPages());
