@@ -616,6 +616,21 @@ public class ItemRepository implements IItemRepository {
         }
         if (properties.getSkullTexture() != null) {
             jsonProps.put("skull_texture", properties.getSkullTexture());
+        } else {
+            // The typed field is authoritative, so a null must actually erase the key (#1914).
+            // Without this remove, clearing a texture silently does nothing: the read path copies
+            // EVERY json key into customProperties as well, so skull_texture exists twice, and the
+            // putAll above writes the stale copy straight back. The clear reports success and the
+            // head keeps its old skin. Caught on Dev by reading the row instead of trusting the
+            // "Cleared head texture" message.
+            //
+            // NOTE: the same shadowing applies to lore_text / is_glow / pages / custom_model_data —
+            // each is skipped rather than removed when its typed field is empty, so a stale custom
+            // property would survive there too. Deliberately NOT changed here: making all five
+            // authoritative in one go would alter serialization for existing items (an item whose
+            // typed glow is false but whose custom is_glow is true would flip on next write), and
+            // that deserves its own change with its own verification.
+            jsonProps.remove("skull_texture");
         }
         if (properties.getPages() != null && !properties.getPages().isEmpty()) {
             jsonProps.put("pages", properties.getPages());
