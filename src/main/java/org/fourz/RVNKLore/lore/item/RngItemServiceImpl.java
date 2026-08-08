@@ -120,6 +120,35 @@ public class RngItemServiceImpl implements IRngItemService {
                 if (mat == null) {
                     continue;
                 }
+                // #1914 workstream A: refuse to bake a player head rather than emit an anonymous one.
+                //
+                // The obvious fix here looked like "the bake forgot the profile component, carry it
+                // like #1844 carried enchantments". It is not that. There is no profile to carry:
+                // the head payload does not survive the database round trip on ANY lane.
+                //   - ItemRepository.buildItemPropertiesJson persists exactly custom props, lore_text,
+                //     is_glow, skull_texture, pages, custom_model_data and enchantments. headVariant,
+                //     textureData, ownerName and the whole metadata map are never written.
+                //   - ItemPropertiesDTO does carry those fields, but it is used ONLY by the REST
+                //     serializer (LoreApiEndpointImpl) — it is not in the persistence path at all.
+                //   - skullTexture is written and read back (ItemRepository 618/1842) and then has
+                //     ZERO consumers. Nothing anywhere applies it to a SkullMeta.
+                // So createLoreItemInternal's default branch builds a PLAYER_HEAD, sets name/lore/CMD/
+                // glow/PDC and never touches the profile — the dynamic roll produces a blank Steve head
+                // too. The bake is already AT parity; emitting a profile here would break parity in the
+                // other direction by making the baked item better than the rolled one.
+                //
+                // Skipping loudly is therefore the honest behaviour: a blank head in a reward chest is
+                // indistinguishable from a texture that failed to load, which is exactly the silent
+                // class of failure #1844 existed to end. Mob skulls are deliberately NOT guarded — a
+                // ZOMBIE_HEAD carries its identity in the material itself and bakes correctly.
+                if (isPlayerHead(mat)) {
+                    logger.error("Refusing to bake lore item " + e.loreItemId + " ('" + p.getDisplayName()
+                        + "', " + mat + ") into pool '" + poolId + "': player-head textures are not"
+                        + " persisted by lore_item, so this would bake a blank head. Remove it from the"
+                        + " pool, or give the item a material that carries its own appearance"
+                        + " (CARVED_PUMPKIN + custom_model_data is how the hat set does it).");
+                    continue;
+                }
                 JsonObject entry = new JsonObject();
                 entry.addProperty("type", "minecraft:item");
                 entry.addProperty("name", mat.getKey().toString());
@@ -295,6 +324,18 @@ public class RngItemServiceImpl implements IRngItemService {
         }
 
         return components;
+    }
+
+    /**
+     * Is this the player-head family, whose appearance lives entirely in a profile component?
+     *
+     * <p>Deliberately narrow. Mob skulls ({@code ZOMBIE_HEAD}, {@code WITHER_SKELETON_SKULL}, …) get
+     * their texture from the material and bake correctly, so guarding them would reject items that
+     * work. Only {@code PLAYER_HEAD}/{@code PLAYER_WALL_HEAD} render as an anonymous Steve without
+     * profile data that {@code lore_item} does not store.</p>
+     */
+    private boolean isPlayerHead(Material material) {
+        return material == Material.PLAYER_HEAD || material == Material.PLAYER_WALL_HEAD;
     }
 
     /**

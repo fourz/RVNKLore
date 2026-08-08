@@ -51,6 +51,12 @@ public interface IRngItemService {
      * baked items are visual look-alikes, not registered lore items. For true lore items (identity,
      * resolve-back, collection/vote hooks) use {@link #roll(String, String)} to fill containers directly.
      *
+     * <p><b>Player heads are skipped, not baked</b> (#1914): {@code lore_item} never persists profile
+     * or texture data, so a {@code PLAYER_HEAD} entry could only bake as an anonymous Steve. Such
+     * entries are logged at ERROR and omitted; a pool containing nothing else yields an empty result.
+     * The dynamic {@link #roll(String, String)} lane has the same gap, so this is parity, not a
+     * bake-only regression. Mob skulls carry their own appearance and bake normally.
+     *
      * @param poolId     The pool identifier
      * @param rarityTier Rarity tier filter, or null for all active tiers
      * @return Future containing the loot-table JSON, or empty if the pool has no resolvable items
