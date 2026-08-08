@@ -51,12 +51,11 @@ public interface IRngItemService {
      * baked items are visual look-alikes, not registered lore items. For true lore items (identity,
      * resolve-back, collection/vote hooks) use {@link #roll(String, String)} to fill containers directly.
      *
-     * <p><b>Player heads are skipped, not baked</b> (#1914): this serializer cannot yet emit a
-     * {@code minecraft:profile} component, so a {@code PLAYER_HEAD} entry could only bake as an
-     * anonymous Steve. Such entries are logged at ERROR and omitted; a pool containing nothing else
-     * yields an empty result. The dynamic {@link #roll(String, String)} lane now applies the stored
-     * {@code skull_texture}, so this is a bake-only gap — carrying the profile component here is the
-     * fix, after which the skip should be removed. Mob skulls bake normally.
+     * <p><b>Player heads bake with their texture</b> (#1914): a stored {@code skull_texture} is
+     * emitted as a {@code minecraft:profile} component, matching what the dynamic
+     * {@link #roll(String, String)} lane applies via {@code HeadUtil}. A head with no stored texture
+     * bakes without a profile — the same anonymous result the roll lane gives for that item, so the
+     * two lanes still agree. Earlier builds refused to bake heads outright; that guard is gone.
      *
      * @param poolId     The pool identifier
      * @param rarityTier Rarity tier filter, or null for all active tiers

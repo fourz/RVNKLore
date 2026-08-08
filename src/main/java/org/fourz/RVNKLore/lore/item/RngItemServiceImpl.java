@@ -120,40 +120,13 @@ public class RngItemServiceImpl implements IRngItemService {
                 if (mat == null) {
                     continue;
                 }
-                // #1914 workstream A: refuse to bake a player head rather than emit an anonymous one.
-                //
-                // The obvious fix here looked like "the bake forgot the profile component, carry it
-                // like #1844 carried enchantments". It is not that. There is no profile to carry:
-                // the head payload does not survive the database round trip on ANY lane.
-                //   - ItemRepository.buildItemPropertiesJson persists exactly custom props, lore_text,
-                //     is_glow, skull_texture, pages, custom_model_data and enchantments. headVariant,
-                //     textureData, ownerName and the whole metadata map are never written.
-                //   - ItemPropertiesDTO does carry those fields, but it is used ONLY by the REST
-                //     serializer (LoreApiEndpointImpl) — it is not in the persistence path at all.
-                //   - skullTexture is written and read back (ItemRepository 618/1842) and then has
-                //     ZERO consumers. Nothing anywhere applies it to a SkullMeta.
-                // UPDATE: the first two points above still hold — headVariant/textureData/metadata are
-                // still not persisted — but skull_texture IS, and createLoreItemInternal now applies it
-                // (ItemManager, #1914). So the DYNAMIC ROLL lane produces a properly textured head.
-                //
-                // That flips the reason this guard exists without changing the verdict. Previously both
-                // lanes were equally blank and emitting a profile here would have made the bake better
-                // than the roll. Now the roll is correct and the BAKE is the one that would ship a blank
-                // head — a real parity break in the other direction. Refusing is still right, because a
-                // blank head in a reward chest is indistinguishable from a texture that failed to load,
-                // which is exactly the silent failure class #1844 existed to end.
-                //
-                // The fix is to emit a "minecraft:profile" component built from p.getSkullTexture(),
-                // then delete this guard. Until that lands, refuse. Mob skulls are deliberately NOT
-                // guarded — a ZOMBIE_HEAD carries its identity in the material and bakes correctly.
-                if (isPlayerHead(mat)) {
-                    logger.error("Refusing to bake lore item " + e.loreItemId + " ('" + p.getDisplayName()
-                        + "', " + mat + ") into pool '" + poolId + "': player-head textures are not"
-                        + " persisted by lore_item, so this would bake a blank head. Remove it from the"
-                        + " pool, or give the item a material that carries its own appearance"
-                        + " (CARVED_PUMPKIN + custom_model_data is how the hat set does it).");
-                    continue;
-                }
+                // #1914: player heads used to be REFUSED here. The refusal was correct while the head
+                // payload could not reach an ItemStack on any lane, and then while only the roll lane
+                // could. Both of those are fixed — skull_texture is applied by createLoreItemInternal
+                // and can now be authored via /lore item texture and the REST skullTexture field — so
+                // the bake carries it too, via minecraft:profile in buildIdentityComponents(). A head
+                // with no stored texture bakes without a profile, which still matches what the roll
+                // lane produces for the same item; parity, not silence.
                 JsonObject entry = new JsonObject();
                 entry.addProperty("type", "minecraft:item");
                 entry.addProperty("name", mat.getKey().toString());
@@ -282,6 +255,27 @@ public class RngItemServiceImpl implements IRngItemService {
                 tooltip.add("hidden_components", hidden);
                 components.add("minecraft:tooltip_display", tooltip);
             }
+        }
+
+        // Head texture (#1914) — the baked counterpart of what HeadUtil.applyTextureData does on the
+        // roll lane. The appearance of a player head lives entirely in this component; without it the
+        // item is an anonymous Steve, which reads as a texture that failed to load rather than as a
+        // bug. Emitted as the raw textures property (the same base64 blob stored in skull_texture)
+        // rather than a name or uuid, because these heads have no owning player.
+        //
+        // Only PLAYER_HEAD/PLAYER_WALL_HEAD produce SkullMeta and honour this component; mob skulls
+        // carry their texture in the material, so guarding on the material keeps this off items where
+        // the component would be meaningless.
+        if (isPlayerHead(p.getMaterial()) && p.getSkullTexture() != null
+                && !p.getSkullTexture().isEmpty()) {
+            JsonObject textures = new JsonObject();
+            textures.addProperty("name", "textures");
+            textures.addProperty("value", p.getSkullTexture());
+            JsonArray propsArr = new JsonArray();
+            propsArr.add(textures);
+            JsonObject profile = new JsonObject();
+            profile.add("properties", propsArr);
+            components.add("minecraft:profile", profile);
         }
 
         // Display name — component object so it renders without the default-italic of a bare string.

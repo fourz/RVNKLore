@@ -941,6 +941,12 @@ public class LoreApiEndpointImpl implements ILoreApiService {
         m.put("lore", dto.lore());
         m.put("pages", dto.pages());
         m.put("glow", dto.glow());
+        // Head texture (#1914). Exposed so the value is readable back out of the API it can now be
+        // written through, and so bake_parity can assert the baked minecraft:profile against the DB
+        // record instead of guessing whether a head was supposed to carry one.
+        if (dto.skullTexture() != null && !dto.skullTexture().isEmpty()) {
+            m.put("skullTexture", dto.skullTexture());
+        }
         if (dto.enchantments() != null && !dto.enchantments().isEmpty()) {
             Map<String, Object> ench = new LinkedHashMap<>();
             dto.enchantments().forEach((e, lvl) -> ench.put(e.getKey().toString(), lvl));
