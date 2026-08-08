@@ -132,15 +132,20 @@ public class RngItemServiceImpl implements IRngItemService {
                 //     serializer (LoreApiEndpointImpl) — it is not in the persistence path at all.
                 //   - skullTexture is written and read back (ItemRepository 618/1842) and then has
                 //     ZERO consumers. Nothing anywhere applies it to a SkullMeta.
-                // So createLoreItemInternal's default branch builds a PLAYER_HEAD, sets name/lore/CMD/
-                // glow/PDC and never touches the profile — the dynamic roll produces a blank Steve head
-                // too. The bake is already AT parity; emitting a profile here would break parity in the
-                // other direction by making the baked item better than the rolled one.
+                // UPDATE: the first two points above still hold — headVariant/textureData/metadata are
+                // still not persisted — but skull_texture IS, and createLoreItemInternal now applies it
+                // (ItemManager, #1914). So the DYNAMIC ROLL lane produces a properly textured head.
                 //
-                // Skipping loudly is therefore the honest behaviour: a blank head in a reward chest is
-                // indistinguishable from a texture that failed to load, which is exactly the silent
-                // class of failure #1844 existed to end. Mob skulls are deliberately NOT guarded — a
-                // ZOMBIE_HEAD carries its identity in the material itself and bakes correctly.
+                // That flips the reason this guard exists without changing the verdict. Previously both
+                // lanes were equally blank and emitting a profile here would have made the bake better
+                // than the roll. Now the roll is correct and the BAKE is the one that would ship a blank
+                // head — a real parity break in the other direction. Refusing is still right, because a
+                // blank head in a reward chest is indistinguishable from a texture that failed to load,
+                // which is exactly the silent failure class #1844 existed to end.
+                //
+                // The fix is to emit a "minecraft:profile" component built from p.getSkullTexture(),
+                // then delete this guard. Until that lands, refuse. Mob skulls are deliberately NOT
+                // guarded — a ZOMBIE_HEAD carries its identity in the material and bakes correctly.
                 if (isPlayerHead(mat)) {
                     logger.error("Refusing to bake lore item " + e.loreItemId + " ('" + p.getDisplayName()
                         + "', " + mat + ") into pool '" + poolId + "': player-head textures are not"

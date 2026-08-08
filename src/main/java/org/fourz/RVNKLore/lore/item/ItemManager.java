@@ -432,6 +432,31 @@ public class ItemManager implements IItemService, ILoreItemResolver {
                         meta.addEnchant(org.bukkit.enchantments.Enchantment.UNBREAKING, 1, true);
                         meta.addItemFlags(org.bukkit.inventory.ItemFlag.HIDE_ENCHANTS);
                     }
+                    // #1914: apply the stored head texture. This was the one missing wire in an
+                    // otherwise complete chain — skull_texture persists (ItemRepository 617/1842),
+                    // round-trips through REST (ItemPropertiesDTO 97/136) and HeadUtil knows how to
+                    // apply it; nothing ever connected the two. The only live applyTextureData callers
+                    // read from somewhere else entirely: CommonHeadHandler from LoreEntry metadata and
+                    // CosmeticsManager from the in-memory HeadVariant registry. So heads authored as
+                    // lore ITEMS came out as anonymous Steve heads on every lane that builds from
+                    // ItemProperties — which is the lane the RNG pool and the bake both use.
+                    //
+                    // Guarded on SkullMeta rather than on Material: only PLAYER_HEAD/PLAYER_WALL_HEAD
+                    // produce SkullMeta, and mob skulls carry their texture in the material itself, so
+                    // this naturally applies to exactly the items that need it.
+                    if (meta instanceof org.bukkit.inventory.meta.SkullMeta skullMeta
+                            && properties.getSkullTexture() != null
+                            && !properties.getSkullTexture().isEmpty()) {
+                        if (org.fourz.RVNKLore.util.HeadUtil.isValidTextureData(properties.getSkullTexture())) {
+                            org.fourz.RVNKLore.util.HeadUtil.applyTextureData(skullMeta, properties.getSkullTexture());
+                        } else {
+                            // Loud on malformed data rather than silently shipping a blank head — the
+                            // failure mode #1844/#1914 exist to stop.
+                            logger.warning("Lore item " + properties.getDatabaseId() + " ('" + name
+                                + "') has a skull_texture that is not valid base64 texture data;"
+                                + " the head will render blank.");
+                        }
+                    }
                     if (properties.getDatabaseId() > 0) {
                         org.bukkit.NamespacedKey itemIdKey = new org.bukkit.NamespacedKey(plugin, "lore_item_id");
                         meta.getPersistentDataContainer().set(itemIdKey,
