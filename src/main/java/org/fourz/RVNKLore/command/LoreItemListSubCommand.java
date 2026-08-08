@@ -49,7 +49,16 @@ public class LoreItemListSubCommand implements SubCommand {
             }
         }
 
-        itemManager.refreshCacheForCommands();
+        // Wait for the refresh before reading (#1887). The old code called the fire-and-forget
+        // refresh and read the cache on the next line, so the listing rendered pre-refresh data and
+        // a freshly minted item was absent from its own output. Render back on the main thread.
+        final int requestedPage = page;
+        itemManager.refreshCacheForCommandsAsync().thenRun(() ->
+            org.bukkit.Bukkit.getScheduler().runTask(plugin, () -> renderList(sender, requestedPage)));
+        return true;
+    }
+
+    private boolean renderList(CommandSender sender, int page) {
         List<ItemProperties> items = itemManager.getAllItemsWithPropertiesForCommands();
         items.sort(Comparator.comparing(ItemProperties::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())).reversed());
 

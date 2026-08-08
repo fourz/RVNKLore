@@ -733,10 +733,42 @@ public class ItemManager implements IItemService, ILoreItemResolver {
     }
 
     /**
-     * Refresh the item cache (public method for commands).
+     * Refresh the item cache, fire-and-forget.
+     *
+     * <p><b>This does not block.</b> Despite the historical name of the private helper it delegates
+     * to, the refresh runs on an async task, so a caller that reads the cache on the next line sees
+     * the <em>old</em> contents. Use {@link #refreshCacheForCommandsAsync()} when the caller needs
+     * to render the refreshed data (#1887).</p>
      */
     public void refreshCacheForCommands() {
         refreshCacheSync();
+    }
+
+    /**
+     * Refresh the item cache and complete once the new contents are in place.
+     *
+     * <p>Added for #1887. {@code /lore item list} previously called the fire-and-forget refresh and
+     * then read the cache on the very next statement, so it rendered pre-refresh data and a freshly
+     * minted item was missing from its own listing — which is why running the command twice
+     * "worked" and why it acquired a reputation as a manual cache flush. It flushed; it just never
+     * waited for its own flush.</p>
+     *
+     * <p>The DB work stays off the main thread; callers should resume there via the scheduler.</p>
+     */
+    public CompletableFuture<Void> refreshCacheForCommandsAsync() {
+        CompletableFuture<Void> done = new CompletableFuture<>();
+        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                initializeCache();
+            } catch (Exception e) {
+                logger.error("Error refreshing item cache for commands", e);
+            } finally {
+                // Complete either way: a failed refresh should still render the cache we have
+                // rather than leaving the command silently hanging with no output.
+                done.complete(null);
+            }
+        });
+        return done;
     }
 
     /**

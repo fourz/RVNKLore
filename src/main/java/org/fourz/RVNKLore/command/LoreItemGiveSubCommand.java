@@ -60,15 +60,45 @@ public class LoreItemGiveSubCommand implements SubCommand {
             logger.error("ItemManager is null when trying to give item: " + itemName, null);
             return true;
         }
-        // Use ItemManager for item lookup and giving
-        org.bukkit.inventory.ItemStack item = itemManager.createLoreItemSync(itemName);
-        if (item == null) {
-            sender.sendMessage(ChatColor.RED + "✖ Item not found: " + itemName);
+        // Accept a numeric database id as well as a display name (#1887). This branch was missing
+        // entirely: give always went down the name-only path, so `give 159 <player>` looked up an
+        // item literally named "159", found nothing, and reported "Item not found: 159" — while
+        // `info 159` and `spawn 159` resolved the same item fine. Mirrors LoreItemSpawnSubCommand
+        // so the two commands agree on what an argument means.
+        if (isNumericId(itemName)) {
+            int itemId = Integer.parseInt(itemName.trim());
+            itemManager.getItemPropertiesById(itemId).thenAccept(optProps -> {
+                String resolvedName = optProps.map(p -> p.getDisplayName()).orElse(itemName);
+                itemManager.createLoreItem(itemId).thenAccept(opt ->
+                    Bukkit.getScheduler().runTask(plugin, () -> deliver(sender, opt, resolvedName, target)));
+            });
             return true;
         }
-        target.getInventory().addItem(item);
-        sender.sendMessage(ChatColor.GREEN + "✓ Gave " + itemName + " to " + playerName);
+
+        // Name path stays async too — createLoreItemSync blocks the main thread on a DB read when
+        // the name is not cached, which on the cross-host MySQL is a real stall (#1856).
+        itemManager.createLoreItem(itemName).thenAccept(opt ->
+            Bukkit.getScheduler().runTask(plugin, () -> deliver(sender, opt, itemName, target)));
         return true;
+    }
+
+    private void deliver(CommandSender sender, java.util.Optional<org.bukkit.inventory.ItemStack> opt,
+                         String resolvedName, Player target) {
+        if (opt == null || opt.isEmpty()) {
+            sender.sendMessage(ChatColor.RED + "✖ Item not found: " + resolvedName);
+            return;
+        }
+        target.getInventory().addItem(opt.get());
+        sender.sendMessage(ChatColor.GREEN + "✓ Gave " + resolvedName + " to " + target.getName());
+    }
+
+    private boolean isNumericId(String value) {
+        try {
+            Integer.parseInt(value.trim());
+            return true;
+        } catch (NumberFormatException e) {
+            return false;
+        }
     }
 
     @Override
