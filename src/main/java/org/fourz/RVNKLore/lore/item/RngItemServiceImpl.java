@@ -4,6 +4,7 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import org.bukkit.Material;
+import org.bukkit.enchantments.Enchantment;
 import org.bukkit.inventory.ItemStack;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.data.DatabaseConnection;
@@ -16,6 +17,7 @@ import org.fourz.rvnkcore.util.log.LogManager;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
@@ -202,6 +204,52 @@ public class RngItemServiceImpl implements IRngItemService {
             components.add("minecraft:custom_model_data", cmdComp);
         }
 
+        // Enchantments + glow (#1844). Two separate reasons an item carries the enchantments
+        // component:
+        //   (a) real enchantments off ItemProperties — ENCHANTED items;
+        //   (b) the glow flag, which the spawn path fakes with UNBREAKING 1 + hidden enchants
+        //       so the item glints without advertising stats (#1843, ItemManager).
+        // The bake dropped BOTH: this class had no enchantment handling at all, so an ENCHANTED
+        // lore item baked to a plain vanilla one with only a name and lore. Unlike the CMD bug
+        // this was an omission, not a wrong format.
+        //
+        // Component shape confirmed on 26.2 by reading a live item: a FLAT map of namespaced key
+        // to level ({"minecraft:unbreaking": 1}) — no {"levels":{...}} wrapper. Key string is
+        // built the same way ItemRepository.appendEnchantJson does it, so the bake and the DB
+        // round-trip agree on one format.
+        Map<Enchantment, Integer> enchants = p.getEnchantments();
+        boolean glow = p.isGlow();
+        JsonObject enchComp = new JsonObject();
+        if (enchants != null) {
+            for (Map.Entry<Enchantment, Integer> e : enchants.entrySet()) {
+                if (e.getKey() == null || e.getValue() == null) {
+                    continue;
+                }
+                String key = enchantmentKey(e.getKey());
+                if (key != null) {
+                    enchComp.addProperty(key, e.getValue());
+                }
+            }
+        }
+        // Glow on an otherwise-unenchanted item: mirror the spawn path's UNBREAKING 1 stand-in
+        // rather than inventing different semantics for the bake lane.
+        if (glow && enchComp.size() == 0) {
+            enchComp.addProperty("minecraft:unbreaking", 1);
+        }
+        if (enchComp.size() > 0) {
+            components.add("minecraft:enchantments", enchComp);
+            // Matches ItemManager's HIDE_ENCHANTS: the glint should read as an aura, not gear
+            // stats. Note this hides real enchantments too when both are set — the same tradeoff
+            // the spawn path already makes, kept identical on purpose.
+            if (glow) {
+                JsonArray hidden = new JsonArray();
+                hidden.add("minecraft:enchantments");
+                JsonObject tooltip = new JsonObject();
+                tooltip.add("hidden_components", hidden);
+                components.add("minecraft:tooltip_display", tooltip);
+            }
+        }
+
         // Display name — component object so it renders without the default-italic of a bare string.
         String name = p.getDisplayName();
         if (name != null && !name.isEmpty()) {
@@ -247,6 +295,23 @@ public class RngItemServiceImpl implements IRngItemService {
         }
 
         return components;
+    }
+
+    /**
+     * Namespaced key for an enchantment ({@code "minecraft:sharpness"}) as the
+     * {@code minecraft:enchantments} component expects it.
+     *
+     * <p>{@link Enchantment#getKey()} is deprecated as of 1.21.4, but this module builds against
+     * spigot-api, where {@code Registry#getKey(T)} is not available — only {@code get(key)} and
+     * iteration. Rather than scan the registry on every entry, this matches
+     * {@code ItemRepository.appendEnchantJson}, which already serializes enchantments to the DB
+     * the same way. One format for the DB round-trip and the baked table is worth more here than
+     * dodging a warning; revisit together if the module ever moves to paper-api.</p>
+     */
+    @SuppressWarnings("deprecation")
+    private String enchantmentKey(Enchantment enchantment) {
+        org.bukkit.NamespacedKey key = enchantment.getKey();
+        return key != null ? key.toString() : null;
     }
 
     /**
