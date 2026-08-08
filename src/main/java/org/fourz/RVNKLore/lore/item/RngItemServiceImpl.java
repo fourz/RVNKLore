@@ -128,14 +128,14 @@ public class RngItemServiceImpl implements IRngItemService {
                 setCount.addProperty("function", "minecraft:set_count");
                 setCount.addProperty("count", 1);
                 functions.add(setCount);
-                // Best-effort visual fidelity. custom_model_data function format is MC-version sensitive;
-                // the RVNKWorlds Dev test (#1674) validates the emitted table loads on the server.
-                if (p.getCustomModelData() > 0) {
-                    JsonObject cmd = new JsonObject();
-                    cmd.addProperty("function", "minecraft:set_custom_model_data");
-                    cmd.addProperty("value", p.getCustomModelData());
-                    functions.add(cmd);
-                }
+                // custom_model_data is carried by buildIdentityComponents() via set_components.
+                // It used to be emitted here as a standalone
+                //   {"function":"minecraft:set_custom_model_data","value":<int>}
+                // which is the pre-1.21.2 shape. In the component era that field is silently
+                // ignored — no parse error, no warning — but the function still creates the
+                // component, so every baked item rolled with an EMPTY
+                //   "minecraft:custom_model_data": {}
+                // and the CMD was lost. Verified on Dev against a three-way loot table (#1674).
                 // #1677: restore full lore identity into the baked (static) table so a poolbake chest
                 // rolls the real item — name, rarity lore, the rvnklore PDC id, and book pages — not a
                 // bare vanilla item. set_components is the component-era canonical carrier. Verify the
@@ -187,6 +187,20 @@ public class RngItemServiceImpl implements IRngItemService {
      */
     private JsonObject buildIdentityComponents(ItemProperties p) {
         JsonObject components = new JsonObject();
+
+        // custom_model_data — component-era shape is a struct of typed lists, not a scalar.
+        // Inside set_components this is the RAW component ({"floats":[N]}); the {"mode","values"}
+        // ListOperation wrapper applies only to the standalone set_custom_model_data function.
+        // Emitted as a float because the component stores floats — a resource pack keyed on the
+        // legacy integer CMD must match on the float list. Verified on Dev: rolls back as
+        // "minecraft:custom_model_data": {floats: [N.0f]} (#1674).
+        if (p.getCustomModelData() > 0) {
+            JsonArray cmdFloats = new JsonArray();
+            cmdFloats.add(p.getCustomModelData());
+            JsonObject cmdComp = new JsonObject();
+            cmdComp.add("floats", cmdFloats);
+            components.add("minecraft:custom_model_data", cmdComp);
+        }
 
         // Display name — component object so it renders without the default-italic of a bare string.
         String name = p.getDisplayName();
