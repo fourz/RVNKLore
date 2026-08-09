@@ -60,6 +60,7 @@ public class RVNKLore extends JavaPlugin {
     private LoreMapManager loreMapManager;
     private int healthCheckTaskId = -1;
     private final AtomicBoolean isReconnecting = new AtomicBoolean(false);
+    private final AtomicBoolean isProbing = new AtomicBoolean(false);
     private Thread shutdownHook;
     private boolean shuttingDown = false;
     private final Object shutdownLock = new Object();
@@ -285,6 +286,15 @@ public class RVNKLore extends JavaPlugin {
      *
      * <p>A health check is diagnostic by nature; nothing about it needs to be synchronous with a
      * tick. That is the whole argument for this change.</p>
+     *
+     * <p><b>Probes cannot stack.</b> Bukkit re-queues an async repeating task on its tick period
+     * whether or not the previous run has returned, so a probe slower than the period would overlap
+     * itself, and every overlapping run holds a pool slot in {@code ConcurrentBag.borrow} —
+     * starving the pool is precisely the condition being probed for. Today the borrow is bounded by
+     * {@code connectionTimeout} (30s) and the period is 60s, so they do not overlap, but that is an
+     * arithmetic accident of two independently-editable config values rather than a guarantee.
+     * {@link #isProbing} makes it structural: a probe still running when the timer fires is skipped,
+     * not queued behind.</p>
      */
     private void startHealthCheck() {
         healthCheckTaskId = getServer().getScheduler().runTaskTimerAsynchronously(this, () -> {
@@ -292,29 +302,41 @@ public class RVNKLore extends JavaPlugin {
                 return;
             }
 
-            boolean needsReconnect = !databaseManager.isConnected();
-            boolean needsPrimaryRecovery = !needsReconnect
-                    && databaseManager.isInFallbackMode()
-                    && databaseManager.getFallbackTracker() != null
-                    && !databaseManager.getFallbackTracker().isInFallbackMode();
+            // A probe already in flight means the pool is slow or wedged — exactly when piling on a
+            // second borrow does the most harm. Skip this tick; the next one is 60s away.
+            if (!isProbing.compareAndSet(false, true)) {
+                logger.warning("Database health probe still running from a previous tick, skipping "
+                        + "this one (the connection pool is slow or exhausted)");
+                return;
+            }
 
-            if (needsReconnect || needsPrimaryRecovery) {
-                if (needsReconnect) {
-                    logger.warning("Database connection lost, attempting reconnect");
-                } else {
-                    logger.info("Recovery period elapsed, attempting primary database reconnection");
+            try {
+                boolean needsReconnect = !databaseManager.isConnected();
+                boolean needsPrimaryRecovery = !needsReconnect
+                        && databaseManager.isInFallbackMode()
+                        && databaseManager.getFallbackTracker() != null
+                        && !databaseManager.getFallbackTracker().isInFallbackMode();
+
+                if (needsReconnect || needsPrimaryRecovery) {
+                    if (needsReconnect) {
+                        logger.warning("Database connection lost, attempting reconnect");
+                    } else {
+                        logger.info("Recovery period elapsed, attempting primary database reconnection");
+                    }
+                    if (isReconnecting.compareAndSet(false, true)) {
+                        getServer().getScheduler().runTaskAsynchronously(this, () -> {
+                            try {
+                                databaseManager.reconnect();
+                            } finally {
+                                isReconnecting.set(false);
+                            }
+                        });
+                    } else {
+                        logger.warning("Reconnect already in progress, skipping");
+                    }
                 }
-                if (isReconnecting.compareAndSet(false, true)) {
-                    getServer().getScheduler().runTaskAsynchronously(this, () -> {
-                        try {
-                            databaseManager.reconnect();
-                        } finally {
-                            isReconnecting.set(false);
-                        }
-                    });
-                } else {
-                    logger.warning("Reconnect already in progress, skipping");
-                }
+            } finally {
+                isProbing.set(false);
             }
         }, 1200L, 1200L).getTaskId(); // Check every minute (20 ticks/sec * 60 sec)
     }

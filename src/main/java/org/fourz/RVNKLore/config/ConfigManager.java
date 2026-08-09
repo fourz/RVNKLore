@@ -255,9 +255,21 @@ public class ConfigManager {
     public LoreMode getMode() {
         String raw = config.getString("general.mode", "full").trim().toLowerCase();
         switch (raw) {
-            case "full":  return LoreMode.FULL;
+            // "true" is not a documented spelling — it is what an unquoted `on` becomes, and it is
+            // accepted only for symmetry with the `off` case below.
+            case "full":
+            case "true":
+                return LoreMode.FULL;
             case "quiet": return LoreMode.QUIET;
-            case "off":   return LoreMode.OFF;
+            // "false" IS the documented spelling arriving in disguise. YAML 1.1 — which SnakeYAML
+            // implements — resolves bare off/no/false to boolean false, so `mode: off` written
+            // exactly as this plugin's own config.yml documents it reaches Bukkit as Boolean.FALSE
+            // and getString() hands back "false". Without this case the sole mode #1826 exists to
+            // deliver was unreachable by its own documented spelling: the plugin logged
+            // "Unknown general.mode 'false'" and silently ran FULL. Verified on Dev 2026-08-09.
+            case "off":
+            case "false":
+                return LoreMode.OFF;
             default:
                 logger.warning("Unknown general.mode '" + raw + "' — defaulting to 'full'. Valid: full | quiet | off");
                 return LoreMode.FULL;
