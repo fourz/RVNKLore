@@ -178,4 +178,178 @@ class FallbackReconcileTest {
             assertTrue(LoreTableScope.isPerServer(FallbackWriteLog.extractTable("SELECT 1")));
         }
     }
+
+    @Nested
+    @DisplayName("Replay dependency awareness")
+    class Dependencies {
+
+        /** Build an entry the way {@link FallbackWriteLog#record} does, binds in column order. */
+        private FallbackWriteLog.JournalEntry entry(String sql, Object... values) {
+            java.util.List<FallbackWriteLog.Bind> binds = new java.util.ArrayList<>();
+            for (int i = 0; i < values.length; i++) {
+                binds.add(new FallbackWriteLog.Bind(i + 1, "setString", values[i]));
+            }
+            return new FallbackWriteLog.JournalEntry(sql, binds,
+                    FallbackWriteLog.extractColumns(sql), FallbackWriteLog.extractTable(sql));
+        }
+
+        @Test
+        @DisplayName("Column lists parse from INSERTs and are ignored for UPDATE/DELETE")
+        void columnParsing() {
+            assertEquals(java.util.List.of("id", "name", "type"), FallbackWriteLog.extractColumns(
+                    "INSERT INTO lore_entry (id, name, type) VALUES (?, ?, ?)"));
+            // Prefixed, newline-wrapped, and glued-paren forms all appear in the real SQL.
+            assertEquals(java.util.List.of("entry_id", "content"), FallbackWriteLog.extractColumns(
+                    "INSERT INTO rvnklore_lore_submission\n  (entry_id, content)\n  VALUES (?, ?)"));
+            assertEquals(java.util.List.of("a", "b"),
+                    FallbackWriteLog.extractColumns("INSERT INTO lore_map(a, b) VALUES (?, ?)"));
+            // An UPDATE cannot bring a row into existence, so it needs no dependency tracking.
+            assertTrue(FallbackWriteLog.extractColumns(
+                    "UPDATE lore_entry SET name = ? WHERE id = ?").isEmpty());
+            assertTrue(FallbackWriteLog.extractColumns(
+                    "DELETE FROM lore_entry WHERE id = ?").isEmpty());
+        }
+
+        @Test
+        @DisplayName("A VALUES tuple is never mistaken for a column list")
+        void doesNotParseValuesAsColumns() {
+            // Misreading this as columns would misalign every bind index and silently attribute the
+            // wrong value to a foreign key — worse than having no dependency tracking at all.
+            assertTrue(FallbackWriteLog.extractColumns(
+                    "INSERT INTO lore_entry VALUES (?, ?, ?)").isEmpty());
+        }
+
+        @Test
+        @DisplayName("The schema's foreign keys are declared")
+        void foreignKeysDeclared() {
+            assertTrue(LoreTableDependencies.hasParents(DatabaseConnection.TABLE_LORE_SUBMISSION));
+            assertTrue(LoreTableDependencies.hasParents(DatabaseConnection.TABLE_LORE_ITEM));
+            assertTrue(LoreTableDependencies.hasParents(DatabaseConnection.TABLE_LORE_METADATA));
+            assertTrue(LoreTableDependencies.hasParents(DatabaseConnection.TABLE_COLLECTION_ITEM));
+            // lore_entry is referenced by others but declares no key of its own.
+            assertFalse(LoreTableDependencies.hasParents(DatabaseConnection.TABLE_LORE_ENTRY));
+            assertTrue(LoreTableDependencies.isParent(DatabaseConnection.TABLE_LORE_ENTRY));
+            assertTrue(LoreTableDependencies.isParent(DatabaseConnection.TABLE_LORE_ITEM));
+            // World-bearing tables had their keys into lore_entry dropped by #1839.
+            assertFalse(LoreTableDependencies.hasParents(DatabaseConnection.TABLE_LORE_DISCOVERY));
+            assertFalse(LoreTableDependencies.hasParents(DatabaseConnection.TABLE_LORE_LOCATION));
+        }
+
+        @Test
+        @DisplayName("The observed #1840 orphan pair is linked parent-to-child")
+        void orphanPairIsLinked() {
+            // The exact shape from the #1833 verification: an entry insert and a submission insert
+            // for the same entry. The submission must recognise the entry as its parent.
+            FallbackWriteLog.JournalEntry parent = entry(
+                    "INSERT INTO lore_entry (id, name, type) VALUES (?, ?, ?)",
+                    "abc-123", "Some Entry", "CITY");
+            FallbackWriteLog.JournalEntry child = entry(
+                    "INSERT INTO lore_submission (id, entry_id, content) VALUES (?, ?, ?)",
+                    "sub-1", "abc-123", "body");
+
+            String parentKey = parent.parentKey();
+            assertNotNull(parentKey, "a lore_entry insert must expose an identity to depend on");
+            assertTrue(child.parentRefs().contains(parentKey),
+                    "the submission must point at the entry it references");
+            assertEquals(parentKey, child.firstRefIn(java.util.Set.of(parentKey)));
+        }
+
+        @Test
+        @DisplayName("A child of a different parent row is not held back")
+        void unrelatedChildNotBlocked() {
+            // Blocking on table identity alone would stall every submission behind one bad entry.
+            // Matching must be on the row's id, not just its table.
+            FallbackWriteLog.JournalEntry failedParent = entry(
+                    "INSERT INTO lore_entry (id, name) VALUES (?, ?)", "abc-123", "Entry A");
+            FallbackWriteLog.JournalEntry otherChild = entry(
+                    "INSERT INTO lore_submission (id, entry_id) VALUES (?, ?)", "sub-2", "zzz-999");
+
+            assertNull(otherChild.firstRefIn(java.util.Set.of(failedParent.parentKey())),
+                    "a submission for a different entry must still replay");
+        }
+
+        @Test
+        @DisplayName("Prefixed and bare table names match each other across the journal")
+        void prefixMatching() {
+            // A journal written on a prefixed tier must match keys derived from bare DDL names, or
+            // dependency tracking silently does nothing on exactly the servers that run clustering.
+            FallbackWriteLog.JournalEntry parent = entry(
+                    "INSERT INTO rvnklore_lore_entry (id, name) VALUES (?, ?)", "abc-123", "E");
+            FallbackWriteLog.JournalEntry child = entry(
+                    "INSERT INTO rvnklore_lore_submission (id, entry_id) VALUES (?, ?)", "s", "abc-123");
+            assertTrue(child.parentRefs().contains(parent.parentKey()));
+
+            FallbackWriteLog.JournalEntry barePrefixMix = entry(
+                    "INSERT INTO lore_submission (id, entry_id) VALUES (?, ?)", "s", "abc-123");
+            assertTrue(barePrefixMix.parentRefs().contains(parent.parentKey()),
+                    "a bare child must match a prefixed parent");
+        }
+
+        @Test
+        @DisplayName("Composite membership rows depend on both of their parents")
+        void compositeParents() {
+            FallbackWriteLog.JournalEntry membership = entry(
+                    "INSERT INTO collection_item (collection_id, item_id) VALUES (?, ?)",
+                    "coll-1", "item-9");
+            java.util.List<String> refs = membership.parentRefs();
+            assertEquals(2, refs.size(), "collection_item has two foreign keys");
+            assertTrue(refs.stream().anyMatch(r -> r.endsWith("#coll-1")));
+            assertTrue(refs.stream().anyMatch(r -> r.endsWith("#item-9")));
+        }
+
+        @Test
+        @DisplayName("A journal written before this change still gets dependency tracking on reload")
+        void legacyJournalEntriesRehydrate() {
+            // Older .reconcile-pending files carry no columns/table fields. Treating them as
+            // dependency-free would let a restart reintroduce the orphaning this change removes.
+            com.google.gson.JsonObject legacy = new com.google.gson.JsonObject();
+            legacy.addProperty("sql",
+                    "INSERT INTO lore_submission (id, entry_id, content) VALUES (?, ?, ?)");
+            legacy.addProperty("attempts", 1);
+            com.google.gson.JsonArray binds = new com.google.gson.JsonArray();
+            String[] values = {"sub-1", "abc-123", "body"};
+            for (int i = 0; i < values.length; i++) {
+                com.google.gson.JsonObject b = new com.google.gson.JsonObject();
+                b.addProperty("i", i + 1);
+                b.addProperty("s", "setString");
+                b.addProperty("v", values[i]);
+                binds.add(b);
+            }
+            legacy.add("binds", binds);
+
+            FallbackWriteLog.JournalEntry rehydrated = FallbackWriteLog.JournalEntry.fromJson(legacy);
+            assertEquals(1, rehydrated.attempts, "attempt count must survive the reload");
+            assertTrue(rehydrated.parentRefs().stream().anyMatch(r -> r.endsWith("#abc-123")),
+                    "columns and table must be re-derived from the SQL for a legacy entry");
+        }
+
+        @Test
+        @DisplayName("Binds recorded out of order still resolve to the right column")
+        void outOfOrderBinds() {
+            // The recording proxy captures setX calls in whatever order the call site makes them, so
+            // position in the list cannot be trusted — only the recorded index can.
+            java.util.List<FallbackWriteLog.Bind> binds = new java.util.ArrayList<>();
+            binds.add(new FallbackWriteLog.Bind(2, "setString", "abc-123"));
+            binds.add(new FallbackWriteLog.Bind(1, "setString", "sub-1"));
+            String sql = "INSERT INTO lore_submission (id, entry_id) VALUES (?, ?)";
+            FallbackWriteLog.JournalEntry e = new FallbackWriteLog.JournalEntry(sql, binds,
+                    FallbackWriteLog.extractColumns(sql), FallbackWriteLog.extractTable(sql));
+
+            assertTrue(e.parentRefs().stream().anyMatch(r -> r.endsWith("#abc-123")),
+                    "entry_id must read from bind index 2, not list position");
+        }
+
+        @Test
+        @DisplayName("A row with no bound foreign key claims no parents")
+        void noParentsWhenUnbound() {
+            // A NULL foreign key is legitimate on some rows; inventing a dependency on "null" would
+            // hold back writes behind a parent that never existed.
+            FallbackWriteLog.JournalEntry e = entry(
+                    "INSERT INTO lore_submission (id, entry_id) VALUES (?, ?)", "sub-1", null);
+            assertTrue(e.parentRefs().isEmpty());
+            // And a table with no declared keys never claims one.
+            assertTrue(entry("INSERT INTO lore_discovery (player_uuid, world) VALUES (?, ?)",
+                    "u", "world").parentRefs().isEmpty());
+        }
+    }
 }

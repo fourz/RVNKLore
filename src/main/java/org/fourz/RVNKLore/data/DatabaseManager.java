@@ -359,7 +359,11 @@ public class DatabaseManager {
             return false;
         }
         // Synchronous wrapper for async operation
-        return loreRepository.addLoreEntry(entry).join();
+        boolean saved = loreRepository.addLoreEntry(entry).join();
+        if (saved) {
+            syncPrimaryLocation(entry);
+        }
+        return saved;
     }
 
     /**
@@ -374,7 +378,57 @@ public class DatabaseManager {
             return false;
         }
         // Synchronous wrapper for async operation
-        return loreRepository.updateLoreEntry(entry).join();
+        boolean updated = loreRepository.updateLoreEntry(entry).join();
+        if (updated) {
+            syncPrimaryLocation(entry);
+        }
+        return updated;
+    }
+
+    /**
+     * Mirror an entry's coordinates into the relational lore_location table (#1900).
+     *
+     * <p>Coordinates have always been persisted inside the lore_submission content JSON, but
+     * nothing ever wrote lore_location, so proximity discovery, per-world location counts and
+     * collection markers all read a permanently empty table. This is the write side.</p>
+     *
+     * <p>Deliberately outside the entry transaction: lore_entry is cluster-shared while
+     * lore_location is per-server (it carries a world name), so the two live in different
+     * databases and cannot share a transaction. A failure here is logged and swallowed — an
+     * entry that saved should not be reported as failed because its spatial index lagged.</p>
+     *
+     * <p>Only writes when the entry actually carries a location. A null location means "no
+     * coordinates supplied", never "delete the coordinates on record", so existing rows are
+     * left alone rather than clobbered by an unrelated edit.</p>
+     */
+    private void syncPrimaryLocation(LoreEntry entry) {
+        org.bukkit.Location loc = entry.getLocation();
+        if (loc == null || loc.getWorld() == null) {
+            return;
+        }
+        try {
+            // Replace only the PRIMARY row, so WAYPOINT/BOUNDARY rows survive an entry edit.
+            LoreLocation existing = locationRepository.findPrimaryByEntryId(entry.getId()).join();
+            if (existing != null) {
+                locationRepository.deleteById(existing.getId()).join();
+            }
+
+            LoreLocation location = LoreLocation.builder()
+                    .entryId(entry.getId())
+                    .world(loc.getWorld().getName())
+                    .x(loc.getX())
+                    .y(loc.getY())
+                    .z(loc.getZ())
+                    .locationType("PRIMARY")
+                    .label(entry.getName())
+                    .build();
+
+            if (locationRepository.save(location).join() == null) {
+                logger.warning("Lore entry saved but its location row did not: " + entry.getId());
+            }
+        } catch (Exception e) {
+            logger.error("Failed to sync lore_location for entry: " + entry.getId(), e);
+        }
     }
 
     /**

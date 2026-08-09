@@ -18,6 +18,7 @@ import org.fourz.RVNKLore.lore.item.collection.LoreCollection;
 import org.fourz.RVNKLore.lore.item.enchant.EnchantmentTier;
 import org.fourz.RVNKLore.lore.player.PlayerManager;
 import org.fourz.RVNKLore.service.IRngItemService;
+import org.fourz.RVNKLore.util.HeadUtil;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.enchantments.Enchantment;
@@ -458,15 +459,17 @@ public class LoreApiEndpointImpl implements ILoreApiService {
 
     @Override
     public CompletableFuture<ApiResponse<?>> getItemByName(String name) {
-        return loreManager.getItemManager().getAllItemsWithProperties()
-            .<ApiResponse<?>>handle((list, ex) -> {
+        // #1917: was a cache-only scan (getAllItemsWithProperties reads itemNameCache and never
+        // falls back to the DB). Because every versioned update evicts the item's key, a
+        // read -> PUT -> read sequence reported the item as missing with no flush in between —
+        // data that plainly existed in lore_item. getItemPropertiesByName re-queries on a miss.
+        return loreManager.getItemManager().getItemPropertiesByName(name)
+            .<ApiResponse<?>>handle((opt, ex) -> {
                 if (ex != null) {
                     logger.error("Error retrieving item by name '" + name + "'", unwrapException(ex));
                     return ApiResponse.error("INTERNAL_ERROR", "An unexpected error occurred.");
                 }
-                return list.stream()
-                    .filter(p -> name.equalsIgnoreCase(p.getDisplayName()))
-                    .findFirst()
+                return opt
                     .map(props -> ApiResponse.success(itemToMap(props)))
                     .orElse(ApiResponse.error("NOT_FOUND", "Item not found: " + name));
             });
@@ -645,6 +648,19 @@ public class LoreApiEndpointImpl implements ILoreApiService {
                 if (Boolean.TRUE.equals(body.get("glow"))) props.setGlow(true);
                 Integer cmd = asInt(body.get("customModelData"));
                 if (cmd != null && cmd > 0) props.setCustomModelData(cmd);
+                // Head texture (#1914). Previously unmintable: the field persisted and round-tripped
+                // through the DTO but no write path accepted it, so heads could only be textured by a
+                // direct DB write. Validated here so a bad blob is rejected at mint instead of
+                // surfacing later as a blank head.
+                String skullTexture = asString(body.get("skullTexture"));
+                if (skullTexture != null && !skullTexture.isBlank()) {
+                    if (HeadUtil.isValidTextureData(skullTexture)
+                            && HeadUtil.hasExtractableTextureUrl(skullTexture)) {
+                        props.setSkullTexture(skullTexture);
+                    } else {
+                        warnings.add("Invalid skullTexture ignored: no skin URL could be decoded");
+                    }
+                }
                 props.setCreatedBy(createdBy != null ? createdBy : "rest-mint");
 
                 int itemId = loreManager.getItemManager()
@@ -888,6 +904,19 @@ public class LoreApiEndpointImpl implements ILoreApiService {
         if (body.containsKey("glow")) p.setGlow(Boolean.TRUE.equals(body.get("glow")));
         Integer cmd = asInt(body.get("customModelData"));
         if (cmd != null) p.setCustomModelData(cmd);
+        // Head texture (#1914). An explicit null/empty clears it, matching how the other nullable
+        // fields behave on PUT; anything else must decode to a real skin URL or it is dropped with
+        // a warning rather than stored as something that will render blank.
+        if (body.containsKey("skullTexture")) {
+            String tex = asString(body.get("skullTexture"));
+            if (tex == null || tex.isBlank()) {
+                p.setSkullTexture(null);
+            } else if (HeadUtil.isValidTextureData(tex) && HeadUtil.hasExtractableTextureUrl(tex)) {
+                p.setSkullTexture(tex);
+            } else {
+                warnings.add("Invalid skullTexture ignored: no skin URL could be decoded");
+            }
+        }
         String itemTypeStr = asString(body.get("itemType"));
         if (itemTypeStr != null && !itemTypeStr.isBlank()) {
             try { p.setItemType(ItemType.valueOf(itemTypeStr.trim().toUpperCase())); }
@@ -914,6 +943,12 @@ public class LoreApiEndpointImpl implements ILoreApiService {
         m.put("lore", dto.lore());
         m.put("pages", dto.pages());
         m.put("glow", dto.glow());
+        // Head texture (#1914). Exposed so the value is readable back out of the API it can now be
+        // written through, and so bake_parity can assert the baked minecraft:profile against the DB
+        // record instead of guessing whether a head was supposed to carry one.
+        if (dto.skullTexture() != null && !dto.skullTexture().isEmpty()) {
+            m.put("skullTexture", dto.skullTexture());
+        }
         if (dto.enchantments() != null && !dto.enchantments().isEmpty()) {
             Map<String, Object> ench = new LinkedHashMap<>();
             dto.enchantments().forEach((e, lvl) -> ench.put(e.getKey().toString(), lvl));
@@ -948,5 +983,57 @@ public class LoreApiEndpointImpl implements ILoreApiService {
         if (name == null || name.isEmpty()) return name;
         return name.substring(0, 1).toUpperCase() +
                name.substring(1).toLowerCase().replace("_", " ");
+    }
+
+    /**
+     * Lore locations near a point, for cross-plugin spatial lookups (#1924).
+     *
+     * <p>Backed by {@code lore_location}, which only became populated in 1.0.107 (#1900) — before
+     * that the table was created and read from but never written, so this lookup would have
+     * returned an empty list on every tier and looked like "no lore here" rather than "nothing was
+     * ever recorded".</p>
+     *
+     * <p>Returns a plain list of maps rather than a DTO: the consumer is RVNKWorlds' survey, which
+     * merges this into a JSON payload it already assembles from maps.</p>
+     */
+    @Override
+    public CompletableFuture<ApiResponse<?>> findNearbyLocations(String world, double x, double z,
+                                                                 double radius) {
+        return CompletableFuture.supplyAsync(() -> {
+            if (world == null || world.isBlank()) {
+                return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", "world is required");
+            }
+            if (radius <= 0) {
+                return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", "radius must be positive");
+            }
+            try {
+                List<org.fourz.RVNKLore.data.model.LoreLocation> found =
+                    plugin.getDatabaseManager().findNearbyLore(world, x, z, radius);
+
+                List<Map<String, Object>> out = new java.util.ArrayList<>();
+                for (org.fourz.RVNKLore.data.model.LoreLocation loc : found) {
+                    double dx = loc.getX() - x;
+                    double dz = loc.getZ() - z;
+                    Map<String, Object> row = new java.util.LinkedHashMap<>();
+                    row.put("entryId", loc.getEntryId());
+                    row.put("label", loc.getLabel());
+                    row.put("world", loc.getWorld());
+                    row.put("x", loc.getX());
+                    row.put("y", loc.getY());
+                    row.put("z", loc.getZ());
+                    row.put("locationType", loc.getLocationType());
+                    row.put("distance", Math.round(Math.sqrt(dx * dx + dz * dz) * 100.0) / 100.0);
+                    out.add(row);
+                }
+                out.sort((a, b) -> Double.compare(
+                    ((Number) a.get("distance")).doubleValue(),
+                    ((Number) b.get("distance")).doubleValue()));
+                return (ApiResponse<?>) ApiResponse.success(out);
+            } catch (Exception e) {
+                logger.error("findNearbyLocations failed for " + world + " " + x + "," + z, e);
+                return (ApiResponse<?>) ApiResponse.error("INTERNAL_ERROR",
+                    "Lore location lookup failed: " + e.getMessage());
+            }
+        });
     }
 }

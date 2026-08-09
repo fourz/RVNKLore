@@ -167,10 +167,23 @@ public class DiscoveryManager {
                         // Set cooldown
                         setCooldown(playerUuid, entryId);
 
-                        // Send notification (on main thread)
-                        Bukkit.getScheduler().runTask(plugin, () -> {
-                            notificationManager.sendDiscoveryNotification(evt);
-                        });
+                        // #1845: notify once per player per entry, ever. recordDiscovery() returns true
+                        // for an existing row as well as a fresh insert, so `recorded` cannot tell a
+                        // rediscovery apart on its own — gate on isFirstForPlayer, which is backed by
+                        // lore_discovery UNIQUE(player_uuid, entry_id) and therefore survives restarts.
+                        // The cooldowns above are duplicate-work guards only: both are in-memory and
+                        // reset on shutdown, so they never provided this guarantee.
+                        // Mirrors DiscoveryListener.onLoreDiscovery, which already gates achievements
+                        // on the same flag.
+                        if (isFirstForPlayer) {
+                            // Send notification (on main thread)
+                            Bukkit.getScheduler().runTask(plugin, () -> {
+                                notificationManager.sendDiscoveryNotification(evt);
+                            });
+                        } else {
+                            logger.debug("Rediscovery - notification suppressed for " + player.getName() +
+                                ": " + entry.getName());
+                        }
 
                         logger.debug("Player " + player.getName() + " discovered: " + entry.getName() +
                             (isFirstDiscovery ? " (FIRST DISCOVERY)" : ""));

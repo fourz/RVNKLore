@@ -68,13 +68,46 @@ public class LoreItemPoolSubCommand implements SubCommand {
         }
         String rarityTier = args.length >= 4 ? args[3].toUpperCase() : "COMMON";
         int weight = args.length >= 5 ? parseIntOr(args[4], 1) : 1;
+        final int resolvedId = itemId;
         itemManager.addPoolEntry(poolId, itemId, rarityTier, weight).thenAccept(ok ->
             plugin.getServer().getScheduler().runTask(plugin, () -> {
                 if (ok) {
-                    sender.sendMessage(ChatColor.GREEN + "✓ Added item " + itemId + " to pool '" + poolId
+                    sender.sendMessage(ChatColor.GREEN + "✓ Added item " + resolvedId + " to pool '" + poolId
                         + "' (" + rarityTier + ", weight " + weight + ")");
+                    warnIfUntexturedHead(sender, resolvedId);
                 } else {
                     sender.sendMessage(ChatColor.RED + "✖ Failed to add pool entry (does the item exist?).");
+                }
+            }));
+    }
+
+    /**
+     * Flag a player head pooled with no stored texture (#1920).
+     *
+     * <p>A {@code PLAYER_HEAD} with no {@code skull_texture} rolls and bakes as an anonymous Steve.
+     * That is consistent across both lanes so it is not a parity break — but in a reward chest it
+     * looks like a texture that failed to load, and the author almost certainly meant to set one.
+     * Catching it here beats discovering it in-game.</p>
+     *
+     * <p>Warn, never refuse: an intentionally anonymous head is legitimate, and the pool entry has
+     * already been written by the time this runs. Fires after the success line so the warning reads
+     * as a follow-up to a completed action rather than a failure.</p>
+     */
+    private void warnIfUntexturedHead(CommandSender sender, int itemId) {
+        itemManager.getItemPropertiesById(itemId).thenAccept(opt ->
+            plugin.getServer().getScheduler().runTask(plugin, () -> {
+                if (opt == null || opt.isEmpty()) {
+                    return;
+                }
+                ItemProperties p = opt.get();
+                org.bukkit.Material mat = p.getMaterial();
+                boolean playerHead = mat == org.bukkit.Material.PLAYER_HEAD
+                    || mat == org.bukkit.Material.PLAYER_WALL_HEAD;
+                if (playerHead && (p.getSkullTexture() == null || p.getSkullTexture().isEmpty())) {
+                    sender.sendMessage(ChatColor.YELLOW + "⚠ Item " + itemId + " is a player head with no"
+                        + " stored texture — it will roll and bake as a blank (Steve) head.");
+                    sender.sendMessage(ChatColor.GRAY + "   Set one with /lore item texture " + itemId
+                        + " <base64>, or ignore this if an anonymous head is intended.");
                 }
             }));
     }

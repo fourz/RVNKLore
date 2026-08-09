@@ -6,7 +6,7 @@
 
    <groupId>org.fourz.RVNKLore</groupId>
    <artifactId>RVNKLore</artifactId>
-   <version>1.0.84</version>
+   <version>1.0.111</version>
 
    <name>RVNKLore</name>
    <description></description>
@@ -87,7 +87,7 @@
        <dependency>
            <groupId>org.fourz</groupId>
            <artifactId>rvnkcore</artifactId>
-           <version>1.5.10-alpha</version>
+           <version>1.5.73-alpha</version>
            <scope>provided</scope>
        </dependency>
        <!-- RVNKQuests - for QuestCompleteEvent cross-plugin integration -->
@@ -164,6 +164,24 @@
            </resource>
        </resources>
        <plugins>
+            <!--
+              Pinned below the default 3.15.0 with a forked compiler (#1929, root cause #1559).
+              On JDK 25 the 3.14/3.15 in-process compiler reuse crashes javac on the SECOND
+              compilation: default-testCompile dies losing sight of main classes that exist.
+              Main sources compile because they run first, before the stale reused context.
+              3.13.0 predates the reuse change, and fork=true runs a fresh javac subprocess per
+              compilation rather than the in-process JavacTool API. Standardised across all
+              plugins so this is not one plugin's private fix.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+                <configuration>
+                    <fork>true</fork>
+                </configuration>
+            </plugin>
+
            <plugin>
                <groupId>org.apache.maven.plugins</groupId>
                <artifactId>maven-shade-plugin</artifactId>

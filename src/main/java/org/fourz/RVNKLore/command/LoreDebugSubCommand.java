@@ -147,8 +147,17 @@ public class LoreDebugSubCommand implements SubCommand {
                 + (pending == 0 ? ChatColor.GREEN + "0" : ChatColor.YELLOW + String.valueOf(pending)));
 
         if (inFallback) {
-            sender.sendMessage(ChatColor.YELLOW + "⚠ Shared lore tables are read-only while in fallback.");
-            sender.sendMessage(ChatColor.GRAY + "   Per-server lore (discoveries, locations, maps) still works");
+            // The read-only claim must track the gate in DatabaseHelper.fallbackRefusal(), which
+            // returns early when clustering is off — with nothing genuinely shared, shared-table
+            // writes are allowed and journalled like any other. Printing the warning
+            // unconditionally told the operator lore_entry was refused while it was in fact being
+            // written and reconciled; caught while verifying #1833 on Dev 2026-08-09.
+            if (dbManager.isClusterEnabled()) {
+                sender.sendMessage(ChatColor.YELLOW + "⚠ Shared lore tables are read-only while in fallback.");
+                sender.sendMessage(ChatColor.GRAY + "   Per-server lore (discoveries, locations, maps) still works");
+            } else {
+                sender.sendMessage(ChatColor.GRAY + "   Clustering is off, so all lore stays writable");
+            }
             sender.sendMessage(ChatColor.GRAY + "   and replays to the primary automatically on recovery.");
         }
         if (pending > 0) {

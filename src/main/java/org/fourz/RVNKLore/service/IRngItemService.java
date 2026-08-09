@@ -51,6 +51,12 @@ public interface IRngItemService {
      * baked items are visual look-alikes, not registered lore items. For true lore items (identity,
      * resolve-back, collection/vote hooks) use {@link #roll(String, String)} to fill containers directly.
      *
+     * <p><b>Player heads bake with their texture</b> (#1914): a stored {@code skull_texture} is
+     * emitted as a {@code minecraft:profile} component, matching what the dynamic
+     * {@link #roll(String, String)} lane applies via {@code HeadUtil}. A head with no stored texture
+     * bakes without a profile — the same anonymous result the roll lane gives for that item, so the
+     * two lanes still agree. Earlier builds refused to bake heads outright; that guard is gone.
+     *
      * @param poolId     The pool identifier
      * @param rarityTier Rarity tier filter, or null for all active tiers
      * @return Future containing the loot-table JSON, or empty if the pool has no resolvable items

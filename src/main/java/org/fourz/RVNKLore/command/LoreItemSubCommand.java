@@ -30,6 +30,7 @@ public class LoreItemSubCommand implements SubCommand {
         subCommands.put("list", new LoreItemListSubCommand(plugin));
         subCommands.put("tag", new LoreItemTagSubCommand(plugin));
         subCommands.put("text", new LoreItemTextSubCommand(plugin, plugin.getLoreManager().getItemManager()));
+        subCommands.put("texture", new LoreItemTextureSubCommand(plugin, plugin.getLoreManager().getItemManager()));
         subCommands.put("presets", new LoreItemPresetsSubCommand(plugin, plugin.getLoreManager().getItemManager()));
         subCommands.put("pool", new LoreItemPoolSubCommand(plugin, plugin.getLoreManager().getItemManager()));
         subCommands.put("preset", new LoreItemPresetSubCommand(plugin, plugin.getLoreManager().getItemManager()));

@@ -132,20 +132,22 @@ public class DiscoveryNotificationManager {
                             }
                         })
                         .exceptionally(ex -> {
-                            logger.debug("Error checking discovery notification preferences: " + ex.getMessage());
-                            // Fallback to config-based settings
-                            sendDiscoveryNotificationFallback(player, entry, event);
+                            // #1846: fail CLOSED. The player has preferences we could not read; falling
+                            // back to config defaults (all true) would notify someone who opted out.
+                            logger.warning("Discovery channel preferences unreadable for " + player.getName()
+                                    + " - suppressing notification rather than assuming enabled: " + ex.getMessage());
                             return null;
                         });
                 })
                 .exceptionally(ex -> {
-                    logger.debug("Error checking discovery notification enable status: " + ex.getMessage());
-                    // Fallback to config-based settings
-                    sendDiscoveryNotificationFallback(player, entry, event);
+                    // #1846: fail CLOSED — see above. Only a genuinely absent service uses config flags.
+                    logger.warning("Discovery notification preference unreadable for " + player.getName()
+                            + " - suppressing notification rather than assuming enabled: " + ex.getMessage());
                     return null;
                 });
         } else {
-            // No preferences service available - use config flags
+            // No preferences service at all - there are no per-player preferences to honour, so the
+            // config flags are the only policy available. Distinct from a failed read (#1846).
             sendDiscoveryNotificationFallback(player, entry, event);
         }
     }
@@ -207,13 +209,15 @@ public class DiscoveryNotificationManager {
     private void sendChatNotification(Player player, LoreEntry entry, boolean firstDiscovery, boolean firstForPlayer) {
         player.sendMessage("");
 
+        // #1845: there is no "Lore Rediscovered" case any more. DiscoveryManager only sends a
+        // notification when isFirstForPlayer is true, so a repeat visit is silent rather than
+        // re-announced. firstForPlayer is kept in the signature because the caller still passes
+        // the event's flag, but it is now always true here.
         if (firstDiscovery) {
             player.sendMessage(ChatColor.GOLD + "★ " + ChatColor.BOLD + "FIRST DISCOVERY! " + ChatColor.GOLD + "★");
             player.sendMessage(ChatColor.YELLOW + "You are the first to discover this lore!");
-        } else if (firstForPlayer) {
-            player.sendMessage(ChatColor.AQUA + "━━━ " + ChatColor.WHITE + "Lore Discovered" + ChatColor.AQUA + " ━━━");
         } else {
-            player.sendMessage(ChatColor.GRAY + "━━━ " + ChatColor.WHITE + "Lore Rediscovered" + ChatColor.GRAY + " ━━━");
+            player.sendMessage(ChatColor.AQUA + "━━━ " + ChatColor.WHITE + "Lore Discovered" + ChatColor.AQUA + " ━━━");
         }
 
         String typeColor = getTypeColor(entry.getType());

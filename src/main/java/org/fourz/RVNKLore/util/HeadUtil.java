@@ -73,6 +73,19 @@ public class HeadUtil {
     }
 
     /**
+     * Can a skin URL actually be decoded out of this base64 blob?
+     *
+     * <p>{@link #isValidTextureData(String)} only checks shape (long enough, no spaces), so a blob
+     * can pass it and still yield no URL — at which point {@link #applyTextureData} logs and returns
+     * and the head renders blank. Authoring paths should call this too, so bad data is rejected at
+     * the point of entry rather than surfacing later as a texture that looks like it failed to load
+     * (#1914).</p>
+     */
+    public static boolean hasExtractableTextureUrl(String base64Data) {
+        return extractTextureUrl(base64Data) != null;
+    }
+
+    /**
      * Get texture data for a mob type.
      */
     public static String getMobTextureData(EntityType entityType) {

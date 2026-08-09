@@ -60,6 +60,7 @@ public class RVNKLore extends JavaPlugin {
     private LoreMapManager loreMapManager;
     private int healthCheckTaskId = -1;
     private final AtomicBoolean isReconnecting = new AtomicBoolean(false);
+    private final AtomicBoolean isProbing = new AtomicBoolean(false);
     private Thread shutdownHook;
     private boolean shuttingDown = false;
     private final Object shutdownLock = new Object();
@@ -268,37 +269,76 @@ public class RVNKLore extends JavaPlugin {
         Runtime.getRuntime().addShutdownHook(shutdownHook);
     }
 
+    /**
+     * Periodic database health check (#1856).
+     *
+     * <p>Runs <b>asynchronously</b>. It previously used {@code scheduleSyncRepeatingTask}, which put
+     * {@link org.fourz.RVNKLore.data.DatabaseManager#isConnected()} — a HikariCP pool borrow against
+     * a cross-host MySQL — directly on the server thread. When that pool degrades, the borrow parks
+     * in {@code ConcurrentBag.borrow} and takes the whole server with it. Reproduced on both tiers
+     * on 2026-08-01 within seven minutes of each other; Dev tripped a 10-second Paper watchdog on
+     * exactly that frame.</p>
+     *
+     * <p>The <i>reconnect</i> was already dispatched async (#858) — this closes the other half. The
+     * body touches no Bukkit API: it reads the database manager and logs, both safe off-thread. The
+     * reconnect keeps its own async dispatch so the guarded {@code isReconnecting} handoff is
+     * unchanged.</p>
+     *
+     * <p>A health check is diagnostic by nature; nothing about it needs to be synchronous with a
+     * tick. That is the whole argument for this change.</p>
+     *
+     * <p><b>Probes cannot stack.</b> Bukkit re-queues an async repeating task on its tick period
+     * whether or not the previous run has returned, so a probe slower than the period would overlap
+     * itself, and every overlapping run holds a pool slot in {@code ConcurrentBag.borrow} —
+     * starving the pool is precisely the condition being probed for. Today the borrow is bounded by
+     * {@code connectionTimeout} (30s) and the period is 60s, so they do not overlap, but that is an
+     * arithmetic accident of two independently-editable config values rather than a guarantee.
+     * {@link #isProbing} makes it structural: a probe still running when the timer fires is skipped,
+     * not queued behind.</p>
+     */
     private void startHealthCheck() {
-        healthCheckTaskId = getServer().getScheduler().scheduleSyncRepeatingTask(this, () -> {
+        healthCheckTaskId = getServer().getScheduler().runTaskTimerAsynchronously(this, () -> {
             if (databaseManager == null) {
                 return;
             }
 
-            boolean needsReconnect = !databaseManager.isConnected();
-            boolean needsPrimaryRecovery = !needsReconnect
-                    && databaseManager.isInFallbackMode()
-                    && databaseManager.getFallbackTracker() != null
-                    && !databaseManager.getFallbackTracker().isInFallbackMode();
-
-            if (needsReconnect || needsPrimaryRecovery) {
-                if (needsReconnect) {
-                    logger.warning("Database connection lost, attempting reconnect");
-                } else {
-                    logger.info("Recovery period elapsed, attempting primary database reconnection");
-                }
-                if (isReconnecting.compareAndSet(false, true)) {
-                    getServer().getScheduler().runTaskAsynchronously(this, () -> {
-                        try {
-                            databaseManager.reconnect();
-                        } finally {
-                            isReconnecting.set(false);
-                        }
-                    });
-                } else {
-                    logger.warning("Reconnect already in progress, skipping");
-                }
+            // A probe already in flight means the pool is slow or wedged — exactly when piling on a
+            // second borrow does the most harm. Skip this tick; the next one is 60s away.
+            if (!isProbing.compareAndSet(false, true)) {
+                logger.warning("Database health probe still running from a previous tick, skipping "
+                        + "this one (the connection pool is slow or exhausted)");
+                return;
             }
-        }, 1200L, 1200L); // Check every minute (20 ticks/sec * 60 sec)
+
+            try {
+                boolean needsReconnect = !databaseManager.isConnected();
+                boolean needsPrimaryRecovery = !needsReconnect
+                        && databaseManager.isInFallbackMode()
+                        && databaseManager.getFallbackTracker() != null
+                        && !databaseManager.getFallbackTracker().isInFallbackMode();
+
+                if (needsReconnect || needsPrimaryRecovery) {
+                    if (needsReconnect) {
+                        logger.warning("Database connection lost, attempting reconnect");
+                    } else {
+                        logger.info("Recovery period elapsed, attempting primary database reconnection");
+                    }
+                    if (isReconnecting.compareAndSet(false, true)) {
+                        getServer().getScheduler().runTaskAsynchronously(this, () -> {
+                            try {
+                                databaseManager.reconnect();
+                            } finally {
+                                isReconnecting.set(false);
+                            }
+                        });
+                    } else {
+                        logger.warning("Reconnect already in progress, skipping");
+                    }
+                }
+            } finally {
+                isProbing.set(false);
+            }
+        }, 1200L, 1200L).getTaskId(); // Check every minute (20 ticks/sec * 60 sec)
     }
 
     @Override

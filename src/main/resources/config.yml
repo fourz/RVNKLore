@@ -11,6 +11,8 @@ general:
   #   off   - plugin loaded but INERT: no services/REST/listeners/commands registered.
   #           Flip this and restart to enable; no uninstall needed.
   # Absent or unknown -> full. full<->quiet is hot (via /lore reload); off<->on needs a restart.
+  # `off` may be written bare or quoted — YAML reads bare off as boolean false, which is accepted
+  # as a synonym for off, so both `mode: off` and `mode: "off"` do the same thing.
   mode: full
 
 features:
@@ -30,7 +32,7 @@ features:
     enabled: true
 
 lore:
-  nearbyRadius: 50.0
+  nearbyRadius: 20.0
   requireApproval: true
   # Player-death lore creation:
   #   none        - no lore entries from player deaths (default)

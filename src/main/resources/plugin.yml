@@ -110,6 +110,9 @@ permissions:
   rvnklore.sign.library:
     description: Designate a lectern as a lore library ([library] sign tag)
     default: op
+  rvnklore.sign.tome:
+    description: Allows creating a [Tome] quest-giver lectern that dispenses a lore book
+    default: op
   rvnklore.sign.forge:
     description: Designate an anvil as a lore forge ([forge] sign tag)
     default: op
@@ -190,6 +193,9 @@ permissions:
     default: op
   rvnklore.admin.item.preset:
     description: Author quest item presets (/lore item preset bind|unbind|list)
+    default: op
+  rvnklore.admin.item.texture:
+    description: Set or clear a lore item's head texture (/lore item texture)
     default: op
 
   # ── Admin — collections ───────────────────────────────────────────────────
