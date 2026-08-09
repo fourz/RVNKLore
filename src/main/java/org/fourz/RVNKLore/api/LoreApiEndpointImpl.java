@@ -984,4 +984,56 @@ public class LoreApiEndpointImpl implements ILoreApiService {
         return name.substring(0, 1).toUpperCase() +
                name.substring(1).toLowerCase().replace("_", " ");
     }
+
+    /**
+     * Lore locations near a point, for cross-plugin spatial lookups (#1924).
+     *
+     * <p>Backed by {@code lore_location}, which only became populated in 1.0.107 (#1900) — before
+     * that the table was created and read from but never written, so this lookup would have
+     * returned an empty list on every tier and looked like "no lore here" rather than "nothing was
+     * ever recorded".</p>
+     *
+     * <p>Returns a plain list of maps rather than a DTO: the consumer is RVNKWorlds' survey, which
+     * merges this into a JSON payload it already assembles from maps.</p>
+     */
+    @Override
+    public CompletableFuture<ApiResponse<?>> findNearbyLocations(String world, double x, double z,
+                                                                 double radius) {
+        return CompletableFuture.supplyAsync(() -> {
+            if (world == null || world.isBlank()) {
+                return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", "world is required");
+            }
+            if (radius <= 0) {
+                return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", "radius must be positive");
+            }
+            try {
+                List<org.fourz.RVNKLore.data.model.LoreLocation> found =
+                    plugin.getDatabaseManager().findNearbyLore(world, x, z, radius);
+
+                List<Map<String, Object>> out = new java.util.ArrayList<>();
+                for (org.fourz.RVNKLore.data.model.LoreLocation loc : found) {
+                    double dx = loc.getX() - x;
+                    double dz = loc.getZ() - z;
+                    Map<String, Object> row = new java.util.LinkedHashMap<>();
+                    row.put("entryId", loc.getEntryId());
+                    row.put("label", loc.getLabel());
+                    row.put("world", loc.getWorld());
+                    row.put("x", loc.getX());
+                    row.put("y", loc.getY());
+                    row.put("z", loc.getZ());
+                    row.put("locationType", loc.getLocationType());
+                    row.put("distance", Math.round(Math.sqrt(dx * dx + dz * dz) * 100.0) / 100.0);
+                    out.add(row);
+                }
+                out.sort((a, b) -> Double.compare(
+                    ((Number) a.get("distance")).doubleValue(),
+                    ((Number) b.get("distance")).doubleValue()));
+                return (ApiResponse<?>) ApiResponse.success(out);
+            } catch (Exception e) {
+                logger.error("findNearbyLocations failed for " + world + " " + x + "," + z, e);
+                return (ApiResponse<?>) ApiResponse.error("INTERNAL_ERROR",
+                    "Lore location lookup failed: " + e.getMessage());
+            }
+        });
+    }
 }
