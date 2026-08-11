@@ -87,9 +87,19 @@ public class DiscoveryListener implements Listener {
         locationExactIndex.clear();
 
         int count = 0;
+        // Entries that HAVE coordinates but whose world is not loaded. Counted rather than ignored:
+        // a landmark that cannot be discovered because its world never came up is invisible
+        // otherwise, and that silence is what made #1953 cost a QA session to find.
+        java.util.Map<String, Integer> pendingByWorld = new java.util.TreeMap<>();
+
         List<LoreEntry> entries = loreManager.getAllLoreEntriesSync();
         for (LoreEntry entry : entries) {
-            if (entry.getLocation() == null || entry.getLocation().getWorld() == null) continue;
+            if (entry.getLocation() == null || entry.getLocation().getWorld() == null) {
+                if (entry.hasUnresolvedLocation()) {
+                    pendingByWorld.merge(entry.getDeferredWorldName(), 1, Integer::sum);
+                }
+                continue;
+            }
             String world = entry.getLocation().getWorld().getName();
             locationLoreCache.computeIfAbsent(world, k -> new ArrayList<>()).add(entry);
             locationExactIndex.put(getLocationKey(entry.getLocation()), entry);
@@ -97,6 +107,17 @@ public class DiscoveryListener implements Listener {
         }
 
         logger.debug("Built location cache: " + count + " entries across " + locationLoreCache.size() + " worlds");
+
+        if (!pendingByWorld.isEmpty()) {
+            StringBuilder sb = new StringBuilder();
+            for (java.util.Map.Entry<String, Integer> e : pendingByWorld.entrySet()) {
+                if (sb.length() > 0) sb.append(", ");
+                sb.append(e.getValue()).append(" in '").append(e.getKey()).append('\'');
+            }
+            logger.warning("Proximity discovery is unavailable for " + sb
+                    + " - those worlds are not loaded. They become discoverable automatically when"
+                    + " the world loads; if a world never loads, its lore cannot be found.");
+        }
     }
 
     /**

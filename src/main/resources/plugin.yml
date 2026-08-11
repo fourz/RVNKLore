@@ -13,6 +13,11 @@ softdepend:
   - Dynmap
   - VotingPlugin
   - GriefPrevention
+  # RVNKWorlds activates the custom worlds (alphac, zeal, ...) during its own enable. Loading
+  # after it means entries are parsed with those worlds already present, instead of losing their
+  # coordinates to an unloaded world (#1953). Soft, not hard: RVNKLore runs fine without it, and
+  # the lazy resolve + WorldLoadEvent refresh still cover worlds that arrive later.
+  - RVNKWorlds
 
 commands:
   lore:

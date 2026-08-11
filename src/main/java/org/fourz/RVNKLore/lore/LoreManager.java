@@ -317,9 +317,22 @@ public class LoreManager implements ILoreService {
     /**
      * Reload all lore entries from the database
      */
+    /**
+     * Reloads lore entries and the caches derived from them.
+     *
+     * <p>The proximity cache refresh is not optional (#1953). {@code reloadLore()} used to call
+     * {@code loadLoreEntries()} alone, so {@code DiscoveryListener} kept the location buckets it
+     * built at construction. After a reload that genuinely repaired every entry's location, a
+     * player could still walk through a landmark and discover nothing, because the cache being
+     * consulted was the empty snapshot from startup — and the only way out was a full restart.
+     * Reload is the documented recovery path, so it has to actually recover.</p>
+     */
     public void reloadLore() {
         logger.debug("Reloading lore entries...");
         loadLoreEntries();
+        if (plugin.getDiscoveryManager() != null) {
+            plugin.getDiscoveryManager().refreshLocationCache();
+        }
     }
 
     /**
