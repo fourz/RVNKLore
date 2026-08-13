@@ -176,20 +176,12 @@ public class LoreCollectionSubCommand implements SubCommand {
                 }
                 break;
 
-            case "list":
-                Map<String, LoreCollection> allColls = cmgr.getAllCollectionsSync();
-                if (allColls.isEmpty()) {
-                    sender.sendMessage(ChatColor.YELLOW + "⚠ No collections available");
-                    return true;
-                }
-                sender.sendMessage(ChatColor.GREEN + "Collections (" + allColls.size() + " total):");
-                for (LoreCollection coll : allColls.values()) {
-                    int entryCount = coll.getRequiredEntryCount();
-                    String countStr = entryCount > 0 ? entryCount + " entries" : coll.getItemCount() + " items";
-                    sender.sendMessage(ChatColor.GRAY + "  - [" + ChatColor.WHITE + coll.getId() + ChatColor.GRAY + "] "
-                            + ChatColor.YELLOW + coll.getName() + ChatColor.GRAY + " (" + countStr + ")");
-                }
-                break;
+            // NOTE: there is no "list" case here. "list" is a registered subcommand (see the
+            // constructor), so the dispatch at the top of execute() always routes it to
+            // LoreCollectionListSubCommand and any case here would be unreachable. One did exist
+            // and had the *correct* entry-aware count while the reachable implementation did not,
+            // which is part of how #1935 stayed hidden. Keep the count logic in
+            // DisplayFactory.formatCollectionCount() so there is only one of it.
 
             default:
                 sender.sendMessage(ChatColor.RED + "✖ Unknown subcommand: " + sub);

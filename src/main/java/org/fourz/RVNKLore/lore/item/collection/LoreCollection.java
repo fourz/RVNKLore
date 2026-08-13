@@ -57,6 +57,10 @@ public class LoreCollection {
         }
     }
 
+    public boolean removeRequiredEntry(UUID entryId) {
+        return entryId != null && requiredEntryIds.remove(entryId);
+    }
+
     public List<UUID> getRequiredEntryIds() { return new ArrayList<>(requiredEntryIds); }
 
     public boolean hasRequiredEntry(UUID entryId) {

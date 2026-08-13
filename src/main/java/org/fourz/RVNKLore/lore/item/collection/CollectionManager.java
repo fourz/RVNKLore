@@ -1104,22 +1104,32 @@ public class CollectionManager implements ICollectionService {
         }
 
         DatabaseConnection dbConn = plugin.getDatabaseManager().getDatabaseConnection();
-        // item_id: use 0, -1, -2, ... to avoid PK collision with real lore_item rows (positive IDs)
-        String countSql = "SELECT COUNT(*) FROM " + dbConn.table(DatabaseConnection.TABLE_COLLECTION_ITEM) +
-                          " WHERE collection_id = ? AND entry_id IS NOT NULL";
+        // item_id: use 0, -1, -2, ... to avoid PK collision with real lore_item rows (positive IDs).
+        //
+        // Derive the next id from MIN(item_id) - 1, NOT from -COUNT(*). COUNT is only collision-free
+        // while nothing is ever deleted: remove one of five entries and the count drops to 4, so the
+        // next insert reuses item_id -4, which the fifth entry still holds. That threw
+        // "Duplicate entry '1--4' for key 'PRIMARY'" the first time an entry was removed and re-added
+        // from the console (#1935). MIN - 1 is monotonic and stays correct across deletions.
+        String nextIdSql = "SELECT MIN(item_id) FROM " + dbConn.table(DatabaseConnection.TABLE_COLLECTION_ITEM) +
+                           " WHERE collection_id = ? AND entry_id IS NOT NULL";
         String insertSql = "INSERT INTO " + dbConn.table(DatabaseConnection.TABLE_COLLECTION_ITEM) +
                            " (collection_id, item_id, entry_id) VALUES (?, ?, ?)";
         try (Connection conn = dbConn.getConnection()) {
-            int entryCount;
-            try (PreparedStatement cs = conn.prepareStatement(countSql)) {
+            int nextItemId = 0;
+            try (PreparedStatement cs = conn.prepareStatement(nextIdSql)) {
                 cs.setInt(1, collectionDbId);
                 try (ResultSet rs = cs.executeQuery()) {
-                    entryCount = rs.next() ? rs.getInt(1) : 0;
+                    if (rs.next()) {
+                        int min = rs.getInt(1);
+                        // rs.wasNull() means no entry rows yet -> start the sequence at 0
+                        if (!rs.wasNull()) nextItemId = min - 1;
+                    }
                 }
             }
             try (PreparedStatement stmt = conn.prepareStatement(insertSql)) {
                 stmt.setInt(1, collectionDbId);
-                stmt.setInt(2, -entryCount); // 0, -1, -2, ...
+                stmt.setInt(2, nextItemId); // 0, -1, -2, ...
                 stmt.setString(3, entryId.toString());
                 stmt.executeUpdate();
             }
@@ -1129,6 +1139,48 @@ public class CollectionManager implements ICollectionService {
             return true;
         } catch (SQLException e) {
             logger.error("Failed to add entry to collection: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Remove a required lore entry from a collection, in the database and in the cache.
+     *
+     * Counterpart to {@link #addEntryToCollectionSync(String, UUID)}. Needs no player context —
+     * the entry is identified by UUID, so this is usable from the console (#1935).
+     *
+     * @param collectionId The string collection id
+     * @param entryId      The lore entry UUID to remove
+     * @return true if a row was deleted; false if absent, unknown collection, or DB error
+     */
+    public boolean removeEntryFromCollectionSync(String collectionId, UUID entryId) {
+        if (collectionId == null || entryId == null) return false;
+        if (!plugin.getDatabaseManager().isConnected()) return false;
+
+        int collectionDbId = getCollectionDatabaseId(collectionId);
+        if (collectionDbId <= 0) {
+            logger.warning("Collection not found in database: " + collectionId);
+            return false;
+        }
+
+        DatabaseConnection dbConn = plugin.getDatabaseManager().getDatabaseConnection();
+        String deleteSql = "DELETE FROM " + dbConn.table(DatabaseConnection.TABLE_COLLECTION_ITEM) +
+                           " WHERE collection_id = ? AND entry_id = ?";
+        try (Connection conn = dbConn.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(deleteSql)) {
+            stmt.setInt(1, collectionDbId);
+            stmt.setString(2, entryId.toString());
+            int deleted = stmt.executeUpdate();
+            if (deleted == 0) {
+                logger.debug("Entry not in collection: " + collectionId + " / " + entryId);
+                return false;
+            }
+            LoreCollection cached = collections.get(collectionId);
+            if (cached != null) cached.removeRequiredEntry(entryId);
+            logger.debug("Removed entry " + entryId + " from collection " + collectionId);
+            return true;
+        } catch (SQLException e) {
+            logger.error("Failed to remove entry from collection: " + e.getMessage());
             return false;
         }
     }
