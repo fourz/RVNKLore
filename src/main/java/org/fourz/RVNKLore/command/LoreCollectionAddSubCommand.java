@@ -54,10 +54,18 @@ public class LoreCollectionAddSubCommand implements SubCommand {
         String name = String.join(" ", Arrays.copyOfRange(args, 2, args.length)).replaceAll("^\"|\"$", "").trim();
         String description = "";
 
-        // Validate collection ID (no spaces, alphanumeric + underscore only)
+        // Validate collection ID (no spaces, alphanumeric + underscore only).
+        // Case is normalised above rather than rejected, so the rule is about the character set,
+        // not about case — saying "use only lowercase" while silently accepting and rewriting
+        // uppercase told the operator something untrue about an id they then could not type back
+        // into `view` (#1955).
         if (!collectionId.matches("^[a-z0-9_]+$")) {
-            sender.sendMessage(ChatColor.RED + "✖ Invalid collection ID. Use only lowercase letters, numbers, and underscores.");
+            sender.sendMessage(ChatColor.RED + "✖ Invalid collection ID. Use only letters, numbers, and underscores.");
+            sender.sendMessage(ChatColor.GRAY + "   Ids are stored lowercase; '" + args[0] + "' became '" + collectionId + "'.");
             return true;
+        }
+        if (!args[0].equals(collectionId)) {
+            sender.sendMessage(ChatColor.YELLOW + "⚠ Id normalised to lowercase: '" + collectionId + "'");
         }
 
         // Check if collection already exists

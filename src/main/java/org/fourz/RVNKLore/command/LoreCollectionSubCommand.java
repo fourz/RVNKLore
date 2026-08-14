@@ -36,6 +36,7 @@ public class LoreCollectionSubCommand implements SubCommand {
         subCommands.put("list", new LoreCollectionListSubCommand(plugin));
         subCommands.put("additem", new LoreCollectionAddItemSubCommand(plugin));
         subCommands.put("removeitem", new LoreCollectionRemoveItemSubCommand(plugin));
+        subCommands.put("delete", new LoreCollectionDeleteSubCommand(plugin));
     }
 
     @Override
@@ -65,7 +66,7 @@ public class LoreCollectionSubCommand implements SubCommand {
             return true;
         }
         if (args.length == 0) {
-            sender.sendMessage(ChatColor.RED + "▶ Usage: /lore collection <view|claim|list|add|additem|removeitem> [collection_id]");
+            sender.sendMessage(ChatColor.RED + "▶ Usage: /lore collection <view|claim|list|add|additem|removeitem|delete> [collection_id]");
             return true;
         }
 
@@ -79,7 +80,10 @@ public class LoreCollectionSubCommand implements SubCommand {
                     sender.sendMessage(ChatColor.RED + "▶ Usage: /lore collection view <collection_id>");
                     return true;
                 }
-                collectionId = args[1];
+                // Lowercased like add/additem/removeitem. getCollectionSync is an exact map lookup
+                // and ids are stored lowercase, so `view QA_Bad_ID` reported "Collection not found"
+                // for an id `add` had just accepted verbatim (#1955).
+                collectionId = args[1].toLowerCase();
                 LoreCollection itemCollection = cmgr.getCollectionSync(collectionId);
                 if (itemCollection == null) {
                     sender.sendMessage(ChatColor.RED + "✖ Collection not found: " + collectionId);
@@ -113,7 +117,7 @@ public class LoreCollectionSubCommand implements SubCommand {
                         return true;
                     }
                     claimTarget = (Player) sender;
-                    collectionId = args[1];
+                    collectionId = args[1].toLowerCase();
                 } else {
                     if (args.length < 3) {
                         sender.sendMessage("Usage: /lore collection claim <player> <collection_id>");
@@ -124,7 +128,7 @@ public class LoreCollectionSubCommand implements SubCommand {
                         sender.sendMessage("Player not found or not online: " + args[1]);
                         return true;
                     }
-                    collectionId = args[2];
+                    collectionId = args[2].toLowerCase();
                 }
                 LoreCollection claimColl = cmgr.getCollectionSync(collectionId);
                 if (claimColl == null) {
@@ -185,7 +189,7 @@ public class LoreCollectionSubCommand implements SubCommand {
 
             default:
                 sender.sendMessage(ChatColor.RED + "✖ Unknown subcommand: " + sub);
-                sender.sendMessage(ChatColor.GRAY + "   Use /lore collection <view|claim|list|add|additem|removeitem>");
+                sender.sendMessage(ChatColor.GRAY + "   Use /lore collection <view|claim|list|add|additem|removeitem|delete>");
                 break;
         }
         return true;
@@ -229,6 +233,6 @@ public class LoreCollectionSubCommand implements SubCommand {
     }
 
     public String getUsage() {
-        return "/lore collection <view|claim|list|add|additem|removeitem> [args...]";
+        return "/lore collection <view|claim|list|add|additem|removeitem|delete> [args...]";
     }
 }

@@ -85,9 +85,12 @@ public class LoreCollectionAddItemSubCommand implements SubCommand {
             return true;
         }
 
-        // Fall back to material (single arg only)
+        // Fall back to material (single arg only).
+        // Name the resolution failure first: an entry name may well be exactly what was typed, and
+        // "use an entry name instead" then reads as "the console cannot do this" when the truth is
+        // "no entry has that name" (#1955). Matches the wording removeitem uses.
         if (!(sender instanceof Player)) {
-            sender.sendMessage(ChatColor.RED + "✖ Material-based additem requires a player. Use an entry name instead.");
+            sender.sendMessage(ChatColor.RED + "✖ No lore entry named '" + itemArg + "'. Material-based additem requires a player.");
             return true;
         }
 

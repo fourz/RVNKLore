@@ -44,12 +44,12 @@ public class LoreCollectionListSubCommand implements SubCommand {
 
         List<LoreCollection> collectionsToShow = new ArrayList<>();
         if (themeFilter != null) {
-            CollectionTheme theme = CollectionTheme.fromDisplayName(themeFilter);
-            if (theme == null || theme == CollectionTheme.CUSTOM) {
+            // parse(), not fromDisplayName(): the latter returns CUSTOM when nothing matches, so it
+            // cannot tell garbage input from a real request for the CUSTOM theme (#1955).
+            CollectionTheme theme = CollectionTheme.parse(themeFilter);
+            if (theme == null) {
                 sender.sendMessage(ChatColor.RED + "Unknown theme: " + themeFilter);
-                if (sender instanceof Player) {
-                    listThemes((Player) sender);
-                }
+                listThemes(sender);
                 return true;
             }
             for (LoreCollection collection : collectionManager.getAllCollectionsSync().values()) {
@@ -79,20 +79,30 @@ public class LoreCollectionListSubCommand implements SubCommand {
         return true;
     }
 
-    private void listThemes(Player player) {
-        player.sendMessage(ChatColor.YELLOW + "⚙ " + ChatColor.BOLD + "Available Themes");
-        player.sendMessage("");
+    /**
+     * List the themes that currently hold collections.
+     *
+     * Takes a CommandSender rather than a Player so the console gets the same help. It previously
+     * required a Player purely to call sendMessage, which left a console operator with a bare
+     * "Unknown theme" and no way to discover valid values (#1955).
+     */
+    private void listThemes(CommandSender sender) {
+        sender.sendMessage(ChatColor.YELLOW + "⚙ " + ChatColor.BOLD + "Available Themes");
+        sender.sendMessage("");
+        // Every theme is listed, not only the populated ones. This is reached from the error path
+        // for an unrecognised theme, where the question being answered is "what may I type?" —
+        // hiding the empty ones answers a different question and leaves the list blank on a server
+        // whose collections are all untagged.
         for (CollectionTheme theme : CollectionTheme.values()) {
             int count = (int) collectionManager.getAllCollectionsSync().values().stream()
                     .filter(c -> theme.name().equalsIgnoreCase(c.getThemeId()))
                     .count();
-            if (count > 0) {
-                player.sendMessage(ChatColor.WHITE + theme.getDisplayName() + " " + ChatColor.GRAY + "(" + count + " collections)");
-                player.sendMessage(ChatColor.GRAY + "   " + theme.getDescription());
-            }
+            String suffix = count > 0 ? ChatColor.GRAY + " (" + count + " collections)" : "";
+            sender.sendMessage(ChatColor.WHITE + theme.getDisplayName() + suffix);
+            sender.sendMessage(ChatColor.GRAY + "   " + theme.getDescription());
         }
-        player.sendMessage("");
-        player.sendMessage(ChatColor.GRAY + "   Use " + ChatColor.WHITE + "/lore collection list <theme> " + ChatColor.GRAY + "to view theme collections");
+        sender.sendMessage("");
+        sender.sendMessage(ChatColor.GRAY + "   Use " + ChatColor.WHITE + "/lore collection list <theme> " + ChatColor.GRAY + "to view theme collections");
     }
 
     @Override

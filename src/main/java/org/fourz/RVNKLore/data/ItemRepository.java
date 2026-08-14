@@ -1468,6 +1468,10 @@ public class ItemRepository implements IItemRepository {
                         );
                         collection.setThemeId(rs.getString("theme_id"));
                         collection.setActive(rs.getBoolean("is_active"));
+                        // created_at was already in the SELECT and simply discarded, so the
+                        // constructor's "now" stood in for it and list ordering went arbitrary
+                        // after every restart (#1956).
+                        collection.setCreatedAt(rs.getLong("created_at"));
                         collection.setRewardEntryId(rs.getString("reward_entry_id"));
                         collection.setRewardAchievementId(rs.getString("reward_achievement_id"));
                         collections.add(collection);

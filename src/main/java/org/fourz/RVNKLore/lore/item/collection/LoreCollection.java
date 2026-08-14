@@ -77,6 +77,19 @@ public class LoreCollection {
 
     public long getCreatedAt() { return createdAt; }
 
+    /**
+     * Restore the original creation timestamp when loading from storage.
+     *
+     * Without this the constructor's System.currentTimeMillis() survives the round trip, so every
+     * collection read back from the database is stamped with load time and the "Newest First"
+     * ordering in `/lore collection list` degrades to load order after any restart (#1956).
+     *
+     * @param createdAt Epoch millis; ignored when not positive, keeping the constructor default
+     */
+    public void setCreatedAt(long createdAt) {
+        if (createdAt > 0) this.createdAt = createdAt;
+    }
+
     public String getRewardEntryId() { return rewardEntryId; }
     public void setRewardEntryId(String rewardEntryId) { this.rewardEntryId = rewardEntryId; }
 
