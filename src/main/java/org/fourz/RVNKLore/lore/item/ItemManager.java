@@ -505,7 +505,13 @@ public class ItemManager implements IItemService, ILoreItemResolver {
 
     /**
      * Create a lore item by name (synchronous internal method).
-     * If multiple items exist with the same name, returns the first found.
+     *
+     * <p>Names are not unique. Both {@code .get(0)} picks below — the cache hit and the cache-miss
+     * repository call — rely on the list arriving already prioritised by
+     * {@code ItemRepository.NAME_RESOLUTION_ORDER} (obtainable first, then oldest id). The cache is
+     * grouped from {@code getAllItems()}, which carries the same clause, so its per-name lists
+     * inherit the order too. Do not replace these with an unordered query or a re-sort: the
+     * ordering rule deliberately lives in exactly one place (#1939).</p>
      */
     private ItemStack createLoreItemByNameInternal(String itemName) {
         String key = itemName.toLowerCase();
