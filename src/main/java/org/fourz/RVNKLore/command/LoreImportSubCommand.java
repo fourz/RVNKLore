@@ -197,4 +197,18 @@ public class LoreImportSubCommand implements SubCommand {
 
         return completions;
     }
+
+    /** Grammar and worked examples served by {@code /lore help <verb>} (#1981). */
+    @Override
+    public String getUsage() {
+        return "/lore import <filename> [--preview]";
+    }
+
+    @Override
+    public java.util.List<String> getExamples() {
+        return java.util.List.of(
+                "/lore import alphac_landmarks.json --preview",
+                "  ALWAYS preview first - it reports what would land without writing",
+                "/lore import alphac_landmarks.json");
+    }
 }

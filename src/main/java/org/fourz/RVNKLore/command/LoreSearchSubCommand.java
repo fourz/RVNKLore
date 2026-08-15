@@ -358,4 +358,20 @@ public class LoreSearchSubCommand implements SubCommand {
     public String getDescription() {
         return "Search lore entries with advanced filtering";
     }
+
+    /** Grammar and worked examples served by {@code /lore help <verb>} (#1981). */
+    @Override
+    public String getUsage() {
+        return "/lore search <query> [options]";
+    }
+
+    @Override
+    public java.util.List<String> getExamples() {
+        return java.util.List.of(
+                "/lore search dragon",
+                "/lore search sword --type ITEM --discovered",
+                "/lore search tower --type LANDMARK,CITY",
+                "  --type takes a comma-separated list",
+                "Use /lore get <id> for the full record of a hit.");
+    }
 }

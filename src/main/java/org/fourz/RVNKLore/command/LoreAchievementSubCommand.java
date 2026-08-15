@@ -281,4 +281,21 @@ public class LoreAchievementSubCommand implements SubCommand {
     public String getDescription() {
         return "View and manage achievements";
     }
+
+    /** Grammar and worked examples served by {@code /lore help <verb>} (#1981). */
+    @Override
+    public String getUsage() {
+        return "/lore achievement <list|progress|grant|revoke> [args...]";
+    }
+
+    @Override
+    public java.util.List<String> getExamples() {
+        return java.util.List.of(
+                "/lore achievement list",
+                "/lore achievement list 2",
+                "/lore achievement progress",
+                "/lore achievement progress Shad0melt",
+                "/lore achievement grant Shad0melt first_discovery",
+                "/lore achievement revoke Shad0melt first_discovery");
+    }
 }

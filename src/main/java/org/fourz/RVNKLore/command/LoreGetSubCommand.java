@@ -160,4 +160,18 @@ public class LoreGetSubCommand implements SubCommand {
         }
         return new ArrayList<>();
     }
+
+    /** Grammar and worked examples served by {@code /lore help <verb>} (#1981). */
+    @Override
+    public String getUsage() {
+        return "/lore get <name|id>";
+    }
+
+    @Override
+    public java.util.List<String> getExamples() {
+        return java.util.List.of(
+                "/lore get Sol Sanctum",
+                "/lore get a1b2c3d4",
+                "  accepts a short or full UUID");
+    }
 }

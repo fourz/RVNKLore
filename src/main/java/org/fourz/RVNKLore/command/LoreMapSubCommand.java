@@ -187,4 +187,19 @@ public class LoreMapSubCommand implements SubCommand {
 
         return new ArrayList<>();
     }
+
+    /** Grammar and worked examples served by {@code /lore help <verb>} (#1981). */
+    @Override
+    public String getUsage() {
+        return "/lore map <give|info|delete>";
+    }
+
+    @Override
+    public java.util.List<String> getExamples() {
+        return java.util.List.of(
+                "/lore map give Sol Sanctum",
+                "  player only - it puts a filled map in your hand",
+                "/lore map info Sol Sanctum",
+                "/lore map delete 42");
+    }
 }

@@ -221,4 +221,21 @@ public class LoreDiscoverSubCommand implements SubCommand {
     public String getDescription() {
         return "Grant or view lore discoveries";
     }
+
+    /** Grammar and worked examples served by {@code /lore help <verb>} (#1981). */
+    @Override
+    public String getUsage() {
+        return "/lore discover <player> <entry_id|name> | list [player]";
+    }
+
+    @Override
+    public java.util.List<String> getExamples() {
+        return java.util.List.of(
+                "/lore discover list",
+                "/lore discover list Shad0melt",
+                "/lore discover Shad0melt Sol Sanctum",
+                "  grant a discovery directly",
+                "A console teleport DOES fire proximity discovery (#1842, verified 1.0.107),",
+                "so /world tp is valid QA. The DB cannot prove a chime played - only a human can.");
+    }
 }

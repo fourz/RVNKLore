@@ -302,4 +302,22 @@ public class LorePrefsSubCommand implements SubCommand {
 
         return completions;
     }
+
+    /** Grammar and worked examples served by {@code /lore help <verb>} (#1981). */
+    @Override
+    public String getUsage() {
+        return "/lore prefs [toggle|enable|disable|quiet|channel]";
+    }
+
+    @Override
+    public java.util.List<String> getExamples() {
+        return java.util.List.of(
+                "/lore prefs",
+                "/lore prefs enable discovery",
+                "/lore prefs disable achievement",
+                "/lore prefs quiet 22 7",
+                "/lore prefs quiet disable",
+                "/lore prefs channel discovery chat off",
+                "Types: discovery achievement collection_completion");
+    }
 }

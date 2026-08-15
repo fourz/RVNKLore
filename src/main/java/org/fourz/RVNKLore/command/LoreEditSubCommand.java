@@ -206,4 +206,18 @@ public class LoreEditSubCommand implements SubCommand {
         if ("--description".startsWith(last)) flags.add("--description");
         return flags;
     }
+
+    /** Grammar and worked examples served by {@code /lore help <verb>} (#1981). */
+    @Override
+    public String getUsage() {
+        return "/lore edit <name> [--name <new>] [--description <text>] [--visibility PUBLIC|STAFF_ONLY|HIDDEN]";
+    }
+
+    @Override
+    public java.util.List<String> getExamples() {
+        return java.util.List.of(
+                "/lore edit Sol Sanctum --description A shrine of the old world",
+                "/lore edit Sol Sanctum --name Sol Sanctum Ruins",
+                "/lore edit Sol Sanctum --visibility STAFF_ONLY");
+    }
 }

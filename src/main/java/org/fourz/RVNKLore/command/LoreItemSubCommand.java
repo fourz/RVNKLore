@@ -161,4 +161,26 @@ public class LoreItemSubCommand implements SubCommand {
     public String getDescription() {
         return "Manage lore items (give, spawn, info, list, tag)";
     }
+
+    /** Grammar and worked examples served by {@code /lore help <verb>} (#1981). */
+    @Override
+    public String getUsage() {
+        return "/lore item <give|spawn|info|list|tag|text|texture|pool|preset|presets>";
+    }
+
+    @Override
+    public java.util.List<String> getExamples() {
+        return java.util.List.of(
+                "/lore item give Excalibur Shad0melt",
+                "/lore item spawn Excalibur Shad0melt",
+                "/lore item info a1b2c3d4",
+                "  accepts a short or full UUID, or the item name",
+                "/lore item texture Excalibur clear",
+                "/lore item pool add rare_pool Excalibur epic 5",
+                "/lore item pool preview rare_pool epic",
+                "/lore item preset bind tfah_ch1_journey Excalibur",
+                "/lore item presets tfah_ch1_journey",
+                "Mint books with scripts/minecraft/book.item.py, never by hand - hand-rolled",
+                "SNBT has broken heading colour and page fit before.");
+    }
 }

@@ -94,6 +94,19 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
         }
 
         String subCommandName = args[0].toLowerCase();
+
+        // `help` was previously unregistered and only worked by accident: it fell through the
+        // unknown-subcommand branch below, which prints the list anyway. Handling it explicitly
+        // makes it real and gives it a verb argument (#1981).
+        if (subCommandName.equals("help") || subCommandName.equals("?")) {
+            if (args.length >= 2) {
+                showVerbHelp(sender, args[1].toLowerCase());
+            } else {
+                showHelp(sender);
+            }
+            return true;
+        }
+
         SubCommand subCommand = subCommands.get(subCommandName);
 
         if (subCommand == null) {
@@ -167,13 +180,66 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
      */
     private void showHelp(CommandSender sender) {
         sender.sendMessage(ChatColor.GOLD + "===== RVNKLore Commands =====");
-        for (Map.Entry<String, SubCommand> entry : subCommands.entrySet()) {
-            if (entry.getValue().hasPermission(sender)) {
-                sender.sendMessage(ChatColor.YELLOW + "/lore " + entry.getKey()
-                        + ChatColor.WHITE + " - " + entry.getValue().getDescription());
+        List<String> names = new ArrayList<>(subCommands.keySet());
+        java.util.Collections.sort(names);
+
+        boolean anyExamples = false;
+        for (String name : names) {
+            SubCommand sub = subCommands.get(name);
+            if (sub == null || !sub.hasPermission(sender)) {
+                continue;
             }
+            boolean hasExamples = !sub.getExamples().isEmpty();
+            anyExamples |= hasExamples;
+            sender.sendMessage(ChatColor.YELLOW + "/lore " + name
+                    + (hasExamples ? ChatColor.AQUA + "*" : "")
+                    + ChatColor.WHITE + " - " + sub.getDescription());
+        }
+        if (anyExamples) {
+            sender.sendMessage(ChatColor.AQUA + "*" + ChatColor.GRAY + " has worked examples — "
+                    + ChatColor.WHITE + "/lore help <subcommand>");
         }
         sender.sendMessage(ChatColor.GRAY + "See /lore item and /lore collection for item and collection management.");
+    }
+
+    /**
+     * {@code /lore help <verb>} — one subcommand's grammar and worked examples (#1981).
+     *
+     * <p>The examples ship inside the jar rather than in {@code docs/plugins/commands/lore.md}, so
+     * they are fetched per verb and cannot drift from the build.</p>
+     */
+    private void showVerbHelp(CommandSender sender, String verb) {
+        SubCommand sub = subCommands.get(verb);
+        if (sub == null) {
+            sender.sendMessage(ChatColor.RED + "Unknown subcommand: " + verb);
+            sender.sendMessage(ChatColor.GRAY + "Use " + ChatColor.WHITE + "/lore help"
+                    + ChatColor.GRAY + " for the list.");
+            return;
+        }
+        if (!sub.hasPermission(sender)) {
+            sender.sendMessage(ChatColor.RED + "You don't have permission to use this command.");
+            return;
+        }
+
+        sender.sendMessage(ChatColor.GOLD + "===== /lore " + verb + " =====");
+        sender.sendMessage(ChatColor.WHITE + sub.getDescription());
+        if (!sub.getUsage().isEmpty()) {
+            sender.sendMessage(ChatColor.YELLOW + "Usage: " + ChatColor.WHITE + sub.getUsage());
+        }
+
+        List<String> examples = sub.getExamples();
+        if (examples.isEmpty()) {
+            sender.sendMessage(ChatColor.GRAY + "No worked examples for this subcommand yet.");
+            return;
+        }
+        sender.sendMessage(ChatColor.YELLOW + "Examples:");
+        for (String example : examples) {
+            if (example.startsWith("  ")) {
+                sender.sendMessage(ChatColor.DARK_GRAY + "     " + example.trim());
+            } else {
+                sender.sendMessage(ChatColor.WHITE + "  " + example);
+            }
+        }
     }
 
     @Override

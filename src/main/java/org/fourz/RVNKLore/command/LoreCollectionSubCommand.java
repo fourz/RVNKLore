@@ -235,4 +235,19 @@ public class LoreCollectionSubCommand implements SubCommand {
     public String getUsage() {
         return "/lore collection <view|claim|list|add|additem|removeitem|delete> [args...]";
     }
+
+    /** Worked examples served by {@code /lore help collection} (#1981). */
+    @Override
+    public java.util.List<String> getExamples() {
+        return java.util.List.of(
+                "/lore collection list",
+                "/lore collection list seasonal",
+                "/lore collection view relics_of_alphac",
+                "/lore collection claim relics_of_alphac",
+                "/lore collection claim Shad0melt relics_of_alphac",
+                "/lore collection add relics_of_alphac seasonal Relics of Alpha Centauri",
+                "/lore collection additem relics_of_alphac Excalibur 1",
+                "/lore collection removeitem relics_of_alphac Excalibur 1",
+                "/lore collection delete relics_of_alphac confirm");
+    }
 }

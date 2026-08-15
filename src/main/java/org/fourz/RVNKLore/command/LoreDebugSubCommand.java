@@ -637,4 +637,27 @@ public class LoreDebugSubCommand implements SubCommand {
     public String getDescription() {
         return "Debug and diagnostic tools for administrators";
     }
+
+    /** Grammar and worked examples served by {@code /lore help <verb>} (#1981). */
+    @Override
+    public String getUsage() {
+        return "/lore debug <diagnostics|check|handlers|fix|player|seed|loglevel>";
+    }
+
+    @Override
+    public java.util.List<String> getExamples() {
+        return java.util.List.of(
+                "/lore debug diagnostics",
+                "/lore debug diagnostics --verbose",
+                "/lore debug check a1b2c3d4",
+                "/lore debug handlers",
+                "/lore debug fix",
+                "/lore debug player Shad0melt",
+                "/lore debug loglevel WARNING",
+                "  PERSISTS to config.yml - a session left on DEBUG stays on across restarts",
+                "/lore debug seed minimal",
+                "  minimal 10 / standard 100 / stress 1000 / cleanup / status",
+                "DEBUG plus load is an availability risk: it once queued ~150k lines and",
+                "blocked shutdown for 11 minutes. Return to WARNING after any diagnostic.");
+    }
 }
