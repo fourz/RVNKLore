@@ -40,6 +40,29 @@ import java.util.concurrent.CompletableFuture;
  * All methods return CompletableFuture<T> for async operations per RVNKCore standard.
  */
 public class ItemRepository implements IItemRepository {
+    /**
+     * Resolution order for every name-keyed item lookup (#1939).
+     *
+     * <p>Item names are not unique — operators mint duplicates, and the documented way to retire
+     * one is to set {@code is_obtainable = 0}. A bare {@code LIMIT 1} guarantees nothing about
+     * which row returns, so the item a command hands out could change with no data edit and no
+     * deploy: an index change, a rewritten row, or a different query plan is enough. Worse, a
+     * retired duplicate stayed an eligible answer, which made {@code is_obtainable = 0} look like
+     * a fix while doing nothing.</p>
+     *
+     * <p>Ordering here rather than at each call site is deliberate. Callers in ItemManager take
+     * {@code .get(0)} off the returned list — including the item-name cache, which is grouped from
+     * {@link #getAllItems()}. Because the list arrives already prioritised, every one of those
+     * picks becomes correct without a selector of its own, so the rule lives in exactly one place.
+     * The trade-off: a future name-keyed query that omits this clause reintroduces the bug
+     * silently. Apply it to any new lookup that resolves an item by name.</p>
+     *
+     * <p>{@code is_obtainable DESC} puts live rows first on both dialects (MySQL TINYINT and
+     * SQLite INTEGER both sort 1 before 0); {@code id ASC} then breaks ties toward the oldest row,
+     * so the answer is stable and explainable rather than merely deterministic.</p>
+     */
+    private static final String NAME_RESOLUTION_ORDER = " ORDER BY is_obtainable DESC, id ASC";
+
     private final RVNKLore plugin;
     private final LogManager logger;
     private final DatabaseConnection dbConnection;
@@ -147,7 +170,8 @@ public class ItemRepository implements IItemRepository {
 
     /**
      * Get an item by its name
-     * Note: If multiple items have the same name, this will return the first one found
+     * Note: Names are not unique. When several rows share a name this returns the obtainable one,
+     * oldest first, per {@link #NAME_RESOLUTION_ORDER} — not an arbitrary row (#1939).
      *
      * @param name The name of the item to retrieve
      * @return CompletableFuture that completes with Optional containing the item properties, or empty if not found
@@ -155,7 +179,7 @@ public class ItemRepository implements IItemRepository {
     @Override
     public CompletableFuture<Optional<ItemProperties>> getItemByName(String name) {
         return CompletableFuture.supplyAsync(() -> {
-            String sql = "SELECT * FROM " + t("lore_item") + " WHERE name = ? LIMIT 1";
+            String sql = "SELECT * FROM " + t("lore_item") + " WHERE name = ?" + NAME_RESOLUTION_ORDER + " LIMIT 1";
 
             try {
                 ItemProperties result = dbHelper.executeQuery(sql,
@@ -183,7 +207,7 @@ public class ItemRepository implements IItemRepository {
     @Override
     public CompletableFuture<List<ItemProperties>> getAllItemsByName(String name) {
         return CompletableFuture.supplyAsync(() -> {
-            String sql = "SELECT * FROM " + t("lore_item") + " WHERE name = ?";
+            String sql = "SELECT * FROM " + t("lore_item") + " WHERE name = ?" + NAME_RESOLUTION_ORDER;
 
             try {
                 return dbHelper.executeQuery(sql,
@@ -305,7 +329,7 @@ public class ItemRepository implements IItemRepository {
     @Override
     public CompletableFuture<List<ItemProperties>> getAllItems() {
         return CompletableFuture.supplyAsync(() -> {
-            String sql = "SELECT * FROM " + t("lore_item") + "";
+            String sql = "SELECT * FROM " + t("lore_item") + NAME_RESOLUTION_ORDER;
 
             try {
                 return dbHelper.executeQuery(sql,
@@ -979,7 +1003,8 @@ public class ItemRepository implements IItemRepository {
 
     /**
      * Get the current database ID for an item by name
-     * Note: If multiple items have the same name, this will return the first one found
+     * Note: Names are not unique. When several rows share a name this returns the obtainable one,
+     * oldest first, per {@link #NAME_RESOLUTION_ORDER} — not an arbitrary row (#1939).
      * For uniquely identifying items, use the UUID-based methods instead
      *
      * @param name The name of the item
@@ -988,7 +1013,7 @@ public class ItemRepository implements IItemRepository {
     @Override
     public CompletableFuture<Integer> getCurrentItemId(String name) {
         return CompletableFuture.supplyAsync(() -> {
-            String sql = "SELECT id FROM " + t("lore_item") + " WHERE name = ? LIMIT 1";
+            String sql = "SELECT id FROM " + t("lore_item") + " WHERE name = ?" + NAME_RESOLUTION_ORDER + " LIMIT 1";
 
             try {
                 return dbHelper.executeQuery(sql,
@@ -1015,7 +1040,7 @@ public class ItemRepository implements IItemRepository {
     @Override
     public CompletableFuture<List<Integer>> getAllItemIdsByName(String name) {
         return CompletableFuture.supplyAsync(() -> {
-            String sql = "SELECT id FROM " + t("lore_item") + " WHERE name = ?";
+            String sql = "SELECT id FROM " + t("lore_item") + " WHERE name = ?" + NAME_RESOLUTION_ORDER;
 
             try {
                 return dbHelper.executeQuery(sql,
@@ -1468,6 +1493,10 @@ public class ItemRepository implements IItemRepository {
                         );
                         collection.setThemeId(rs.getString("theme_id"));
                         collection.setActive(rs.getBoolean("is_active"));
+                        // created_at was already in the SELECT and simply discarded, so the
+                        // constructor's "now" stood in for it and list ordering went arbitrary
+                        // after every restart (#1956).
+                        collection.setCreatedAt(rs.getLong("created_at"));
                         collection.setRewardEntryId(rs.getString("reward_entry_id"));
                         collection.setRewardAchievementId(rs.getString("reward_achievement_id"));
                         collections.add(collection);

@@ -152,4 +152,17 @@ public class LoreRejectSubCommand implements SubCommand {
 
         return new ArrayList<>();
     }
+
+    /** Grammar and worked examples served by {@code /lore help <verb>} (#1981). */
+    @Override
+    public String getUsage() {
+        return "/lore reject <name|uuid> [--reason <text>]";
+    }
+
+    @Override
+    public java.util.List<String> getExamples() {
+        return java.util.List.of(
+                "/lore reject Sol Sanctum",
+                "/lore reject Sol Sanctum --reason Coordinates do not match the build");
+    }
 }

@@ -1,6 +1,8 @@
 package org.fourz.RVNKLore.lore;
 
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.World;
 import org.json.simple.JSONObject;
 
 import org.bukkit.entity.Player;
@@ -19,6 +21,11 @@ public class LoreEntry {
     private LoreType type;
     private String nbtData;
     private Location location;
+    // Coordinates whose world was not loaded at parse time; resolved lazily by getLocation() (#1953).
+    private String deferredWorldName;
+    private double deferredX;
+    private double deferredY;
+    private double deferredZ;
     private String submittedBy;
     private String approvalStatus = "PENDING";
     private Timestamp createdAt;
@@ -169,12 +176,64 @@ public class LoreEntry {
         this.nbtData = nbtData;
     }
 
+    /**
+     * The entry's location, resolving a deferred world on first successful lookup (#1953).
+     *
+     * <p>An entry parsed before its world was loaded used to lose its coordinates outright: the
+     * mapper only built a {@link Location} when {@code Bukkit.getWorld(name)} returned non-null,
+     * and dropped the coordinates silently otherwise. RVNKLore parses its entries during enable,
+     * so every entry in a world that RVNKWorlds had not activated yet loaded with no location at
+     * all — permanently, because the parsed object is cached. That killed proximity discovery for
+     * those worlds with no error anywhere.</p>
+     *
+     * <p>The coordinates are now retained (see {@link #setDeferredLocation}) and resolved here the
+     * first time the world exists. Enable order therefore stops being load-bearing.</p>
+     */
     public Location getLocation() {
+        if (location == null && deferredWorldName != null) {
+            World world = Bukkit.getWorld(deferredWorldName);
+            if (world != null) {
+                location = new Location(world, deferredX, deferredY, deferredZ);
+                deferredWorldName = null;
+            }
+        }
         return location;
     }
 
     public void setLocation(Location location) {
         this.location = location;
+        if (location != null) {
+            this.deferredWorldName = null;
+        }
+    }
+
+    /**
+     * Records coordinates whose world is not loaded yet, to be resolved by {@link #getLocation()}.
+     *
+     * @param worldName world name as stored; never resolved here
+     * @param x         block/exact X as stored
+     * @param y         block/exact Y as stored
+     * @param z         block/exact Z as stored
+     */
+    public void setDeferredLocation(String worldName, double x, double y, double z) {
+        this.deferredWorldName = worldName;
+        this.deferredX = x;
+        this.deferredY = y;
+        this.deferredZ = z;
+    }
+
+    /**
+     * @return true when coordinates are held but their world has not been loaded yet — the entry
+     *         has a location on paper but cannot produce one, which callers may want to report
+     *         rather than treat as "no location".
+     */
+    public boolean hasUnresolvedLocation() {
+        return location == null && deferredWorldName != null;
+    }
+
+    /** @return the world name awaiting resolution, or null when nothing is deferred. */
+    public String getDeferredWorldName() {
+        return deferredWorldName;
     }
 
     /**

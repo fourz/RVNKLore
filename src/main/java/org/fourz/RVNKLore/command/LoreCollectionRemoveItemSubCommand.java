@@ -7,13 +7,16 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.rvnkcore.util.log.LogManager;
+import org.fourz.RVNKLore.command.output.DisplayFactory;
 import org.fourz.RVNKLore.data.ItemRepository;
+import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.item.collection.CollectionManager;
 import org.fourz.RVNKLore.lore.item.collection.LoreCollection;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Handles the /lore collection removeitem command.
@@ -47,19 +50,53 @@ public class LoreCollectionRemoveItemSubCommand implements SubCommand {
             return true;
         }
 
-        if (!(sender instanceof Player)) {
-            sender.sendMessage(ChatColor.RED + "▶ This command can only be used by players");
+        if (args.length < 2) {
+            sender.sendMessage(ChatColor.RED + "▶ Usage: /lore collection removeitem <collection_id> <entry_name|material> [quantity]");
+            sender.sendMessage(ChatColor.GRAY + "   Remove a lore entry or material item from a collection");
             return true;
         }
 
-        if (args.length < 2) {
-            sender.sendMessage(ChatColor.RED + "▶ Usage: /lore collection removeitem <collection_id> <material> [quantity]");
-            sender.sendMessage(ChatColor.GRAY + "   Remove an item from a collection by material type");
+        String collectionId = args[0].toLowerCase();
+        String itemArg = String.join(" ", Arrays.copyOfRange(args, 1, args.length)).replaceAll("^\"|\"$", "").trim();
+
+        // Check if collection exists
+        LoreCollection collection = collectionManager.getCollectionSync(collectionId);
+        if (collection == null) {
+            sender.sendMessage(ChatColor.RED + "✖ Collection not found: " + collectionId);
+            return true;
+        }
+
+        // Try lore entry name first — mirrors additem, and needs no player context, so this form
+        // works from the console (#1935). Seeding is exactly when you make a mistake, so a
+        // collection that can be built headlessly has to be correctable headlessly too.
+        LoreEntry entry = plugin.getLoreManager().getLoreEntryByNameSync(itemArg);
+        if (entry == null) {
+            // DB fallback (handles unapproved entries not in cache)
+            entry = plugin.getDatabaseManager().getAllLoreEntries().stream()
+                    .filter(e -> e.getName() != null && e.getName().equalsIgnoreCase(itemArg))
+                    .findFirst().orElse(null);
+        }
+        if (entry != null) {
+            UUID entryUuid = entry.getUUID();
+            boolean removed = collectionManager.removeEntryFromCollectionSync(collectionId, entryUuid);
+            if (removed) {
+                sender.sendMessage(ChatColor.GREEN + "✓ Removed lore entry '" + entry.getName() + "' from collection: " + collection.getName());
+                sender.sendMessage(ChatColor.GRAY + "   Now: " + DisplayFactory.formatCollectionCount(collection));
+                logger.info(sender.getName() + " removed entry " + entry.getName() + " from collection " + collectionId);
+            } else {
+                sender.sendMessage(ChatColor.YELLOW + "⚠ Entry '" + entry.getName() + "' is not in collection: " + collection.getName());
+                sender.sendMessage(ChatColor.GRAY + "   Use /lore collection view " + collectionId + " to see its members");
+            }
+            return true;
+        }
+
+        // Fall back to material — this form still needs a player.
+        if (!(sender instanceof Player)) {
+            sender.sendMessage(ChatColor.RED + "✖ No lore entry named '" + itemArg + "'. Material-based removeitem requires a player.");
             return true;
         }
 
         Player player = (Player) sender;
-        String collectionId = args[0].toLowerCase();
         String materialStr = args[1].toUpperCase();
         int quantity = 1;
 
@@ -76,19 +113,12 @@ public class LoreCollectionRemoveItemSubCommand implements SubCommand {
             }
         }
 
-        // Check if collection exists
-        LoreCollection collection = collectionManager.getCollectionSync(collectionId);
-        if (collection == null) {
-            sender.sendMessage(ChatColor.RED + "✖ Collection not found: " + collectionId);
-            return true;
-        }
-
         // Validate material
         Material material;
         try {
             material = Material.valueOf(materialStr);
         } catch (IllegalArgumentException e) {
-            sender.sendMessage(ChatColor.RED + "✖ Invalid material: " + materialStr);
+            sender.sendMessage(ChatColor.RED + "✖ No lore entry found and invalid material: " + itemArg);
             return true;
         }
 
@@ -132,7 +162,7 @@ public class LoreCollectionRemoveItemSubCommand implements SubCommand {
 
                 if (deleted) {
                     sender.sendMessage(ChatColor.GREEN + "✓ Removed " + removed + "x " + materialStr + " from collection: " + collection.getName());
-                    sender.sendMessage(ChatColor.GRAY + "   Item count: " + collection.getItemCount());
+                    sender.sendMessage(ChatColor.GRAY + "   Now: " + DisplayFactory.formatCollectionCount(collection));
                 } else {
                     sender.sendMessage(ChatColor.YELLOW + "⚠ Removed item from collection in memory, but database delete failed.");
                     sender.sendMessage(ChatColor.GRAY + "   Changes may not persist across restarts.");
@@ -197,15 +227,20 @@ public class LoreCollectionRemoveItemSubCommand implements SubCommand {
             // Complete collection IDs
             completions.addAll(collectionManager.getAllCollectionsSync().keySet());
         } else if (args.length == 2) {
-            // Get items in selected collection and suggest materials
-            if (args.length > 0) {
-                LoreCollection collection = collectionManager.getCollectionSync(args[0].toLowerCase());
-                if (collection != null) {
-                    for (ItemStack item : collection.getItems()) {
-                        String materialName = item.getType().name();
-                        if (!completions.contains(materialName)) {
-                            completions.add(materialName);
-                        }
+            // Suggest what is actually IN the selected collection — both of its lists, since
+            // either form is removable now.
+            LoreCollection collection = collectionManager.getCollectionSync(args[0].toLowerCase());
+            if (collection != null) {
+                for (UUID entryId : collection.getRequiredEntryIds()) {
+                    LoreEntry entry = plugin.getLoreManager().getLoreEntrySync(entryId);
+                    if (entry != null && entry.getName() != null && !completions.contains(entry.getName())) {
+                        completions.add(entry.getName());
+                    }
+                }
+                for (ItemStack item : collection.getItems()) {
+                    String materialName = item.getType().name();
+                    if (!completions.contains(materialName)) {
+                        completions.add(materialName);
                     }
                 }
             }

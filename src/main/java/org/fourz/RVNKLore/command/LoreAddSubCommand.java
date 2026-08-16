@@ -363,4 +363,22 @@ public class LoreAddSubCommand implements SubCommand {
         }
         return new ArrayList<>();
     }
+
+    /** Grammar and worked examples served by {@code /lore help <verb>} (#1981). */
+    @Override
+    public String getUsage() {
+        return "/lore add <type> <name> [--desc <text>] [--at <x> <y> <z>] [--world <name>] [--approve]";
+    }
+
+    @Override
+    public java.util.List<String> getExamples() {
+        return java.util.List.of(
+                "/lore add LANDMARK Sol Sanctum --desc An old-world shrine",
+                "/lore add LANDMARK Sol Sanctum --at -316 118 447 --world alphac --approve",
+                "  --approve skips the submission queue",
+                "Types: GENERIC PLAYER CITY LANDMARK FACTION PATH ITEM EVENT QUEST",
+                "ENCHANTMENT MONUMENT HEAD TAVERN GUILD SHRINE",
+                "An entry with location data becomes proximity-discoverable immediately -",
+                "the location cache refreshes on add, no restart needed.");
+    }
 }

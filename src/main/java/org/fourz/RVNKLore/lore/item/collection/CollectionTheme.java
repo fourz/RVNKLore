@@ -62,12 +62,39 @@ public enum CollectionTheme {
      */
     public static CollectionTheme fromDisplayName(String displayName) {
         if (displayName == null) return CUSTOM;
-        
+
         for (CollectionTheme theme : values()) {
             if (theme.displayName.equalsIgnoreCase(displayName)) {
                 return theme;
             }
         }
         return CUSTOM;
+    }
+
+    /**
+     * Resolve user input to a theme, or null when it matches nothing.
+     *
+     * Use this instead of {@link #fromDisplayName(String)} anywhere the caller needs to tell
+     * "unrecognised input" apart from "the CUSTOM theme". fromDisplayName returns CUSTOM as its
+     * not-found sentinel, so its callers cannot distinguish the two — which is why
+     * `/lore collection list Custom` reported "Unknown theme: Custom" for a theme that is
+     * declared, offered by tab completion, and accepted by `add` (#1955).
+     *
+     * Matches either the display name ("Medieval") or the enum name ("MEDIEVAL"), ignoring case.
+     *
+     * @param input Raw user input
+     * @return The matching theme, or null if there is no match
+     */
+    public static CollectionTheme parse(String input) {
+        if (input == null) return null;
+        String trimmed = input.trim();
+        if (trimmed.isEmpty()) return null;
+
+        for (CollectionTheme theme : values()) {
+            if (theme.displayName.equalsIgnoreCase(trimmed) || theme.name().equalsIgnoreCase(trimmed)) {
+                return theme;
+            }
+        }
+        return null;
     }
 }

@@ -778,6 +778,12 @@ public class LoreEntryRepository implements ILoreEntryRepository {
         String description = null;
         String nbtData = null;
         Location location = null;
+        // Held when the world is not loaded yet, so the coordinates survive to be resolved later
+        // instead of being dropped on the floor (#1953).
+        String deferredWorld = null;
+        double deferredX = 0;
+        double deferredY = 0;
+        double deferredZ = 0;
         java.util.Map<String, String> metadata = null;
 
         // Parse the content JSON (with null/empty check)
@@ -788,18 +794,28 @@ public class LoreEntryRepository implements ILoreEntryRepository {
                     description = (String) content.get("description");
                     nbtData = (String) content.get("nbt_data");
 
-                    // Extract location if available
+                    // Extract location if available.
+                    //
+                    // An unloaded world is NOT a reason to discard the coordinates (#1953). Entries
+                    // are parsed during enable, before RVNKWorlds activates the custom worlds, so
+                    // this branch used to null out the location of every entry in alphac, zeal and
+                    // friends — silently, and permanently, because the parsed entry is cached.
+                    // Proximity discovery then skipped them forever with nothing logged anywhere.
                     if (content.containsKey("location")) {
                         JSONObject locJson = (JSONObject) content.get("location");
                         String worldName = (String) locJson.get("world");
-                        World world = Bukkit.getWorld(worldName);
+                        double x = ((Number) locJson.get("x")).doubleValue();
+                        double y = ((Number) locJson.get("y")).doubleValue();
+                        double z = ((Number) locJson.get("z")).doubleValue();
 
+                        World world = (worldName != null) ? Bukkit.getWorld(worldName) : null;
                         if (world != null) {
-                            double x = ((Number) locJson.get("x")).doubleValue();
-                            double y = ((Number) locJson.get("y")).doubleValue();
-                            double z = ((Number) locJson.get("z")).doubleValue();
-
                             location = new Location(world, x, y, z);
+                        } else if (worldName != null) {
+                            deferredWorld = worldName;
+                            deferredX = x;
+                            deferredY = y;
+                            deferredZ = z;
                         }
                     }
 
@@ -834,6 +850,12 @@ public class LoreEntryRepository implements ILoreEntryRepository {
             approved,
             createdAt != null ? createdAt.toString() : null
         );
+
+        // Coordinates whose world was not up at parse time — resolved on first getLocation() once
+        // the world exists, so enable order stops deciding whether this entry has a location.
+        if (deferredWorld != null) {
+            entry.setDeferredLocation(deferredWorld, deferredX, deferredY, deferredZ);
+        }
 
         // Populate metadata from JSON content
         if (metadata != null) {

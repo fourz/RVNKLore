@@ -113,4 +113,20 @@ public class LoreDynmapSubCommand implements SubCommand {
     public String getDescription() {
         return "Dynmap marker integration (diff, import)";
     }
+
+    /** Grammar and worked examples served by {@code /lore help <verb>} (#1981). */
+    @Override
+    public String getUsage() {
+        return "/lore dynmap <import|diff>";
+    }
+
+    @Override
+    public java.util.List<String> getExamples() {
+        return java.util.List.of(
+                "/lore dynmap diff",
+                "  what differs between lore locations and Dynmap markers",
+                "/lore dynmap import",
+                "Prefer console dmarker plus the markers.yml file over the map site.",
+                "Note 'dmarker list id:' is silently broken - use 'set:' instead.");
+    }
 }

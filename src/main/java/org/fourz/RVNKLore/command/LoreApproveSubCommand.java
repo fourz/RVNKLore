@@ -196,4 +196,18 @@ public class LoreApproveSubCommand implements SubCommand {
 
         return new ArrayList<>();
     }
+
+    /** Grammar and worked examples served by {@code /lore help <verb>} (#1981). */
+    @Override
+    public String getUsage() {
+        return "/lore approve <name|id> [reject]";
+    }
+
+    @Override
+    public java.util.List<String> getExamples() {
+        return java.util.List.of(
+                "/lore approve Sol Sanctum",
+                "/lore approve a1b2c3d4",
+                "Find candidates with /lore list --pending.");
+    }
 }

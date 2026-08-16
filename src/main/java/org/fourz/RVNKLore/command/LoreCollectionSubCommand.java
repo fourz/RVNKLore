@@ -36,6 +36,7 @@ public class LoreCollectionSubCommand implements SubCommand {
         subCommands.put("list", new LoreCollectionListSubCommand(plugin));
         subCommands.put("additem", new LoreCollectionAddItemSubCommand(plugin));
         subCommands.put("removeitem", new LoreCollectionRemoveItemSubCommand(plugin));
+        subCommands.put("delete", new LoreCollectionDeleteSubCommand(plugin));
     }
 
     @Override
@@ -65,7 +66,7 @@ public class LoreCollectionSubCommand implements SubCommand {
             return true;
         }
         if (args.length == 0) {
-            sender.sendMessage(ChatColor.RED + "▶ Usage: /lore collection <view|claim|list|add|additem|removeitem> [collection_id]");
+            sender.sendMessage(ChatColor.RED + "▶ Usage: /lore collection <view|claim|list|add|additem|removeitem|delete> [collection_id]");
             return true;
         }
 
@@ -79,7 +80,10 @@ public class LoreCollectionSubCommand implements SubCommand {
                     sender.sendMessage(ChatColor.RED + "▶ Usage: /lore collection view <collection_id>");
                     return true;
                 }
-                collectionId = args[1];
+                // Lowercased like add/additem/removeitem. getCollectionSync is an exact map lookup
+                // and ids are stored lowercase, so `view QA_Bad_ID` reported "Collection not found"
+                // for an id `add` had just accepted verbatim (#1955).
+                collectionId = args[1].toLowerCase();
                 LoreCollection itemCollection = cmgr.getCollectionSync(collectionId);
                 if (itemCollection == null) {
                     sender.sendMessage(ChatColor.RED + "✖ Collection not found: " + collectionId);
@@ -113,7 +117,7 @@ public class LoreCollectionSubCommand implements SubCommand {
                         return true;
                     }
                     claimTarget = (Player) sender;
-                    collectionId = args[1];
+                    collectionId = args[1].toLowerCase();
                 } else {
                     if (args.length < 3) {
                         sender.sendMessage("Usage: /lore collection claim <player> <collection_id>");
@@ -124,7 +128,7 @@ public class LoreCollectionSubCommand implements SubCommand {
                         sender.sendMessage("Player not found or not online: " + args[1]);
                         return true;
                     }
-                    collectionId = args[2];
+                    collectionId = args[2].toLowerCase();
                 }
                 LoreCollection claimColl = cmgr.getCollectionSync(collectionId);
                 if (claimColl == null) {
@@ -176,24 +180,16 @@ public class LoreCollectionSubCommand implements SubCommand {
                 }
                 break;
 
-            case "list":
-                Map<String, LoreCollection> allColls = cmgr.getAllCollectionsSync();
-                if (allColls.isEmpty()) {
-                    sender.sendMessage(ChatColor.YELLOW + "⚠ No collections available");
-                    return true;
-                }
-                sender.sendMessage(ChatColor.GREEN + "Collections (" + allColls.size() + " total):");
-                for (LoreCollection coll : allColls.values()) {
-                    int entryCount = coll.getRequiredEntryCount();
-                    String countStr = entryCount > 0 ? entryCount + " entries" : coll.getItemCount() + " items";
-                    sender.sendMessage(ChatColor.GRAY + "  - [" + ChatColor.WHITE + coll.getId() + ChatColor.GRAY + "] "
-                            + ChatColor.YELLOW + coll.getName() + ChatColor.GRAY + " (" + countStr + ")");
-                }
-                break;
+            // NOTE: there is no "list" case here. "list" is a registered subcommand (see the
+            // constructor), so the dispatch at the top of execute() always routes it to
+            // LoreCollectionListSubCommand and any case here would be unreachable. One did exist
+            // and had the *correct* entry-aware count while the reachable implementation did not,
+            // which is part of how #1935 stayed hidden. Keep the count logic in
+            // DisplayFactory.formatCollectionCount() so there is only one of it.
 
             default:
                 sender.sendMessage(ChatColor.RED + "✖ Unknown subcommand: " + sub);
-                sender.sendMessage(ChatColor.GRAY + "   Use /lore collection <view|claim|list|add|additem|removeitem>");
+                sender.sendMessage(ChatColor.GRAY + "   Use /lore collection <view|claim|list|add|additem|removeitem|delete>");
                 break;
         }
         return true;
@@ -237,6 +233,21 @@ public class LoreCollectionSubCommand implements SubCommand {
     }
 
     public String getUsage() {
-        return "/lore collection <view|claim|list|add|additem|removeitem> [args...]";
+        return "/lore collection <view|claim|list|add|additem|removeitem|delete> [args...]";
+    }
+
+    /** Worked examples served by {@code /lore help collection} (#1981). */
+    @Override
+    public java.util.List<String> getExamples() {
+        return java.util.List.of(
+                "/lore collection list",
+                "/lore collection list seasonal",
+                "/lore collection view relics_of_alphac",
+                "/lore collection claim relics_of_alphac",
+                "/lore collection claim Shad0melt relics_of_alphac",
+                "/lore collection add relics_of_alphac seasonal Relics of Alpha Centauri",
+                "/lore collection additem relics_of_alphac Excalibur 1",
+                "/lore collection removeitem relics_of_alphac Excalibur 1",
+                "/lore collection delete relics_of_alphac confirm");
     }
 }

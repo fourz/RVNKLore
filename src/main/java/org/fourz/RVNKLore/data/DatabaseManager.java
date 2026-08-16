@@ -200,6 +200,11 @@ public class DatabaseManager {
         // Built before initializeDatabase() so a journal left by a previous outage is loaded and
         // ready to replay the moment the primary comes back (#1833).
         this.fallbackWriteLog = new FallbackWriteLog(plugin);
+        // getDatabaseHelper() returned null for every caller until this was assigned: the field was
+        // declared and exposed but never initialised, so the accessor was a guaranteed NPE and each
+        // consumer quietly built its own `new DatabaseHelper(plugin)` instead. Safe to build here —
+        // DatabaseHelper resolves the DatabaseManager at use time rather than capturing it.
+        this.databaseHelper = new DatabaseHelper(plugin);
         initializeDatabase();
     }
 

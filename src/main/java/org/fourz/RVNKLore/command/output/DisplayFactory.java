@@ -167,6 +167,38 @@ public class DisplayFactory {
      * @param collections The list of collections to display
      * @return true if the display was successful
      */
+    /**
+     * Describe how much a collection holds, counting BOTH of its independent lists.
+     *
+     * A collection has two membership lists that are populated by different paths: {@code items}
+     * (ItemStacks, written by the player/material form of additem) and {@code requiredEntryIds}
+     * (lore entry UUIDs, written by the entry-name form, which is the console path). Reporting
+     * only the first made every console-built collection read as "(0 items)" right after a run of
+     * successful adds — the exact value that means "nothing was saved" (#1935).
+     *
+     * Both counts are named explicitly so the two paths stay distinguishable rather than one
+     * silently going uncounted.
+     *
+     * @param collection The collection to describe
+     * @return e.g. "5 entries", "3 items", "3 items, 5 entries", or "empty"
+     */
+    public static String formatCollectionCount(LoreCollection collection) {
+        int items = collection.getItemCount();
+        int entries = collection.getRequiredEntryCount();
+        if (items == 0 && entries == 0) {
+            return "empty";
+        }
+        StringBuilder sb = new StringBuilder();
+        if (items > 0) {
+            sb.append(items).append(items == 1 ? " item" : " items");
+        }
+        if (entries > 0) {
+            if (sb.length() > 0) sb.append(", ");
+            sb.append(entries).append(entries == 1 ? " entry" : " entries");
+        }
+        return sb.toString();
+    }
+
     public static boolean displayCollectionList(CommandSender sender, List<LoreCollection> collections) {
         sender.sendMessage(ChatColor.GOLD + "===== Collections (Newest First) =====");
         if (collections.isEmpty()) {
@@ -178,7 +210,7 @@ public class DisplayFactory {
             sender.sendMessage(ChatColor.WHITE + collection.getName() + ChatColor.GRAY + " (" + collection.getId() + ")"
                     + ChatColor.YELLOW + " - " + dateStr);
             sender.sendMessage(ChatColor.GRAY + "   " + collection.getDescription());
-            sender.sendMessage(ChatColor.GRAY + "   " + collection.getItemCount() + " items • " +
+            sender.sendMessage(ChatColor.GRAY + "   " + formatCollectionCount(collection) + " • " +
                     (collection.getThemeId() != null ? collection.getThemeId() : "custom"));
         }
         sender.sendMessage(ChatColor.GRAY + "   Use " + ChatColor.WHITE + "/lore collection view <id> " + ChatColor.GRAY + "for details");

@@ -12,6 +12,7 @@ import org.fourz.rvnkcore.util.log.LogManager;
 import org.fourz.RVNKLore.lore.item.ItemProperties;
 import org.fourz.RVNKLore.lore.item.cosmetic.HeadCollection;
 import org.fourz.RVNKLore.data.DatabaseConnection;
+import org.fourz.RVNKLore.data.DatabaseHelper;
 import org.fourz.RVNKLore.data.ItemRepository;
 import org.fourz.RVNKLore.data.model.CollectionReward;
 import java.sql.Connection;
@@ -44,10 +45,16 @@ public class CollectionManager implements ICollectionService {
     private final Map<String, LoreCollection> collections = new ConcurrentHashMap<>();
     private final Map<String, CollectionTheme> themes = new ConcurrentHashMap<>();
     private final RewardHandlerRegistry rewardHandlers;
+    private final DatabaseHelper dbHelper;
 
     public CollectionManager(RVNKLore plugin) {
         this.plugin = plugin;
         this.logger = LogManager.getInstance(plugin, "CollectionManager");
+        // Own instance, as ItemRepository does. DatabaseHelper is stateless beyond the plugin
+        // handle and resolves the DatabaseManager at use time, so this carries no ordering risk —
+        // unlike reading DatabaseManager.getDatabaseHelper() from a manager that may not have
+        // finished constructing.
+        this.dbHelper = new DatabaseHelper(plugin);
         this.rewardHandlers = new RewardHandlerRegistry(plugin);
         initializeCollections();
         logger.debug("CollectionManager initialized with reward handlers");
@@ -1104,25 +1111,36 @@ public class CollectionManager implements ICollectionService {
         }
 
         DatabaseConnection dbConn = plugin.getDatabaseManager().getDatabaseConnection();
-        // item_id: use 0, -1, -2, ... to avoid PK collision with real lore_item rows (positive IDs)
-        String countSql = "SELECT COUNT(*) FROM " + dbConn.table(DatabaseConnection.TABLE_COLLECTION_ITEM) +
-                          " WHERE collection_id = ? AND entry_id IS NOT NULL";
+        // item_id: use 0, -1, -2, ... to avoid PK collision with real lore_item rows (positive IDs).
+        //
+        // Derive the next id from MIN(item_id) - 1, NOT from -COUNT(*). COUNT is only collision-free
+        // while nothing is ever deleted: remove one of five entries and the count drops to 4, so the
+        // next insert reuses item_id -4, which the fifth entry still holds. That threw
+        // "Duplicate entry '1--4' for key 'PRIMARY'" the first time an entry was removed and re-added
+        // from the console (#1935). MIN - 1 is monotonic and stays correct across deletions.
+        String nextIdSql = "SELECT MIN(item_id) FROM " + dbConn.table(DatabaseConnection.TABLE_COLLECTION_ITEM) +
+                           " WHERE collection_id = ? AND entry_id IS NOT NULL";
         String insertSql = "INSERT INTO " + dbConn.table(DatabaseConnection.TABLE_COLLECTION_ITEM) +
                            " (collection_id, item_id, entry_id) VALUES (?, ?, ?)";
         try (Connection conn = dbConn.getConnection()) {
-            int entryCount;
-            try (PreparedStatement cs = conn.prepareStatement(countSql)) {
+            int nextItemId = 0;
+            try (PreparedStatement cs = conn.prepareStatement(nextIdSql)) {
                 cs.setInt(1, collectionDbId);
                 try (ResultSet rs = cs.executeQuery()) {
-                    entryCount = rs.next() ? rs.getInt(1) : 0;
+                    if (rs.next()) {
+                        int min = rs.getInt(1);
+                        // rs.wasNull() means no entry rows yet -> start the sequence at 0
+                        if (!rs.wasNull()) nextItemId = min - 1;
+                    }
                 }
             }
-            try (PreparedStatement stmt = conn.prepareStatement(insertSql)) {
-                stmt.setInt(1, collectionDbId);
-                stmt.setInt(2, -entryCount); // 0, -1, -2, ...
-                stmt.setString(3, entryId.toString());
-                stmt.executeUpdate();
-            }
+            // Via DatabaseHelper so a fallback-era add is journalled and replayed on recovery (#1833).
+            final int itemId = nextItemId; // 0, -1, -2, ...
+            dbHelper.executeUpdateOn(conn, insertSql, stmt -> {
+                        stmt.setInt(1, collectionDbId);
+                        stmt.setInt(2, itemId);
+                        stmt.setString(3, entryId.toString());
+                    });
             logger.debug("Added entry " + entryId + " to collection " + collectionId);
             LoreCollection cached = collections.get(collectionId);
             if (cached != null) cached.addRequiredEntry(entryId);
@@ -1131,6 +1149,147 @@ public class CollectionManager implements ICollectionService {
             logger.error("Failed to add entry to collection: " + e.getMessage());
             return false;
         }
+    }
+
+    /**
+     * Remove a required lore entry from a collection, in the database and in the cache.
+     *
+     * Counterpart to {@link #addEntryToCollectionSync(String, UUID)}. Needs no player context —
+     * the entry is identified by UUID, so this is usable from the console (#1935).
+     *
+     * @param collectionId The string collection id
+     * @param entryId      The lore entry UUID to remove
+     * @return true if a row was deleted; false if absent, unknown collection, or DB error
+     */
+    public boolean removeEntryFromCollectionSync(String collectionId, UUID entryId) {
+        if (collectionId == null || entryId == null) return false;
+        if (!plugin.getDatabaseManager().isConnected()) return false;
+
+        int collectionDbId = getCollectionDatabaseId(collectionId);
+        if (collectionDbId <= 0) {
+            logger.warning("Collection not found in database: " + collectionId);
+            return false;
+        }
+
+        DatabaseConnection dbConn = plugin.getDatabaseManager().getDatabaseConnection();
+        String deleteSql = "DELETE FROM " + dbConn.table(DatabaseConnection.TABLE_COLLECTION_ITEM) +
+                           " WHERE collection_id = ? AND entry_id = ?";
+        try (Connection conn = dbConn.getConnection()) {
+            // Via DatabaseHelper so a fallback-era removal is journalled and replayed (#1833).
+            int deleted = dbHelper.executeUpdateOn(conn, deleteSql, stmt -> {
+                        stmt.setInt(1, collectionDbId);
+                        stmt.setString(2, entryId.toString());
+                    });
+            if (deleted == 0) {
+                logger.debug("Entry not in collection: " + collectionId + " / " + entryId);
+                return false;
+            }
+            LoreCollection cached = collections.get(collectionId);
+            if (cached != null) cached.removeRequiredEntry(entryId);
+            logger.debug("Removed entry " + entryId + " from collection " + collectionId);
+            return true;
+        } catch (SQLException e) {
+            logger.error("Failed to remove entry from collection: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Delete a collection and everything that hangs off it, then drop it from the cache.
+     *
+     * Children are removed explicitly rather than left to ON DELETE CASCADE. Two reasons: the
+     * cascades only exist on the two tables keyed by the numeric collection.id, and they only fire
+     * at all under InnoDB / with SQLite's foreign_keys pragma enabled — neither of which is worth
+     * betting orphaned rows on.
+     *
+     * Mind which key each table uses. collection_item and player_collection_items reference the
+     * numeric collection.id; collection_reward and player_collection_progress store the STRING
+     * collection_id. Using the wrong one silently deletes nothing.
+     *
+     * @param collectionId The string collection id
+     * @return true if the collection row was deleted; false if unknown or on DB error
+     */
+    public boolean deleteCollectionSync(String collectionId) {
+        if (collectionId == null) return false;
+        if (!plugin.getDatabaseManager().isConnected()) return false;
+
+        int collectionDbId = getCollectionDatabaseId(collectionId);
+        if (collectionDbId <= 0) {
+            logger.warning("Collection not found in database: " + collectionId);
+            return false;
+        }
+
+        DatabaseConnection dbConn = plugin.getDatabaseManager().getDatabaseConnection();
+        String delClaims = "DELETE FROM " + dbConn.table(DatabaseConnection.TABLE_PLAYER_REWARD_CLAIM) +
+                           " WHERE reward_id IN (SELECT id FROM " + dbConn.table(DatabaseConnection.TABLE_COLLECTION_REWARD) +
+                           " WHERE collection_id = ?)";
+        String delRewards = "DELETE FROM " + dbConn.table(DatabaseConnection.TABLE_COLLECTION_REWARD) +
+                            " WHERE collection_id = ?";
+        String delProgress = "DELETE FROM " + dbConn.table(DatabaseConnection.TABLE_PLAYER_COLLECTION_PROGRESS) +
+                             " WHERE collection_id = ?";
+        String delPlayerItems = "DELETE FROM " + dbConn.table(DatabaseConnection.TABLE_PLAYER_COLLECTION_ITEMS) +
+                                " WHERE collection_id = ?";
+        String delItems = "DELETE FROM " + dbConn.table(DatabaseConnection.TABLE_COLLECTION_ITEM) +
+                          " WHERE collection_id = ?";
+        String delCollection = "DELETE FROM " + dbConn.table(DatabaseConnection.TABLE_COLLECTION) +
+                               " WHERE collection_id = ?";
+
+        Connection conn = null;
+        try {
+            conn = dbConn.getConnection();
+            conn.setAutoCommit(false);
+            try {
+                execUpdate(conn, delClaims, collectionId);          // string id (via subquery)
+                execUpdate(conn, delRewards, collectionId);         // string id
+                execUpdate(conn, delProgress, collectionId);        // string id
+                execUpdate(conn, delPlayerItems, collectionDbId);   // numeric id
+                execUpdate(conn, delItems, collectionDbId);         // numeric id
+
+                int deleted = dbHelper.executeUpdateOn(conn, delCollection, stmt -> stmt.setString(1, collectionId));
+                if (deleted == 0) {
+                    conn.rollback();
+                    logger.warning("Collection row vanished mid-delete: " + collectionId);
+                    return false;
+                }
+                conn.commit();
+            } catch (SQLException e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(true);
+            }
+
+            collections.remove(collectionId);
+            logger.info("Deleted collection " + collectionId + " and its dependent rows");
+            return true;
+        } catch (SQLException e) {
+            logger.error("Failed to delete collection " + collectionId + ": " + e.getMessage());
+            return false;
+        } finally {
+            if (conn != null) {
+                try { conn.close(); } catch (SQLException ignored) { }
+            }
+        }
+    }
+
+    /**
+     * Run a single-parameter update through DatabaseHelper rather than the raw connection.
+     *
+     * That routing is the point: DatabaseHelper.executeUpdateOn is where a write made while the
+     * plugin is on the SQLite fallback gets journalled into the FallbackWriteLog and replayed to
+     * the primary on recovery (#1833). A raw conn.prepareStatement bypasses the journal, so an
+     * outage-era collection edit would land on SQLite and then silently vanish when MySQL came
+     * back — or, for a delete, the collection would reappear. Remote disconnects are expected here,
+     * so every collection write has to survive one.
+     *
+     * It also does not close the connection, which the transactional delete depends on.
+     */
+    private void execUpdate(Connection conn, String sql, String param) throws SQLException {
+        dbHelper.executeUpdateOn(conn, sql, stmt -> stmt.setString(1, param));
+    }
+
+    private void execUpdate(Connection conn, String sql, int param) throws SQLException {
+        dbHelper.executeUpdateOn(conn, sql, stmt -> stmt.setInt(1, param));
     }
 
     /**

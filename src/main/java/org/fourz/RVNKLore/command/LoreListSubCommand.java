@@ -188,4 +188,20 @@ public class LoreListSubCommand implements SubCommand {
         }
         return new ArrayList<>();
     }
+
+    /** Grammar and worked examples served by {@code /lore help <verb>} (#1981). */
+    @Override
+    public String getUsage() {
+        return "/lore list [--pending|--archived]";
+    }
+
+    @Override
+    public java.util.List<String> getExamples() {
+        return java.util.List.of(
+                "/lore list",
+                "/lore list --pending",
+                "  what is waiting on /lore approve",
+                "/lore list --archived",
+                "  entries removed with /lore delete but not purged");
+    }
 }

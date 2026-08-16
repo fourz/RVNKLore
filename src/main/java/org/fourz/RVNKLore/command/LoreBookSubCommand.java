@@ -154,4 +154,19 @@ public class LoreBookSubCommand implements SubCommand {
             bookManager.shutdown();
         }
     }
+
+    /** Grammar and worked examples served by {@code /lore help <verb>} (#1981). */
+    @Override
+    public String getUsage() {
+        return "/lore book <list|give>";
+    }
+
+    @Override
+    public java.util.List<String> getExamples() {
+        return java.util.List.of(
+                "/lore book list",
+                "/lore book give Shad0melt a1b2c3d4",
+                "/lore book give Shad0melt a1b2c3d4 epic",
+                "  [rarity] is optional");
+    }
 }

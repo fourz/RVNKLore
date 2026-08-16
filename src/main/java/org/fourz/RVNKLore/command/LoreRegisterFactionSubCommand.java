@@ -187,4 +187,16 @@ public class LoreRegisterFactionSubCommand implements SubCommand {
     public String getDescription() {
         return "Register a new faction with territory claim";
     }
+
+    /** Grammar and worked examples served by {@code /lore help <verb>} (#1981). */
+    @Override
+    public String getUsage() {
+        return "/lore registerfaction <name> <member1> [member2] [member3...]";
+    }
+
+    @Override
+    public java.util.List<String> getExamples() {
+        return java.util.List.of(
+                "/lore registerfaction Arcology Shad0melt wizardofire");
+    }
 }

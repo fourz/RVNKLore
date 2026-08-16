@@ -195,4 +195,19 @@ public class LoreDeleteSubCommand implements SubCommand {
 
         return new ArrayList<>();
     }
+
+    /** Grammar and worked examples served by {@code /lore help <verb>} (#1981). */
+    @Override
+    public String getUsage() {
+        return "/lore delete <name> [--purge [confirm]]";
+    }
+
+    @Override
+    public java.util.List<String> getExamples() {
+        return java.util.List.of(
+                "/lore delete Sol Sanctum",
+                "  archives it - recoverable, and still visible under /lore list --archived",
+                "/lore delete Sol Sanctum --purge confirm",
+                "  permanent. --purge without confirm only reports what it would remove.");
+    }
 }

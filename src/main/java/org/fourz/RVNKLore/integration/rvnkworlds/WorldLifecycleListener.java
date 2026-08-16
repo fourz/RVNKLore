@@ -82,6 +82,28 @@ public class WorldLifecycleListener implements Listener {
 
     // -- Bukkit listeners for late plugin load/unload --
 
+    /**
+     * Rebuilds the proximity cache when a world finishes loading (#1953).
+     *
+     * <p>Entries are parsed during enable, before RVNKWorlds has activated the custom worlds, so
+     * their coordinates arrive with no {@link org.bukkit.World} to attach to. They are retained
+     * and resolved lazily now, but {@code DiscoveryListener} buckets entries once and would keep
+     * a snapshot taken while those worlds were still absent. Refreshing here is what makes a
+     * late-loading world discoverable without a restart.</p>
+     *
+     * <p>Bukkit's own {@code WorldLoadEvent}, deliberately — this must fire for <em>any</em> world
+     * arriving late, whether RVNKWorlds activated it or something else did.</p>
+     */
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onWorldLoad(org.bukkit.event.world.WorldLoadEvent event) {
+        if (plugin.getDiscoveryManager() == null) {
+            return;
+        }
+        plugin.getDiscoveryManager().refreshLocationCache();
+        logger.debug("World '" + event.getWorld().getName()
+                + "' loaded - refreshed lore proximity cache");
+    }
+
     @EventHandler
     public void onPluginEnable(PluginEnableEvent event) {
         if ("RVNKWorlds".equalsIgnoreCase(event.getPlugin().getName()) && !enabled) {

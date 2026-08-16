@@ -138,4 +138,17 @@ public class LoreShareSubCommand implements SubCommand {
         }
         return java.util.Collections.emptyList();
     }
+
+    /** Grammar and worked examples served by {@code /lore help <verb>} (#1981). */
+    @Override
+    public String getUsage() {
+        return "/lore share <entry-name>";
+    }
+
+    @Override
+    public java.util.List<String> getExamples() {
+        return java.util.List.of(
+                "/lore share Sol Sanctum",
+                "  posts a clickable link to chat");
+    }
 }
