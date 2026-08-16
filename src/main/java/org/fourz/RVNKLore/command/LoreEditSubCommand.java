@@ -105,7 +105,7 @@ public class LoreEditSubCommand implements SubCommand {
                         java.util.Optional<Claim> claimOpt = gp.getClaimById(claimId);
                         if (claimOpt.isPresent()) {
                             if (!gp.ownsOrManagesClaim(player, claimOpt.get())) {
-                                player.sendMessage(ChatColor.RED + "✖ You don't have permission to edit this lore entry — you must own the associated GP claim.");
+                                player.sendMessage(ChatColor.RED + "✖ You don't have permission to edit this lore entry - you must own the associated GP claim.");
                                 return true;
                             }
                         }

@@ -56,7 +56,7 @@ public class LoreReloadSubCommand implements SubCommand {
                 sender.sendMessage(ChatColor.GREEN + "Lore data reloaded successfully.");
             } catch (Exception e) {
                 // #1831: degrade cleanly — no unhandled stack trace, previously loaded data stays live.
-                sender.sendMessage(ChatColor.RED + "Lore data reload failed — the database may be "
+                sender.sendMessage(ChatColor.RED + "Lore data reload failed - the database may be "
                         + "unavailable. Config was applied; lore stays on the previously loaded data.");
                 logger.warning("Lore data reload failed (config was applied): " + e.getMessage());
             }

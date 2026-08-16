@@ -513,7 +513,7 @@ public class LoreBookManager implements ILoreBookService {
         // --- Page 1: Identity ---
         StringBuilder identity = new StringBuilder();
         identity.append(ChatColor.DARK_GRAY).append(ChatColor.ITALIC)
-                .append("— Chronicle —\n\n");
+                .append("- Chronicle -\n\n");
         identity.append(rarity.getColor()).append(ChatColor.BOLD)
                 .append(entry.getName()).append(ChatColor.RESET).append("\n");
 
@@ -604,7 +604,7 @@ public class LoreBookManager implements ILoreBookService {
         // --- Page 1: Archive Record ---
         StringBuilder record = new StringBuilder();
         record.append(ChatColor.DARK_GRAY).append(ChatColor.ITALIC)
-                .append("— Archive Record —\n\n");
+                .append("- Archive Record -\n\n");
         record.append(rarity.getColor()).append(ChatColor.BOLD)
                 .append(entry.getName()).append(ChatColor.RESET).append("\n\n");
 
@@ -689,7 +689,7 @@ public class LoreBookManager implements ILoreBookService {
         // --- Page 1: Notice ---
         StringBuilder notice = new StringBuilder();
         notice.append(ChatColor.DARK_GRAY).append(ChatColor.ITALIC)
-                .append("— Notice Board —\n\n");
+                .append("- Notice Board -\n\n");
         notice.append(rarity.getColor()).append(ChatColor.BOLD)
                 .append(entry.getName()).append(ChatColor.RESET).append("\n\n");
 
@@ -761,7 +761,7 @@ public class LoreBookManager implements ILoreBookService {
         // --- Page 1: Survey Record ---
         StringBuilder record = new StringBuilder();
         record.append(ChatColor.DARK_GRAY).append(ChatColor.ITALIC)
-                .append("— Survey Record —\n\n");
+                .append("- Survey Record -\n\n");
         record.append(rarity.getColor()).append(ChatColor.BOLD)
                 .append(entry.getName()).append(ChatColor.RESET).append("\n");
         record.append(ChatColor.DARK_GRAY).append(ChatColor.ITALIC)
@@ -838,17 +838,17 @@ public class LoreBookManager implements ILoreBookService {
         String founderLabel;
         switch (entry.getType()) {
             case TAVERN:
-                frameHeader = "— Establishment Record —";
+                frameHeader = "- Establishment Record -";
                 historyLabel = "◆ About";
                 founderLabel = "Proprietor: ";
                 break;
             case GUILD:
-                frameHeader = "— Guild Charter —";
+                frameHeader = "- Guild Charter -";
                 historyLabel = "◆ Charter";
                 founderLabel = "Guildmaster: ";
                 break;
             default: // CITY
-                frameHeader = "— Settlement Record —";
+                frameHeader = "- Settlement Record -";
                 historyLabel = "◆ History";
                 founderLabel = "Founded by: ";
                 break;
@@ -935,7 +935,7 @@ public class LoreBookManager implements ILoreBookService {
         // --- Page 1: Sacred Site ---
         StringBuilder record = new StringBuilder();
         record.append(ChatColor.DARK_GRAY).append(ChatColor.ITALIC)
-                .append("— Sacred Site —\n\n");
+                .append("- Sacred Site -\n\n");
         record.append(rarity.getColor()).append(ChatColor.BOLD)
                 .append(entry.getName()).append(ChatColor.RESET).append("\n\n");
 
@@ -999,14 +999,14 @@ public class LoreBookManager implements ILoreBookService {
         // --- Page 1: Faction Codex ---
         StringBuilder codex = new StringBuilder();
         codex.append(ChatColor.DARK_GRAY).append(ChatColor.ITALIC)
-                .append("— Faction Codex —\n\n");
+                .append("- Faction Codex -\n\n");
         codex.append(rarity.getColor()).append(ChatColor.BOLD)
                 .append(entry.getName()).append(ChatColor.RESET).append("\n");
 
         String motto = entry.getMetadata("motto");
         if (motto != null && !motto.isEmpty()) {
             codex.append(ChatColor.GRAY).append(ChatColor.ITALIC)
-                    .append("“").append(motto).append("”")
+                    .append("\"").append(motto).append("\"")
                     .append(ChatColor.RESET).append("\n");
         }
         codex.append("\n");
@@ -1077,7 +1077,7 @@ public class LoreBookManager implements ILoreBookService {
         // --- Page 1: Route Header ---
         StringBuilder header = new StringBuilder();
         header.append(ChatColor.DARK_GRAY).append(ChatColor.ITALIC)
-                .append("— Road Survey —\n\n");
+                .append("- Road Survey -\n\n");
         header.append(rarity.getColor()).append(ChatColor.BOLD)
                 .append(entry.getName()).append(ChatColor.RESET).append("\n");
 
@@ -1157,7 +1157,7 @@ public class LoreBookManager implements ILoreBookService {
         if (pointsOfInterest != null && !pointsOfInterest.isEmpty()) {
             footer.append(pointsOfInterest);
         } else {
-            footer.append("—");
+            footer.append("-");
         }
 
         footer.append("\n\n").append(ChatColor.DARK_GRAY).append(ChatColor.ITALIC)
@@ -1183,7 +1183,7 @@ public class LoreBookManager implements ILoreBookService {
         // --- Page 1: Catalogue Entry ---
         StringBuilder catalogue = new StringBuilder();
         catalogue.append(ChatColor.DARK_GRAY).append(ChatColor.ITALIC)
-                .append("— Item Compendium —\n\n");
+                .append("- Item Compendium -\n\n");
         catalogue.append(rarity.getColor()).append(ChatColor.BOLD)
                 .append(entry.getName()).append(ChatColor.RESET).append("\n");
 

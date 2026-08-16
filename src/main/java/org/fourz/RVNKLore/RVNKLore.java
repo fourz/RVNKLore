@@ -108,7 +108,7 @@ public class RVNKLore extends JavaPlugin {
         // registerShutdownHook already ran, so onDisable's removeShutdownHook + null-guarded
         // cleanupManagers stay safe with nothing initialized. Flip general.mode + restart to enable.
         if (configManager.getMode().isInert()) {
-            logger.warning("RVNKLore mode=off — plugin is INERT (no features registered). "
+            logger.warning("RVNKLore mode=off - plugin is INERT (no features registered). "
                     + "Set general.mode to 'full' or 'quiet' and restart to enable.");
             return;
         }
@@ -125,7 +125,7 @@ public class RVNKLore extends JavaPlugin {
 
             logger.info("RVNKLore has been enabled! (mode: " + configManager.getMode().name().toLowerCase() + ")");
             if (configManager.getMode().suppressesNotifications()) {
-                logger.info("mode=quiet — player-facing lore notifications are suppressed (data still recorded).");
+                logger.info("mode=quiet - player-facing lore notifications are suppressed (data still recorded).");
             }
         } catch (Exception e) {
             logger.error("Failed to initialize plugin", e);
@@ -997,7 +997,7 @@ public class RVNKLore extends JavaPlugin {
 
             rvnkCoreAvailable = true;
             rvnkCoreInstance = coreInstance;
-            logger.info("RVNKCore integration enabled — " + serviceCount + " services registered");
+            logger.info("RVNKCore integration enabled - " + serviceCount + " services registered");
 
         } catch (ClassNotFoundException e) {
             logger.info("RVNKCore classes not found - running in standalone mode");

@@ -143,7 +143,7 @@ public class MySQLConnection extends DatabaseConnection {
         // only do it when the pool is genuinely unusable. This reconnect previously cycled the whole
         // pool on a single transient validation failure (#1629).
         if (rvnkProvider != null && rvnkProvider.isValid()) {
-            logger.debug("MySQL reconnect requested but pool is valid (Hikari self-healed) — skipping teardown");
+            logger.debug("MySQL reconnect requested but pool is valid (Hikari self-healed) - skipping teardown");
             return true;
         }
         try {

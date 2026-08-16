@@ -271,7 +271,7 @@ public class ConfigManager {
             case "false":
                 return LoreMode.OFF;
             default:
-                logger.warning("Unknown general.mode '" + raw + "' — defaulting to 'full'. Valid: full | quiet | off");
+                logger.warning("Unknown general.mode '" + raw + "' - defaulting to 'full'. Valid: full | quiet | off");
                 return LoreMode.FULL;
         }
     }

@@ -309,7 +309,7 @@ public class HandlerSignTome extends DefaultLoreHandler {
         ItemStack book = createBook(itemName);
         if (book == null) {
             logger.warning("Tome lectern could not stock '" + itemName + "' at "
-                + lectern.getLocation() + " — item did not resolve");
+                + lectern.getLocation() + " - item did not resolve");
             return false;
         }
 
@@ -355,7 +355,7 @@ public class HandlerSignTome extends DefaultLoreHandler {
         // no-op reported success for two builds and sent the diagnosis after the wrong component.
         if (bookOn(lectern) == null) {
             logger.warning("Tome lectern at " + lectern.getLocation() + " did not accept '"
-                + itemName + "' — slot still empty after write");
+                + itemName + "' - slot still empty after write");
             return false;
         }
         return true;

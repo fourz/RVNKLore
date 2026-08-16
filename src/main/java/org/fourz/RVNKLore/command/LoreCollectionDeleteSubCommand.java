@@ -85,7 +85,7 @@ public class LoreCollectionDeleteSubCommand implements SubCommand {
             logger.info(sender.getName() + " deleted collection " + collectionId + " (held " + contents + ")");
         } else {
             sender.sendMessage(ChatColor.RED + "✖ Failed to delete collection: " + collectionId);
-            sender.sendMessage(ChatColor.GRAY + "   Nothing was removed — see the server log for the cause");
+            sender.sendMessage(ChatColor.GRAY + "   Nothing was removed - see the server log for the cause");
         }
         return true;
     }

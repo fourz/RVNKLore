@@ -113,7 +113,7 @@ public class FallbackWriteLog {
     public synchronized void record(String sql, List<Bind> binds) {
         String table = extractTable(sql);
         if (table == null) {
-            logger.warning("Fallback write could not be journalled — no table parsed from: "
+            logger.warning("Fallback write could not be journalled - no table parsed from: "
                     + abbreviate(sql) + ". It will NOT be reconciled on recovery.");
             return;
         }
@@ -127,7 +127,7 @@ public class FallbackWriteLog {
             // failure than dropping it silently, which is the exact loss this class exists to stop.
             if (plugin.getDatabaseManager() != null && plugin.getDatabaseManager().isClusterEnabled()) {
                 logger.warning("A shared-table write (" + table + ") reached the fallback store while"
-                        + " clustering is enabled — the #1833 gate should have refused it. Journalling"
+                        + " clustering is enabled - the #1833 gate should have refused it. Journalling"
                         + " it so nothing is lost, but replaying it may conflict with the authoritative"
                         + " tier; review before recovery.");
             }
@@ -190,7 +190,7 @@ public class FallbackWriteLog {
         // Parent rows abandoned this pass — their dependents are unreconcilable and follow them out.
         Set<String> abandonedParents = new HashSet<>();
         try {
-            logger.warning("Primary database recovered — replaying " + snapshot.size()
+            logger.warning("Primary database recovered - replaying " + snapshot.size()
                     + " outage-era write(s)");
             for (JournalEntry entry : snapshot) {
                 String blockingParent = entry.firstRefIn(abandonedParents);
@@ -199,7 +199,7 @@ public class FallbackWriteLog {
                     // verification found. Quarantine it with the parent named, so the pair can be
                     // reviewed together in .reconcile-failed.
                     quarantine(entry, new SQLException("parent row was quarantined in the same "
-                            + "reconcile pass (" + blockingParent + ") — replaying this would orphan it"));
+                            + "reconcile pass (" + blockingParent + ") - replaying this would orphan it"));
                     synchronized (this) {
                         pending.remove(entry);
                     }
@@ -211,7 +211,7 @@ public class FallbackWriteLog {
                     // Deliberately does NOT increment attempts — a dependent must not burn its retry
                     // budget waiting on a parent that has budget of its own left.
                     held++;
-                    logger.warning("Holding back " + abbreviate(entry.sql) + " — its parent row ("
+                    logger.warning("Holding back " + abbreviate(entry.sql) + " - its parent row ("
                             + blockingParent + ") has not reconciled yet; it will retry on the next "
                             + "recovery without consuming an attempt");
                     continue;
@@ -255,7 +255,7 @@ public class FallbackWriteLog {
                 + (held > 0 ? ", " + held + " held back pending a parent row" : "")
                 + (stillPending > 0 ? ", " + stillPending + " still pending" : "");
         if (quarantined > 0 || cascaded > 0) {
-            logger.error(summary + " — quarantined writes were NOT applied; inspect "
+            logger.error(summary + " - quarantined writes were NOT applied; inspect "
                     + quarantineFile.getName(), null);
         } else if (stillPending > 0 || held > 0) {
             logger.warning(summary);
@@ -294,7 +294,7 @@ public class FallbackWriteLog {
             }
             Files.write(journalFile.toPath(), gson.toJson(arr).getBytes(StandardCharsets.UTF_8));
         } catch (IOException e) {
-            logger.error("Failed to persist the reconcile journal — outage-era writes may be lost "
+            logger.error("Failed to persist the reconcile journal - outage-era writes may be lost "
                     + "if the server restarts before recovery", e);
         }
     }
@@ -311,7 +311,7 @@ public class FallbackWriteLog {
             }
             if (!pending.isEmpty()) {
                 logger.warning("Loaded " + pending.size() + " un-reconciled write(s) from a previous "
-                        + "outage — they will replay when the primary database recovers");
+                        + "outage - they will replay when the primary database recovers");
             }
         } catch (Exception e) {
             logger.error("Could not read the reconcile journal; it will be left in place for manual "

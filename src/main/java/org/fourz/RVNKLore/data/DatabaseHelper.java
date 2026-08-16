@@ -386,7 +386,7 @@ public class DatabaseHelper {
             return null;
         }
         String message = "Refusing to write shared lore table '" + table
-                + "' while the database is in fallback mode — the authoritative tier owns this data and"
+                + "' while the database is in fallback mode - the authoritative tier owns this data and"
                 + " a local write could not be merged back (#1833). Per-server lore still works;"
                 + " retry once the primary database recovers.";
         logger.warning(message);

@@ -112,7 +112,7 @@ public class NameGenerator {
             "Netherbound Lament",
             "Sorrowful Shade",
             "Screaming Phantom of the Crimson Chasm",
-            "Nether’s Grieving Wraith",
+            "Nether's Grieving Wraith",
             "Howling Horror of the Veil",
             "The Ashen Banshee",
             "Soulbound Cry of the Nether Wastes"
@@ -128,7 +128,7 @@ public class NameGenerator {
             "Blackflame Marauder",
             "Soulbound Enforcer of the Abyss",
             "Runescarred Reaper",
-            "Nether’s Bound Warlord"
+            "Nether's Bound Warlord"
         ));
         
         namesByType.put(EntityType.PIGLIN_BRUTE, Arrays.asList(

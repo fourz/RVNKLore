@@ -498,7 +498,7 @@ public abstract class DatabaseConnection {
                             + loreEntryTable + ")");
                 } catch (SQLException e) {
                     logger.error("Migration #1839: failed to drop foreign key " + constraint + " on "
-                            + tableName + " — the #1834 connection split will fail until it is gone", e);
+                            + tableName + " - the #1834 connection split will fail until it is gone", e);
                 }
             }
         }
@@ -534,7 +534,7 @@ public abstract class DatabaseConnection {
         String engine = tableEngine(stmt, table(TABLE_LORE_ENTRY));
         if (engine != null && !"innodb".equalsIgnoreCase(engine)) {
             logger.error("Lore tables use the " + engine + " engine, which does not support foreign "
-                    + "keys — it accepts the syntax and discards the constraint. No referential "
+                    + "keys - it accepts the syntax and discards the constraint. No referential "
                     + "integrity is enforced between lore_entry and its submissions/items/metadata, "
                     + "and transactions are also unavailable on this engine, so rollbacks silently do "
                     + "nothing. Convert the lore tables to InnoDB to fix both.", null);
@@ -573,7 +573,7 @@ public abstract class DatabaseConnection {
                     continue;
                 }
                 logger.warning("Migration: added missing foreign key " + constraint + " on " + child
-                        + " — " + child + "." + column + " now cascades from " + parent);
+                        + " - " + child + "." + column + " now cascades from " + parent);
             } catch (SQLException e) {
                 String msg = e.getMessage() != null ? e.getMessage() : "";
                 String lower = msg.toLowerCase();
@@ -639,7 +639,7 @@ public abstract class DatabaseConnection {
                 converted++;
                 logger.info("Migration #1840: converted " + tableName + " to InnoDB");
             } catch (SQLException e) {
-                logger.error("Migration #1840: could not convert " + tableName + " to InnoDB — "
+                logger.error("Migration #1840: could not convert " + tableName + " to InnoDB - "
                         + "foreign keys and transactions remain unavailable for it", e);
             }
         }
@@ -744,7 +744,7 @@ public abstract class DatabaseConnection {
     private void createTableSafely(Statement stmt, String sql, String tableName) {
         try {
             stmt.execute(sql);
-            logger.info("Schema: table ready — " + tableName);
+            logger.info("Schema: table ready - " + tableName);
         } catch (SQLException e) {
             logger.warning("Schema: failed to create table '" + tableName + "': " + e.getMessage());
             logger.warning("Schema SQL: " + sql.substring(0, Math.min(300, sql.length())));
@@ -756,7 +756,7 @@ public abstract class DatabaseConnection {
      * Disables FK checks for MySQL; SQLite FK checks are off by default.
      */
     public void dropAllTables() {
-        logger.warning("=== DEV: dropAllTables — dropping all lore tables ===");
+        logger.warning("=== DEV: dropAllTables - dropping all lore tables ===");
         String[] tables = {
             // leaf → root order (FK children before parents)
             table(TABLE_PLAYER_REWARD_CLAIM),
@@ -797,7 +797,7 @@ public abstract class DatabaseConnection {
      * Uses FK check disable so order doesn't matter.
      */
     public void purgeAllData() {
-        logger.warning("=== DEV: purgeAllData — truncating all lore table rows ===");
+        logger.warning("=== DEV: purgeAllData - truncating all lore table rows ===");
         String[] tables = {
             table(TABLE_PLAYER_REWARD_CLAIM),
             table(TABLE_PLAYER_ACHIEVEMENT),
