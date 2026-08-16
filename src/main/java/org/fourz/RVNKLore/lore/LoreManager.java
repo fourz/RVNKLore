@@ -543,7 +543,10 @@ public class LoreManager implements ILoreService {
      * an archived one, an approved entry outranks a pending one, and id is the final tiebreak because
      * it never changes.
      */
-    private static final Comparator<LoreEntry> NAME_RESOLUTION_ORDER =
+    // Package-private rather than private so LoreNameResolutionTest can assert the ordering
+    // directly. The property under test is "same winner regardless of input order", which cannot be
+    // demonstrated through a public method without standing up a full manager and cache.
+    static final Comparator<LoreEntry> NAME_RESOLUTION_ORDER =
         Comparator.comparing(LoreEntry::isArchived)                       // false (live) first
             .thenComparing(Comparator.comparing(LoreEntry::isApproved).reversed())  // true first
             .thenComparing(entry -> entry.getId() == null ? "" : entry.getId());
