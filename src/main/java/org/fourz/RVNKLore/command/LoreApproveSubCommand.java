@@ -36,7 +36,7 @@ public class LoreApproveSubCommand implements SubCommand {
     @Override
     public boolean execute(CommandSender sender, String[] args) {
         if (!plugin.getConfigManager().isApprovalWorkflowEnabled()) {
-            sender.sendMessage(ChatColor.YELLOW + "⚠ Approval workflow is disabled — all entries are auto-approved.");
+            sender.sendMessage(ChatColor.YELLOW + "⚠ Approval workflow is disabled - all entries are auto-approved.");
             return true;
         }
         if (args.length < 1) {

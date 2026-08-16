@@ -132,7 +132,7 @@ public class LoreDebugSubCommand implements SubCommand {
                         && dbManager.getClusterConnection().isConnected();
                 sender.sendMessage(ChatColor.WHITE + "Shared lore content: "
                         + (reachable ? ChatColor.GREEN + "available from the cluster"
-                                     : ChatColor.RED + "UNAVAILABLE — cluster unreachable"));
+                                     : ChatColor.RED + "UNAVAILABLE - cluster unreachable"));
             } else {
                 sender.sendMessage(ChatColor.GRAY + "   This server owns the shared lore content.");
             }
@@ -584,7 +584,7 @@ public class LoreDebugSubCommand implements SubCommand {
 
     private boolean executeSetup(CommandSender sender) {
         if (plugin.getServer().getPluginManager().getPlugin("LuckPerms") == null) {
-            sender.sendMessage(ChatColor.RED + "✖ LuckPerms is not installed — cannot apply permission defaults.");
+            sender.sendMessage(ChatColor.RED + "✖ LuckPerms is not installed - cannot apply permission defaults.");
             sender.sendMessage(ChatColor.GRAY + "Install LuckPerms and run this command again.");
             return true;
         }

@@ -614,7 +614,7 @@ public class LoreEntryRepository implements ILoreEntryRepository {
             check.setString(1, entryId);
             try (ResultSet rs = check.executeQuery()) {
                 if (rs.next() && rs.getInt(1) > 0) {
-                    logger.debug("lore_item row exists for entry " + entryId + " — updating instead of inserting");
+                    logger.debug("lore_item row exists for entry " + entryId + " - updating instead of inserting");
                     String updateSql = "UPDATE " + t("lore_item") +
                         " SET name = ?, material = ?, item_type = ?, rarity = ?, is_obtainable = ?, nbt_data = ?" +
                         " WHERE lore_entry_id = ?";

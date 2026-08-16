@@ -62,7 +62,7 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
             registerSubCommand("collection", new LoreCollectionSubCommand(plugin));
             registerSubCommand("item", new LoreItemSubCommand(plugin));
         } else if (!plugin.getConfigManager().isCollectionsEnabled()) {
-            logger.debug("Feature disabled: collections — /lore collection and /lore item not registered");
+            logger.debug("Feature disabled: collections - /lore collection and /lore item not registered");
         }
 
         registerSubCommand("book", new LoreBookSubCommand(plugin));
@@ -196,7 +196,7 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
                     + ChatColor.WHITE + " - " + sub.getDescription());
         }
         if (anyExamples) {
-            sender.sendMessage(ChatColor.AQUA + "*" + ChatColor.GRAY + " has worked examples — "
+            sender.sendMessage(ChatColor.AQUA + "*" + ChatColor.GRAY + " has worked examples - "
                     + ChatColor.WHITE + "/lore help <subcommand>");
         }
         sender.sendMessage(ChatColor.GRAY + "See /lore item and /lore collection for item and collection management.");

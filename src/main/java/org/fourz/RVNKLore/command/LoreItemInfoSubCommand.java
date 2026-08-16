@@ -112,7 +112,7 @@ public class LoreItemInfoSubCommand implements SubCommand {
             int pages = p.getPages() != null ? p.getPages().size() : 0;
             sender.sendMessage(ChatColor.GRAY + "Pages: " + (pages > 0
                 ? ChatColor.WHITE + String.valueOf(pages)
-                : ChatColor.RED + "0 — book has NO page content"));
+                : ChatColor.RED + "0 - book has NO page content"));
         }
         if (p.getLoreEntryId() != null) {
             sender.sendMessage(ChatColor.GRAY + "Lore entry: " + ChatColor.WHITE + p.getLoreEntryId());

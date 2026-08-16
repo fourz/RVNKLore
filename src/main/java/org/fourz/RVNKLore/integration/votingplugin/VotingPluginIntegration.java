@@ -71,7 +71,7 @@ public class VotingPluginIntegration implements Listener {
             logger.debug("VotingPlugin integration activated");
             return true;
         } catch (ClassNotFoundException e) {
-            logger.debug("VotingPlugin classes not on classpath — integration disabled");
+            logger.debug("VotingPlugin classes not on classpath - integration disabled");
             return false;
         } catch (Exception e) {
             logger.warning("Failed to initialize VotingPlugin integration: " + e.getMessage());
@@ -188,7 +188,7 @@ public class VotingPluginIntegration implements Listener {
             );
             logger.debug("Registered VotingPlugin vote event listener");
         } catch (ClassNotFoundException e) {
-            logger.debug("VotingPluginEvent class not found — vote head rewards disabled");
+            logger.debug("VotingPluginEvent class not found - vote head rewards disabled");
         } catch (Exception e) {
             logger.warning("Failed to register vote event listener: " + e.getMessage());
         }

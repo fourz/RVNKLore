@@ -145,7 +145,7 @@ public class DatabaseManager {
         try {
             if (plugin.getLoreManager() != null) {
                 plugin.getLoreManager().reloadLore();
-                logger.info("Lore cache refreshed after reconcile — replayed entries are now visible");
+                logger.info("Lore cache refreshed after reconcile - replayed entries are now visible");
             }
         } catch (Exception e) {
             logger.warning("Reconcile succeeded but the lore cache could not be refreshed; run "
@@ -172,7 +172,7 @@ public class DatabaseManager {
         if (plugin.getConfig().isSet("database.fallback." + key)) {
             int legacy = plugin.getConfig().getInt("database.fallback." + key, defaultValue);
             logger.warning("Using legacy config path database.fallback." + key
-                    + " — move this to storage.fallback." + key);
+                    + " - move this to storage.fallback." + key);
             return legacy;
         }
         return defaultValue;
@@ -222,11 +222,11 @@ public class DatabaseManager {
 
             // Dev reset flags — both are no-ops unless explicitly enabled in config.yml
             if (plugin.getConfigManager().isPurgeSchema()) {
-                logger.warning("=== DEV purgeSchema ENABLED — dropping and recreating all lore tables ===");
+                logger.warning("=== DEV purgeSchema ENABLED - dropping and recreating all lore tables ===");
                 connection.dropAllTables();
                 connection.createTables();
             } else if (plugin.getConfigManager().isPurgeData()) {
-                logger.warning("=== DEV purgeData ENABLED — deleting all lore table rows ===");
+                logger.warning("=== DEV purgeData ENABLED - deleting all lore table rows ===");
                 connection.purgeAllData();
             }
 
@@ -245,7 +245,7 @@ public class DatabaseManager {
             // (#1833). Off the main thread: this is blocking DB I/O during enable.
             if (fallbackWriteLog != null && !fallbackWriteLog.isEmpty()) {
                 final int carried = fallbackWriteLog.pendingCount();
-                logger.warning("Found " + carried + " un-reconciled write(s) from a previous outage —"
+                logger.warning("Found " + carried + " un-reconciled write(s) from a previous outage -"
                         + " replaying to the primary database now");
                 plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
                     try (Connection primaryHandle = connection.getConnection()) {
@@ -292,7 +292,7 @@ public class DatabaseManager {
             return;
         }
         if (isClusterAuthoritative()) {
-            logger.info("Cluster: role=authoritative — shared lore content is served from this "
+            logger.info("Cluster: role=authoritative - shared lore content is served from this "
                     + "server's own database; no second pool opened");
             return;
         }
@@ -300,7 +300,7 @@ public class DatabaseManager {
         try {
             DatabaseConnection cluster = connectionFactory.createClusterConnection();
             if (cluster == null) {
-                logger.error("Cluster: role=member but no usable cluster.mysql configuration — shared "
+                logger.error("Cluster: role=member but no usable cluster.mysql configuration - shared "
                         + "lore content is UNAVAILABLE. Refusing to serve it from local tables, which "
                         + "would present a stale copy of the canon as authoritative.", null);
                 return;
@@ -308,9 +308,9 @@ public class DatabaseManager {
             cluster.initialize();
             cluster.createTables();
             clusterConnection = cluster;
-            logger.info("Cluster: role=member — shared lore content served from the cluster pool");
+            logger.info("Cluster: role=member - shared lore content served from the cluster pool");
         } catch (Exception e) {
-            logger.error("Cluster: failed to reach the cluster database — shared lore content is "
+            logger.error("Cluster: failed to reach the cluster database - shared lore content is "
                     + "UNAVAILABLE. Per-server lore (discoveries, locations, maps) is unaffected.", e);
             clusterConnection = null;
         }

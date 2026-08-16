@@ -81,7 +81,7 @@ public class LoreMapSubCommand implements SubCommand {
             sender.sendMessage(ChatColor.GREEN + "✓ Lore map #" + loreMap.getId() + " created and given for: " + entry.getName());
             logger.info("Map #" + loreMap.getId() + " given to " + player.getName() + " for entry '" + entry.getName() + "'");
         } else {
-            sender.sendMessage(ChatColor.YELLOW + "⚠ Map record saved (id=" + loreMap.getId() + ") but item could not be issued — world not loaded.");
+            sender.sendMessage(ChatColor.YELLOW + "⚠ Map record saved (id=" + loreMap.getId() + ") but item could not be issued - world not loaded.");
         }
     }
 
@@ -143,10 +143,10 @@ public class LoreMapSubCommand implements SubCommand {
 
     private void showUsage(CommandSender sender) {
         sender.sendMessage(ChatColor.GOLD + "=== /lore map ===");
-        sender.sendMessage(ChatColor.YELLOW + "/lore map give <entry-name>" + ChatColor.WHITE + " — create and give a map item");
-        sender.sendMessage(ChatColor.YELLOW + "/lore map info <entry-name>" + ChatColor.WHITE + " — show stored map records");
+        sender.sendMessage(ChatColor.YELLOW + "/lore map give <entry-name>" + ChatColor.WHITE + " - create and give a map item");
+        sender.sendMessage(ChatColor.YELLOW + "/lore map info <entry-name>" + ChatColor.WHITE + " - show stored map records");
         if (LoreCommandUtil.isAdmin(sender)) {
-            sender.sendMessage(ChatColor.YELLOW + "/lore map delete <map-id>" + ChatColor.WHITE + " — delete a map record");
+            sender.sendMessage(ChatColor.YELLOW + "/lore map delete <map-id>" + ChatColor.WHITE + " - delete a map record");
         }
     }
 

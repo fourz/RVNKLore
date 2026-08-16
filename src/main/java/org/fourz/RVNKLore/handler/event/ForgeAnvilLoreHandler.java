@@ -186,7 +186,7 @@ public class ForgeAnvilLoreHandler extends DefaultLoreHandler {
     private void stampAndConfirm(Player player, ItemStack held, int itemId, String entryId,
                                  String display, String tail) {
         plugin.getLoreManager().getItemManager().stampLoreItemPdc(held, itemId, entryId, display);
-        player.sendMessage(ChatColor.GREEN + "✓ Forged into the record — "
+        player.sendMessage(ChatColor.GREEN + "✓ Forged into the record - "
             + ChatColor.GOLD + display + ChatColor.GREEN + " " + tail);
     }
 

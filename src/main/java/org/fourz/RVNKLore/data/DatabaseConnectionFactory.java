@@ -44,7 +44,7 @@ public class DatabaseConnectionFactory {
 
         if (settings.getType() == DatabaseSettingsDTO.DatabaseType.MYSQL) {
             this.dialect = new MySQLDialect();
-            logger.debug("Using MySQL dialect — will reuse RVNKCore shared pool");
+            logger.debug("Using MySQL dialect - will reuse RVNKCore shared pool");
             this.usingFallback = false;
             return new MySQLConnection(plugin, dialect);
         } else {
@@ -68,7 +68,7 @@ public class DatabaseConnectionFactory {
         String host = plugin.getConfig().getString("cluster.mysql.host", null);
         String database = plugin.getConfig().getString("cluster.mysql.database", null);
         if (host == null || host.isBlank() || database == null || database.isBlank()) {
-            logger.error("cluster.role is 'member' but cluster.mysql.host/database are not set — "
+            logger.error("cluster.role is 'member' but cluster.mysql.host/database are not set - "
                     + "shared lore content cannot be reached", null);
             return null;
         }

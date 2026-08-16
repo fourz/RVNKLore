@@ -106,7 +106,7 @@ public class LoreShareSubCommand implements SubCommand {
             ChatColor.DARK_GRAY + "[" + ChatColor.GOLD + "Lore" + ChatColor.DARK_GRAY + "] "
             + ChatColor.YELLOW + "★ " + ChatColor.AQUA + typeLabel
             + ChatColor.GRAY + " · " + ChatColor.WHITE + name
-            + ChatColor.GRAY + "  —  " + ChatColor.GRAY + ChatColor.ITALIC + desc + "  "
+            + ChatColor.GRAY + "  -  " + ChatColor.GRAY + ChatColor.ITALIC + desc + "  "
         );
 
         // Clickable [Read More]

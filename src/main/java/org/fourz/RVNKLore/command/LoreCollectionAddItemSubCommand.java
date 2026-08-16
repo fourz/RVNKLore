@@ -135,7 +135,7 @@ public class LoreCollectionAddItemSubCommand implements SubCommand {
                 if (saved) {
                     sender.sendMessage(ChatColor.GREEN + "✓ Added " + quantity + "x " + materialStr + " to collection: " + collection.getName());
                 } else {
-                    sender.sendMessage(ChatColor.YELLOW + "⚠ Added item in memory only — database save failed.");
+                    sender.sendMessage(ChatColor.YELLOW + "⚠ Added item in memory only - database save failed.");
                 }
             } else {
                 sender.sendMessage(ChatColor.YELLOW + "⚠ Added item in memory only (database not available)");

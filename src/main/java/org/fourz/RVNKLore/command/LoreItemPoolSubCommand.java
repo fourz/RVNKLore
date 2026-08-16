@@ -105,7 +105,7 @@ public class LoreItemPoolSubCommand implements SubCommand {
                     || mat == org.bukkit.Material.PLAYER_WALL_HEAD;
                 if (playerHead && (p.getSkullTexture() == null || p.getSkullTexture().isEmpty())) {
                     sender.sendMessage(ChatColor.YELLOW + "⚠ Item " + itemId + " is a player head with no"
-                        + " stored texture — it will roll and bake as a blank (Steve) head.");
+                        + " stored texture - it will roll and bake as a blank (Steve) head.");
                     sender.sendMessage(ChatColor.GRAY + "   Set one with /lore item texture " + itemId
                         + " <base64>, or ignore this if an anonymous head is intended.");
                 }
@@ -192,7 +192,7 @@ public class LoreItemPoolSubCommand implements SubCommand {
             plugin.getServer().getScheduler().runTask(plugin, () -> {
                 if (opt.isEmpty()) {
                     sender.sendMessage(ChatColor.YELLOW + "⚠ Pool '" + label
-                        + "' is empty or unavailable — nothing to preview.");
+                        + "' is empty or unavailable - nothing to preview.");
                     return;
                 }
                 sender.sendMessage(ChatColor.GOLD + "===== Baked loot table (preview): " + label + " =====");

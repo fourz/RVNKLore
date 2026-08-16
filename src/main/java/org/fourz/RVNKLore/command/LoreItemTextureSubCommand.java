@@ -55,7 +55,7 @@ public class LoreItemTextureSubCommand implements SubCommand {
     public boolean execute(CommandSender sender, String[] args) {
         if (args.length < 2) {
             sender.sendMessage(ChatColor.RED + "▶ Usage: /lore item texture <id|name> <base64|clear>");
-            sender.sendMessage(ChatColor.GRAY + "   base64 decodes to {\"textures\":{\"SKIN\":{\"url\":\"…\"}}}");
+            sender.sendMessage(ChatColor.GRAY + "   base64 decodes to {\"textures\":{\"SKIN\":{\"url\":\"...\"}}}");
             sender.sendMessage(ChatColor.GRAY + "   clear  removes the stored texture");
             return true;
         }
@@ -78,7 +78,7 @@ public class LoreItemTextureSubCommand implements SubCommand {
         // succeeds and the head still renders blank — the silent failure #1914 was about.
         if (!clearing && !HeadUtil.hasExtractableTextureUrl(raw)) {
             sender.sendMessage(ChatColor.RED + "✖ No skin URL could be decoded from that texture data.");
-            sender.sendMessage(ChatColor.GRAY + "   It must decode to {\"textures\":{\"SKIN\":{\"url\":\"…\"}}}");
+            sender.sendMessage(ChatColor.GRAY + "   It must decode to {\"textures\":{\"SKIN\":{\"url\":\"...\"}}}");
             return true;
         }
 
@@ -96,7 +96,7 @@ public class LoreItemTextureSubCommand implements SubCommand {
                 Material mat = props.getMaterial();
                 if (mat != Material.PLAYER_HEAD && mat != Material.PLAYER_WALL_HEAD) {
                     sender.sendMessage(ChatColor.YELLOW + "⚠ Item " + itemId + " is " + mat
-                        + ", not a player head — the texture is stored but will not render.");
+                        + ", not a player head - the texture is stored but will not render.");
                 }
 
                 props.setSkullTexture(clearing ? null : raw);

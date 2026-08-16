@@ -50,12 +50,12 @@ public class LoreItemTextSubCommand implements SubCommand {
         Player player = (Player) sender;
 
         if (args.length == 0) {
-            player.sendMessage(ChatColor.RED + "▶ Usage: /lore item text <text…>");
+            player.sendMessage(ChatColor.RED + "▶ Usage: /lore item text <text...>");
             return true;
         }
         final String text = String.join(" ", args).trim();
         if (text.isEmpty()) {
-            player.sendMessage(ChatColor.RED + "▶ Usage: /lore item text <text…>");
+            player.sendMessage(ChatColor.RED + "▶ Usage: /lore item text <text...>");
             return true;
         }
 
@@ -132,7 +132,7 @@ public class LoreItemTextSubCommand implements SubCommand {
                             m.setLore(renderedLore);
                             held.setItemMeta(m);
                         }
-                        player.sendMessage(ChatColor.GREEN + "✓ Descriptor added — cost " + cost + " levels.");
+                        player.sendMessage(ChatColor.GREEN + "✓ Descriptor added - cost " + cost + " levels.");
                     }));
             }));
         return true;

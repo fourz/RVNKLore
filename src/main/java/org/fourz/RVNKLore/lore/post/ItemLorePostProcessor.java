@@ -48,7 +48,7 @@ public class ItemLorePostProcessor implements LorePostProcessor {
             UUID entryUUID = UUID.fromString(entry.getId());
             boolean itemSuccess = itemManager.registerLoreItem(entryUUID, itemProps).join();
             if (!itemSuccess) {
-                logger.warning("Item registration failed for: " + entry.getName() + " — rolling back lore entry");
+                logger.warning("Item registration failed for: " + entry.getName() + " - rolling back lore entry");
                 entry.addMetadata("validation_errors", "Item registration failed in database");
                 return false;
             }
