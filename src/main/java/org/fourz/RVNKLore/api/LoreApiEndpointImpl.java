@@ -335,6 +335,7 @@ public class LoreApiEndpointImpl implements ILoreApiService {
                         .description(col.getDescription())
                         .theme(col.getThemeId())
                         .itemCount(col.getItemCount())
+                        .entryCount(col.getRequiredEntryCount())
                         .seasonal(false)
                         .build());
                 }
@@ -614,7 +615,7 @@ public class LoreApiEndpointImpl implements ILoreApiService {
                     .getAllItemsWithProperties().get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
                 if (existingItems.stream().anyMatch(p -> name.equalsIgnoreCase(p.getDisplayName()))) {
                     return (ApiResponse<?>) ApiResponse.error("CONFLICT",
-                        "An item named '" + name + "' already exists — use PUT /lore/items/{id} to update it.");
+                        "An item named '" + name + "' already exists - use PUT /lore/items/{id} to update it.");
                 }
 
                 // 1) lore_entry (type ITEM) — an authed mint is trusted, so approve immediately.

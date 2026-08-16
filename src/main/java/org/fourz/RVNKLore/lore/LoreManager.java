@@ -173,7 +173,7 @@ public class LoreManager implements ILoreService {
     }
 
     private void rollbackEntry(LoreEntry entry) {
-        logger.warning("Post-processing failed for '" + entry.getName() + "' — rolling back persisted entry");
+        logger.warning("Post-processing failed for '" + entry.getName() + "' - rolling back persisted entry");
         try {
             UUID entryUUID = UUID.fromString(entry.getId());
             plugin.getDatabaseManager().deleteLoreEntry(entryUUID);
@@ -530,12 +530,30 @@ public class LoreManager implements ILoreService {
      * @param name The name of the lore entry
      * @return The lore entry, or null if not found
      */
+    /**
+     * Deterministic order for resolving a name that matches more than one entry (#2009).
+     *
+     * getCachedEntries() collects into a Set, so iteration order is a hash artifact: it can differ
+     * between two runs of the same server on the same data. Picking findFirst() out of that meant a
+     * duplicated name resolved to a different entry after a restart, and /lore edit could land on a
+     * different row than the one the operator had just read.
+     *
+     * The ranking mirrors the item fix's "ORDER BY is_obtainable DESC, id ASC": prefer the entry a
+     * player could actually encounter, then break the tie on something stable. A live entry outranks
+     * an archived one, an approved entry outranks a pending one, and id is the final tiebreak because
+     * it never changes.
+     */
+    private static final Comparator<LoreEntry> NAME_RESOLUTION_ORDER =
+        Comparator.comparing(LoreEntry::isArchived)                       // false (live) first
+            .thenComparing(Comparator.comparing(LoreEntry::isApproved).reversed())  // true first
+            .thenComparing(entry -> entry.getId() == null ? "" : entry.getId());
+
     public LoreEntry getLoreEntryByNameSync(String name) {
         logger.debug("Looking up lore entry by name: " + name);
 
         return getCachedEntries().stream()
             .filter(entry -> entry.getName().equalsIgnoreCase(name))
-            .findFirst()
+            .min(NAME_RESOLUTION_ORDER)
             .orElse(null);
     }
 
