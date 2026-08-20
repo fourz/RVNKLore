@@ -141,6 +141,106 @@ public final class LecternSignUtil {
         return null;
     }
 
+    /** Payload lines on a tagged sign: everything below the tag on line 0. */
+    public static final int NAME_FIRST_LINE = 1;
+    public static final int NAME_LAST_LINE = 3;
+
+    /**
+     * Reads a payload name spanning lines 1-3 of whichever face carries {@code tag} (#2021).
+     *
+     * <p>A sign line holds roughly fifteen rendered characters, so a name like
+     * {@code RAVENFORGE WAYBILL} (18) cannot be typed onto one line at all — the client stops at
+     * {@code RAVENFORGE WAYBI}. Joining the three payload lines with single spaces lifts the
+     * ceiling to about forty-five characters and costs nothing: a one-line name yields exactly
+     * itself, because the empty lines below contribute nothing to the join.</p>
+     *
+     * <p>Use this instead of {@code readLineFromTaggedSide(sign, tag, 1)} anywhere a lore item
+     * name is resolved. Resolution is by exact name, so the join must preserve internal spacing
+     * and case — hence single spaces and no case folding.</p>
+     *
+     * @param sign the sign to read
+     * @param tag  the line-0 tag identifying which face carries the payload
+     * @return the joined name, or null when no tagged face has anything below the tag
+     */
+    public static String readNameFromTaggedSide(Sign sign, String tag) {
+        for (Side side : new Side[] { Side.FRONT, Side.BACK }) {
+            if (!tagOnSide(sign, side, tag)) continue;
+            StringBuilder joined = new StringBuilder();
+            for (int i = NAME_FIRST_LINE; i <= NAME_LAST_LINE; i++) {
+                String part = readLine(sign, side, i);
+                if (part == null || part.isEmpty()) continue;
+                if (joined.length() > 0) joined.append(' ');
+                joined.append(part);
+            }
+            if (joined.length() > 0) return joined.toString();
+        }
+        return null;
+    }
+
+    /**
+     * Joins the payload lines of a {@link org.bukkit.event.block.SignChangeEvent} (#2021).
+     *
+     * <p>The event carries the lines the player just typed; the block's own state is not committed
+     * until the event resolves, so a sign being created cannot be read through {@link Sign}. Same
+     * join rule as {@link #readNameFromTaggedSide} so create-time and read-time agree — if they
+     * ever diverged, a sign would designate under one name and dispense under another.</p>
+     *
+     * @param lines the event's four lines, any of which may be null
+     * @return the joined name, empty when nothing was typed below the tag
+     */
+    public static String joinNameLines(String[] lines) {
+        if (lines == null) return "";
+        StringBuilder joined = new StringBuilder();
+        for (int i = NAME_FIRST_LINE; i <= NAME_LAST_LINE && i < lines.length; i++) {
+            String part = lines[i] == null ? "" : ChatColor.stripColor(lines[i]).trim();
+            if (part.isEmpty()) continue;
+            if (joined.length() > 0) joined.append(' ');
+            joined.append(part);
+        }
+        return joined.toString();
+    }
+
+    /**
+     * Word-wraps a name across the three payload lines so it stays legible (#2021).
+     *
+     * <p>Writing a long name onto line 1 alone stores it correctly but renders clipped, and a
+     * quest-giver nobody can read defeats the reason the name is on the sign. Wrapping is the
+     * write-side twin of {@link #readNameFromTaggedSide}: what is written is what reads back.</p>
+     *
+     * <p>A single word longer than one line is left to clip — there is nowhere else for it to go,
+     * and breaking mid-word would corrupt the name on the round trip.</p>
+     *
+     * @param name the full name
+     * @return exactly three lines, blank-padded
+     */
+    public static String[] wrapNameOntoLines(String name) {
+        String[] out = { "", "", "" };
+        if (name == null || name.isBlank()) return out;
+
+        int line = 0;
+        StringBuilder current = new StringBuilder();
+        for (String word : name.trim().split("\\s+")) {
+            if (current.length() == 0) {
+                current.append(word);
+            } else if (current.length() + 1 + word.length() <= SIGN_LINE_CHARS) {
+                current.append(' ').append(word);
+            } else {
+                if (line == out.length - 1) {
+                    // Out of lines: keep the remainder on the last one rather than dropping it.
+                    current.append(' ').append(word);
+                } else {
+                    out[line++] = current.toString();
+                    current = new StringBuilder(word);
+                }
+            }
+        }
+        out[line] = current.toString();
+        return out;
+    }
+
+    /** Rendered characters that reliably fit on one sign line. */
+    private static final int SIGN_LINE_CHARS = 15;
+
     private static boolean tagOnSide(Sign sign, Side side, String tag) {
         String line0 = readLine(sign, side, 0);
         return line0 != null && line0.equalsIgnoreCase(tag);

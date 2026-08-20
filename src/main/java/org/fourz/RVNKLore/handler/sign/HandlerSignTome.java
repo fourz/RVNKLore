@@ -11,7 +11,12 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.block.Action;
+import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockExplodeEvent;
+import org.bukkit.event.block.BlockPistonExtendEvent;
+import org.bukkit.event.block.BlockPistonRetractEvent;
 import org.bukkit.event.block.SignChangeEvent;
+import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerTakeLecternBookEvent;
 import org.bukkit.inventory.EquipmentSlot;
@@ -55,6 +60,16 @@ import org.fourz.rvnkcore.util.log.LogManager;
 public class HandlerSignTome extends DefaultLoreHandler {
 
     private static final String PERMISSION_CREATE = "rvnklore.sign.tome";
+
+    /**
+     * Permission to take a sign-governed lectern apart (#2022).
+     *
+     * <p>Creation was gated from the start; destruction was not gated at all, so any player with
+     * build rights could delete a published quest-giver and its book with one swing. #1881 is the
+     * precedent: Chapter 1's start lectern vanished from Event with no record of how it had been
+     * built.</p>
+     */
+    private static final String PERMISSION_DESTROY = "rvnklore.sign.destroy";
 
     /**
      * Line-0 text written when a {@code [Tome]} sign is refused.
@@ -129,7 +144,9 @@ public class HandlerSignTome extends DefaultLoreHandler {
             return;
         }
 
-        String itemName = event.getLine(1) == null ? "" : event.getLine(1).trim();
+        // #2021: the name may span lines 2-4 on the sign, because one line cannot hold a name
+        // like "RAVENFORGE WAYBILL". Read all three the same way the interact path does.
+        String itemName = LecternSignUtil.joinNameLines(event.getLines());
         ItemStack onLectern = bookOn(lectern);
 
         // Book-first build: no name given, so read it off the book already on the lectern.
@@ -141,7 +158,10 @@ public class HandlerSignTome extends DefaultLoreHandler {
                     + "Put a lore book on the lectern first, or name one on line 2.");
                 return;
             }
-            event.setLine(1, itemName);
+            String[] wrapped = LecternSignUtil.wrapNameOntoLines(itemName);
+            for (int i = 0; i < wrapped.length; i++) {
+                event.setLine(LecternSignUtil.NAME_FIRST_LINE + i, wrapped[i]);
+            }
         }
 
         // Resolve by NAME, never by id — a freshly minted item is unreachable by id (#1887), and a
@@ -206,7 +226,7 @@ public class HandlerSignTome extends DefaultLoreHandler {
         if (signBlock == null) return;
         if (!(signBlock.getState() instanceof Sign sign)) return;
 
-        String itemName = LecternSignUtil.readLineFromTaggedSide(sign, LecternSignUtil.TOME_TAG, 1);
+        String itemName = LecternSignUtil.readNameFromTaggedSide(sign, LecternSignUtil.TOME_TAG);
         if (itemName == null || itemName.isEmpty()) return;
 
         event.setCancelled(true);
@@ -245,7 +265,7 @@ public class HandlerSignTome extends DefaultLoreHandler {
         if (signBlock == null) return;
         if (!(signBlock.getState() instanceof Sign sign)) return;
 
-        String itemName = LecternSignUtil.readLineFromTaggedSide(sign, LecternSignUtil.TOME_TAG, 1);
+        String itemName = LecternSignUtil.readNameFromTaggedSide(sign, LecternSignUtil.TOME_TAG);
         if (itemName == null || itemName.isEmpty()) return;
 
         Player player = event.getPlayer();
@@ -409,6 +429,158 @@ public class HandlerSignTome extends DefaultLoreHandler {
      */
     private org.fourz.RVNKLore.lore.item.ItemManager items() {
         return plugin.getLoreManager() == null ? null : plugin.getLoreManager().getItemManager();
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Protection for sign-governed lecterns (#2022)
+    //
+    // Lives here rather than in its own handler because handlers are keyed by LoreType and this
+    // needs no type of its own. It is deliberately TAG-AGNOSTIC: it guards [Library] lecterns as
+    // well as [Tome] ones, since both are published content that a pickaxe should not be able to
+    // delete. HandlerSignLibrary reads no payload line and needs no changes.
+    //
+    // Protection is derived from the blocks themselves — no registry, nothing to persist, nothing
+    // to fall out of sync across a restart or a chunk reload.
+    //
+    // KNOWN LIMIT, stated rather than implied: /setblock, /fill and WorldEdit do not fire
+    // BlockBreakEvent and will still destroy the pair. This stops players, not operators.
+    // ---------------------------------------------------------------------------------------
+
+    /** @return the tag governing this lectern, or null when it is an ordinary lectern. */
+    private String governingTag(Block block) {
+        if (block == null || block.getType() != Material.LECTERN) return null;
+        if (LecternSignUtil.findTomeSign(block) != null) return LecternSignUtil.TOME_TAG;
+        if (LecternSignUtil.findLibrarySign(block) != null) return LecternSignUtil.LIBRARY_TAG;
+        return null;
+    }
+
+    /** @return the tag on this sign if it governs the lectern it is mounted on, else null. */
+    private String governingSignTag(Block block) {
+        if (block == null || !(block.getState() instanceof Sign)) return null;
+        Block attached = LecternSignUtil.getAttachedBlock(block);
+        if (attached == null || attached.getType() != Material.LECTERN) return null;
+        String tag = governingTag(attached);
+        // Only protect the sign that is actually doing the designating.
+        return (tag != null && block.equals(LecternSignUtil.findTaggedSign(attached, tag))) ? tag : null;
+    }
+
+    /** @return true when breaking this block would take a designated lectern apart. */
+    private boolean isProtected(Block block) {
+        return governingTag(block) != null || governingSignTag(block) != null;
+    }
+
+    /**
+     * Refuses to let a player break a designated lectern or its sign.
+     *
+     * <p>The refusal explains itself. A silent cancel reads as a broken server, and the player has
+     * no way to learn that the block is content rather than scenery — the same reasoning as the
+     * out-of-order feedback in RVNKQuests.</p>
+     */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onBlockBreak(BlockBreakEvent event) {
+        Block block = event.getBlock();
+        String tag = governingTag(block);
+        if (tag == null) tag = governingSignTag(block);
+        if (tag == null) return;
+
+        Player player = event.getPlayer();
+        if (player.hasPermission(PERMISSION_DESTROY)) {
+            logger.info("Sign-governed lectern " + tag + " at " + block.getLocation()
+                + " broken by " + player.getName() + " (has " + PERMISSION_DESTROY + ")");
+            return;
+        }
+
+        event.setCancelled(true);
+        player.sendMessage(ChatColor.RED + "That lectern is a lore " + tag + " - it hands out a book.");
+        player.sendMessage(ChatColor.GRAY + "   Clear the tag from its sign to retire it. "
+            + "You do not have permission to do that.");
+        logger.debug("Blocked break of " + tag + " lectern at " + block.getLocation()
+            + " by " + player.getName());
+    }
+
+    /**
+     * Keeps explosions from doing what a pickaxe may not.
+     *
+     * <p>Without this the protection is theatre: a creeper, a bed, or one TNT block deletes a
+     * quest-giver that a player was explicitly refused. Both explosion events are handled because
+     * they have separate sources — entities and blocks — and neither implies the other.</p>
+     */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onEntityExplode(EntityExplodeEvent event) {
+        event.blockList().removeIf(this::isProtected);
+    }
+
+    /** Block-sourced explosions (beds, respawn anchors, TNT blocks). */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onBlockExplode(BlockExplodeEvent event) {
+        event.blockList().removeIf(this::isProtected);
+    }
+
+    /**
+     * Stops a piston shoving a designated lectern or its sign out of position.
+     *
+     * <p>Moving either block silently un-designates the pair — the sign is the designation, and it
+     * only designates the lectern it is mounted on.</p>
+     */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onPistonExtend(BlockPistonExtendEvent event) {
+        if (event.getBlocks().stream().anyMatch(this::isProtected)) event.setCancelled(true);
+    }
+
+    /** Sticky pistons pulling the pair apart. */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onPistonRetract(BlockPistonRetractEvent event) {
+        if (event.getBlocks().stream().anyMatch(this::isProtected)) event.setCancelled(true);
+    }
+
+    /**
+     * Gates un-designation, which is the sanctioned way to remove one of these (#2022).
+     *
+     * <p>Runs at LOW so it settles before the designating handler at default priority sees the
+     * event. Retiring a lectern is a deliberate act performed through the sign; breaking it is
+     * not. An unauthorised player editing the tag away is refused and the sign is left alone.</p>
+     */
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    public void onSignUndesignate(SignChangeEvent event) {
+        Block signBlock = event.getBlock();
+        String tag = governingSignTag(signBlock);
+        if (tag == null) return;
+
+        // Still carrying its tag after the edit? Then this is a rename, not a retirement.
+        String newLine0 = event.getLine(0) == null ? "" : ChatColor.stripColor(event.getLine(0)).trim();
+        if (newLine0.equalsIgnoreCase(tag)) return;
+
+        Player player = event.getPlayer();
+        if (player.hasPermission(PERMISSION_DESTROY)) {
+            logger.info("Lectern " + tag + " at " + signBlock.getLocation() + " retired by "
+                + player.getName());
+            return;
+        }
+
+        event.setCancelled(true);
+        player.sendMessage(ChatColor.RED + "You do not have permission to retire a lore " + tag + ".");
+        logger.debug("Blocked un-designation of " + tag + " at " + signBlock.getLocation()
+            + " by " + player.getName());
+    }
+
+    /**
+     * Refuses to wax a designating sign.
+     *
+     * <p>A waxed sign cannot be edited, and editing the sign is the only sanctioned removal path.
+     * Allowing the wax would make the pair permanently unbreakable by anyone, including an
+     * operator holding {@code rvnklore.sign.destroy} — a protection with no way out is a bug, not
+     * a stronger protection.</p>
+     */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onWaxAttempt(PlayerInteractEvent event) {
+        if (event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
+        if (event.getHand() != EquipmentSlot.HAND) return;
+        if (event.getItem() == null || event.getItem().getType() != Material.HONEYCOMB) return;
+        if (governingSignTag(event.getClickedBlock()) == null) return;
+
+        event.setCancelled(true);
+        event.getPlayer().sendMessage(ChatColor.RED
+            + "Waxing this sign would seal the lectern permanently - refused.");
     }
 
     @Override
