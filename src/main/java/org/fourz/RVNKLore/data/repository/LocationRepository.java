@@ -110,6 +110,33 @@ public class LocationRepository implements ILocationRepository {
     }
 
     @Override
+    public CompletableFuture<List<LoreLocation>> findRecent(String world, int limit) {
+        return CompletableFuture.supplyAsync(() -> {
+            List<LoreLocation> locations = new ArrayList<>();
+            int cap = Math.max(1, Math.min(limit, 200));
+            String sql = "SELECT * FROM " + t("lore_location")
+                    + (world != null && !world.isBlank() ? " WHERE world = ?" : "")
+                    + " ORDER BY id DESC LIMIT ?";
+            try (Connection conn = dbConnection.getConnection();
+                 PreparedStatement stmt = conn.prepareStatement(sql)) {
+                int i = 1;
+                if (world != null && !world.isBlank()) {
+                    stmt.setString(i++, world);
+                }
+                stmt.setInt(i, cap);
+                try (ResultSet rs = stmt.executeQuery()) {
+                    while (rs.next()) {
+                        locations.add(mapRow(rs));
+                    }
+                }
+            } catch (SQLException e) {
+                logger.error("Failed to list recent locations (world=" + world + ")", e);
+            }
+            return locations;
+        });
+    }
+
+    @Override
     public CompletableFuture<List<LoreLocation>> findNearby(String world, double x, double z, double radius) {
         return CompletableFuture.supplyAsync(() -> {
             List<LoreLocation> locations = new ArrayList<>();

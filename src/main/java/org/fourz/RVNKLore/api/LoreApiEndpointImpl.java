@@ -997,6 +997,151 @@ public class LoreApiEndpointImpl implements ILoreApiService {
      * <p>Returns a plain list of maps rather than a DTO: the consumer is RVNKWorlds' survey, which
      * merges this into a JSON payload it already assembles from maps.</p>
      */
+    /**
+     * GET /lore/locations (#2053). With world+x+z+radius: the nearby lookup. Otherwise a
+     * recent list (optional world filter, limit cap 200). Same rows either way.
+     */
+    @Override
+    public CompletableFuture<ApiResponse<?>> getLocations(String query) {
+        Map<String, String> q = new java.util.HashMap<>();
+        if (query != null && !query.isBlank()) {
+            for (String pair : query.split("&")) {
+                int eq = pair.indexOf('=');
+                if (eq > 0) {
+                    q.put(java.net.URLDecoder.decode(pair.substring(0, eq), java.nio.charset.StandardCharsets.UTF_8),
+                          java.net.URLDecoder.decode(pair.substring(eq + 1), java.nio.charset.StandardCharsets.UTF_8));
+                }
+            }
+        }
+        String world = q.get("world");
+        if (q.containsKey("x") && q.containsKey("z") && q.containsKey("radius")) {
+            try {
+                return findNearbyLocations(world,
+                        Double.parseDouble(q.get("x")), Double.parseDouble(q.get("z")),
+                        Double.parseDouble(q.get("radius")));
+            } catch (NumberFormatException e) {
+                return CompletableFuture.completedFuture(
+                        ApiResponse.error("INVALID_REQUEST", "x, z and radius must be numbers"));
+            }
+        }
+        int limit;
+        try {
+            limit = q.containsKey("limit") ? Integer.parseInt(q.get("limit")) : 50;
+        } catch (NumberFormatException e) {
+            return CompletableFuture.completedFuture(
+                    ApiResponse.error("INVALID_REQUEST", "limit must be a whole number"));
+        }
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                List<org.fourz.RVNKLore.data.model.LoreLocation> rows =
+                        plugin.getDatabaseManager().findRecentLore(world, limit);
+                List<Map<String, Object>> out = new java.util.ArrayList<>();
+                for (org.fourz.RVNKLore.data.model.LoreLocation loc : rows) {
+                    Map<String, Object> row = new java.util.LinkedHashMap<>();
+                    row.put("entryId", loc.getEntryId());
+                    row.put("label", loc.getLabel());
+                    row.put("world", loc.getWorld());
+                    row.put("x", loc.getX());
+                    row.put("y", loc.getY());
+                    row.put("z", loc.getZ());
+                    row.put("locationType", loc.getLocationType());
+                    out.add(row);
+                }
+                return (ApiResponse<?>) ApiResponse.success(out);
+            } catch (Exception e) {
+                logger.error("getLocations failed", e);
+                return (ApiResponse<?>) ApiResponse.error("INTERNAL_ERROR",
+                        "Lore location listing failed: " + e.getMessage());
+            }
+        });
+    }
+
+    /**
+     * POST /lore/locations (#2053) - the validated twin of the raw two-table INSERT that
+     * agents used to run through database_tools. Creates the lore entry through the same
+     * handler validation the sign path uses, and the coordinate row is mirrored into
+     * lore_location by the add path itself (#1900).
+     *
+     * <p>The world must be LOADED: the mirror reads the Bukkit world off the Location, so an
+     * unloaded world would save the entry but silently skip the spatial row - the failure
+     * mode this endpoint exists to remove.</p>
+     */
+    @Override
+    public CompletableFuture<ApiResponse<?>> createLocation(String requestBody) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                com.google.gson.JsonObject body = gson.fromJson(requestBody, com.google.gson.JsonObject.class);
+                if (body == null) {
+                    return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", "A JSON body is required");
+                }
+                String name = body.has("name") ? body.get("name").getAsString() : null;
+                String typeRaw = body.has("type") ? body.get("type").getAsString() : null;
+                String worldName = body.has("world") ? body.get("world").getAsString() : null;
+                if (name == null || name.isBlank() || typeRaw == null || worldName == null
+                        || !body.has("x") || !body.has("y") || !body.has("z")) {
+                    return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST",
+                            "Required: name, type, world, x, y, z (optional: description, createdBy)");
+                }
+                org.fourz.RVNKLore.lore.LoreType type;
+                try {
+                    type = org.fourz.RVNKLore.lore.LoreType.valueOf(typeRaw.trim().toUpperCase(java.util.Locale.ROOT));
+                } catch (IllegalArgumentException e) {
+                    return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST",
+                            "Unknown lore type '" + typeRaw + "'");
+                }
+                org.bukkit.World world = org.bukkit.Bukkit.getWorld(worldName);
+                if (world == null) {
+                    return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST",
+                            "World '" + worldName + "' is not loaded - load it first (/world load), "
+                            + "or the location row cannot be mirrored");
+                }
+                double x = body.get("x").getAsDouble();
+                double y = body.get("y").getAsDouble();
+                double z = body.get("z").getAsDouble();
+                String description = body.has("description") ? body.get("description").getAsString() : "";
+                String createdBy = body.has("createdBy") ? body.get("createdBy").getAsString() : "rest";
+
+                String entryId = java.util.UUID.randomUUID().toString();
+                org.fourz.RVNKLore.lore.LoreEntry entry =
+                        new org.fourz.RVNKLore.lore.LoreEntry(entryId, name, description, type);
+                entry.setSubmittedBy(createdBy);
+                entry.setLocation(new org.bukkit.Location(world, x, y, z));
+                entry.addMetadata("world", worldName);
+                entry.addMetadata("x", String.valueOf((int) x));
+                entry.addMetadata("y", String.valueOf((int) y));
+                entry.addMetadata("z", String.valueOf((int) z));
+                entry.addMetadata("source", "rest");
+                // Operator-driven seeding replaces a direct insert, which had no approval
+                // gate either - so the entry lands approved, unlike web submitEntry.
+                entry.setApproved(true);
+
+                if (!loreManager.addLoreEntrySync(entry)) {
+                    return (ApiResponse<?>) ApiResponse.error("INTERNAL_ERROR",
+                            "Entry failed handler validation or did not save - see server log");
+                }
+                // Prove the mirror, not just the entry: the whole point is the spatial row.
+                org.fourz.RVNKLore.data.model.LoreLocation mirrored =
+                        plugin.getDatabaseManager().getPrimaryLocation(entryId);
+
+                Map<String, Object> out = new java.util.LinkedHashMap<>();
+                out.put("entryId", entryId);
+                out.put("name", name);
+                out.put("type", type.name());
+                out.put("world", worldName);
+                out.put("x", x);
+                out.put("y", y);
+                out.put("z", z);
+                out.put("approved", true);
+                out.put("locationMirrored", mirrored != null);
+                return (ApiResponse<?>) ApiResponse.success(out);
+            } catch (Exception e) {
+                logger.error("createLocation failed", unwrapException(e));
+                return (ApiResponse<?>) ApiResponse.error("INTERNAL_ERROR",
+                        "Lore location create failed: " + e.getMessage());
+            }
+        });
+    }
+
     @Override
     public CompletableFuture<ApiResponse<?>> findNearbyLocations(String world, double x, double z,
                                                                  double radius) {

@@ -794,6 +794,13 @@ public class DatabaseManager {
     }
 
     /**
+     * Most recent lore locations, newest first; {@code world} null = every world (#2053).
+     */
+    public List<LoreLocation> findRecentLore(String world, int limit) {
+        return locationRepository.findRecent(world, limit).join();
+    }
+
+    /**
      * Delete all locations for a lore entry.
      */
     public boolean deleteLoreLocations(String entryId) {
