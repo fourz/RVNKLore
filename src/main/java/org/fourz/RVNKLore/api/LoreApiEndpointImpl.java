@@ -1115,9 +1115,16 @@ public class LoreApiEndpointImpl implements ILoreApiService {
                 // gate either - so the entry lands approved, unlike web submitEntry.
                 entry.setApproved(true);
 
+                // Validate FIRST so a caller mistake comes back as a 400 naming the field
+                // (found in the #2053 test pass: a missing description surfaced as a bare 500
+                // while the handler knew exactly what was wrong).
+                String validationError = loreManager.validateEntry(entry);
+                if (validationError != null) {
+                    return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", validationError);
+                }
                 if (!loreManager.addLoreEntrySync(entry)) {
                     return (ApiResponse<?>) ApiResponse.error("INTERNAL_ERROR",
-                            "Entry failed handler validation or did not save - see server log");
+                            "Entry did not save - see server log");
                 }
                 // Prove the mirror, not just the entry: the whole point is the spatial row.
                 org.fourz.RVNKLore.data.model.LoreLocation mirrored =
