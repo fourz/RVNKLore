@@ -45,6 +45,23 @@ import java.util.stream.Collectors;
  */
 public class LoreApiEndpointImpl implements ILoreApiService {
 
+    /**
+     * Build the INVALID_REQUEST response WITH the reasons the handler computed (#2062).
+     * Every list-building handler stashes them on the entry as metadata key
+     * "validation_errors" (semicolon-joined) before returning false - the information was
+     * always in hand at this point and simply never made it into the envelope, so a REST
+     * caller saw "Validation failed for type LANDMARK" with details:[] and had to read the
+     * server log to learn the field. A handler that stashes nothing still gets an empty
+     * details list, never a null.
+     */
+    private ApiResponse<?> validationErrorResponse(org.fourz.RVNKLore.lore.LoreEntry entry, String validationError) {
+        String stored = entry.getMetadata("validation_errors");
+        List<String> details = (stored == null || stored.isEmpty())
+                ? Collections.emptyList()
+                : Arrays.asList(stored.split(";"));
+        return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", validationError, details);
+    }
+
     private static final int ASYNC_TIMEOUT_SECONDS = 15;
 
     private final RVNKLore plugin;
@@ -255,7 +272,7 @@ public class LoreApiEndpointImpl implements ILoreApiService {
 
                 String validationError = loreManager.validateEntry(entry);
                 if (validationError != null) {
-                    return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", validationError);
+                    return validationErrorResponse(entry, validationError);
                 }
 
                 boolean success = loreManager.addLoreEntry(entry).get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
@@ -631,7 +648,7 @@ public class LoreApiEndpointImpl implements ILoreApiService {
 
                 String validationError = loreManager.validateEntry(entry);
                 if (validationError != null) {
-                    return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", validationError);
+                    return validationErrorResponse(entry, validationError);
                 }
                 boolean entrySaved = loreManager.addLoreEntry(entry).get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
                 if (!entrySaved) {
@@ -1120,7 +1137,7 @@ public class LoreApiEndpointImpl implements ILoreApiService {
                 // while the handler knew exactly what was wrong).
                 String validationError = loreManager.validateEntry(entry);
                 if (validationError != null) {
-                    return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", validationError);
+                    return validationErrorResponse(entry, validationError);
                 }
                 if (!loreManager.addLoreEntrySync(entry)) {
                     return (ApiResponse<?>) ApiResponse.error("INTERNAL_ERROR",
