@@ -24,4 +24,7 @@ public interface ILocationRepository {
     CompletableFuture<Boolean> deleteById(int locationId);
 
     CompletableFuture<Integer> countByWorld(String worldName);
+
+    /** Most recent locations, newest first; {@code world} null = every world (#2053). */
+    CompletableFuture<List<LoreLocation>> findRecent(String world, int limit);
 }

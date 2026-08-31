@@ -115,6 +115,9 @@ permissions:
   rvnklore.sign.library:
     description: Designate a lectern as a lore library ([library] sign tag)
     default: op
+  rvnklore.sign.destroy:
+    description: Retire a sign-governed lectern - break it, or clear its tag ([Tome]/[Library])
+    default: op
   rvnklore.sign.tome:
     description: Allows creating a [Tome] quest-giver lectern that dispenses a lore book
     default: op
