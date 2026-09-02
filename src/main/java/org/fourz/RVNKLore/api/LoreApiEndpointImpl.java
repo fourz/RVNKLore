@@ -777,7 +777,17 @@ public class LoreApiEndpointImpl implements ILoreApiService {
                 }
                 ItemProperties props = opt.get();
                 List<String> warnings = new ArrayList<>();
+                ItemPropertiesDTO before = ItemPropertiesDTO.from(props);
                 applyBodyToProps(props, body, warnings);
+                if (ItemPropertiesDTO.from(props).equals(before)) {
+                    // Nothing actually changed: answer with the current state and burn no
+                    // version. A no-op PUT used to archive v(n) and mint an identical
+                    // v(n+1), which read as proof the change landed (#2036).
+                    Map<String, Object> unchanged = itemToMap(props);
+                    unchanged.put("no_change", true);
+                    if (!warnings.isEmpty()) unchanged.put("warnings", warnings);
+                    return (ApiResponse<?>) ApiResponse.success(unchanged);
+                }
 
                 int ver = loreManager.getItemManager().updateItemVersioned(id, props)
                     .get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
@@ -898,7 +908,21 @@ public class LoreApiEndpointImpl implements ILoreApiService {
     }
 
     /** Apply the updatable fields present in {@code body} onto an existing ItemProperties (name is identity, unchanged). */
+    /** The set of fields PUT /lore/items/{id} understands. Anything else is surfaced as a
+     *  warning instead of vanishing - a silently dropped field returned a clean 200 and
+     *  burned a version while changing nothing (#2036). */
+    private static final Set<String> UPDATABLE_ITEM_KEYS = Set.of(
+            "name", "material", "rarity", "lore", "lore_text", "pages", "enchantments",
+            "enchantmentTier", "glow", "customModelData", "skullTexture", "itemType");
+
     private void applyBodyToProps(ItemProperties p, Map<String, Object> body, List<String> warnings) {
+        for (String key : body.keySet()) {
+            if (!UPDATABLE_ITEM_KEYS.contains(key)) {
+                warnings.add("Unknown field ignored: " + key);
+            }
+        }
+        String name = asString(body.get("name"));
+        if (name != null && !name.isBlank()) p.setDisplayName(name);
         String mat = asString(body.get("material"));
         if (mat != null && !mat.isBlank()) {
             Material m = Material.matchMaterial(mat);
