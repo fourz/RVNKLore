@@ -45,6 +45,23 @@ import java.util.stream.Collectors;
  */
 public class LoreApiEndpointImpl implements ILoreApiService {
 
+    /**
+     * Build the INVALID_REQUEST response WITH the reasons the handler computed (#2062).
+     * Every list-building handler stashes them on the entry as metadata key
+     * "validation_errors" (semicolon-joined) before returning false - the information was
+     * always in hand at this point and simply never made it into the envelope, so a REST
+     * caller saw "Validation failed for type LANDMARK" with details:[] and had to read the
+     * server log to learn the field. A handler that stashes nothing still gets an empty
+     * details list, never a null.
+     */
+    private ApiResponse<?> validationErrorResponse(org.fourz.RVNKLore.lore.LoreEntry entry, String validationError) {
+        String stored = entry.getMetadata("validation_errors");
+        List<String> details = (stored == null || stored.isEmpty())
+                ? Collections.emptyList()
+                : Arrays.asList(stored.split(";"));
+        return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", validationError, details);
+    }
+
     private static final int ASYNC_TIMEOUT_SECONDS = 15;
 
     private final RVNKLore plugin;
@@ -255,7 +272,7 @@ public class LoreApiEndpointImpl implements ILoreApiService {
 
                 String validationError = loreManager.validateEntry(entry);
                 if (validationError != null) {
-                    return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", validationError);
+                    return validationErrorResponse(entry, validationError);
                 }
 
                 boolean success = loreManager.addLoreEntry(entry).get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
@@ -631,7 +648,7 @@ public class LoreApiEndpointImpl implements ILoreApiService {
 
                 String validationError = loreManager.validateEntry(entry);
                 if (validationError != null) {
-                    return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", validationError);
+                    return validationErrorResponse(entry, validationError);
                 }
                 boolean entrySaved = loreManager.addLoreEntry(entry).get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
                 if (!entrySaved) {
@@ -760,7 +777,17 @@ public class LoreApiEndpointImpl implements ILoreApiService {
                 }
                 ItemProperties props = opt.get();
                 List<String> warnings = new ArrayList<>();
+                ItemPropertiesDTO before = ItemPropertiesDTO.from(props);
                 applyBodyToProps(props, body, warnings);
+                if (ItemPropertiesDTO.from(props).equals(before)) {
+                    // Nothing actually changed: answer with the current state and burn no
+                    // version. A no-op PUT used to archive v(n) and mint an identical
+                    // v(n+1), which read as proof the change landed (#2036).
+                    Map<String, Object> unchanged = itemToMap(props);
+                    unchanged.put("no_change", true);
+                    if (!warnings.isEmpty()) unchanged.put("warnings", warnings);
+                    return (ApiResponse<?>) ApiResponse.success(unchanged);
+                }
 
                 int ver = loreManager.getItemManager().updateItemVersioned(id, props)
                     .get(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
@@ -881,7 +908,21 @@ public class LoreApiEndpointImpl implements ILoreApiService {
     }
 
     /** Apply the updatable fields present in {@code body} onto an existing ItemProperties (name is identity, unchanged). */
+    /** The set of fields PUT /lore/items/{id} understands. Anything else is surfaced as a
+     *  warning instead of vanishing - a silently dropped field returned a clean 200 and
+     *  burned a version while changing nothing (#2036). */
+    private static final Set<String> UPDATABLE_ITEM_KEYS = Set.of(
+            "name", "material", "rarity", "lore", "lore_text", "pages", "enchantments",
+            "enchantmentTier", "glow", "customModelData", "skullTexture", "itemType");
+
     private void applyBodyToProps(ItemProperties p, Map<String, Object> body, List<String> warnings) {
+        for (String key : body.keySet()) {
+            if (!UPDATABLE_ITEM_KEYS.contains(key)) {
+                warnings.add("Unknown field ignored: " + key);
+            }
+        }
+        String name = asString(body.get("name"));
+        if (name != null && !name.isBlank()) p.setDisplayName(name);
         String mat = asString(body.get("material"));
         if (mat != null && !mat.isBlank()) {
             Material m = Material.matchMaterial(mat);
@@ -1120,7 +1161,7 @@ public class LoreApiEndpointImpl implements ILoreApiService {
                 // while the handler knew exactly what was wrong).
                 String validationError = loreManager.validateEntry(entry);
                 if (validationError != null) {
-                    return (ApiResponse<?>) ApiResponse.error("INVALID_REQUEST", validationError);
+                    return validationErrorResponse(entry, validationError);
                 }
                 if (!loreManager.addLoreEntrySync(entry)) {
                     return (ApiResponse<?>) ApiResponse.error("INTERNAL_ERROR",
