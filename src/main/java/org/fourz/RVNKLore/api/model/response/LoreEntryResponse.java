@@ -1,6 +1,5 @@
 package org.fourz.RVNKLore.api.model.response;
 
-import org.bukkit.Location;
 import org.fourz.RVNKLore.data.dto.LoreEntryDTO;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
@@ -79,9 +78,13 @@ public class LoreEntryResponse {
         response.createdAt = entry.getCreatedAt() != null ? entry.getCreatedAt().toLocalDateTime() : null;
         response.updatedAt = response.createdAt; // Use createdAt as fallback
         response.metadata = entry.getAllMetadata();
-        Location loc = entry.getLocation();
-        if (loc != null && loc.getWorld() != null) {
-            response.location = new LocationData(loc.getWorld().getName(), loc.getX(), loc.getY(), loc.getZ());
+        // Stored form, so an entry whose world is not loaded still reports its coordinates
+        // (#1366). LocationData already holds the world as a String, so the live World handle
+        // this used to demand was never needed to build the response - and demanding it made the
+        // API answer "no location" for rows that plainly exist in lore_location.
+        LoreEntry.StoredLocation loc = entry.getStoredLocation();
+        if (loc != null) {
+            response.location = new LocationData(loc.world(), loc.x(), loc.y(), loc.z());
         }
         return response;
     }
