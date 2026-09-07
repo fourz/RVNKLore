@@ -407,8 +407,13 @@ public class DatabaseManager {
      * left alone rather than clobbered by an unrelated edit.</p>
      */
     private void syncPrimaryLocation(LoreEntry entry) {
-        org.bukkit.Location loc = entry.getLocation();
-        if (loc == null || loc.getWorld() == null) {
+        // The stored form, not getLocation() (#1366). lore_location.world is varchar(64) and takes
+        // a name, so a world that is not currently loaded is perfectly storable — but gating on a
+        // live World handle meant every entry in an unloaded world (koz, zeal, zothique, alphac —
+        // valid, visitable, simply not up on the importing server) got no row at all. That is why
+        // the table holds five located entries against 209 items.
+        LoreEntry.StoredLocation loc = entry.getStoredLocation();
+        if (loc == null) {
             return;
         }
         try {
@@ -420,10 +425,10 @@ public class DatabaseManager {
 
             LoreLocation location = LoreLocation.builder()
                     .entryId(entry.getId())
-                    .world(loc.getWorld().getName())
-                    .x(loc.getX())
-                    .y(loc.getY())
-                    .z(loc.getZ())
+                    .world(loc.world())
+                    .x(loc.x())
+                    .y(loc.y())
+                    .z(loc.z())
                     .locationType("PRIMARY")
                     .label(entry.getName())
                     .build();

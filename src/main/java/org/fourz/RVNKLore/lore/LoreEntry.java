@@ -237,6 +237,58 @@ public class LoreEntry {
     }
 
     /**
+     * Coordinates in the form the database actually stores them: a world <b>name</b> plus x/y/z.
+     *
+     * <p>Both {@code lore_location.world} and the {@code content} JSON hold a varchar world name,
+     * so neither needs a live {@link World} handle. Persisting through {@link #getLocation()}
+     * therefore imposed a requirement the storage layer never had, and entries in an unloaded
+     * world lost their coordinates on every write (#1366).</p>
+     *
+     * @return the stored form, resolved or deferred, or {@code null} when there are no coordinates
+     */
+    public StoredLocation getStoredLocation() {
+        Location loc = getLocation();
+        if (loc != null && loc.getWorld() != null) {
+            return new StoredLocation(loc.getWorld().getName(), loc.getX(), loc.getY(), loc.getZ());
+        }
+        if (deferredWorldName != null) {
+            return new StoredLocation(deferredWorldName, deferredX, deferredY, deferredZ);
+        }
+        return null;
+    }
+
+    /**
+     * Attach coordinates by world <b>name</b>, resolving the world only if it happens to be up.
+     *
+     * <p>This is the single place that decides loaded-vs-deferred, so callers do not each repeat
+     * a {@code Bukkit.getWorld() == null} check and then disagree about what to do with the
+     * answer. It also stamps {@link LoreMetadataKeys#WORLD_STATUS}, which records the state
+     * <i>at write time</i> — once the world loads, {@link #getLocation()} resolves and the tag
+     * becomes a historical note rather than current truth. That is intentional and matches the
+     * key's documented meaning.</p>
+     *
+     * @param worldName world name as supplied; stored verbatim, never validated against the server
+     */
+    public void applyLocationByWorldName(String worldName, double x, double y, double z) {
+        World world = (worldName != null) ? Bukkit.getWorld(worldName) : null;
+        if (world != null) {
+            setLocation(new Location(world, x, y, z));
+            addMetadata(LoreMetadataKeys.WORLD_STATUS, "loaded");
+        } else {
+            setDeferredLocation(worldName, x, y, z);
+            addMetadata(LoreMetadataKeys.WORLD_STATUS, "unloaded");
+        }
+    }
+
+    /**
+     * A location as the database stores it — world name, not world handle.
+     *
+     * @param world world name, never null when this record exists
+     */
+    public record StoredLocation(String world, double x, double y, double z) {
+    }
+
+    /**
      * Get the submitter UUID string.
      * Returns the UUID of the player who submitted this lore entry,
      * or "Server" for system-generated entries.

@@ -174,28 +174,38 @@ public class LoreAddSubCommand implements SubCommand {
             autoApprove = false;
         }
 
-        // Resolve world for --at coordinates
+        // Resolve world for --at coordinates.
+        //
+        // An unloaded world is no longer refused (#1366). koz, zeal, zothique and alphac are real,
+        // visitable worlds that are simply not up on whichever server takes the command, and
+        // "Unknown world" turned every one of those into a rejected entry. The name is stored
+        // verbatim and the coordinates are kept; getLocation() resolves them once the world loads.
+        //
+        // parsedLocation stays null in that case ON PURPOSE - it feeds the GriefPrevention claim
+        // check below, which cannot run against a world that is not loaded.
         Location parsedLocation = null;
+        String locWorldName = null;
+        boolean worldDeferred = false;
         if (coords != null) {
             // --world flag overrides 4-arg --at world name
-            String worldName = flagWorldName != null ? flagWorldName : atWorldName;
+            locWorldName = flagWorldName != null ? flagWorldName : atWorldName;
 
-            if (worldName == null) {
+            if (locWorldName == null) {
                 // No explicit world — infer from player or error for console
                 if (isPlayer) {
-                    worldName = ((Player) sender).getWorld().getName();
+                    locWorldName = ((Player) sender).getWorld().getName();
                 } else {
                     sender.sendMessage(ChatColor.RED + "\u2716 Console requires --world <name> or 4-arg --at <world> <x> <y> <z>");
                     return true;
                 }
             }
 
-            World world = Bukkit.getWorld(worldName);
-            if (world == null) {
-                sender.sendMessage(ChatColor.RED + "\u2716 Unknown world: " + worldName);
-                return true;
+            World world = Bukkit.getWorld(locWorldName);
+            if (world != null) {
+                parsedLocation = new Location(world, coords[0], coords[1], coords[2]);
+            } else {
+                worldDeferred = true;
             }
-            parsedLocation = new Location(world, coords[0], coords[1], coords[2]);
         }
 
         String name = String.join(" ", nameArgs).replaceAll("^\"|\"$", "").trim();
@@ -211,6 +221,16 @@ public class LoreAddSubCommand implements SubCommand {
             GriefPreventionIntegration gp = plugin.getGriefPreventionIntegration();
             if (gp == null || !gp.isEnabled()) {
                 sender.sendMessage(ChatColor.RED + "✖ FACTION entries require GriefPrevention to be installed.");
+                return true;
+            }
+            // A deferred world cannot be claim-checked, and falling through to the player's own
+            // position would check the wrong place entirely: the entry would be stored at the
+            // named coordinates while the permission was granted for wherever the player happens
+            // to stand. Refuse instead. Storing an unresolved location is fine (#1366); granting
+            // FACTION ownership off the back of an unverifiable one is not.
+            if (worldDeferred) {
+                sender.sendMessage(ChatColor.RED + "\u2716 World '" + locWorldName + "' is not loaded, so its "
+                        + "GriefPrevention claim cannot be checked. Load the world, or ask an admin.");
                 return true;
             }
             Location checkLocation = parsedLocation != null ? parsedLocation : player.getLocation();
@@ -249,8 +269,10 @@ public class LoreAddSubCommand implements SubCommand {
         }
 
         // Set location: --at flag takes priority, then player location for spatial types
-        if (parsedLocation != null) {
-            entry.setLocation(parsedLocation);
+        if (locWorldName != null && coords != null) {
+            // By NAME, so an unloaded world keeps its coordinates instead of losing them (#1366).
+            // Also stamps world_status metadata.
+            entry.applyLocationByWorldName(locWorldName, coords[0], coords[1], coords[2]);
         } else if (player != null && type.isLocationCapable()) {
             entry.setLocation(player.getLocation());
         }
@@ -272,6 +294,14 @@ public class LoreAddSubCommand implements SubCommand {
                                  String name, boolean isPlayer, boolean autoApprove, boolean success) {
         if (success) {
             sender.sendMessage(ChatColor.GREEN + "✓ Lore entry added: " + entry.getName() + " (" + entry.getType() + ")");
+            // Say it out loud. The coordinates ARE stored, but the world is not up, so nothing
+            // that needs a live World (dynmap markers, proximity discovery) will act on them yet.
+            // Reporting it here is also what makes a mistyped world name visible immediately,
+            // since the name is deliberately not validated against the server (#1366).
+            if (entry.hasUnresolvedLocation()) {
+                sender.sendMessage(ChatColor.YELLOW + "⚠ World '" + entry.getDeferredWorldName() + "' is not loaded. "
+                        + "Coordinates stored (world_status=unloaded); they resolve when the world loads.");
+            }
             if (autoApprove) {
                 boolean approved = plugin.getLoreManager().approveLoreEntrySync(entry.getUUID());
                 if (approved) {
