@@ -440,12 +440,18 @@ public class LoreEntry {
             json.put("nbtData", nbtData);
         }
 
-        if (location != null) {
+        // Stored form, so an entry in an unloaded world reports its coordinates instead of
+        // reporting none (#1366). This is what the REST API serialises, and null here meant the
+        // API contradicted the database: the lore_location row existed, the response said there
+        // was no location. Reading the raw field also skipped the deferred resolution entirely,
+        // so even a since-loaded world stayed null until something else called getLocation().
+        StoredLocation storedLocation = getStoredLocation();
+        if (storedLocation != null) {
             JSONObject locationJson = new JSONObject();
-            locationJson.put("world", location.getWorld().getName());
-            locationJson.put("x", location.getX());
-            locationJson.put("y", location.getY());
-            locationJson.put("z", location.getZ());
+            locationJson.put("world", storedLocation.world());
+            locationJson.put("x", storedLocation.x());
+            locationJson.put("y", storedLocation.y());
+            locationJson.put("z", storedLocation.z());
             json.put("location", locationJson);
         }
 
