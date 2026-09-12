@@ -8,6 +8,7 @@ import org.fourz.RVNKLore.data.repository.DiscoveryRepository;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreManager;
 import org.fourz.RVNKLore.lore.player.PlayerManager;
+import org.fourz.RVNKLore.service.IDiscoveryService;
 import org.fourz.rvnkcore.util.log.LogManager;
 
 import java.util.*;
@@ -30,7 +31,7 @@ import java.util.concurrent.TimeUnit;
  * boolean discovered = discoveryManager.hasPlayerDiscovered(player, entry);
  * }</pre>
  */
-public class DiscoveryManager {
+public class DiscoveryManager implements IDiscoveryService {
 
     private final RVNKLore plugin;
     private final LogManager logger;
@@ -283,6 +284,94 @@ public class DiscoveryManager {
             }
             return entries;
         });
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // IDiscoveryService (#1650) — the cross-plugin surface.
+    //
+    // Persistence has worked since #1832; what was missing was any way to reach it from outside
+    // RVNKLore. These three methods are that surface and deliberately speak only JDK types, since
+    // consumers resolve them by reflection through RVNKCore's ServiceRegistry and cannot see
+    // LoreEntry or DiscoveryTriggerType.
+    // ---------------------------------------------------------------------------------------
+
+    @Override
+    public CompletableFuture<Boolean> grantDiscovery(UUID playerUuid, String entryId, String triggerType) {
+        if (playerUuid == null || entryId == null) {
+            return CompletableFuture.completedFuture(false);
+        }
+
+        LoreEntry entry = loreManager.getLoreById(entryId).orElse(null);
+        if (entry == null) {
+            logger.warning("grantDiscovery: no lore entry with id " + entryId);
+            return CompletableFuture.completedFuture(false);
+        }
+
+        DiscoveryTriggerType trigger = parseTrigger(triggerType);
+        Player player = Bukkit.getPlayer(playerUuid);
+
+        // Online: take the full path so the player gets the event, the cooldown and the chime.
+        if (player != null) {
+            return triggerDiscovery(player, entry, trigger, player.getLocation());
+        }
+
+        // Offline: persist anyway. A quest reward earned while offline is still earned
+        // (RVNKQuests #1983), and there is nobody to notify, so the event and notification are
+        // skipped rather than faked. isFirstDiscovery is computed the same way triggerDiscovery
+        // does it, so the server-first flag stays meaningful on this path too.
+        return hasPlayerDiscoveredAsync(playerUuid, entryId).thenCompose(already -> {
+            if (already) {
+                // The unique constraint makes a repeat write harmless, but returning early keeps
+                // the first-discoverer cache from being rewritten by a retry.
+                return CompletableFuture.completedFuture(true);
+            }
+            boolean isFirstDiscovery = !firstDiscoverers.containsKey(entryId);
+            return recordDiscovery(playerUuid, entryId, isFirstDiscovery, trigger, null);
+        }).exceptionally(ex -> {
+            logger.error("grantDiscovery failed for " + playerUuid + " / " + entryId, ex);
+            return false;
+        });
+    }
+
+    @Override
+    public CompletableFuture<Boolean> hasDiscovered(UUID playerUuid, String entryId) {
+        if (playerUuid == null || entryId == null) {
+            return CompletableFuture.completedFuture(false);
+        }
+        return hasPlayerDiscoveredAsync(playerUuid, entryId);
+    }
+
+    @Override
+    public CompletableFuture<List<String>> getDiscoveredEntryIds(UUID playerUuid) {
+        if (playerUuid == null) {
+            return CompletableFuture.completedFuture(Collections.emptyList());
+        }
+        // Straight from the repository — the LoreEntry-resolving getPlayerDiscoveries() above would
+        // silently drop any id whose entry no longer loads, and a caller asking "what has this
+        // player found" should not lose rows to an unrelated lookup failure.
+        if (discoveryRepository != null) {
+            return discoveryRepository.getDiscoveredEntryIds(playerUuid);
+        }
+        return playerManager.getPlayerLoreEntryIds(playerUuid);
+    }
+
+    /**
+     * Resolve a trigger-type name supplied by another plugin.
+     *
+     * <p>Falls back to {@link DiscoveryTriggerType#EXTERNAL} rather than rejecting the grant: the
+     * discovery is the thing worth keeping, and losing it because a caller sent an unknown
+     * provenance label would be a poor trade.</p>
+     */
+    private DiscoveryTriggerType parseTrigger(String triggerType) {
+        if (triggerType == null || triggerType.isBlank()) {
+            return DiscoveryTriggerType.EXTERNAL;
+        }
+        try {
+            return DiscoveryTriggerType.valueOf(triggerType.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            logger.debug("Unknown discovery trigger '" + triggerType + "' - recording as EXTERNAL");
+            return DiscoveryTriggerType.EXTERNAL;
+        }
     }
 
     /**

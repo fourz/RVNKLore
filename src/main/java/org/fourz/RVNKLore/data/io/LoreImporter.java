@@ -2,8 +2,6 @@ package org.fourz.RVNKLore.data.io;
 
 import com.google.gson.*;
 import org.bukkit.Bukkit;
-import org.bukkit.Location;
-import org.bukkit.World;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreMetadataKeys;
@@ -317,10 +315,7 @@ public class LoreImporter {
             }
 
             if (json.has("location")) {
-                Location location = parseJsonLocation(json.getAsJsonObject("location"), warnings);
-                if (location != null) {
-                    entry.setLocation(location);
-                }
+                applyJsonLocation(entry, json.getAsJsonObject("location"), warnings);
             }
 
             if (json.has("submitted_by")) {
@@ -416,10 +411,7 @@ public class LoreImporter {
             }
 
             if (map.containsKey("location")) {
-                Location location = parseYamlLocation((Map<String, Object>) map.get("location"), warnings);
-                if (location != null) {
-                    entry.setLocation(location);
-                }
+                applyYamlLocation(entry, (Map<String, Object>) map.get("location"), warnings);
             }
 
             if (map.containsKey("submitted_by")) {
@@ -467,47 +459,54 @@ public class LoreImporter {
     /**
      * Parse location from JSON.
      */
-    private Location parseJsonLocation(JsonObject json, List<String> warnings) {
+    /**
+     * Attach a JSON location to {@code entry}, keeping the coordinates when the world is unloaded.
+     *
+     * <p>This used to return null for an unresolvable world and warn "location skipped", which
+     * dropped the coordinates outright. The arcology worlds — koz, zeal, zothique, alphac — are
+     * valid and visitable but routinely not loaded on whichever server runs the import, so the
+     * common case for imported location lore was the case that silently lost it (#1366).</p>
+     *
+     * <p>The world name is stored verbatim and <b>not</b> validated against the server. That is
+     * the locked decision for this lane: a name cannot be checked when the world is legitimately
+     * absent, so guessing would reject good data as often as it caught a typo. Provenance is
+     * recorded instead, via {@code world_status} metadata.</p>
+     */
+    private void applyJsonLocation(LoreEntry entry, JsonObject json, List<String> warnings) {
         try {
             String worldName = json.get("world").getAsString();
             double x = json.get("x").getAsDouble();
             double y = json.get("y").getAsDouble();
             double z = json.get("z").getAsDouble();
 
-            World world = Bukkit.getWorld(worldName);
-            if (world == null) {
-                warnings.add("World not found: " + worldName + ", location skipped");
-                return null;
+            entry.applyLocationByWorldName(worldName, x, y, z);
+            if (Bukkit.getWorld(worldName) == null) {
+                warnings.add("World '" + worldName + "' is not loaded; location stored as unresolved"
+                        + " (world_status=unloaded)");
             }
-
-            return new Location(world, x, y, z);
         } catch (Exception e) {
             warnings.add("Invalid location format");
-            return null;
         }
     }
 
     /**
-     * Parse location from YAML map.
+     * Attach a YAML location to {@code entry}. See {@link #applyJsonLocation} — same rules (#1366).
      */
     @SuppressWarnings("unchecked")
-    private Location parseYamlLocation(Map<String, Object> map, List<String> warnings) {
+    private void applyYamlLocation(LoreEntry entry, Map<String, Object> map, List<String> warnings) {
         try {
             String worldName = (String) map.get("world");
             double x = ((Number) map.get("x")).doubleValue();
             double y = ((Number) map.get("y")).doubleValue();
             double z = ((Number) map.get("z")).doubleValue();
 
-            World world = Bukkit.getWorld(worldName);
-            if (world == null) {
-                warnings.add("World not found: " + worldName + ", location skipped");
-                return null;
+            entry.applyLocationByWorldName(worldName, x, y, z);
+            if (Bukkit.getWorld(worldName) == null) {
+                warnings.add("World '" + worldName + "' is not loaded; location stored as unresolved"
+                        + " (world_status=unloaded)");
             }
-
-            return new Location(world, x, y, z);
         } catch (Exception e) {
             warnings.add("Invalid location format");
-            return null;
         }
     }
 

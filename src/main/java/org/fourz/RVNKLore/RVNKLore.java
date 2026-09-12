@@ -994,6 +994,14 @@ public class RVNKLore extends JavaPlugin {
             }
             registerMethod.invoke(serviceRegistry, ILoreItemResolver.class, itemManager);
             serviceCount++;
+            // #1650: discovery persistence has existed since #1832 but was unreachable from other
+            // plugins, so RVNKQuests' LORE reward was a stub that reported success and wrote
+            // nothing. Registering it is what makes that reward real.
+            if (discoveryManager != null) {
+                registerMethod.invoke(serviceRegistry,
+                    org.fourz.RVNKLore.service.IDiscoveryService.class, discoveryManager);
+                serviceCount++;
+            }
 
             rvnkCoreAvailable = true;
             rvnkCoreInstance = coreInstance;
@@ -1065,6 +1073,7 @@ public class RVNKLore extends JavaPlugin {
                 Class<?> loreApiServiceClass = Class.forName("org.fourz.rvnkcore.api.service.ILoreApiService");
                 unregisterMethod.invoke(serviceRegistry, loreApiServiceClass);
             } catch (ClassNotFoundException ignored) {}
+            unregisterMethod.invoke(serviceRegistry, org.fourz.RVNKLore.service.IDiscoveryService.class);
             unregisterMethod.invoke(serviceRegistry, ILoreItemResolver.class);
             unregisterMethod.invoke(serviceRegistry, ILoreBookService.class);
             unregisterMethod.invoke(serviceRegistry, IPlayerLoreService.class);

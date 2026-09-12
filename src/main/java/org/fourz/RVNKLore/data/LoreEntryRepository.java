@@ -694,22 +694,32 @@ public class LoreEntryRepository implements ILoreEntryRepository {
             JSONObject content = new JSONObject();
             content.put("description", entry.getDescription());
             content.put("nbt_data", entry.getNbtData());
-            // Include location if available
-            Location loc = entry.getLocation();
-            if (loc != null && loc.getWorld() != null) {
+            // Include location if available.
+            //
+            // Reads the STORED form, not getLocation() (#1366). getLocation() returns null while
+            // the world is unloaded, so an entry in alphac/koz/zeal that was loaded, edited for
+            // any unrelated reason and saved again lost its coordinates here — silently, and for
+            // good, because the write is what the next read parses. The reader below already
+            // handles an unresolvable world by deferring it; only the writer still insisted on a
+            // live World handle that the varchar column never needed.
+            LoreEntry.StoredLocation loc = entry.getStoredLocation();
+            if (loc != null) {
                 JSONObject locJson = new JSONObject();
-                locJson.put("world", loc.getWorld().getName());
-                locJson.put("x", loc.getX());
-                locJson.put("y", loc.getY());
-                locJson.put("z", loc.getZ());
+                locJson.put("world", loc.world());
+                locJson.put("x", loc.x());
+                locJson.put("y", loc.y());
+                locJson.put("z", loc.z());
                 content.put("location", locJson);
             }
-            // Include metadata
+            // Include metadata, NESTED under "metadata" — which is what this class's own reader
+            // expects (see the content.containsKey("metadata") branch), and what LoreEntry.toJson()
+            // and LoreExporter already emit. Writing the pairs at the top level instead meant no
+            // metadata written through this path was ever read back.
             Map<String, String> metadata = entry.getAllMetadata();
-            if (metadata != null) {
-                for (Map.Entry<String, String> meta : metadata.entrySet()) {
-                    content.put(meta.getKey(), meta.getValue());
-                }
+            if (metadata != null && !metadata.isEmpty()) {
+                JSONObject metaJson = new JSONObject();
+                metaJson.putAll(metadata);
+                content.put("metadata", metaJson);
             }
             stmt.setString(3, content.toJSONString());
             // Generate and set versioned slug to avoid UNIQUE constraint violations.
