@@ -12,6 +12,8 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.fourz.RVNKLore.RVNKLore;
 import org.fourz.RVNKLore.lore.LoreEntry;
 import org.fourz.RVNKLore.lore.LoreType;
+import org.fourz.rvnkcore.RVNKCore;
+import org.fourz.rvnkcore.api.service.PlayerPreferencesService;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -22,6 +24,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 /**
@@ -29,6 +32,7 @@ import java.util.stream.Collectors;
  */
 public class EnchantedItemLoreHandler extends DefaultLoreHandler {
 
+    private static final String PREFS_PLUGIN_ID = "rvnklore";
     private static final DateTimeFormatter NAME_TIMESTAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     public EnchantedItemLoreHandler(RVNKLore plugin) {
@@ -40,13 +44,19 @@ public class EnchantedItemLoreHandler extends DefaultLoreHandler {
     }
 
     /**
-     * Listen for enchant item events to create lore entries for special enchantments
+     * Listen for enchant item events to create lore entries for special enchantments.
+     * Recorded only when the enchanter holds {@link EnchantChronicle#PERMISSION} and has opted in.
      */
     @EventHandler
     public void onItemEnchant(EnchantItemEvent event) {
-        if (isNotableEnchantment(event.getEnchantsToAdd())) {
-            createEnchantmentLoreEntry(event);
+        if (!isNotableEnchantment(event.getEnchantsToAdd())) {
+            return;
         }
+        Player enchanter = event.getEnchanter();
+        if (!enchanter.hasPermission(EnchantChronicle.PERMISSION)) {
+            return;
+        }
+        createEnchantmentLoreEntry(event);
     }
     
     /**
@@ -58,28 +68,52 @@ public class EnchantedItemLoreHandler extends DefaultLoreHandler {
     }
     
     /**
-     * Create a lore entry for a significant enchanted item
+     * Create a lore entry for a significant enchanted item, if the enchanter opted in.
+     * The entry is built here on the main thread; only the preference read and the save are async.
      */
     private void createEnchantmentLoreEntry(EnchantItemEvent event) {
+        Player enchanter = event.getEnchanter();
         Map<String, Integer> enchants = new LinkedHashMap<>();
         event.getEnchantsToAdd().forEach((enchant, level) -> enchants.put(enchant.getKey().getKey(), level));
 
         LoreEntry entry = buildEnchantmentEntry(
-                event.getEnchanter().getName(),
-                event.getEnchanter().getUniqueId(),
+                enchanter.getName(),
+                enchanter.getUniqueId(),
                 event.getItem().getType(),
                 enchants,
                 event.getExpLevelCost(),
                 event.getEnchantBlock().getLocation(),
-                LocalDateTime.now());
+                LocalDateTime.now(),
+                enchanter.hasPermission("rvnklore.approve.own"));
 
-        getPlugin().getLoreManager().addLoreEntry(entry)
+        // Fail closed: without the preference service the opt-in cannot be read, so nothing records.
+        PlayerPreferencesService prefs = RVNKCore.getServiceSafe(PlayerPreferencesService.class);
+        if (prefs == null) {
+            logger.debug("Enchant chronicle skipped for " + enchanter.getName() + " - preferences unavailable");
+            return;
+        }
+
+        prefs.getPreferences(enchanter.getUniqueId(), PREFS_PLUGIN_ID)
+            .thenCompose(dto -> {
+                if (!EnchantChronicle.isOptedIn(dto.getMetadata())) {
+                    logger.debug("Enchant chronicle skipped for " + enchanter.getName() + " - not opted in");
+                    return CompletableFuture.<Boolean>completedFuture(null);
+                }
+                return getPlugin().getLoreManager().addLoreEntry(entry);
+            })
             .thenAccept(success -> {
+                if (success == null) {
+                    return;
+                }
                 if (success) {
                     logger.debug("Enchanted item lore entry saved: " + entry.getName());
                 } else {
                     logger.warning("Enchanted item lore entry not saved: " + entry.getName());
                 }
+            })
+            .exceptionally(ex -> {
+                logger.warning("Enchant chronicle failed for " + enchanter.getName() + ": " + ex.getMessage());
+                return null;
             });
     }
 
@@ -94,7 +128,7 @@ public class EnchantedItemLoreHandler extends DefaultLoreHandler {
      */
     static LoreEntry buildEnchantmentEntry(String playerName, UUID playerUuid, Material material,
                                            Map<String, Integer> enchants, int expCost,
-                                           Location location, LocalDateTime when) {
+                                           Location location, LocalDateTime when, boolean approved) {
         String itemName = prettyName(material.name());
         String enchantList = enchants.entrySet().stream()
                 .map(e -> prettyName(e.getKey()) + " " + roman(e.getValue()))
@@ -115,8 +149,8 @@ public class EnchantedItemLoreHandler extends DefaultLoreHandler {
                 .map(e -> e.getKey() + ":" + e.getValue())
                 .collect(Collectors.joining(",")));
 
-        // Auto-approve since it's system-generated
-        entry.setApproved(true);
+        // Matches the other event-triggered recorders: auto-approve only with rvnklore.approve.own
+        entry.setApproved(approved);
         return entry;
     }
 

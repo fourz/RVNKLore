@@ -33,8 +33,12 @@ class EnchantedItemLoreHandlerTest {
     }
 
     private static LoreEntry build(String player, LocalDateTime when) {
+        return build(player, when, false);
+    }
+
+    private static LoreEntry build(String player, LocalDateTime when, boolean approved) {
         return EnchantedItemLoreHandler.buildEnchantmentEntry(player, PLAYER, Material.DIAMOND_PICKAXE,
-                pickaxeEnchants(), 30, new Location(null, 10, 64, -20), when);
+                pickaxeEnchants(), 30, new Location(null, 10, 64, -20), when, approved);
     }
 
     @Test
@@ -60,7 +64,6 @@ class EnchantedItemLoreHandlerTest {
         assertEquals("30", entry.getMetadata("exp_cost"));
         assertEquals("efficiency:5,unbreaking:3", entry.getMetadata("enchantments"));
         assertEquals("crumpetm32588", entry.getSubmittedBy());
-        assertTrue(entry.isApproved());
         assertNotNull(entry.getLocation());
     }
 
@@ -79,6 +82,36 @@ class EnchantedItemLoreHandlerTest {
         LoreEntry entry = build("crumpetm32588", WHEN);
         assertFalse(entry.getName().isEmpty());
         assertFalse(entry.getDescription().isEmpty());
+    }
+
+    @Test
+    @DisplayName("approval follows rvnklore.approve.own, not unconditional")
+    void approvalIsPassedThrough() {
+        assertFalse(build("crumpetm32588", WHEN, false).isApproved());
+        assertTrue(build("crumpetm32588", WHEN, true).isApproved());
+    }
+
+    @Test
+    @DisplayName("opt-in: only an explicit true counts as consent")
+    void optInRequiresExplicitTrue() {
+        assertFalse(EnchantChronicle.isOptedIn(null));
+        assertFalse(EnchantChronicle.isOptedIn(Map.of()));
+        assertFalse(EnchantChronicle.isOptedIn(Map.of(EnchantChronicle.META_KEY, "false")));
+        assertFalse(EnchantChronicle.isOptedIn(Map.of(EnchantChronicle.META_KEY, "")));
+        assertTrue(EnchantChronicle.isOptedIn(Map.of(EnchantChronicle.META_KEY, "true")));
+        assertTrue(EnchantChronicle.isOptedIn(Map.of(EnchantChronicle.META_KEY, "TRUE")));
+    }
+
+    @Test
+    @DisplayName("gate names match plugin.yml and the prefs metadata key")
+    void gateConstants() throws Exception {
+        assertEquals("enchant_chronicle", EnchantChronicle.META_KEY);
+        try (java.io.InputStream in = getClass().getResourceAsStream("/plugin.yml")) {
+            assertNotNull(in, "plugin.yml on the test classpath");
+            String yml = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            assertTrue(yml.contains("\n  " + EnchantChronicle.PERMISSION + ":\n"),
+                    "plugin.yml declares " + EnchantChronicle.PERMISSION);
+        }
     }
 
     @Test
