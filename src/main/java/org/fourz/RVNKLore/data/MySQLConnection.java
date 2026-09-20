@@ -114,6 +114,13 @@ public class MySQLConnection extends DatabaseConnection {
             .build();
 
         try {
+            if (!primaryReachable()) {
+                // RVNKCore already probed the host and it is not answering; building the pool would
+                // only spend this plugin's own 30s HikariCP window reaching the same answer (#2103).
+                throw new SQLException("Primary MySQL host is unreachable (reported by RVNKCore)"
+                        + " - falling back to SQLite without waiting for the pool timeout");
+            }
+
             rvnkProvider = new ConnectionProviderFactory(plugin).createConnectionProvider(config);
         } catch (Exception e) {
             throw new SQLException("Failed to create MySQL ConnectionProvider: " + e.getMessage(), e);
@@ -190,5 +197,27 @@ public class MySQLConnection extends DatabaseConnection {
     @Override
     public String getDatabaseType() {
         return "mysql";
+    }
+
+    /**
+     * Asks RVNKCore whether the shared database host is answering (#2103).
+     *
+     * <p>Optimistic by design: an older RVNKCore that does not publish the service, or any failure
+     * reaching it, answers {@code true} so this plugin still tries its own connection. The service
+     * can only save time; it never blocks a connection that would have worked.</p>
+     */
+    private boolean primaryReachable() {
+        try {
+            org.fourz.rvnkcore.RVNKCore core = org.fourz.rvnkcore.RVNKCore.getInstance();
+            if (core == null || core.getServiceRegistry() == null) {
+                return true;
+            }
+            org.fourz.rvnkcore.api.service.DatabaseAvailabilityService availability =
+                    core.getServiceRegistry().getService(
+                            org.fourz.rvnkcore.api.service.DatabaseAvailabilityService.class);
+            return availability == null || availability.isPrimaryReachable();
+        } catch (Throwable ignored) {
+            return true;
+        }
     }
 }
