@@ -4,6 +4,7 @@ import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.fourz.RVNKLore.RVNKLore;
+import org.fourz.RVNKLore.handler.EnchantChronicle;
 import org.fourz.rvnkcore.RVNKCore;
 import org.fourz.rvnkcore.api.service.PlayerPreferencesService;
 import org.fourz.rvnkcore.util.log.LogManager;
@@ -26,6 +27,7 @@ import java.util.UUID;
  *   /lore prefs quiet &lt;startHour&gt; &lt;endHour&gt;
  *   /lore prefs quiet disable
  *   /lore prefs channel &lt;type&gt; &lt;channel&gt; &lt;on|off&gt;
+ *   /lore prefs chronicle [on|off]
  */
 public class LorePrefsSubCommand implements SubCommand {
 
@@ -70,6 +72,8 @@ public class LorePrefsSubCommand implements SubCommand {
                 return handleQuietHours(player, playerId, args);
             case "channel":
                 return handleChannel(player, playerId, args);
+            case "chronicle":
+                return handleChronicle(player, playerId, args);
             default:
                 showUsage(player);
                 return true;
@@ -94,6 +98,11 @@ public class LorePrefsSubCommand implements SubCommand {
 
                     player.sendMessage(ChatColor.YELLOW + "Notification Types:");
                     player.sendMessage(ChatColor.GRAY + "  discovery, achievement, collection_completion");
+                    if (player.hasPermission(EnchantChronicle.PERMISSION)) {
+                        String chronicle = EnchantChronicle.isOptedIn(prefs.getMetadata())
+                                ? ChatColor.GREEN + "ON" : ChatColor.RED + "OFF";
+                        player.sendMessage(ChatColor.YELLOW + "Enchant Chronicle: " + chronicle);
+                    }
                     player.sendMessage("");
                     player.sendMessage(ChatColor.GRAY + "Use /lore prefs <action> to modify.");
                     player.sendMessage(ChatColor.GRAY + "Or use /pref " + PLUGIN_ID + " for full details.");
@@ -241,9 +250,60 @@ public class LorePrefsSubCommand implements SubCommand {
         return true;
     }
 
+    /**
+     * Opt in or out of recording notable enchants as lore (#2099). Requires the chronicle node;
+     * the listener checks the node again at enchant time, so revoking it stops recording.
+     */
+    private boolean handleChronicle(Player player, UUID playerId, String[] args) {
+        if (!player.hasPermission(EnchantChronicle.PERMISSION)) {
+            player.sendMessage(ChatColor.RED + "✖ Enchant chronicling is not available to you.");
+            return true;
+        }
+
+        PlayerPreferencesService service = RVNKCore.getServiceSafe(PlayerPreferencesService.class);
+
+        if (args.length < 2) {
+            service.getPreferences(playerId, PLUGIN_ID)
+                    .thenAccept(prefs -> {
+                        boolean on = EnchantChronicle.isOptedIn(prefs.getMetadata());
+                        player.sendMessage(ChatColor.YELLOW + "Enchant Chronicle: "
+                                + (on ? ChatColor.GREEN + "ON" : ChatColor.RED + "OFF"));
+                        player.sendMessage(ChatColor.GRAY + "Use /lore prefs chronicle <on|off>");
+                    })
+                    .exceptionally(ex -> {
+                        player.sendMessage(ChatColor.RED + "✖ Error loading preferences: " + ex.getMessage());
+                        logger.warning("Error loading enchant chronicle preference", ex);
+                        return null;
+                    });
+            return true;
+        }
+
+        String state = args[1].toLowerCase();
+        if (!state.equals("on") && !state.equals("off")) {
+            player.sendMessage(ChatColor.RED + "✖ State must be 'on' or 'off'");
+            return true;
+        }
+        boolean enabled = state.equals("on");
+
+        service.getPreferences(playerId, PLUGIN_ID)
+                .thenCompose(prefs -> {
+                    prefs.getMetadata().put(EnchantChronicle.META_KEY, String.valueOf(enabled));
+                    return service.savePreferences(prefs);
+                })
+                .thenRun(() -> player.sendMessage(enabled
+                        ? ChatColor.AQUA + "✓ Your notable enchants will now be recorded as lore."
+                        : ChatColor.AQUA + "✓ Your enchants will no longer be recorded as lore."))
+                .exceptionally(ex -> {
+                    player.sendMessage(ChatColor.RED + "✖ Error saving preference: " + ex.getMessage());
+                    logger.warning("Error saving enchant chronicle preference", ex);
+                    return null;
+                });
+        return true;
+    }
+
     private void showUsage(Player player) {
         player.sendMessage(ChatColor.RED + "✖ Unknown preference action");
-        player.sendMessage(ChatColor.YELLOW + "Usage: /lore prefs [toggle|enable|disable|quiet|channel]");
+        player.sendMessage(ChatColor.YELLOW + "Usage: /lore prefs [toggle|enable|disable|quiet|channel|chronicle]");
         player.sendMessage(ChatColor.GRAY + "Use /lore prefs for more information");
     }
 
@@ -270,11 +330,17 @@ public class LorePrefsSubCommand implements SubCommand {
             completions.add("disable");
             completions.add("quiet");
             completions.add("channel");
+            if (sender.hasPermission(EnchantChronicle.PERMISSION)) {
+                completions.add("chronicle");
+            }
         } else if (args.length == 2) {
             if ("enable".equalsIgnoreCase(args[0]) || "disable".equalsIgnoreCase(args[0])) {
                 completions.add("discovery");
                 completions.add("achievement");
                 completions.add("collection_completion");
+            } else if ("chronicle".equalsIgnoreCase(args[0])) {
+                completions.add("on");
+                completions.add("off");
             } else if ("quiet".equalsIgnoreCase(args[0])) {
                 completions.add("disable");
                 completions.add("0");
@@ -306,7 +372,7 @@ public class LorePrefsSubCommand implements SubCommand {
     /** Grammar and worked examples served by {@code /lore help <verb>} (#1981). */
     @Override
     public String getUsage() {
-        return "/lore prefs [toggle|enable|disable|quiet|channel]";
+        return "/lore prefs [toggle|enable|disable|quiet|channel|chronicle]";
     }
 
     @Override
@@ -318,6 +384,8 @@ public class LorePrefsSubCommand implements SubCommand {
                 "/lore prefs quiet 22 7",
                 "/lore prefs quiet disable",
                 "/lore prefs channel discovery chat off",
+                "/lore prefs chronicle on",
+                "  Record your notable enchants as lore (needs rvnklore.enchant.chronicle)",
                 "Types: discovery achievement collection_completion");
     }
 }

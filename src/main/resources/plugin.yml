@@ -140,6 +140,9 @@ permissions:
   rvnklore.library.submit:
     description: Trigger lore recording when placing a written book on a lectern
     default: op
+  rvnklore.enchant.chronicle:
+    description: Record your notable enchants as lore once you opt in (/lore prefs chronicle on)
+    default: op
   rvnklore.forge:
     description: Publish the held item to the lore catalog at a [forge] anvil, and enrich it with /lore item text
     default: true
