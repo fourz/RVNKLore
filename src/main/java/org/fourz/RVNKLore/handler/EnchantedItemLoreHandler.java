@@ -33,7 +33,7 @@ import java.util.stream.Collectors;
 public class EnchantedItemLoreHandler extends DefaultLoreHandler {
 
     private static final String PREFS_PLUGIN_ID = "rvnklore";
-    private static final DateTimeFormatter NAME_TIMESTAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final DateTimeFormatter NAME_TIMESTAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS");
 
     public EnchantedItemLoreHandler(RVNKLore plugin) {
         super(plugin);
@@ -124,7 +124,9 @@ public class EnchantedItemLoreHandler extends DefaultLoreHandler {
      * collection, and validates through this handler instead of ItemLoreHandler. lore_entry is
      * UNIQUE (name, entry_type) and a collision is only logged at DEBUG, so the name carries the
      * enchanter and a timestamp - a per-material name would keep the first record and silently
-     * drop every later one.
+     * drop every later one. The timestamp runs to MILLISECONDS: at second granularity two enchants
+     * of the same material by the same player inside one second collide and the later one is
+     * dropped silently (PR #21 review).
      */
     static LoreEntry buildEnchantmentEntry(String playerName, UUID playerUuid, Material material,
                                            Map<String, Integer> enchants, int expCost,
@@ -140,10 +142,14 @@ public class EnchantedItemLoreHandler extends DefaultLoreHandler {
         entry.setDescription(playerName + " enchanted a " + itemName + " with " + enchantList
                 + " for " + expCost + " levels.");
         entry.setLocation(location);
-        entry.setSubmittedBy(playerName);
+        // submitter_uuid holds a UUID string - LoreEntryRepository:29-31 calls name-strings here a
+        // legacy shape that new rows must not create, and it is what makes attribution survive a
+        // rename. The readable name stays in the description and metadata (PR #21 review).
+        entry.setSubmittedBy(playerUuid.toString());
 
         entry.addMetadata("material", material.name());
         entry.addMetadata("enchanter_uuid", playerUuid.toString());
+        entry.addMetadata("enchanter_name", playerName);
         entry.addMetadata("exp_cost", String.valueOf(expCost));
         entry.addMetadata("enchantments", enchants.entrySet().stream()
                 .map(e -> e.getKey() + ":" + e.getValue())

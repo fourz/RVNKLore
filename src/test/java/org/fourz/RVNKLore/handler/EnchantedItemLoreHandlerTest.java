@@ -57,13 +57,16 @@ class EnchantedItemLoreHandlerTest {
     @DisplayName("name, description and metadata record who, what, and the cost")
     void recordsPayload() {
         LoreEntry entry = build("crumpetm32588", WHEN);
-        assertEquals("crumpetm32588's Diamond Pickaxe (2026-09-18 19:16:15)", entry.getName());
+        assertEquals("crumpetm32588's Diamond Pickaxe (2026-09-18 19:16:15.000)", entry.getName());
         assertEquals("crumpetm32588 enchanted a Diamond Pickaxe with Efficiency V, Unbreaking III for 30 levels.",
                 entry.getDescription());
         assertEquals(PLAYER.toString(), entry.getMetadata("enchanter_uuid"));
         assertEquals("30", entry.getMetadata("exp_cost"));
         assertEquals("efficiency:5,unbreaking:3", entry.getMetadata("enchantments"));
-        assertEquals("crumpetm32588", entry.getSubmittedBy());
+        // submitter_uuid is UUID-keyed so attribution survives a rename (PR #21 review);
+        // the readable name stays in the description and metadata.
+        assertEquals(PLAYER.toString(), entry.getSubmittedBy());
+        assertEquals("crumpetm32588", entry.getMetadata("enchanter_name"));
         assertNotNull(entry.getLocation());
     }
 
@@ -74,6 +77,15 @@ class EnchantedItemLoreHandlerTest {
                 build("crumpetm32588", WHEN.plusSeconds(11)).getName());
         assertNotEquals(build("crumpetm32588", WHEN).getName(),
                 build("BHScreep", WHEN).getName());
+    }
+
+    @Test
+    @DisplayName("two enchants inside the SAME second still get different names (PR #21 review)")
+    void namesDoNotCollideWithinOneSecond() {
+        // At second granularity these two shared a name, so the database's UNIQUE(name, entry_type)
+        // rejected the second one and the loss was only logged at DEBUG.
+        assertNotEquals(build("crumpetm32588", WHEN).getName(),
+                build("crumpetm32588", WHEN.plusNanos(40_000_000L)).getName());
     }
 
     @Test

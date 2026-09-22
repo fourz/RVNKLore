@@ -117,8 +117,11 @@ public class MySQLConnection extends DatabaseConnection {
             if (!primaryReachable(mysql.getHost(), mysql.getPort())) {
                 // RVNKCore already probed the host and it is not answering; building the pool would
                 // only spend this plugin's own 30s HikariCP window reaching the same answer (#2103).
-                throw new SQLException("Primary MySQL host is unreachable (reported by RVNKCore)"
-                        + " - falling back to SQLite without waiting for the pool timeout");
+                // Name the target: this class also backs cluster.mysql (DatabaseConnectionFactory:89),
+                // and "Primary MySQL host" would pin a cluster outage on the wrong database (PR #21).
+                throw new SQLException("MySQL host " + mysql.getHost() + ":" + mysql.getPort()
+                        + " (" + configPath + ") is unreachable (reported by RVNKCore)"
+                        + " - skipping the pool timeout and letting the caller fall back");
             }
 
             rvnkProvider = new ConnectionProviderFactory(plugin).createConnectionProvider(config);
