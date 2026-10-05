@@ -17,6 +17,7 @@ import org.fourz.RVNKLore.lore.LoreType;
 import org.fourz.RVNKLore.lore.item.ItemManager;
 import org.fourz.RVNKLore.lore.item.ItemProperties;
 import org.fourz.RVNKLore.service.ILoreBookService;
+import org.fourz.RVNKLore.util.AsciiPunctuation;
 import org.fourz.rvnkcore.util.log.LogManager;
 
 import java.time.format.DateTimeFormatter;
@@ -46,8 +47,9 @@ public class LoreBookManager implements ILoreBookService {
 
     // Configuration
     private static final int BASE_CUSTOM_MODEL_DATA = 7000;
-    private static final int MAX_CHARS_PER_PAGE = 256;
-    private static final int MAX_PAGES = 100;
+    private static final int MAX_PAGES = BookPageLayout.MAX_PAGES;
+    private static final char GRAY_CODE = '7';
+    private static final char DARK_GRAY_CODE = '8';
 
     public LoreBookManager(RVNKLore plugin) {
         this.plugin = plugin;
@@ -86,7 +88,7 @@ public class LoreBookManager implements ILoreBookService {
 
         // Set book title with rarity color
         String rawName = entry.getName() != null ? entry.getName() : "Unknown";
-        String displayName = formatSlugName(rawName);
+        String displayName = AsciiPunctuation.normalize(formatSlugName(rawName));
         String title = rarity.getColor() + displayName;
         if (title.length() > 32) {
             title = title.substring(0, 29) + "...";
@@ -95,13 +97,13 @@ public class LoreBookManager implements ILoreBookService {
 
         // Set author
         String author = entry.getSubmittedBy() != null ? entry.getSubmittedBy() : "Unknown";
-        meta.setAuthor(author);
+        meta.setAuthor(AsciiPunctuation.normalize(author));
 
         // Set generation (original, copy, etc.)
         meta.setGeneration(BookMeta.Generation.ORIGINAL);
 
         // Build book pages
-        List<String> pages = buildBookPages(entry, rarity);
+        List<String> pages = finalizePages(buildBookPages(entry, rarity));
         meta.setPages(pages);
 
         // Set display name with rarity
@@ -259,7 +261,8 @@ public class LoreBookManager implements ILoreBookService {
             if (book != null && title != null && !title.isEmpty()) {
                 BookMeta meta = (BookMeta) book.getItemMeta();
                 if (meta != null) {
-                    String displayTitle = title.length() > 32 ? title.substring(0, 29) + "..." : title;
+                    String asciiTitle = AsciiPunctuation.normalize(title);
+                    String displayTitle = asciiTitle.length() > 32 ? asciiTitle.substring(0, 29) + "..." : asciiTitle;
                     meta.setTitle(displayTitle);
                     meta.setDisplayName(ChatColor.GOLD + "" + ChatColor.BOLD + displayTitle);
                     book.setItemMeta(meta);
@@ -484,15 +487,8 @@ public class LoreBookManager implements ILoreBookService {
         if (entry.hasMetadata()) {
             Map<String, String> metadata = entry.getAllMetadata();
             if (!metadata.isEmpty()) {
-                StringBuilder metaPage = new StringBuilder();
-                metaPage.append(ChatColor.DARK_PURPLE).append(ChatColor.BOLD)
-                        .append("Details\n\n");
-                for (Map.Entry<String, String> meta : metadata.entrySet()) {
-                    metaPage.append(ChatColor.DARK_GRAY)
-                            .append(formatMetaKey(meta.getKey())).append(": ")
-                            .append(ChatColor.GRAY).append(meta.getValue()).append("\n");
-                }
-                pages.add(metaPage.toString());
+                pages.addAll(buildRecordPages(ChatColor.DARK_PURPLE + "" + ChatColor.BOLD + "Details",
+                        metadata));
             }
         }
 
@@ -545,24 +541,7 @@ public class LoreBookManager implements ILoreBookService {
         // --- Pages 2+: Biography ---
         String description = entry.getDescription();
         if (description != null && !description.isEmpty()) {
-            String bioHeader = ChatColor.DARK_GRAY + "" + ChatColor.ITALIC + "◆ History\n\n" + ChatColor.BLACK;
-            int firstPageCapacity = MAX_CHARS_PER_PAGE - bioHeader.length();
-
-            if (description.length() <= firstPageCapacity) {
-                pages.add(bioHeader + description);
-            } else {
-                // Break at word boundary for first bio page
-                int end = firstPageCapacity;
-                int lastSpace = description.lastIndexOf(' ', end);
-                if (lastSpace > 0) end = lastSpace;
-                pages.add(bioHeader + description.substring(0, end).trim());
-
-                // Remaining text on standard split pages
-                String remaining = description.substring(end).trim();
-                if (!remaining.isEmpty()) {
-                    pages.addAll(splitIntoPages(remaining));
-                }
-            }
+            pages.addAll(buildSectionPages("◆ History", description));
         }
 
         // --- Final page: Additional metadata record (fields not shown on identity page) ---
@@ -576,15 +555,8 @@ public class LoreBookManager implements ILoreBookService {
             }
         }
         if (!extraMeta.isEmpty()) {
-            StringBuilder recordPage = new StringBuilder();
-            recordPage.append(ChatColor.DARK_GRAY).append(ChatColor.ITALIC)
-                    .append("◆ Record\n\n");
-            for (Map.Entry<String, String> m : extraMeta.entrySet()) {
-                recordPage.append(ChatColor.DARK_GRAY)
-                        .append(formatMetaKey(m.getKey())).append(": ")
-                        .append(ChatColor.GRAY).append(m.getValue()).append("\n");
-            }
-            pages.add(recordPage.toString());
+            pages.addAll(buildRecordPages(ChatColor.DARK_GRAY + "" + ChatColor.ITALIC + "◆ Record",
+                    extraMeta));
         }
 
         return pages;
@@ -647,29 +619,13 @@ public class LoreBookManager implements ILoreBookService {
         // --- Pages 2+: Account ---
         String description = entry.getDescription();
         if (description != null && !description.isEmpty()) {
-            String accountHeader = ChatColor.DARK_GRAY + "" + ChatColor.ITALIC
-                    + "◆ Account\n\n" + ChatColor.BLACK;
-            int firstPageCapacity = MAX_CHARS_PER_PAGE - accountHeader.length();
-
-            if (description.length() <= firstPageCapacity) {
-                pages.add(accountHeader + description);
-            } else {
-                int end = firstPageCapacity;
-                int lastSpace = description.lastIndexOf(' ', end);
-                if (lastSpace > 0) end = lastSpace;
-                pages.add(accountHeader + description.substring(0, end).trim());
-                String remaining = description.substring(end).trim();
-                if (!remaining.isEmpty()) {
-                    pages.addAll(splitIntoPages(remaining));
-                }
-            }
+            pages.addAll(buildSectionPages("◆ Account", description));
         }
 
         // --- Optional: Participants page ---
         String participants = entry.getMetadata("participants");
         if (participants != null && !participants.isEmpty()) {
-            pages.add(ChatColor.DARK_GRAY + "" + ChatColor.ITALIC
-                    + "◆ Participants\n\n" + ChatColor.GRAY + participants);
+            pages.addAll(buildSectionPages("◆ Participants", participants, GRAY_CODE));
         }
 
         return pages;
@@ -719,29 +675,13 @@ public class LoreBookManager implements ILoreBookService {
         // --- Pages 2+: Objective ---
         String description = entry.getDescription();
         if (description != null && !description.isEmpty()) {
-            String objectiveHeader = ChatColor.DARK_GRAY + "" + ChatColor.ITALIC
-                    + "◆ Objective\n\n" + ChatColor.BLACK;
-            int firstPageCapacity = MAX_CHARS_PER_PAGE - objectiveHeader.length();
-
-            if (description.length() <= firstPageCapacity) {
-                pages.add(objectiveHeader + description);
-            } else {
-                int end = firstPageCapacity;
-                int lastSpace = description.lastIndexOf(' ', end);
-                if (lastSpace > 0) end = lastSpace;
-                pages.add(objectiveHeader + description.substring(0, end).trim());
-                String remaining = description.substring(end).trim();
-                if (!remaining.isEmpty()) {
-                    pages.addAll(splitIntoPages(remaining));
-                }
-            }
+            pages.addAll(buildSectionPages("◆ Objective", description));
         }
 
         // --- Optional: Reward page ---
         String reward = entry.getMetadata("reward");
         if (reward != null && !reward.isEmpty()) {
-            pages.add(ChatColor.DARK_GRAY + "" + ChatColor.ITALIC
-                    + "◆ Reward\n\n" + ChatColor.GRAY + reward);
+            pages.addAll(buildSectionPages("◆ Reward", reward, GRAY_CODE));
         }
 
         return pages;
@@ -795,26 +735,13 @@ public class LoreBookManager implements ILoreBookService {
         // --- Pages 2+: Description ---
         String description = entry.getDescription();
         if (description != null && !description.isEmpty()) {
-            String descHeader = ChatColor.DARK_GRAY + "" + ChatColor.ITALIC
-                    + "◆ Description\n\n" + ChatColor.BLACK;
-            int firstPageCapacity = MAX_CHARS_PER_PAGE - descHeader.length();
-            if (description.length() <= firstPageCapacity) {
-                pages.add(descHeader + description);
-            } else {
-                int end = firstPageCapacity;
-                int lastSpace = description.lastIndexOf(' ', end);
-                if (lastSpace > 0) end = lastSpace;
-                pages.add(descHeader + description.substring(0, end).trim());
-                String remaining = description.substring(end).trim();
-                if (!remaining.isEmpty()) pages.addAll(splitIntoPages(remaining));
-            }
+            pages.addAll(buildSectionPages("◆ Description", description));
         }
 
         // --- Optional: Notes ---
         String notes = entry.getMetadata("notes");
         if (notes != null && !notes.isEmpty()) {
-            pages.add(ChatColor.DARK_GRAY + "" + ChatColor.ITALIC
-                    + "◆ Notes\n\n" + ChatColor.GRAY + notes);
+            pages.addAll(buildSectionPages("◆ Notes", notes, GRAY_CODE));
         }
 
         return pages;
@@ -897,26 +824,13 @@ public class LoreBookManager implements ILoreBookService {
         // --- Pages 2+: History / About / Charter ---
         String description = entry.getDescription();
         if (description != null && !description.isEmpty()) {
-            String histHeader = ChatColor.DARK_GRAY + "" + ChatColor.ITALIC
-                    + historyLabel + "\n\n" + ChatColor.BLACK;
-            int firstPageCapacity = MAX_CHARS_PER_PAGE - histHeader.length();
-            if (description.length() <= firstPageCapacity) {
-                pages.add(histHeader + description);
-            } else {
-                int end = firstPageCapacity;
-                int lastSpace = description.lastIndexOf(' ', end);
-                if (lastSpace > 0) end = lastSpace;
-                pages.add(histHeader + description.substring(0, end).trim());
-                String remaining = description.substring(end).trim();
-                if (!remaining.isEmpty()) pages.addAll(splitIntoPages(remaining));
-            }
+            pages.addAll(buildSectionPages(historyLabel, description));
         }
 
         // --- Optional: Notable features ---
         String notable = entry.getMetadata("notable");
         if (notable != null && !notable.isEmpty()) {
-            pages.add(ChatColor.DARK_GRAY + "" + ChatColor.ITALIC
-                    + "◆ Notable\n\n" + ChatColor.GRAY + notable);
+            pages.addAll(buildSectionPages("◆ Notable", notable, GRAY_CODE));
         }
 
         return pages;
@@ -967,19 +881,7 @@ public class LoreBookManager implements ILoreBookService {
         // --- Pages 2+: Inscription ---
         String description = entry.getDescription();
         if (description != null && !description.isEmpty()) {
-            String inscHeader = ChatColor.DARK_GRAY + "" + ChatColor.ITALIC
-                    + "◆ Inscription\n\n" + ChatColor.BLACK;
-            int firstPageCapacity = MAX_CHARS_PER_PAGE - inscHeader.length();
-            if (description.length() <= firstPageCapacity) {
-                pages.add(inscHeader + description);
-            } else {
-                int end = firstPageCapacity;
-                int lastSpace = description.lastIndexOf(' ', end);
-                if (lastSpace > 0) end = lastSpace;
-                pages.add(inscHeader + description.substring(0, end).trim());
-                String remaining = description.substring(end).trim();
-                if (!remaining.isEmpty()) pages.addAll(splitIntoPages(remaining));
-            }
+            pages.addAll(buildSectionPages("◆ Inscription", description));
         }
 
         return pages;
@@ -1034,26 +936,13 @@ public class LoreBookManager implements ILoreBookService {
         // --- Pages 2+: Charter ---
         String description = entry.getDescription();
         if (description != null && !description.isEmpty()) {
-            String charterHeader = ChatColor.DARK_GRAY + "" + ChatColor.ITALIC
-                    + "◆ Charter\n\n" + ChatColor.BLACK;
-            int firstPageCapacity = MAX_CHARS_PER_PAGE - charterHeader.length();
-            if (description.length() <= firstPageCapacity) {
-                pages.add(charterHeader + description);
-            } else {
-                int end = firstPageCapacity;
-                int lastSpace = description.lastIndexOf(' ', end);
-                if (lastSpace > 0) end = lastSpace;
-                pages.add(charterHeader + description.substring(0, end).trim());
-                String remaining = description.substring(end).trim();
-                if (!remaining.isEmpty()) pages.addAll(splitIntoPages(remaining));
-            }
+            pages.addAll(buildSectionPages("◆ Charter", description));
         }
 
         // --- Optional: Territories ---
         String territories = entry.getMetadata("territories");
         if (territories != null && !territories.isEmpty()) {
-            pages.add(ChatColor.DARK_GRAY + "" + ChatColor.ITALIC
-                    + "◆ Territories\n\n" + ChatColor.GRAY + territories);
+            pages.addAll(buildSectionPages("◆ Territories", territories, GRAY_CODE));
         }
 
         return pages;
@@ -1105,66 +994,39 @@ public class LoreBookManager implements ILoreBookService {
 
         pages.add(header.toString());
 
-        // --- Page 2: Route Overview ---
-        StringBuilder overview = new StringBuilder();
-        overview.append(ChatColor.DARK_GRAY).append(ChatColor.ITALIC)
-                .append("◆ Overview\n\n").append(ChatColor.BLACK);
-
+        // --- Page 2+: Route Overview ---
+        // Pixel-wrapped like every other section (#1500); this replaced an 18-character manual
+        // wrap that never paginated, so a long description ran off the bottom of the page.
         String description = entry.getDescription();
         if (description != null && !description.isEmpty()) {
-            // Wrap text at ~18 chars per line for readability
-            String[] words = description.split(" ");
-            StringBuilder line = new StringBuilder();
-            for (String word : words) {
-                if (line.length() + word.length() + 1 > 18) {
-                    overview.append(line).append("\n");
-                    line = new StringBuilder();
-                }
-                if (line.length() > 0) line.append(" ");
-                line.append(word);
-            }
-            if (line.length() > 0) {
-                overview.append(line);
-            }
+            pages.addAll(buildSectionPages("◆ Overview", description));
         } else {
-            overview.append("No terrain information recorded.");
+            pages.add(ChatColor.DARK_GRAY + "" + ChatColor.ITALIC + "◆ Overview\n\n"
+                    + ChatColor.BLACK + "No terrain information recorded.");
         }
-
-        pages.add(overview.toString());
 
         // --- Page 3: Hazards & Warnings ---
-        StringBuilder hazards = new StringBuilder();
-        hazards.append(ChatColor.DARK_GRAY).append(ChatColor.ITALIC)
-                .append("◆ Hazards & Warnings\n\n").append(ChatColor.BLACK);
-
         String hazardInfo = entry.getMetadata("hazards");
-        if (hazardInfo != null && !hazardInfo.isEmpty()) {
-            hazards.append("Hazards: ").append(hazardInfo);
-        } else {
-            hazards.append("Hazards: None noted");
-        }
-        hazards.append("\n\nSeasonal: Unknown");
-
-        pages.add(hazards.toString());
+        String hazards = "Hazards: " + (hazardInfo != null && !hazardInfo.isEmpty() ? hazardInfo : "None noted")
+                + "\n\nSeasonal: Unknown";
+        pages.addAll(buildSectionPages("◆ Hazards & Warnings", hazards));
 
         // --- Page 4: Points of Interest & Footer ---
-        StringBuilder footer = new StringBuilder();
-        footer.append(ChatColor.DARK_GRAY).append(ChatColor.ITALIC)
-                .append("◆ See Also\n\n").append(ChatColor.GRAY);
-
-        // Extract landmark/city names from description if present
         String pointsOfInterest = entry.getMetadata("points_of_interest");
-        if (pointsOfInterest != null && !pointsOfInterest.isEmpty()) {
-            footer.append(pointsOfInterest);
+        List<String> seeAlso = buildSectionPages("◆ See Also",
+                pointsOfInterest != null && !pointsOfInterest.isEmpty() ? pointsOfInterest : "-", GRAY_CODE);
+        // Plugin-authored footer, so markup mode reads its colour codes; it wraps to 3 lines.
+        String footer = BookPageLayout.layout(ChatColor.DARK_GRAY + "" + ChatColor.ITALIC
+                + "Ravenkraft Road Survey\n" + ChatColor.DARK_GRAY + ChatColor.ITALIC
+                + "Office of Cartography").get(0);
+        String last = seeAlso.get(seeAlso.size() - 1);
+        int needed = last.split("\n", -1).length + 1 + footer.split("\n", -1).length;
+        if (needed <= BookPageLayout.LINES_PER_PAGE) {
+            seeAlso.set(seeAlso.size() - 1, last + "\n\n" + footer);
         } else {
-            footer.append("-");
+            seeAlso.add(footer);
         }
-
-        footer.append("\n\n").append(ChatColor.DARK_GRAY).append(ChatColor.ITALIC)
-                .append("Ravenkraft Road Survey\n")
-                .append("Office of Cartography");
-
-        pages.add(footer.toString());
+        pages.addAll(seeAlso);
 
         return pages;
     }
@@ -1224,25 +1086,13 @@ public class LoreBookManager implements ILoreBookService {
         // --- Pages 2+: Description / Lore ---
         String description = entry.getDescription();
         if (description != null && !description.isEmpty()) {
-            String loreHeader = ChatColor.DARK_GRAY + "" + ChatColor.ITALIC + "◆ Lore\n\n" + ChatColor.BLACK;
-            int firstPageCapacity = MAX_CHARS_PER_PAGE - loreHeader.length();
-            if (description.length() <= firstPageCapacity) {
-                pages.add(loreHeader + description);
-            } else {
-                int end = firstPageCapacity;
-                int lastSpace = description.lastIndexOf(' ', end);
-                if (lastSpace > 0) end = lastSpace;
-                pages.add(loreHeader + description.substring(0, end).trim());
-                String remaining = description.substring(end).trim();
-                if (!remaining.isEmpty()) pages.addAll(splitIntoPages(remaining));
-            }
+            pages.addAll(buildSectionPages("◆ Lore", description));
         }
 
         // --- Optional: Curator Notes ---
         String notes = entry.getMetadata("notes");
         if (notes != null && !notes.isEmpty()) {
-            pages.add(ChatColor.DARK_GRAY + "" + ChatColor.ITALIC
-                    + "◆ Notes\n\n" + ChatColor.GRAY + notes);
+            pages.addAll(buildSectionPages("◆ Notes", notes, GRAY_CODE));
         }
 
         // --- Optional: Provenance ---
@@ -1267,31 +1117,56 @@ public class LoreBookManager implements ILoreBookService {
     }
 
     /**
-     * Split text into book pages.
+     * Split database text into book pages with the pixel-accurate layout shared with
+     * {@code book.item.py} (#1500): 114px lines, at most 14 lines a page, smart punctuation
+     * normalized to ASCII. Plain mode: the text is not read as markup.
      */
     private List<String> splitIntoPages(String text) {
-        List<String> pages = new ArrayList<>();
+        return BookPageLayout.layoutPlain(text);
+    }
 
-        // Add color formatting
-        text = ChatColor.BLACK + text;
+    /**
+     * Lay out a prose section that opens with a dark-gray italic header line (for example
+     * "◆ History"), a blank line, then the database text in black. The first page holds the
+     * header and twelve lines of text; the rest flows onto following pages. The body is plain:
+     * {@code *}, {@code &}, {@code #} and {@code ---} show as written.
+     */
+    private List<String> buildSectionPages(String label, String body) {
+        return BookPageLayout.layoutSectionPlain(ChatColor.DARK_GRAY + "" + ChatColor.ITALIC + label, body);
+    }
 
-        int start = 0;
-        while (start < text.length() && pages.size() < MAX_PAGES) {
-            int end = Math.min(start + MAX_CHARS_PER_PAGE, text.length());
+    /** As {@link #buildSectionPages(String, String)}, with the body in the given colour code. */
+    private List<String> buildSectionPages(String label, String body, char bodyColor) {
+        return BookPageLayout.layoutSectionPlain(ChatColor.DARK_GRAY + "" + ChatColor.ITALIC + label,
+                body, bodyColor);
+    }
 
-            // Try to break at a word boundary
-            if (end < text.length()) {
-                int lastSpace = text.lastIndexOf(' ', end);
-                if (lastSpace > start) {
-                    end = lastSpace;
-                }
-            }
-
-            pages.add(text.substring(start, end).trim());
-            start = end + 1;
+    /**
+     * Lay out a metadata record: the header line, a blank line, then one dark-gray
+     * {@code Key: } and gray value per entry. Keys and values are database text (plain mode).
+     */
+    private List<String> buildRecordPages(String header, Map<String, String> metadata) {
+        Map<String, String> rows = new LinkedHashMap<>();
+        for (Map.Entry<String, String> m : metadata.entrySet()) {
+            rows.put(formatMetaKey(m.getKey()), m.getValue());
         }
+        return BookPageLayout.layoutRecordPlain(header, rows, DARK_GRAY_CODE, GRAY_CODE);
+    }
 
-        return pages;
+    /**
+     * Last pass over a finished page list: normalize smart punctuation that reached a page
+     * through a name, author or metadata value, and cap the book at {@link #MAX_PAGES}.
+     * Wrapped prose is already normalized, so this pass does not change its line widths.
+     */
+    static List<String> finalizePages(List<String> pages) {
+        List<String> out = new ArrayList<>(Math.min(pages.size(), MAX_PAGES));
+        for (String page : pages) {
+            if (out.size() >= MAX_PAGES) {
+                break;
+            }
+            out.add(AsciiPunctuation.normalize(page));
+        }
+        return out;
     }
 
     /**
@@ -1306,7 +1181,7 @@ public class LoreBookManager implements ILoreBookService {
         lore.add("");
 
         // Truncated description
-        String desc = entry.getDescription();
+        String desc = AsciiPunctuation.normalize(entry.getDescription());
         if (desc != null && !desc.isEmpty()) {
             if (desc.length() > 60) {
                 desc = desc.substring(0, 57) + "...";

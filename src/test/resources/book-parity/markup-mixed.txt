@@ -1,0 +1,17 @@
+# The Archea Chart
+Drawn by **Shadowmelt** for the *Office of Cartography*, this chart marks the safe channels.
+
+
+
+§4Red§r ink marks wrecks; &9blue&r ink marks soundings; §2§lbold green§r marks harbours.
+A word too long for one line: Pneumonoultramicroscopicsilicovolcanoconiosisandthensome continues here.
+**Supercalifragilisticexpialidociouslybold** words split as well.
+Double  spaces   and trailing spaces stay out of the render.   
+Tabs	count	as	five pixels. Emoji 🌊 counts once.
+---
+# Legend
+*Italic sentences* and **bold sentences** can share a line with plain ones, and §n§mformats§r stack.
+Lines of 'narrow' punctuation: !!!!! ::::: ;;;;; ,,,,, ..... ||||| '''''
+---
+---
+Final page after an empty page break.
