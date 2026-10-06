@@ -229,7 +229,6 @@ org.fourz.RVNKLore
 │   ├── MenuHolder.java
 │   └── PaginatedMenu.java
 ├── integration/
-│   ├── citizens.disabled/           # Citizens NPC (stub, soft dependency)
 │   ├── discord/                     # Discord webhook (collection completions)
 │   ├── dynmap/                      # Dynmap marker integration
 │   ├── griefprevention/             # GriefPrevention claim integration
@@ -346,12 +345,13 @@ All integrations are optional — plugin runs fully without any of them:
 | Integration | Class | Purpose |
 |-------------|-------|---------|
 | Dynmap | `DynmapIntegration` | Map markers for lore locations |
-| Citizens | `CitizensIntegration` (stub, deferred) | NPC collection vendors — excluded from compilation via `citizens.disabled/` package; `TraitFactory` registration not yet wired; deferred until collection system stabilizes |
 | Discord | `CollectionWebhookListener` | Collection completion webhooks |
 | PlaceholderAPI | `RVNKLorePlaceholderExpansion` | `%rvnklore_*%` placeholders |
 | VotingPlugin | `VotingPluginIntegration` | Vote reward items |
 | GriefPrevention | `GriefPreventionIntegration` | Claim-based lore protection |
 | RVNKWorlds | `WorldLifecycleListener` | World load/unload events |
+
+> **Citizens: removed in #2216 (1.0.140).** The `integration/citizens.disabled/` stub was never excluded from compilation — the `.disabled` directory name did not stop javac, so `CitizensIntegration` was compiled in and ran on every enable. #2216 deleted the stub, its `citizens-main` dependency and its `citizens:` config block. NPC collection vendors are not supported. They can return on the RVNK NPC bridge (#2213).
 
 ### RVNKCore Services Consumed
 
