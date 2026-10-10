@@ -27,13 +27,7 @@ mvn dependency:tree
 
 **Output**: `target/RVNKLore.jar` (versionless — `<finalName>` set in pom.xml)
 
-**Current Status**: Active development — For plugin status and history, search Graph Memory: `search_nodes("RVNKLore")`
-
-## Task Management
-
-**GitHub Issues (primary)**: `gh issue list --repo fourz/Ravenkraft-Dev --label "board:rvnklore" --json number,title,labels`
-
-**Status flow**: `open` → in progress (comment) → `closed`
+**Status and history**: `python scripts/sql-memory/recall.py --bank ravenkraftdev --entity RVNKLore` (run from the parent repo root). Task flow: `.claude/rules/task-workflow.md` (imported above).
 
 ## Remote Testing Workflow
 
@@ -377,8 +371,8 @@ Use consistent message prefixes in command handlers:
 
 | Dependency | Version | Purpose |
 |------------|---------|---------|
-| spigot-api | 1.21.4-R0.1-SNAPSHOT | Bukkit API |
-| rvnkcore | 1.3.5-alpha | Shared services, ServiceRegistry, LogManager (provided) |
+| spigot-api | 26.1.2-R0.1-SNAPSHOT | Bukkit API |
+| rvnkcore | see pom.xml | Shared services, ServiceRegistry, LogManager (provided) |
 | snakeyaml | 2.0 | YAML configuration |
 | guava | 32.1.3-jre | Google utilities |
 | gson | 2.8.9 | JSON serialization |
@@ -396,11 +390,11 @@ Use consistent message prefixes in command handlers:
 - [docs/rvnklore-itemmanager.md](docs/rvnklore-itemmanager.md) - ItemManager documentation
 - [docs/rvnklore-collectionmanager.md](docs/rvnklore-collectionmanager.md) - CollectionManager documentation
 - [docs/rvnklore-enchantmanager.md](docs/rvnklore-enchantmanager.md) - EnchantManager documentation
-- **Graph Memory** — For plugin status and history: `search_nodes("RVNKLore")`
+- **sql-memory** — status and history: `python scripts/sql-memory/recall.py --bank ravenkraftdev --entity RVNKLore`
 
 ### Parent Board Standards (Cross-cutting)
-Documents on Ravenkraft Dev board (`4787f505-e92e-474d-ba54-f5ac7993ccfe`):
-- [Coding Standards](../../docs/standard/coding-standards.md) - Java 17+ conventions
+Parent repo standards:
+- [Coding Standards](../../docs/standard/coding-standards.md) - Java 21 conventions
 - [RVNKCore Integration](../../docs/standard/rvnkcore-integration.md) - ServiceRegistry usage patterns
 - [Database Patterns](../../docs/standard/database-patterns.md) - Repository pattern, HikariCP
 
