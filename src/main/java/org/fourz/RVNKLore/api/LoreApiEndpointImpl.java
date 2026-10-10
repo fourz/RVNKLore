@@ -666,10 +666,7 @@ public class LoreApiEndpointImpl implements ILoreApiService {
                 if (Boolean.TRUE.equals(body.get("glow"))) props.setGlow(true);
                 Integer cmd = asInt(body.get("customModelData"));
                 if (cmd != null && cmd > 0) props.setCustomModelData(cmd);
-                // Head texture (#1914). Previously unmintable: the field persisted and round-tripped
-                // through the DTO but no write path accepted it, so heads could only be textured by a
-                // direct DB write. Validated here so a bad blob is rejected at mint instead of
-                // surfacing later as a blank head.
+                // Head texture (#1914). Validate at mint so a bad blob fails here, not as a blank head.
                 String skullTexture = asString(body.get("skullTexture"));
                 if (skullTexture != null && !skullTexture.isBlank()) {
                     if (HeadUtil.isValidTextureData(skullTexture)
@@ -780,9 +777,7 @@ public class LoreApiEndpointImpl implements ILoreApiService {
                 ItemPropertiesDTO before = ItemPropertiesDTO.from(props);
                 applyBodyToProps(props, body, warnings);
                 if (ItemPropertiesDTO.from(props).equals(before)) {
-                    // Nothing actually changed: answer with the current state and burn no
-                    // version. A no-op PUT used to archive v(n) and mint an identical
-                    // v(n+1), which read as proof the change landed (#2036).
+                    // No-op PUT: return the current state and burn no version (#2036).
                     Map<String, Object> unchanged = itemToMap(props);
                     unchanged.put("no_change", true);
                     if (!warnings.isEmpty()) unchanged.put("warnings", warnings);
@@ -1030,10 +1025,7 @@ public class LoreApiEndpointImpl implements ILoreApiService {
     /**
      * Lore locations near a point, for cross-plugin spatial lookups (#1924).
      *
-     * <p>Backed by {@code lore_location}, which only became populated in 1.0.107 (#1900) — before
-     * that the table was created and read from but never written, so this lookup would have
-     * returned an empty list on every tier and looked like "no lore here" rather than "nothing was
-     * ever recorded".</p>
+     * <p>Backed by {@code lore_location}, which entry saves populate (#1900).</p>
      *
      * <p>Returns a plain list of maps rather than a DTO: the consumer is RVNKWorlds' survey, which
      * merges this into a JSON payload it already assembles from maps.</p>

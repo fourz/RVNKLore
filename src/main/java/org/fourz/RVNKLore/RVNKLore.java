@@ -265,12 +265,9 @@ public class RVNKLore extends JavaPlugin {
     /**
      * Periodic database health check (#1856).
      *
-     * <p>Runs <b>asynchronously</b>. It previously used {@code scheduleSyncRepeatingTask}, which put
-     * {@link org.fourz.RVNKLore.data.DatabaseManager#isConnected()} — a HikariCP pool borrow against
-     * a cross-host MySQL — directly on the server thread. When that pool degrades, the borrow parks
-     * in {@code ConcurrentBag.borrow} and takes the whole server with it. Reproduced on both tiers
-     * on 2026-08-01 within seven minutes of each other; Dev tripped a 10-second Paper watchdog on
-     * exactly that frame.</p>
+     * <p>Runs <b>asynchronously</b>. {@link org.fourz.RVNKLore.data.DatabaseManager#isConnected()}
+     * borrows from a cross-host HikariCP pool; on the server thread, a degraded pool parks the borrow
+     * in {@code ConcurrentBag.borrow} and stalls the server into the Paper watchdog.</p>
      *
      * <p>The <i>reconnect</i> was already dispatched async (#858) — this closes the other half. The
      * body touches no Bukkit API: it reads the database manager and logs, both safe off-thread. The

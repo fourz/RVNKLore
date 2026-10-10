@@ -266,7 +266,7 @@ public class ConfigManager {
             // exactly as this plugin's own config.yml documents it reaches Bukkit as Boolean.FALSE
             // and getString() hands back "false". Without this case the sole mode #1826 exists to
             // deliver was unreachable by its own documented spelling: the plugin logged
-            // "Unknown general.mode 'false'" and silently ran FULL. Verified on Dev 2026-08-09.
+            // "Unknown general.mode 'false'" and silently ran FULL.
             case "off":
             case "false":
                 return LoreMode.OFF;

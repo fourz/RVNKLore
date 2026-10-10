@@ -45,9 +45,7 @@ public class LoreReloadSubCommand implements SubCommand {
             sender.sendMessage(ChatColor.GRAY + "Player-facing lore notifications are suppressed (quiet mode).");
         }
 
-        // #1830: the lore-data reload hits the database and MUST NOT run on the main thread — a stalled
-        // DB previously blocked the server for the full connection timeout (25s+ watchdog stall on
-        // Event). Drain pending writes + reload off-thread, then report back.
+        // Reload lore data off the main thread; a stalled DB must not freeze the server (#1830).
         sender.sendMessage(ChatColor.GRAY + "Reloading lore data in the background...");
         plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
             try {

@@ -151,7 +151,7 @@ public class LoreDebugSubCommand implements SubCommand {
             // returns early when clustering is off — with nothing genuinely shared, shared-table
             // writes are allowed and journalled like any other. Printing the warning
             // unconditionally told the operator lore_entry was refused while it was in fact being
-            // written and reconciled; caught while verifying #1833 on Dev 2026-08-09.
+            // written and reconciled (#1833).
             if (dbManager.isClusterEnabled()) {
                 sender.sendMessage(ChatColor.YELLOW + "⚠ Shared lore tables are read-only while in fallback.");
                 sender.sendMessage(ChatColor.GRAY + "   Per-server lore (discoveries, locations, maps) still works");
