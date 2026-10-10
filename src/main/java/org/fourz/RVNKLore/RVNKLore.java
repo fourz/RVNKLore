@@ -38,7 +38,6 @@ import org.fourz.RVNKLore.integration.griefprevention.GriefPreventionIntegration
 import org.fourz.RVNKLore.integration.rvnkworlds.WorldLifecycleListener;
 import org.fourz.RVNKLore.integration.discord.DiscordWebhookManager;
 import org.fourz.RVNKLore.integration.discord.CollectionWebhookListener;
-import org.fourz.RVNKLore.integration.citizens.CitizensIntegration;
 
 public class RVNKLore extends JavaPlugin {
     private LoreManager loreManager;
@@ -87,9 +86,6 @@ public class RVNKLore extends JavaPlugin {
     // Discord webhook integration
     private DiscordWebhookManager discordWebhookManager = null;
     private CollectionWebhookListener collectionWebhookListener = null;
-
-    // Citizens NPC integration
-    private CitizensIntegration citizensIntegration = null;
 
     @Override
     public void onEnable() {
@@ -245,9 +241,6 @@ public class RVNKLore extends JavaPlugin {
 
         // Register Discord webhook integration if configured
         registerDiscordWebhooks();
-
-        // Register Citizens NPC integration if available
-        registerCitizens();
     }
 
     /**
@@ -272,12 +265,9 @@ public class RVNKLore extends JavaPlugin {
     /**
      * Periodic database health check (#1856).
      *
-     * <p>Runs <b>asynchronously</b>. It previously used {@code scheduleSyncRepeatingTask}, which put
-     * {@link org.fourz.RVNKLore.data.DatabaseManager#isConnected()} — a HikariCP pool borrow against
-     * a cross-host MySQL — directly on the server thread. When that pool degrades, the borrow parks
-     * in {@code ConcurrentBag.borrow} and takes the whole server with it. Reproduced on both tiers
-     * on 2026-08-01 within seven minutes of each other; Dev tripped a 10-second Paper watchdog on
-     * exactly that frame.</p>
+     * <p>Runs <b>asynchronously</b>. {@link org.fourz.RVNKLore.data.DatabaseManager#isConnected()}
+     * borrows from a cross-host HikariCP pool; on the server thread, a degraded pool parks the borrow
+     * in {@code ConcurrentBag.borrow} and stalls the server into the Paper watchdog.</p>
      *
      * <p>The <i>reconnect</i> was already dispatched async (#858) — this closes the other half. The
      * body touches no Bukkit API: it reads the database manager and logs, both safe off-thread. The
@@ -687,52 +677,6 @@ public class RVNKLore extends JavaPlugin {
         return discordWebhookManager;
     }
 
-    /**
-     * Registers Citizens NPC integration if Citizens plugin is available.
-     * Handles NPC trait registration and event listener setup.
-     */
-    private void registerCitizens() {
-        try {
-            citizensIntegration = new CitizensIntegration(this);
-            if (citizensIntegration.activate()) {
-                logger.info("Citizens integration enabled - NPC collection vendors available");
-            } else {
-                logger.debug("Citizens plugin not available - NPC vendor support disabled");
-            }
-        } catch (Exception e) {
-            logger.warning("Failed to register Citizens integration: " + e.getMessage());
-            citizensIntegration = null;
-        }
-    }
-
-    /**
-     * Cleans up Citizens NPC integration.
-     */
-    private void unregisterCitizens() {
-        if (citizensIntegration != null) {
-            citizensIntegration.cleanup();
-            citizensIntegration = null;
-        }
-    }
-
-    /**
-     * Get the Citizens NPC integration instance.
-     *
-     * @return The Citizens integration, or null if not initialized
-     */
-    public CitizensIntegration getCitizensIntegration() {
-        return citizensIntegration;
-    }
-
-    /**
-     * Checks if Citizens integration is active and available.
-     *
-     * @return true if Citizens is loaded and NPC support is enabled
-     */
-    public boolean isCitizensAvailable() {
-        return citizensIntegration != null && citizensIntegration.isEnabled();
-    }
-
     private void cleanupManagers() {
         // ILoreApiService cleanup handled by unregisterFromRVNKCore()
 
@@ -753,9 +697,6 @@ public class RVNKLore extends JavaPlugin {
 
         // Cleanup Discord webhook integration
         unregisterDiscordWebhooks();
-
-        // Cleanup Citizens NPC integration
-        unregisterCitizens();
 
         // Unregister from RVNKCore first
         unregisterFromRVNKCore();

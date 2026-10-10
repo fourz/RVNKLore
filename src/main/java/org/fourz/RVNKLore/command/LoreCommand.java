@@ -96,9 +96,7 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
 
         String subCommandName = args[0].toLowerCase();
 
-        // `help` was previously unregistered and only worked by accident: it fell through the
-        // unknown-subcommand branch below, which prints the list anyway. Handling it explicitly
-        // makes it real and gives it a verb argument (#1981).
+        // Explicit `help [verb]` handling (#1981).
         if (subCommandName.equals("help") || subCommandName.equals("?")) {
             if (args.length >= 2) {
                 showVerbHelp(sender, args[1].toLowerCase());
@@ -129,9 +127,8 @@ public class LoreCommand implements CommandExecutor, TabCompleter {
         try {
             return subCommand.execute(sender, subCommandArgs);
         } catch (Throwable t) {
-            // #1831: a DB stall/outage used to escape as an unhandled CommandException — the operator
-            // got a raw stack trace and "An unexpected error occurred". Degrade cleanly instead, for
-            // EVERY subcommand (many go through .join() sync wrappers that can throw on timeout).
+            // Degrade cleanly on a DB outage for every subcommand; many use .join() wrappers that
+            // throw on timeout (#1831).
             if (isDatabaseUnavailable(t)) {
                 sender.sendMessage(ChatColor.RED + "The lore database is temporarily unavailable. "
                         + "Please try again in a moment.");

@@ -6,7 +6,7 @@
 
    <groupId>org.fourz.RVNKLore</groupId>
    <artifactId>RVNKLore</artifactId>
-   <version>1.0.138</version>
+   <version>1.0.140</version>
 
    <name>RVNKLore</name>
    <description></description>
@@ -46,10 +46,6 @@
        <repository>
            <id>jitpack.io</id>
            <url>https://jitpack.io</url>
-       </repository>
-       <repository>
-           <id>citizens-repo</id>
-           <url>https://repo.citizensnpcs.co/</url>
        </repository>
    </repositories>
 
@@ -119,19 +115,6 @@
            <artifactId>GriefPrevention</artifactId>
            <version>16.18</version>
            <scope>provided</scope>
-       </dependency>
-       <!-- Citizens API for NPC integration -->
-       <dependency>
-           <groupId>net.citizensnpcs</groupId>
-           <artifactId>citizens-main</artifactId>
-           <version>2.0.34-SNAPSHOT</version>
-           <scope>provided</scope>
-           <exclusions>
-               <exclusion>
-                   <groupId>*</groupId>
-                   <artifactId>*</artifactId>
-               </exclusion>
-           </exclusions>
        </dependency>
 
        <!-- Test Dependencies -->

@@ -69,6 +69,8 @@ server but held inert or run quiet without uninstalling. It composes over the gr
 - `/lore export [type]` - Export lore entries to a JSON file (staff only)
 - `/lore reload` - Reload the plugin configuration (staff only)
 
+The full subcommand set (browse, search, edit, discover, item, book, map, lectern, faction and more) is in [`docs/plugins/commands/lore.md`](../../docs/plugins/commands/lore.md) and [`lore-book.md`](../../docs/plugins/commands/lore-book.md) in the parent repo.
+
 ### Lore Types
 
 - `LANDMARK` - Notable locations in the world
@@ -167,10 +169,10 @@ storage:
 /lore add LANDMARK "Ancient Oak" This massive oak tree has stood since the founding of the server. Legend says it was the first block placed in this world.
 ```
 
-### Registering a City
+### Adding a City
 
 ```
-/lore registercity Ravenport A bustling port city on the eastern shore, known for its skilled fishermen and bustling marketplace.
+/lore add CITY Ravenport A bustling port city on the eastern shore, known for its skilled fishermen and bustling marketplace.
 ```
 
 ### Creating Character Lore
@@ -199,7 +201,6 @@ RVNKLore supports multiple methods for ingesting lore data into the database:
 The most direct method using in-game commands:
 ```
 /lore add <type> <name> <description>
-/lore registercity <name> <description>
 ```
 
 ### 2. Player Actions

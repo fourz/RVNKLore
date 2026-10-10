@@ -35,7 +35,7 @@ public enum DiscoveryTriggerType {
     QUEST_COMPLETE,
 
     /**
-     * Player talks to an NPC (Citizens integration).
+     * Player talks to an NPC. Nothing fires this yet; the RVNK NPC bridge (#2213) is the planned source.
      */
     NPC_INTERACT,
 

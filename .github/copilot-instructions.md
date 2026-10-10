@@ -135,10 +135,11 @@ Plugin runs fully without any of these:
 - **Dynmap** — Lore location map markers
 - **PlaceholderAPI** — `%rvnklore_*%` placeholders
 - **Discord** — Collection completion webhooks
-- **Citizens** — NPC collection vendors (stub)
 - **GriefPrevention** — Claim-based protection
 - **VotingPlugin** — Vote reward items
 - **RVNKWorlds** — World lifecycle events
+
+Citizens NPC vendors are not supported. The stub was removed in #2216; vendors can return on the RVNK NPC bridge (#2213).
 
 ---
 

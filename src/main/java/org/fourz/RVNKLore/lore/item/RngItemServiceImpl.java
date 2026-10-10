@@ -120,13 +120,8 @@ public class RngItemServiceImpl implements IRngItemService {
                 if (mat == null) {
                     continue;
                 }
-                // #1914: player heads used to be REFUSED here. The refusal was correct while the head
-                // payload could not reach an ItemStack on any lane, and then while only the roll lane
-                // could. Both of those are fixed — skull_texture is applied by createLoreItemInternal
-                // and can now be authored via /lore item texture and the REST skullTexture field — so
-                // the bake carries it too, via minecraft:profile in buildIdentityComponents(). A head
-                // with no stored texture bakes without a profile, which still matches what the roll
-                // lane produces for the same item; parity, not silence.
+                // Heads bake with their skull_texture via minecraft:profile in buildIdentityComponents().
+                // A head with no stored texture bakes without a profile, as the roll lane does (#1914).
                 JsonObject entry = new JsonObject();
                 entry.addProperty("type", "minecraft:item");
                 entry.addProperty("name", mat.getKey().toString());
@@ -137,18 +132,9 @@ public class RngItemServiceImpl implements IRngItemService {
                 setCount.addProperty("function", "minecraft:set_count");
                 setCount.addProperty("count", 1);
                 functions.add(setCount);
-                // custom_model_data is carried by buildIdentityComponents() via set_components.
-                // It used to be emitted here as a standalone
-                //   {"function":"minecraft:set_custom_model_data","value":<int>}
-                // which is the pre-1.21.2 shape. In the component era that field is silently
-                // ignored — no parse error, no warning — but the function still creates the
-                // component, so every baked item rolled with an EMPTY
-                //   "minecraft:custom_model_data": {}
-                // and the CMD was lost. Verified on Dev against a three-way loot table (#1674).
-                // #1677: restore full lore identity into the baked (static) table so a poolbake chest
-                // rolls the real item — name, rarity lore, the rvnklore PDC id, and book pages — not a
-                // bare vanilla item. set_components is the component-era canonical carrier. Verify the
-                // emitted JSON with `/lore item pool preview <pool>` (#1679) before deploying.
+                // CMD rides in set_components; set_custom_model_data is ignored post-1.21.2 (#1674).
+                // set_components carries the full lore identity (name, rarity lore, book pages) so a
+                // baked chest rolls the real item (#1677). Preview with `/lore item pool preview` (#1679).
                 JsonObject components = buildIdentityComponents(p);
                 if (components.size() > 0) {
                     JsonObject setComponents = new JsonObject();
@@ -159,7 +145,7 @@ public class RngItemServiceImpl implements IRngItemService {
                 // PDC identity via set_custom_data with an explicit SNBT tag — the linchpin of #1677.
                 // The JSON set_components custom_data path stores small ints as bytes (21b), which
                 // PersistentDataType.INTEGER cannot read back; an SNBT integer literal stays TAG_Int,
-                // matching what the roll build path writes (verified on Dev, #1678).
+                // matching what the roll build path writes (#1678).
                 JsonObject setCustomData = new JsonObject();
                 setCustomData.addProperty("function", "minecraft:set_custom_data");
                 setCustomData.addProperty("tag", buildPdcSnbt(p, e.loreItemId));
@@ -201,7 +187,7 @@ public class RngItemServiceImpl implements IRngItemService {
         // Inside set_components this is the RAW component ({"floats":[N]}); the {"mode","values"}
         // ListOperation wrapper applies only to the standalone set_custom_model_data function.
         // Emitted as a float because the component stores floats — a resource pack keyed on the
-        // legacy integer CMD must match on the float list. Verified on Dev: rolls back as
+        // legacy integer CMD must match on the float list. It rolls back as
         // "minecraft:custom_model_data": {floats: [N.0f]} (#1674).
         if (p.getCustomModelData() > 0) {
             JsonArray cmdFloats = new JsonArray();

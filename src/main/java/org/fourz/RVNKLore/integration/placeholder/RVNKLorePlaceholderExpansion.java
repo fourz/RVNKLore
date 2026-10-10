@@ -426,11 +426,11 @@ public class RVNKLorePlaceholderExpansion extends PlaceholderExpansion {
     /**
      * Get player's latest discovery (placeholder implementation).
      *
-     * <p>This is a placeholder that returns "None" as discovery history
-     * tracking requires additional database schema enhancements.</p>
+     * <p>Returns "None" for now. The discovery table already stores {@code discovered_at};
+     * only the "latest discovery" query is missing.</p>
      */
     private String getLatestDiscovery(UUID playerId) {
-        // TODO: Implement discovery timestamp tracking in database
+        // TODO: Query the newest discovered_at row for this player.
         return "None";
     }
 
