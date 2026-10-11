@@ -164,8 +164,17 @@ public final class BookPageLayout {
      */
     public static List<String> layoutRecordPlain(String header, Map<String, String> rows,
                                                  char keyColor, char valueColor) {
+        return layoutRecordPlain(header, new ArrayList<>(rows.entrySet()), keyColor, valueColor);
+    }
+
+    /**
+     * As {@link #layoutRecordPlain(String, Map, char, char)}, with rows as an ordered list. Two
+     * rows may share a label; both are printed (#2282).
+     */
+    public static List<String> layoutRecordPlain(String header, List<Map.Entry<String, String>> rows,
+                                                 char keyColor, char valueColor) {
         List<Block> blocks = headerBlocks(header);
-        for (Map.Entry<String, String> row : rows.entrySet()) {
+        for (Map.Entry<String, String> row : rows) {
             String key = AsciiPunctuation.normalize(String.valueOf(row.getKey())) + ": ";
             List<String> valueLines = splitLines(AsciiPunctuation.normalize(
                     row.getValue() == null ? "" : row.getValue()));
