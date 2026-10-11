@@ -107,6 +107,15 @@ class BookPageLayoutPlainTest {
     }
 
     @Test
+    void recordRowsSurviveAnEmptyKey() {
+        Map<String, String> metadata = new LinkedHashMap<>();
+        metadata.put("", "orphan");
+        List<Map.Entry<String, String>> rows = LoreBookManager.recordRows(metadata);
+        assertEquals(1, rows.size());
+        assertEquals("Unknown", rows.get(0).getKey());
+    }
+
+    @Test
     @DisplayName("plain mode still caps at 100 pages and 14 lines a page")
     void limits() {
         List<String> pages = BookPageLayout.layoutPlain("word &* ".repeat(5000));

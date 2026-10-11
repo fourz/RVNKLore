@@ -1237,7 +1237,7 @@ public class LoreBookManager implements ILoreBookService {
      * Format a metadata key for display.
      */
     private static String formatMetaKey(String key) {
-        if (key == null) return "Unknown";
+        if (key == null || key.isEmpty()) return "Unknown";
         String name = key.replace("_", " ");
         return name.substring(0, 1).toUpperCase() + name.substring(1);
     }
