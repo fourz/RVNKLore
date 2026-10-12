@@ -1146,11 +1146,20 @@ public class LoreBookManager implements ILoreBookService {
      * {@code Key: } and gray value per entry. Keys and values are database text (plain mode).
      */
     private List<String> buildRecordPages(String header, Map<String, String> metadata) {
-        Map<String, String> rows = new LinkedHashMap<>();
+        return BookPageLayout.layoutRecordPlain(header, recordRows(metadata), DARK_GRAY_CODE, GRAY_CODE);
+    }
+
+    /**
+     * One display row per metadata entry, in order. Rows are a list, not a map keyed by the
+     * display label: {@code home_region} and {@code home region} both display as
+     * {@code Home region}, and a map would drop one of them (#2282).
+     */
+    static List<Map.Entry<String, String>> recordRows(Map<String, String> metadata) {
+        List<Map.Entry<String, String>> rows = new ArrayList<>(metadata.size());
         for (Map.Entry<String, String> m : metadata.entrySet()) {
-            rows.put(formatMetaKey(m.getKey()), m.getValue());
+            rows.add(new AbstractMap.SimpleImmutableEntry<>(formatMetaKey(m.getKey()), m.getValue()));
         }
-        return BookPageLayout.layoutRecordPlain(header, rows, DARK_GRAY_CODE, GRAY_CODE);
+        return rows;
     }
 
     /**
@@ -1227,8 +1236,8 @@ public class LoreBookManager implements ILoreBookService {
     /**
      * Format a metadata key for display.
      */
-    private String formatMetaKey(String key) {
-        if (key == null) return "Unknown";
+    private static String formatMetaKey(String key) {
+        if (key == null || key.isEmpty()) return "Unknown";
         String name = key.replace("_", " ");
         return name.substring(0, 1).toUpperCase() + name.substring(1);
     }

@@ -95,6 +95,27 @@ class BookPageLayoutPlainTest {
     }
 
     @Test
+    @DisplayName("#2282: metadata keys that format to the same label both reach the page")
+    void recordRowsKeepDuplicateLabels() {
+        Map<String, String> metadata = new LinkedHashMap<>();
+        metadata.put("home_region", "north");
+        metadata.put("home region", "south");
+        List<Map.Entry<String, String>> rows = LoreBookManager.recordRows(metadata);
+        assertEquals(2, rows.size());
+        assertEquals(List.of("§8§o◆ Record\n\n§8Home region: §7north\n§8Home region: §7south"),
+                BookPageLayout.layoutRecordPlain("§8§o◆ Record", rows, '8', '7'));
+    }
+
+    @Test
+    void recordRowsSurviveAnEmptyKey() {
+        Map<String, String> metadata = new LinkedHashMap<>();
+        metadata.put("", "orphan");
+        List<Map.Entry<String, String>> rows = LoreBookManager.recordRows(metadata);
+        assertEquals(1, rows.size());
+        assertEquals("Unknown", rows.get(0).getKey());
+    }
+
+    @Test
     @DisplayName("plain mode still caps at 100 pages and 14 lines a page")
     void limits() {
         List<String> pages = BookPageLayout.layoutPlain("word &* ".repeat(5000));
