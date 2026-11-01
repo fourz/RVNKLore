@@ -2,20 +2,32 @@
 
 A comprehensive lore and history plugin for Minecraft servers that allows players and staff to document the stories, landmarks, characters, and events that shape your server's world.
 
-## Build Status
+## Status
 
-**Current Status**: Compilation errors present - requires async refactoring
+| Server | Version (read 2026-11-01) |
+|--------|---------------------------|
+| RVNK Dev | 1.0.141 |
+| RVNK Event | 1.0.141 |
+| Ravenkraft (prod) | 1.0.141 |
 
-The plugin currently has compilation errors in `LoreEntryRepository.java` due to interface/implementation mismatch. The repository interface expects async methods returning `CompletableFuture<T>`, but the implementation returns synchronous types. This needs to be resolved before the plugin can be built.
+Versions drift between servers. Read the live one with `version RVNKLore` on the server, or the built one in `pom.xml`.
 
-### Required Fixes
-- Update `LoreEntryRepository` methods to return `CompletableFuture` types
-- Wrap synchronous operations in async execution
-- Update all callers to handle async responses
+## Building
 
-### Dependencies
-- **RVNKCore**: Uses `provided` scope - JAR must be in server plugins folder at runtime
-- The lib/rvnkcore-1.3.0-alpha.jar file is for IDE reference only
+- Compiler: JDK 25 (Temurin). Bytecode: Java 21 (`<release>21</release>`). API: `spigot-api` 26.1.2, `api-version: '26.1'`.
+- maven-compiler-plugin is pinned to 3.13.0 with `<fork>true</fork>`. Do not unpin it: newer versions crash `javac` on JDK 25 (#1929).
+- Bump the pom `<version>` on every deploy. Full rules: `.claude/rules/java-plugin-build.md` in the parent repo (`fourz/Ravenkaft-Dev`).
+
+```bash
+mvn clean package -DskipTests
+# output: target/RVNKLore.jar
+```
+
+## Source and mirrors
+
+GitHub (`fourz/RVNKLore`) is origin. Push there. A read-only mirror is on the internal forge in org `ravenkraft` (path to be added).
+
+RVNKCore uses `provided` scope: the RVNKCore jar must be in the server `plugins` folder at runtime.
 
 ## Features
 
